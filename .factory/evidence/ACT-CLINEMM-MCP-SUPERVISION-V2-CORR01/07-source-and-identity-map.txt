@@ -1,0 +1,83 @@
+ACT-CLINEMM-MCP-SUPERVISION-V2-CORR01 - SOURCE AND IDENTITY MAP
+============================================================
+
+ENTRY_HEAD   f53dfab9349a... (ACT-CLINEMM-MCP-SUPERVISION-V2-01)
+             the commit the HALT_FEEDBACK_LIFECYCLE_CONSERVATION review
+             examined. The two P0s were reproduced against THIS tree.
+
+BRANCH       main
+REPO         /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+
+THE TWO P0 FINDINGS, AND WHERE EACH IS FIXED
+---------------------------------------------
+  P0-1  THE FINGERPRINT IS AMBIGUOUS
+        apps/vscode/src/sdk/control-seam/control-seam-server.ts
+        `fingerprintSupervisionPayload` concatenated the payload fields
+        WITHOUT a separator, so two DIFFERENT valid payloads produced
+        the SAME SHA-256 input:
+
+          {feedback, session-123, 2, run_A,  "BC"} -> "feedbacksession-1232run_ABC"
+          {feedback, session-123, 2, run_AB, "C" } -> "feedbacksession-1232run_ABC"
+
+        Because the ledger lookup happens BEFORE the run-identity check,
+        a replay of an accepted request id with the second payload
+        returned the FIRST payload's recorded acceptance instead of
+        `request-id-conflict`.
+
+        FIX: the canonical, unambiguous JSON encoding
+
+          JSON.stringify([operation, sessionId, expectedEpoch,
+                          expectedRunId ?? null, text ?? null])
+
+        A JSON array is self-delimiting, so no two distinct field
+        tuples can produce the same string. `null` distinguishes an
+        ABSENT optional field from an EMPTY one.
+
+  P0-2  THE FEEDBACK BYPASSED THE CANONICAL TURN-START PRELUDE
+        apps/vscode/src/sdk/SdkController.ts
+        `sendSupervisionFeedback` called the follow-up coordinator
+        DIRECTLY, skipping the lifecycle prelude that the ordinary UI
+        route performs:
+
+          - emit `same_task_continued`,
+          - fence the PREVIOUS canonical run,
+          - set the turn phase to `streaming`,
+          - clear the previous turn's completion signal,
+          - publish the updated state to the webview.
+
+        FIX: the canonical prelude now lives in ONE shared private
+        method, `performCanonicalTurnStart`, and BOTH routes call it.
+        The two routes differ ONLY in the response type they forward:
+
+          UI route   -> responseType: this.task?.taskState?.askResponse
+          MCP route  -> responseType: undefined
+
+        The response type is an EXPLICIT, TYPED parameter
+        (`ClineAskResponse | undefined`), so the MCP route cannot
+        inherit the persisted approval enum by accident.
+
+        EXTRACTING THE PRELUDE (rather than duplicating it) is what
+        makes the two routes structurally unable to drift again: there
+        is now exactly ONE implementation of the lifecycle sequence.
+
+CHANGED PRODUCTION FILES
+------------------------
+apps/vscode/src/sdk/SdkController.test.ts          |  38 ++
+ apps/vscode/src/sdk/SdkController.ts               | 101 ++++-
+ .../src/sdk/control-seam/control-seam-server.ts    |  38 +-
+ .../control-seam.supervision-corr01.test.ts        | 418 +++++++++++++++++++++
+ ....supervision-lifecycle.production-shape.test.ts | 289 ++++++++++++++
+ .../control-seam.supervision-route-pin.test.ts     | 171 +++++++--
+ 6 files changed, 1011 insertions(+), 44 deletions(-)
+
+ADDED WITNESS FILES
+-------------------
+.../control-seam.supervision-corr01.test.ts        | 418 +++++++++++++++++++++
+ ....supervision-lifecycle.production-shape.test.ts | 289 ++++++++++++++
+ 2 files changed, 707 insertions(+)
+
+MODIFIED EXISTING WITNESS FILES (the pins the correction had to update)
+---------------------------------------------------------------------
+apps/vscode/src/sdk/SdkController.test.ts          |  38 +++++
+ .../control-seam.supervision-route-pin.test.ts     | 171 ++++++++++++++++-----
+ 2 files changed, 174 insertions(+), 35 deletions(-)

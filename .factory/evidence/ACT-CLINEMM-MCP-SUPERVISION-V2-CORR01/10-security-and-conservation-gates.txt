@@ -1,0 +1,131 @@
+ACT-CLINEMM-MCP-SUPERVISION-V2-CORR01 - SECURITY AND CONSERVATION GATES
+=======================================================================
+
+C7 - THE SECURITY INVARIANTS MUST REMAIN UNCHANGED
+-----------------------------------------------------
+  AF_UNIX-ONLY TRANSPORT            UNCHANGED. No socket, no TCP
+                                     listener, no second transport was
+                                     added.
+  READ/WRITE CREDENTIAL SEPARATION   UNCHANGED. No new token, no new
+                                     authorization system. Both V2
+                                     operations still require the SAME
+                                     explicit mutation grant.
+  DEFAULT-OFF MUTATION CONTROL       UNCHANGED. A read-only install
+                                     still exposes EXACTLY two
+                                     operations.
+  PER-REQUEST CREDENTIAL AUTHORIZATION UNCHANGED. Every mutation
+                                     request is authorized against the
+                                     grant AT REQUEST TIME and the
+                                     CURRENT workspace is re-verified.
+  WORKSPACE / OWNERSHIP FENCES       UNCHANGED and NOT WEAKENED by
+                                     the correction. The epoch fence,
+                                     the run-identity fence and the
+                                     dispatch-boundary re-check are
+                                     untouched.
+  BOUNDED OPERATION LEDGER           UNCHANGED in kind. The
+                                     fingerprint encoding became
+                                     INJECTIVE, which STRENGTHENS it:
+                                     the ledger can no longer confuse
+                                     two distinct payloads.
+  SESSION-SCOPED EVENT READS         UNCHANGED.
+  allowContentRead SUB-GRANT         UNCHANGED. No new sub-grant.
+  NATIVE APPROVAL AUTHORITY          UNCHANGED and STRENGTHENED. The
+                                     response type is now an EXPLICIT,
+                                     TYPED parameter
+                                     (`ClineAskResponse | undefined`),
+                                     so the MCP route cannot inherit
+                                     the persisted approval enum even
+                                     accidentally.
+  NO SECOND RUNTIME OR SCHEDULER     UNCHANGED. The correction
+                                     EXTRACTED an existing method; it
+                                     added no runtime, controller,
+                                     event bus or queue.
+
+
+THE TWO CORRECTIONS, AGAINST THE REVIEW'S TABLE
+-------------------------------------------------
+  P0-1 - THE FINGERPRINT
+    The encoding is now canonical and injective:
+
+      JSON.stringify([operation, sessionId, expectedEpoch,
+                      expectedRunId ?? null, text ?? null])
+
+    A JSON array is self-delimiting, so no two distinct field tuples
+    can produce the same string. The ledger STILL stores only a
+    SHA-256 fingerprint - never the feedback text.
+
+    The ledger STILL NEVER stores the feedback text, so a ledger dump
+    still cannot leak task content.
+
+    The operation discriminator is still part of the encoding, so one
+    request id still cannot be reused across the two operations.
+
+  P0-2 - THE LIFECYCLE PRELUDE
+    The canonical prelude now lives in ONE shared private method,
+    `performCanonicalTurnStart`. The ordinary UI route and the MCP
+    supervision route BOTH call it, so they cannot drift apart again.
+
+    The two routes differ ONLY in the response type they forward:
+
+      UI route   -> responseType: this.task?.taskState?.askResponse
+                   (the UI IS the approval authority)
+
+      MCP route  -> responseType: undefined
+                   (MCP feedback MUST NOT be able to answer an
+                    approval - LC-3 pins this against a REAL TaskProxy
+                    that really does persist "yesButtonClicked")
+
+    The UI route was NOT weakened: LC-4 proves it still forwards the
+    persisted response type.
+
+
+C6 - THE MINIMUM EXECUTABLE GATES (all observed in THIS session)
+-------------------------------------------------------------------
+  GATE                                                   RESULT
+  -----------------------------------------------------  ----------------
+  The CORR01 witnesses (FP-1..FP-5, LC-1..LC-5)          51/51 GREEN
+    (the 38 V2 witnesses plus 13 CORR01 witnesses)
+  The whole control-seam suite                           196/196 GREEN
+  Session lifecycle / ownership / task-control / followup  211/211 GREEN
+  C9/C10/BCB + completion/continuation/background          0 NEW failures
+  Focused Elm authority suites                            NO REGRESSION
+  Host typecheck (bun run check-types)                   exit 0
+  Scoped lint (biome, 30 files)                          exit 0, 0 findings
+  git diff --check                                        exit 0
+  ACT-owned diagnostics                                   ZERO
+
+  The 25 C9/C10/BCB failures and the 2 Elm
+  completion-continuation-control failures are PRE-EXISTING at
+  pristine HEAD - proven by running the identical gate set against
+  the stashed tree. The NEW-failures set is EMPTY.
+
+
+THE NECESSITY ABLATIONS (4/4, isolated)
+-----------------------------------------
+  A  the CANONICAL fingerprint encoding            -> FP-2 FAIL
+  L  the CANONICAL turn-start prelude              -> LC-1, LC-2, LC-5,
+                                                      RP-1, RP-2 FAIL
+  P  the prelude's `same_task_continued` + fence   -> LC-2 FAIL
+  S  the prelude's phase write + outcome clear     -> LC-1, LC-2, LC-5,
+                                                      RP-3 FAIL
+
+  Each ablation reverts ONE production change ALONE, from the SAME
+  pristine snapshot, so the failures are NOT cumulative.
+
+
+THE FINAL INSTRUCTION, HONOURED
+---------------------------------
+  Codex may request execution, feedback and cancellation, but ClineMM
+  remains the sole authority for task execution, tool approval,
+  background-job containment and terminal completion.
+
+  * The feedback route CANNOT answer an approval: the response type is
+    an explicit `undefined` and the seam rejects feedback outright
+    while `awaiting_approval`.
+  * The feedback route now performs the SAME lifecycle as the
+    operator's own composer, so a completed or resumable task
+    re-enters the correct Elm / C9 / C10 lifecycle.
+  * The cancellation route IS the webview's own Cancel path.
+  * The terminal completion authority is untouched: a late
+    cancellation returns `already_terminal` and never overwrites a
+    committed completion.

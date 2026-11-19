@@ -36380,8 +36380,8 @@ pre-change tree:
 
 ```
 BUNDLE   apps/vscode/dist/extension.js
-SIZE     57809190 bytes
-SHA256   72753476732d84a3b6dba98fd48f1250323dd3886702b48def55a3979cc566a6
+SIZE     57812404 bytes
+SHA256   010e6c1ac77861d85ac560185d1465e1f63f1f223e8819f5f33435012d5b4325
 ```
 
 ## Operator qualifications carried forward
@@ -36395,3 +36395,146 @@ SHA256   72753476732d84a3b6dba98fd48f1250323dd3886702b48def55a3979cc566a6
    **`~/.vscodium-clinemm/cline-data/control-seam`**, not
    `~/.cline/data/control-seam`. Use the actual profile's path, without
    exposing either credential.
+
+# ACT-CLINEMM-MCP-SUPERVISION-V2-CORR01 — PASS_STRUCTURAL_ONLY — 2026-11-19
+
+```yaml
+ACT_ID: ACT-CLINEMM-MCP-SUPERVISION-V2-CORR01
+STATUS: PASS_STRUCTURAL_ONLY
+DATE: 2026-11-19
+BRANCH: main
+ENTRY_HEAD: f53dfab9349a (the commit the review examined)
+WORKSTREAM: W01 (correction of ACT-CLINEMM-MCP-SUPERVISION-V2-01)
+IMPLEMENTATION: bounded - NO new MCP operation; two corrections to the
+  existing clinemm_send_feedback path
+VERDICT: PASS_STRUCTURAL_ONLY
+EVIDENCE: .factory/evidence/ACT-CLINEMM-MCP-SUPERVISION-V2-CORR01/
+```
+
+## The two P0 findings, both reproduced and both corrected
+
+The `HALT_FEEDBACK_LIFECYCLE_CONSERVATION` review raised two P0s at
+`f53dfab93`. Both were reproduced against the pristine tree before any
+correction, and both are now closed.
+
+### P0-1 — the fingerprint was ambiguous
+
+`fingerprintSupervisionPayload` concatenated the payload fields
+WITHOUT a separator, so two DIFFERENT valid payloads produced the SAME
+SHA-256 input:
+
+```
+{feedback, session-123, 2, run_A,  "BC"} -> "feedbacksession-1232run_ABC"
+{feedback, session-123, 2, run_AB, "C" } -> "feedbacksession-1232run_ABC"
+```
+
+Because the ledger lookup happens BEFORE the run-identity check, a replay
+of an accepted request id with the second payload returned the FIRST
+payload's recorded acceptance instead of `request-id-conflict`.
+
+**FIX:** the canonical, unambiguous JSON encoding
+
+```ts
+JSON.stringify([operation, sessionId, expectedEpoch,
+                expectedRunId ?? null, text ?? null])
+```
+
+A JSON array is self-delimiting, so no two distinct field tuples can
+produce the same string. The ledger STILL stores only a SHA-256
+fingerprint — never the feedback text.
+
+### P0-2 — the feedback bypassed the canonical turn-start prelude
+
+`sendSupervisionFeedback` called the follow-up coordinator DIRECTLY,
+skipping the lifecycle prelude the ordinary UI route performs:
+`same_task_continued`, the previous-canonical-run fence, the phase
+write to `streaming`, the turn-outcome clear, and the state
+publication.
+
+**FIX:** the canonical prelude now lives in ONE shared private method,
+`performCanonicalTurnStart`, and BOTH routes call it. They differ ONLY
+in the response type they forward:
+
+| Route | Response type forwarded |
+|---|---|
+| ordinary UI | `this.task?.taskState?.askResponse` (the UI IS the approval authority) |
+| MCP supervision | `undefined` (MCP feedback MUST NOT answer an approval) |
+
+The response type is an EXPLICIT, TYPED parameter
+(`ClineAskResponse | undefined`), so the MCP route cannot inherit the
+persisted approval enum even accidentally. **Extracting** the prelude
+rather than duplicating it is what makes the two routes structurally
+unable to drift again.
+
+## Behavioural RED → GREEN
+
+| | Result |
+|---|---|
+| RED at pristine `f53dfab93` | **4 failed / 6 passed** |
+| GREEN | **51/51** (the 38 V2 witnesses + 13 CORR01 witnesses) |
+
+* **FP-2** reproduced the collision END TO END through the REAL server:
+  the replayed payload returned the first payload's recorded
+  `'accepted'` instead of `request-id-conflict`.
+* **LC-1 / LC-2 / LC-5** reproduced the lifecycle omission: the phase
+  stayed `awaiting_followup` / `resumable`, and `same_task_continued`
+  was never emitted.
+
+## Necessity ablations (4/4, isolated)
+
+| ID | Production revert | Failing witness | Verdict |
+|---|---|---|---|
+| F | the canonical fingerprint encoding | FP-2 | LOAD-BEARING |
+| L | the canonical turn-start prelude | LC-1, LC-2, LC-5, RP-1, RP-2 | LOAD-BEARING |
+| P | the prelude's `same_task_continued` + run fence | LC-2 | LOAD-BEARING |
+| S | the prelude's phase write + outcome clear | LC-1, LC-2, LC-5, RP-3 | LOAD-BEARING |
+
+Each ablation reverts ONE production change ALONE, from the SAME
+pristine snapshot, so the failures are NOT cumulative.
+
+## Conservation (proven, not asserted)
+
+| Gate | Result |
+|---|---|
+| The whole control-seam suite | **196/196 passed** |
+| Session lifecycle / ownership / task-control / followup / interaction | **211/211 passed** |
+| C9/C10/BCB + completion / continuation / background | **0 NEW failures** (the 25 failures are PRE-EXISTING at pristine HEAD; the new-failures set is EMPTY) |
+| Focused Elm authority suites | **NO REGRESSION** (the 2 completion-continuation-control failures are PRE-EXISTING at pristine HEAD) |
+| Host typecheck / scoped lint / `git diff --check` | exit 0 / exit 0 / exit 0 |
+| ACT-owned diagnostics | **ZERO** |
+
+The read-only projection is still **exactly two** operations and the
+mutation projection **exactly six**. No new operation, no new token, no
+new runtime, controller, event bus or queue. The native approval
+authority is unchanged and STRENGTHENED (the response type is now
+explicitly typed).
+
+## The exact-head artifact
+
+Built from the corrected production source tree:
+
+```
+BUNDLE   apps/vscode/dist/extension.js
+SIZE     57812404 bytes
+SHA256   010e6c1ac77861d85ac560185d1465e1f63f1f223e8819f5f33435012d5b4325
+```
+
+## Installed qualification — PENDING
+
+The sandbox cannot install a VSIX and the ACT forbids the sandboxed
+agent from installing one, so the installed-bundle SHA-256 is
+unavailable and **no LIVE claim is made**. The operator procedure is in
+`.factory/evidence/ACT-CLINEMM-MCP-SUPERVISION-V2-CORR01/08-live-qualification-report.txt`.
+
+It adds TWO observable expectations to the live run: after an accepted
+feedback the TaskHeader phase must move to `streaming` and then to the
+next terminal phase, and a feedback against a `resumable` task must
+leave the task RUNNING rather than stuck.
+
+## Decision
+
+`HALT_FEEDBACK_LIFECYCLE_CONSERVATION` is cleared **structurally**. The
+two P0s are corrected, witnessed and ablated. Installed qualification
+remains pending and is the operator's next step; the separate `myc`
+workspace-isolation investigation remains open, so sensitive-repository
+delegation stays blocked independently of this ACT's progress.

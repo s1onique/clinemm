@@ -59,7 +59,7 @@ import type { Settings } from "@shared/storage/state-keys"
 import { resolveActiveTemporaryExternalCanonicalRootsFromBackingFile } from "@shared/storage/temporaryExternalPathAuthorities"
 import type { Mode } from "@shared/storage/types"
 import type { TelemetrySetting } from "@shared/TelemetrySetting"
-import type { ClineCheckpointRestore } from "@shared/WebviewMessage"
+import type { ClineAskResponse, ClineCheckpointRestore } from "@shared/WebviewMessage"
 import { ClineEnv } from "@/config"
 import { parseMentions } from "@/core/mentions"
 import { ensureMcpServersDirectoryExists } from "@/core/storage/disk"
@@ -5006,9 +5006,37 @@ export class Controller {
 		// pending-prompt queue with `delivery: "queue"` — the queue
 		// acknowledges it with its OWN prompt id, which is the
 		// correlatable identity the `queued` outcome reports.
+		//
+		// ACT-CLINEMM-MCP-SUPERVISION-V2-CORR01: the delivery goes
+		// through the CANONICAL turn-start prelude — the SAME method
+		// the ordinary UI route uses. The V2 implementation called the
+		// follow-up coordinator DIRECTLY, which skipped:
+		//
+		//   - the `same_task_continued` emission (the only accepted
+		//     exit from `resumable` in the shadow's lifecycle),
+		//   - the fence of the PREVIOUS canonical run (so a late
+		//     terminal event from the retired run cannot poison the
+		//     resumed task),
+		//   - the turn phase write to `streaming`,
+		//   - the clearing of the previous turn's completion signal,
+		//   - the publication of the updated state to the webview.
+		//
+		// Those are LIFECYCLE operations, not UI conveniences: without
+		// them a completed or resumable task does not re-enter the
+		// correct Elm / C9 / C10 lifecycle.
+		//
+		// THE RESPONSE TYPE IS `undefined`. The canonical prelude takes
+		// the response type as an EXPLICIT parameter, so this route can
+		// never forward the persisted `taskState.askResponse` — the
+		// value the UI's "Approve" click leaves behind, which would
+		// APPROVE the next pending tool.
 		const wasRunning = activeSession.isRunning
 		try {
-			await this.followups.askResponse(input.text, undefined, undefined, undefined, phase)
+			await this.performCanonicalTurnStart({
+				prompt: input.text,
+				responseType: undefined,
+				writerId: "controller-ask-response",
+			})
 		} catch (error) {
 			Logger.error("[SdkController] supervision feedback failed:", error)
 			return { outcome: "unknown_outcome", reason: "host-failure", phase }
@@ -5529,6 +5557,69 @@ export class Controller {
 
 		const turnStateBefore = this.turnStateTracker.get()
 
+		// ACT-CLINEMM-MCP-SUPERVISION-V2-CORR01: the canonical turn-start
+		// prelude lives in ONE place now - `performCanonicalTurnStart` -
+		// and BOTH the ordinary UI route and the MCP supervision route
+		// call it. The two routes differ ONLY in the response type they
+		// forward to the follow-up coordinator: the UI route forwards the
+		// persisted `taskState.askResponse` (it IS the approval answer),
+		// the MCP route forwards `undefined` (it MUST NOT be able to
+		// answer an approval).
+		await this.performCanonicalTurnStart({
+			prompt,
+			images,
+			files,
+			responseType: this.task?.taskState?.askResponse,
+			writerId: "controller-ask-response",
+		})
+	}
+
+	/**
+	 * ACT-CLINEMM-MCP-SUPERVISION-V2-CORR01: THE CANONICAL TURN-START
+	 * PRELUDE.
+	 *
+	 * Answering an ask, continuing after completion and resuming a
+	 * cancelled task all kick off a NEW agent turn. This method performs
+	 * the lifecycle work that MUST happen before the follow-up
+	 * coordinator is reached:
+	 *
+	 *   1. emit `same_task_continued` into the shadow when the previous
+	 *      turn was already terminal - the ONLY accepted exit from
+	 *      `resumable` in the shadow's lifecycle,
+	 *   2. fence the PREVIOUS canonical run, so a late terminal event
+	 *      from the retired run cannot poison the resumed task,
+	 *   3. move the authoritative phase to `streaming`,
+	 *   4. clear the previous turn's completion signal so this turn's
+	 *      phase is computed fresh,
+	 *   5. publish the updated state to the webview,
+	 *   6. hand the text to the follow-up coordinator.
+	 *
+	 * THE RESPONSE TYPE IS A PARAMETER, NOT AN IMPLICIT READ. The
+	 * ordinary UI route passes the persisted `taskState.askResponse`,
+	 * because the UI IS the approval authority. The MCP supervision route
+	 * passes `undefined`, because MCP feedback must NEVER be able to
+	 * answer a tool approval. Reading the persisted value implicitly (as
+	 * the V2 implementation did) is exactly what made the two routes
+	 * diverge.
+	 */
+	private async performCanonicalTurnStart(input: {
+		readonly prompt?: string
+		readonly images?: string[]
+		readonly files?: string[]
+		/**
+		 * The webview interaction enum to forward to the follow-up
+		 * coordinator, or `undefined` when the caller is NOT an
+		 * approval authority.
+		 *
+		 * It is TYPED as `ClineAskResponse`, so a route cannot smuggle
+		 * an arbitrary string into the approval resolver.
+		 */
+		readonly responseType?: ClineAskResponse
+		/** The turn-state writer id recorded for the phase write. */
+		readonly writerId: import("@shared/turn-state-writer-provenance").TurnStateWriterId
+	}): Promise<void> {
+		const turnStateBefore = this.turnStateTracker.get()
+
 		// ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-CORRECTION01:
 		// Emit `same_task_continued` into the shadow when the previous turn
 		// was already terminal (the user is continuing the SAME visible task
@@ -5562,16 +5653,16 @@ export class Controller {
 		// scroll-arrow default). Mirrors initTask(). The webview gates turnState by seq, and the
 		// session-event coordinator will set the terminal phase (completed/awaiting_followup/error)
 		// when this turn ends.
-		this.turnStateTracker.setWithWriter("streaming", undefined, this.writerIdentity("controller-ask-response"))
+		this.turnStateTracker.setWithWriter("streaming", undefined, this.writerIdentity(input.writerId))
 		// Clear the previous turn's completion signal so this new turn's phase is computed fresh.
 		this.messageTranslatorState.clearTurnOutcome()
 		// The webview only learns the phase through a full state post. Without one here it would
 		// keep the stale terminal phase (and hide the thinking indicator) until the first session
 		// event of the new turn posts state — a visible delay after every follow-up/approval.
 		this.postStateToWebview().catch((error) => {
-			Logger.error("[SdkController] Failed to post state after askResponse phase change:", error)
+			Logger.error("[SdkController] Failed to post state after the canonical turn start phase change:", error)
 		})
-		await this.followups.askResponse(prompt, images, files, this.task?.taskState?.askResponse, turnStateBefore.phase)
+		await this.followups.askResponse(input.prompt, input.images, input.files, input.responseType, turnStateBefore.phase)
 	}
 
 	async editMessageAndRegenerate(input: {

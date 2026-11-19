@@ -1,0 +1,58 @@
+ACT-CLINEMM-MCP-SUPERVISION-V2-CORR01 - EXACT-HEAD ARTIFACT MANIFEST
+============================================================
+
+ENTRY_HEAD    f53dfab9349a
+              the commit the review examined; the two P0s were
+              reproduced against THIS tree.
+
+SUBJECT_HEAD  91e399c90e2f9dc4dab2313de059c9e52ce73b3d
+              the git TREE SHA of the corrected subject.
+
+PRODUCTION SOURCE TREE (the identifier the BUNDLE binds to)
+-------------------------------------------------------------
+  apps/vscode/src  1ce2a36c71f4b72cd5e807785bf09f9dab4ace42
+              The tree the bundle was built from. It is IDENTICAL at
+              HEAD and in the final index, so the artifact and the
+              committed production source are provably the same
+              subject. It is recorded INSTEAD of the whole-tree SHA
+              because the evidence files live in that tree - recording
+              the whole-tree SHA inside them would be self-referential.
+
+BUNDLE
+------
+  Built with: bun esbuild.mjs (exit 0), run against the corrected
+  production source tree 1ce2a36c71f4b72cd5e807785bf09f9dab4ace42. The bundle is NOT bound to a
+  pre-correction tree.
+
+  path          apps/vscode/dist/extension.js
+  byte size     57812404
+  sha256        010e6c1ac77861d85ac560185d1465e1f63f1f223e8819f5f33435012d5b4325
+  built at      2026-11-19T04:43:26+0300
+
+  NOTE ON REPRODUCIBILITY: esbuild embeds build-time metadata, so the
+  bundle is NOT byte-reproducible across builds. What IS bound here is
+  the SOURCE tree 1ce2a36c71f4b72cd5e807785bf09f9dab4ace42.
+
+SOURCE MAP
+-----------
+  path          apps/vscode/dist/extension.js.map
+  byte size     32967166
+  sha256        f35b33affd21dfe22693cff38e80323273d6f6b9eb781496ad150b68007568b2
+
+EMBEDDED / INSTALLED BUNDLE
+-----------------------------
+  embedded extension bundle sha256 = 010e6c1ac77861d85ac560185d1465e1f63f1f223e8819f5f33435012d5b4325
+
+  installed bundle sha256          = NOT AVAILABLE
+  reason: the sandbox cannot install a VSIX, and the ACT forbids the
+          sandboxed ClineMM agent from installing one. Per C8 the work
+          stops at structural qualification; the operator procedure is
+          in 08-live-qualification-report.txt (STEP 1 records the
+          installed hash into this file).
+
+DIAGNOSTIC IDENTITY COMPARISON vs f53dfab93
+---------------------------------------------
+  See 05-elm-and-conservation.txt: the failing-test set in the
+  C9/C10/BCB / completion / continuation / background gates is
+  IDENTICAL before and after the correction - the NEW-failures set is
+  EMPTY. The Elm failing set is IDENTICAL too.

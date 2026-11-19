@@ -449,6 +449,25 @@ describe("SDK remote-config coordination", () => {
 				askResponse(prompt?: string, images?: string[], files?: string[]) {
 					return SdkController.prototype.askResponse.call(controller as never, prompt, images, files)
 				},
+				// ACT-CLINEMM-MCP-SUPERVISION-V2-CORR01: the canonical
+				// turn-start prelude is a PRIVATE prototype method. These
+				// mocks are plain objects (not prototype-derived
+				// instances), so the method is not reachable through
+				// `this` - bind it explicitly, the same treatment the
+				// `emitClineAuthError` call already needs.
+				performCanonicalTurnStart(input: {
+					prompt?: string
+					images?: string[]
+					files?: string[]
+					responseType?: string
+					writerId: string
+				}) {
+					return (
+						SdkController.prototype as unknown as {
+							performCanonicalTurnStart: (i: unknown) => Promise<void>
+						}
+					).performCanonicalTurnStart.call(controller as never, input)
+				},
 			}
 			const openTask = (taskId: string) => {
 				controller.task = createTaskProxy(taskId, controller.askResponse, controller.cancelTask)
@@ -560,6 +579,25 @@ describe("SDK remote-config coordination", () => {
 				cancelTask: vi.fn(async () => {}),
 				askResponse(prompt?: string, images?: string[], files?: string[]) {
 					return SdkController.prototype.askResponse.call(controller as never, prompt, images, files)
+				},
+				// ACT-CLINEMM-MCP-SUPERVISION-V2-CORR01: the canonical
+				// turn-start prelude is a PRIVATE prototype method. These
+				// mocks are plain objects (not prototype-derived
+				// instances), so the method is not reachable through
+				// `this` - bind it explicitly, the same treatment the
+				// `emitClineAuthError` call already needs.
+				performCanonicalTurnStart(input: {
+					prompt?: string
+					images?: string[]
+					files?: string[]
+					responseType?: string
+					writerId: string
+				}) {
+					return (
+						SdkController.prototype as unknown as {
+							performCanonicalTurnStart: (i: unknown) => Promise<void>
+						}
+					).performCanonicalTurnStart.call(controller as never, input)
 				},
 			}
 			const errorTask = createTaskProxy("cloud-provisioning-1", controller.askResponse, controller.cancelTask)

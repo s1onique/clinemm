@@ -1,0 +1,43 @@
+ACT-CLINEMM-MCP-SUPERVISION-V2-CORR01 - NECESSITY ABLATIONS
+Each production change is reverted ALONE, from the SAME pristine snapshot,
+so the ablation failures are NOT cumulative. A witness that still PASSES
+after the revert would mean the change is NOT load-bearing.
+
+==============================================================================
+ABLATION F: revert the CANONICAL fingerprint encoding (revert to the separator-less concatenation)
+==============================================================================
+ Test Files  1 failed | 4 passed (5)
+      Tests  1 failed | 50 passed (51)
+ FAIL  src/sdk/control-seam/control-seam.supervision-corr01.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-CORR01 - P0-1 the fingerprint encoding > FP-2: the collision is EXPLOITABLE through the REAL server - the replayed payload returns the WRONG recorded outcome
+
+==============================================================================
+ABLATION L: revert the CANONICAL turn-start prelude (the MCP route calls the follow-up coordinator DIRECTLY again)
+==============================================================================
+ Test Files  2 failed | 3 passed (5)
+      Tests  5 failed | 46 passed (51)
+ FAIL  src/sdk/control-seam/control-seam.supervision-lifecycle.production-shape.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-CORR01 — the canonical turn-start prelude > LC-1: the MCP feedback route performs the CANONICAL prelude - the phase moves to `streaming`, the turn outcome is cleared and the state is published
+ FAIL  src/sdk/control-seam/control-seam.supervision-lifecycle.production-shape.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-CORR01 — the canonical turn-start prelude > LC-2: the prelude emits `same_task_continued` and fences the PREVIOUS canonical run for a terminal phase
+ FAIL  src/sdk/control-seam/control-seam.supervision-lifecycle.production-shape.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-CORR01 — the canonical turn-start prelude > LC-5: a `resumable` task re-enters `streaming` through the MCP route
+ FAIL  src/sdk/control-seam/control-seam.supervision-route-pin.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-CORR01 — the MCP feedback route pin > RP-1: the MCP feedback route goes through the CANONICAL prelude, not `SdkController.askResponse()`
+ FAIL  src/sdk/control-seam/control-seam.supervision-route-pin.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-CORR01 — the MCP feedback route pin > RP-2: the MCP feedback route forwards NO response type to the prelude
+
+==============================================================================
+ABLATION P: revert the CANONICAL prelude's `same_task_continued` emission + run fence
+==============================================================================
+ Test Files  1 failed | 4 passed (5)
+      Tests  1 failed | 50 passed (51)
+ FAIL  src/sdk/control-seam/control-seam.supervision-lifecycle.production-shape.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-CORR01 — the canonical turn-start prelude > LC-2: the prelude emits `same_task_continued` and fences the PREVIOUS canonical run for a terminal phase
+
+==============================================================================
+ABLATION S: revert the CANONICAL prelude's phase write to `streaming` + turn-outcome clear
+==============================================================================
+ Test Files  2 failed | 3 passed (5)
+      Tests  4 failed | 47 passed (51)
+ FAIL  src/sdk/control-seam/control-seam.supervision-lifecycle.production-shape.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-CORR01 — the canonical turn-start prelude > LC-1: the MCP feedback route performs the CANONICAL prelude - the phase moves to `streaming`, the turn outcome is cleared and the state is published
+ FAIL  src/sdk/control-seam/control-seam.supervision-lifecycle.production-shape.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-CORR01 — the canonical turn-start prelude > LC-2: the prelude emits `same_task_continued` and fences the PREVIOUS canonical run for a terminal phase
+ FAIL  src/sdk/control-seam/control-seam.supervision-lifecycle.production-shape.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-CORR01 — the canonical turn-start prelude > LC-5: a `resumable` task re-enters `streaming` through the MCP route
+ FAIL  src/sdk/control-seam/control-seam.supervision-route-pin.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-CORR01 — the MCP feedback route pin > RP-3: the CANONICAL prelude performs the whole lifecycle sequence - the same one the UI route performs
+
+ISOLATION: every ablation starts from the SAME pristine snapshot (taken once
+before any ablation ran) and restores that snapshot afterwards, so the
+failures above are NOT cumulative - each block is that ablation ALONE.

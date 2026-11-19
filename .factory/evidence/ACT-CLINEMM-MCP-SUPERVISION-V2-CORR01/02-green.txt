@@ -1,0 +1,29 @@
+ACT-CLINEMM-MCP-SUPERVISION-V2-CORR01 - BEHAVIORAL GREEN
+====================================================
+
+SUBJECT: the corrected tree.
+
+--- COMMAND ---
+  bun x vitest run --config vitest.config.ts (the CORR01 + V2 witnesses)
+
+--- OUTPUT ---
+ ✓ src/sdk/control-seam/control-seam.supervision-route-pin.test.ts (6 tests) 4ms
+ ✓ src/sdk/control-seam/control-seam.supervision-corr01.test.ts (5 tests) 17ms
+ ✓ src/sdk/control-seam/control-seam.supervision-v2.test.ts (30 tests) 251ms
+ ✓ src/sdk/control-seam/control-seam.supervision-approval-fence.production-shape.test.ts (5 tests) 13ms
+ ✓ src/sdk/control-seam/control-seam.supervision-lifecycle.production-shape.test.ts (5 tests) 4ms
+ Test Files  5 passed (5)
+      Tests  51 passed (51)
+   Duration  3.35s (transform 6.38s, setup 7.63s, import 2.60s, tests 289ms, environment 0ms)
+
+--- THE PER-WITNESS BREAKDOWN ---
+  src/sdk/control-seam/control-seam.supervision-corr01.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-CORR01 - P0-1 the fingerprint encoding > FP-1: the SEPARATOR-LESS encoding collides for the reviewer's payload pair 2ms
+  src/sdk/control-seam/control-seam.supervision-corr01.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-CORR01 - P0-1 the fingerprint encoding > FP-2: the collision is EXPLOITABLE through the REAL server - the replayed payload returns the WRONG recorded outcome 7ms
+  src/sdk/control-seam/control-seam.supervision-corr01.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-CORR01 - P0-1 the fingerprint encoding > FP-3: the CANONICAL encoding does NOT collide for the same payload pair 0ms
+  src/sdk/control-seam/control-seam.supervision-corr01.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-CORR01 - P0-1 the fingerprint encoding > FP-4: a same-id / different-payload replay is REJECTED end to end, for a payload pair that does NOT collide under the old encoding either 2ms
+  src/sdk/control-seam/control-seam.supervision-corr01.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-CORR01 - P0-1 the fingerprint encoding > FP-5: the existing idempotency contract still holds - a byte-identical replay returns the SAME recorded outcome and delivers NOTHING new 2ms
+  src/sdk/control-seam/control-seam.supervision-lifecycle.production-shape.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-CORR01 — the canonical turn-start prelude > LC-1: the MCP feedback route performs the CANONICAL prelude - the phase moves to `streaming`, the turn outcome is cleared and the state is published 2ms
+  src/sdk/control-seam/control-seam.supervision-lifecycle.production-shape.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-CORR01 — the canonical turn-start prelude > LC-2: the prelude emits `same_task_continued` and fences the PREVIOUS canonical run for a terminal phase 0ms
+  src/sdk/control-seam/control-seam.supervision-lifecycle.production-shape.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-CORR01 — the canonical turn-start prelude > LC-3: the MCP route forwards NO response type - the persisted `yesButtonClicked` never reaches the coordinator 1ms
+  src/sdk/control-seam/control-seam.supervision-lifecycle.production-shape.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-CORR01 — the canonical turn-start prelude > LC-4: the ordinary UI route DOES forward the persisted response type - the UI remains the approval authority 0ms
+  src/sdk/control-seam/control-seam.supervision-lifecycle.production-shape.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-CORR01 — the canonical turn-start prelude > LC-5: a `resumable` task re-enters `streaming` through the MCP route 0ms

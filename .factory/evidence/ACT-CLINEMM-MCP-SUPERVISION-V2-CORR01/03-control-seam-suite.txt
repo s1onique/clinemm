@@ -1,0 +1,11 @@
+### THE WHOLE CONTROL-SEAM SUITE
+ Test Files  15 passed (15)
+      Tests  196 passed (196)
+
+### SESSION LIFECYCLE / OWNERSHIP / TASK-CONTROL / FOLLOWUP / INTERACTION
+ Test Files  7 passed (7)
+      Tests  211 passed (211)
+
+### THE V2 + CORR01 WITNESSES
+ Test Files  5 passed (5)
+      Tests  51 passed (51)

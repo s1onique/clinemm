@@ -1498,9 +1498,33 @@ export class ControlSeamServer {
 	 * The payload fingerprint used to bind a supervision `requestId` to
 	 * its payload.
 	 *
-	 * It is a SHA-256 over the canonical encoding of the payload. The
-	 * ledger NEVER stores the feedback text itself, so a ledger dump
-	 * cannot leak task content.
+	 * It is a SHA-256 over the CANONICAL, UNAMBIGUOUS encoding of the
+	 * payload. The ledger NEVER stores the feedback text itself, so a
+	 * ledger dump cannot leak task content.
+	 *
+	 * ACT-CLINEMM-MCP-SUPERVISION-V2-CORR01 (P0-1): the encoding MUST
+	 * be injective. The V2 implementation concatenated the fields
+	 * WITHOUT a separator:
+	 *
+	 *   [operation, sessionId, String(epoch), expectedRunId ?? "", text ?? ""].join("")
+	 *
+	 * which mapped two DIFFERENT valid payloads onto the SAME hash
+	 * input:
+	 *
+	 *   {feedback, session-123, 2, run_A,  "BC"} -> "feedbacksession-1232run_ABC"
+	 *   {feedback, session-123, 2, run_AB, "C" } -> "feedbacksession-1232run_ABC"
+	 *
+	 * Because the ledger lookup happens BEFORE the run-identity check, a
+	 * replay of an accepted request id with the second payload returned
+	 * the FIRST payload's recorded acceptance instead of
+	 * `request-id-conflict` - violating the required "same request id +
+	 * different payload -> reject" contract.
+	 *
+	 * That was not a cryptographic hash collision; it was an AMBIGUOUS
+	 * SERIALIZATION. The fix is a canonical JSON encoding: a JSON array
+	 * is self-delimiting, so no two distinct field tuples can produce
+	 * the same string. `null` distinguishes an ABSENT optional field
+	 * from an EMPTY one.
 	 *
 	 * The operation discriminator (`feedback` / `cancel`) is part of the
 	 * canonical encoding, so the SAME request id cannot be reused across
@@ -1518,7 +1542,13 @@ export class ControlSeamServer {
 	): string {
 		return createHash("sha256")
 			.update(
-				[operation, input.sessionId, String(input.expectedEpoch), input.expectedRunId ?? "", input.text ?? ""].join(""),
+				JSON.stringify([
+					operation,
+					input.sessionId,
+					input.expectedEpoch,
+					input.expectedRunId ?? null,
+					input.text ?? null,
+				]),
 				"utf8",
 			)
 			.digest("hex")

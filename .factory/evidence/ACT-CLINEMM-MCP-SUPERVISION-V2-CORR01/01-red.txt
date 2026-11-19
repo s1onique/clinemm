@@ -1,0 +1,32 @@
+ACT-CLINEMM-MCP-SUPERVISION-V2-CORR01 - BEHAVIORAL RED
+====================================================
+
+SUBJECT: the pristine tree at f53dfab93 (the state the review reviewed).
+         The CORRECTION is ABSENT; only the CORR01 witness files are
+         present.
+
+  * FP-2 reproduces the reviewer's collision END TO END through the
+    REAL server: the replayed payload returns the FIRST payload's
+    recorded acceptance instead of "request-id-conflict".
+
+  * LC-1 / LC-2 / LC-5 reproduce the lifecycle omission: the MCP route
+    does not move the phase to "streaming", does not emit
+    "same_task_continued", and does not fence the previous canonical
+    run.
+
+--- COMMAND ---
+  bun x vitest run --config vitest.config.ts \
+    src/sdk/control-seam/control-seam.supervision-corr01.test.ts \
+    src/sdk/control-seam/control-seam.supervision-lifecycle.production-shape.test.ts
+
+--- OUTPUT ---
+FAIL src/sdk/control-seam/control-seam.supervision-corr01.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-CORR01 - P0-1 the fingerprint encoding > FP-2: the collision is EXPLOITABLE through the REAL server - the replayed payload returns the WRONG recorded outcome
+AssertionError: expected 'accepted' not to be 'accepted' // Object.is equality
+ FAIL src/sdk/control-seam/control-seam.supervision-lifecycle.production-shape.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-CORR01 - the canonical turn-start prelude > LC-1: the MCP feedback route performs the CANONICAL prelude - the phase moves to `streaming`, the turn outcome is cleared and the state is published
+AssertionError: expected 'awaiting_followup' to be 'streaming' // Object.is equality
+ FAIL src/sdk/control-seam/control-seam.supervision-lifecycle.production-shape.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-CORR01 - the canonical turn-start prelude > LC-2: the prelude emits `same_task_continued` and fences the PREVIOUS canonical run for a terminal phase
+AssertionError: expected [] to include 'same_task_continued'
+ FAIL src/sdk/control-seam/control-seam.supervision-lifecycle.production-shape.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-CORR01 - the canonical turn-start prelude > LC-5: a `resumable` task re-enters `streaming` through the MCP route
+AssertionError: expected 'resumable' to be 'streaming' // Object.is equality
+ Test Files  2 failed (2)
+      Tests  4 failed | 6 passed (10)

@@ -1,0 +1,150 @@
+ACT-CLINEMM-MCP-SUPERVISION-V2-CORR01 - LIVE QUALIFICATION REPORT
+=============================================================
+
+STATUS: NOT EXECUTED IN THE SANDBOX - THE SANDBOX CANNOT INSTALL A VSIX.
+
+The correction is structural. The installed qualification remains
+pending, exactly as it did for ACT-CLINEMM-MCP-SUPERVISION-V2-01. The
+ACT forbids the sandboxed ClineMM agent from installing a VSIX, and the
+sandbox has no attached VS Code instance and no Codex Desktop, so the
+installed-bundle SHA-256 cannot be produced here.
+
+Per C8: "If the sandbox cannot install VSIX, stop at structural
+qualification and supply the operator commands."
+
+
+WHAT THIS CORRECTION CHANGES ABOUT THE LIVE RUN
+------------------------------------------------
+The correction does NOT add a new operation. It makes the EXISTING
+`clinemm_send_feedback` operation re-enter the SAME lifecycle the
+operator's own composer does. The live run therefore gains two
+observable expectations:
+
+  * After an accepted feedback, the TaskHeader phase must move to
+    `streaming` (Thinking + Cancel) and then to the next terminal
+    phase - NOT stay on the stale `completed` / `resumable` phase.
+  * A feedback against a `resumable` task must leave the task RUNNING
+    (the `same_task_continued` exit), not stuck in `resumable`.
+
+If either is absent in the live run, the lifecycle conservation claim
+is broken.
+
+
+THE OPERATOR COMMANDS
+----------------------
+STEP 1 - BUILD THE EXACT-HEAD ARTIFACT
+
+  cd /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+
+  git rev-parse HEAD
+  git status --short                      # must be clean
+
+  cd apps/vscode
+  bun run build:webview
+  bun esbuild.mjs
+
+  mkdir -p ../../dist                    # REQUIRED: vsce --out resolves
+                                          # --out relative to the extension
+                                          # package dir and stats the file
+                                          # BEFORE writing it; a missing
+                                          # directory fails with a confusing
+                                          # ENOENT.
+  cd ../..
+  npx --yes @vscode/vsce package \
+      --out "dist/clinemm-mcp-supervision-v2-corr01-${SUBJECT_HEAD}.vsix" \
+      --allow-missing-repository \
+      --skip-license
+
+  shasum -a 256 "dist/clinemm-mcp-supervision-v2-corr01-${SUBJECT_HEAD}.vsix"
+  shasum -a 256 apps/vscode/dist/extension.js
+
+  # INSTALL (use the CLI of the editor actually being qualified)
+  code --install-extension "dist/clinemm-mcp-supervision-v2-corr01-${SUBJECT_HEAD}.vsix"
+
+  # Verify the INSTALLED bundle hash matches the built one:
+  shasum -a 256 ~/.vscode/extensions/claude-dev-*/dist/extension.js
+
+
+STEP 2 - THE LIVE FIXTURE
+
+  Use a FRESH DISPOSABLE fixture directory inside `codium-clinemm`.
+  NO real production repository. NO secrets. NO destructive commands.
+  NO YOLO / auto-approval changes. NO implicit task replacement.
+  NO arbitrary MCP approval responses.
+
+  Codex Desktop then performs, in order:
+
+   1. `clinemm_capabilities`
+   2. Arm the mutation grant in the UI (the operator's own action).
+   3. `clinemm_start_act` - capture the session id and the run id.
+   4. `clinemm_get_run` - record the CURRENT `expectedEpoch`.
+   5. Let the task reach `awaiting_followup`.
+   6. `clinemm_send_feedback`
+        {
+          "requestId":     "<unique>",
+          "sessionId":     "<the captured session id>",
+          "expectedEpoch": <the current epoch>,
+          "expectedRunId": "<the captured run id>",
+          "text":          "Please run the focused test."
+        }
+      Expect `accepted` (or `queued` WITH a `queuedPromptId`).
+   7. OBSERVE THE PHASE: the TaskHeader must move to `streaming`
+      (Thinking + Cancel) and then to the next terminal phase.
+      THIS is the new lifecycle expectation - record it.
+   8. Let the task reach `completed`, then send ONE more feedback
+      against the SAME task and confirm the task re-enters `streaming`
+      and completes again - the same-task continuation path.
+   9. Start a SEPARATE cancellable run, then `clinemm_cancel_run`
+      ONCE. Expect `accepted` or `already_terminal`.
+  10. REPLAY the same cancellation request and verify NO second
+      cancellation effect.
+  11. Verify NO foreign task was affected.
+
+  The operator retains the normal UI approval and Cancel controls
+  throughout. Do NOT rely on an assistant completion message as proof
+  of authoritative completion - use the published TaskHeader phase
+  and the existing lifecycle diagnostics.
+
+  ADDITIONALLY verify, for the cancellation:
+    - the background-job containment state (a background command that
+      remains active must NOT be reported as "cancelled"), and
+    - that a late cancellation never cancelled a replacement task.
+
+  ADDITIONALLY verify the approval fence at the LIVE level:
+    - while a tool approval is pending in the UI, `clinemm_send_feedback`
+      must be REJECTED with `approval-pending`, and the pending approval
+      must remain answerable by the operator in the UI.
+
+
+STEP 3 - RECORD THE INSTALLED HASH
+
+  Append to 09-exact-head-artifact-manifest.txt:
+
+    installed bundle sha256 = <the hash from the installed extension>
+
+  Then regenerate SHA256SUMS.
+
+
+WHAT THE STRUCTURAL QUALIFICATION ALREADY COVERS
+-------------------------------------------------
+The CORR01 witnesses exercise the SAME production seams the live run
+drives:
+
+  FP-1  the reviewer's payload pair collides under the OLD encoding
+  FP-2  the collision is EXPLOITABLE through the REAL server, and the
+        corrected encoding rejects it
+  FP-3  the canonical encoding does NOT collide
+  FP-4  a same-id / different-payload replay is REJECTED end to end
+  FP-5  a byte-identical replay still returns the SAME recorded
+        outcome and delivers NOTHING new (the idempotency contract
+        the correction had to preserve)
+  LC-1  the MCP route performs the canonical prelude: the phase moves
+        to `streaming`, the turn outcome is cleared, the state is
+        published
+  LC-2  the prelude emits `same_task_continued` and fences the previous
+        canonical run
+  LC-3  the MCP route forwards NO response type, so the persisted
+        "yesButtonClicked" never reaches the coordinator
+  LC-4  the ordinary UI route DOES forward the persisted response type
+        (the UI remains the approval authority)
+  LC-5  a `resumable` task re-enters `streaming` through the MCP route

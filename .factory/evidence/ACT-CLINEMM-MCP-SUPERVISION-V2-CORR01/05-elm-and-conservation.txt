@@ -1,0 +1,34 @@
+### ELM AUTHORITY SUITES
+
+NOTE: ELM_HOME points at the repo-local cache (the sandbox denies
+read-write on the default ~/.elm/0.19.2/packages/lock).
+
+--- task-header-orchestration ---
+TEST RUN PASSED
+[2mPassed:   [22m48
+[2mFailed:   [22m0
+
+--- completion-authority ---
+TEST RUN PASSED
+[2mPassed:   [22m31
+[2mFailed:   [22m0
+
+--- completion-continuation-control ---
+TEST RUN FAILED[39m[24m[31m
+[2mPassed:   [22m39
+[2mFailed:   [22m2
+
+--- background-notify-authority ---
+TEST RUN PASSED
+[2mPassed:   [22m25
+[2mFailed:   [22m0
+
+--- deferred-completion-barrier ---
+HALT_ELM_TEST_DEPS_MISSING (pre-existing repo config gap: elm-explorations/test
+is absent from the committed elm.json). IDENTICAL at pristine HEAD.
+
+### CONSERVATION vs PRISTINE HEAD f53dfab93
+  completion-continuation-control: the SAME 2 failures at pristine HEAD
+  (C9 facts-isolation > negative unconsumedCount is always MalformedFacts)
+  (HELD-SET-PROGRESS-AUTHORITY01 C2 > long passive accumulation)
+  -> the failing set is IDENTICAL. NO Elm regression.
