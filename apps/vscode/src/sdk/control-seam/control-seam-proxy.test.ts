@@ -39,10 +39,15 @@ function makeAuthority(sessionId: string | undefined): ControlSeamAuthority {
 		// published TaskHeader record, so `taskState` is omitted.
 		readPublishedTaskState: () => undefined,
 		readCurrentEpoch: () => 0,
+		readCurrentTurnPhase: () => undefined,
 		// ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: READ-ONLY fixture.
 		// The mutation members are never exercised by the proxy tests.
 		readWorkspaceRoot: async () => "/tmp/csproxy-workspace",
 		startAct: async () => ({ outcome: "rejected" as const, reason: "not-authorized-in-this-fixture" }),
+		// ACT-CLINEMM-MCP-SUPERVISION-V2-01: the supervision members are not
+		// exercised by this READ-ONLY fixture.
+		sendFeedback: async () => ({ outcome: "rejected" as const, reason: "not-authorized-in-this-fixture" }),
+		cancelRun: async () => ({ outcome: "rejected" as const, reason: "not-authorized-in-this-fixture" }),
 	}
 }
 
@@ -83,7 +88,7 @@ describe("ACT-CLINEMM-EMBEDDED-MCP-CONTROL-SEAM-RECON01 — MCP proxy", () => {
 		await server.close()
 	})
 
-	it("PX01b: with mutation ENABLED the proxy exposes the two write tools, and `clinemm_start_act` is annotated as MUTATING", async () => {
+	it("PX01b: with mutation ENABLED the proxy exposes the write tools plus the two supervision tools, and `clinemm_start_act` is annotated as MUTATING", async () => {
 		const dir = mkdtempSync(join("/tmp", "csproxy-mut-"))
 		const socketPath = join(dir, "control.sock")
 		const tokenPath = join(dir, "token")
@@ -110,7 +115,18 @@ describe("ACT-CLINEMM-EMBEDDED-MCP-CONTROL-SEAM-RECON01 — MCP proxy", () => {
 
 		const tools = await client.listTools()
 		const names = tools.tools.map((tool) => tool.name).sort()
-		expect(names).toEqual(["clinemm_capabilities", "clinemm_get_run", "clinemm_read_events", "clinemm_start_act"])
+		// ACT-CLINEMM-MCP-SUPERVISION-V2-01: the mutation-enabled proxy
+		// exposes the V1 write pair PLUS the two supervision tools. A
+		// READ-ONLY installation still exposes EXACTLY the original two
+		// operations (asserted by PX01a above).
+		expect(names).toEqual([
+			"clinemm_cancel_run",
+			"clinemm_capabilities",
+			"clinemm_get_run",
+			"clinemm_read_events",
+			"clinemm_send_feedback",
+			"clinemm_start_act",
+		])
 		// `clinemm_start_act` declares itself MUTATING. The annotation is
 		// a DISCOVERY hint only - the extension-host server still
 		// enforces the credential per request.

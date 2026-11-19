@@ -56,10 +56,29 @@
  */
 export type ControlSeamLedgerOutcome =
 	| { readonly status: "pending" }
-	| { readonly status: "accepted"; readonly sessionId: string; readonly taskId?: string }
+	/**
+	 * The `sessionId` is the accepted session identity. It is present for
+	 * `clinemm_start_act` (whose `accepted` outcome REQUIRES it — the
+	 * server must never report an acceptance without an authoritative
+	 * session identity) and absent for the supervision operations, whose
+	 * accepted outcome is scoped to the session the client already owns.
+	 */
+	| { readonly status: "accepted"; readonly sessionId?: string; readonly taskId?: string }
 	| { readonly status: "rejected"; readonly reason: string }
 	| { readonly status: "superseded"; readonly reason: string }
 	| { readonly status: "unknown_outcome"; readonly reason: string }
+	/**
+	 * ACT-CLINEMM-MCP-SUPERVISION-V2-01: the feedback operation's QUEUED
+	 * outcome. It carries the queue's OWN prompt id, so the client can
+	 * correlate the item's eventual consumption by the intended run.
+	 */
+	| { readonly status: "queued"; readonly queuedPromptId: string }
+	/**
+	 * ACT-CLINEMM-MCP-SUPERVISION-V2-01: the cancellation operation's
+	 * ALREADY-TERMINAL outcome. The cancellation was a no-op and did NOT
+	 * overwrite the committed terminal completion.
+	 */
+	| { readonly status: "already_terminal" }
 
 /**
  * One ledger record.

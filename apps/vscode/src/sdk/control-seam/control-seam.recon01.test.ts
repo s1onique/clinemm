@@ -65,10 +65,15 @@ function makeAuthority(fixture: AuthorityFixture = {}): ControlSeamAuthority {
 		// published TaskHeader record, so `taskState` is omitted.
 		readPublishedTaskState: () => undefined,
 		readCurrentEpoch: () => 0,
+		readCurrentTurnPhase: () => undefined,
 		// ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: READ-ONLY fixture.
 		// The mutation members are never exercised by the RECON01 tests.
 		readWorkspaceRoot: async () => "/tmp/crecon-workspace",
 		startAct: async () => ({ outcome: "rejected" as const, reason: "not-authorized-in-this-fixture" }),
+		// ACT-CLINEMM-MCP-SUPERVISION-V2-01: the supervision members are not
+		// exercised by this READ-ONLY fixture.
+		sendFeedback: async () => ({ outcome: "rejected" as const, reason: "not-authorized-in-this-fixture" }),
+		cancelRun: async () => ({ outcome: "rejected" as const, reason: "not-authorized-in-this-fixture" }),
 	}
 }
 
@@ -181,7 +186,12 @@ describe("ACT-CLINEMM-EMBEDDED-MCP-CONTROL-SEAM-RECON01 — C3 read-only proof",
 		expect(CONTROL_SEAM_READ_OPERATIONS.map((operation) => operation.id)).not.toContain("cancel_run")
 		// The FULL registry gained the two WRITE operations, and they
 		// are discriminated as `mutating: true` with a declared scope.
-		expect(CONTROL_SEAM_OPERATIONS).toHaveLength(4)
+		//
+		// ACT-CLINEMM-MCP-SUPERVISION-V2-01: the FULL registry grew from
+		// four operations to SIX — the two supervision operations join
+		// the V1 pair. The READ-ONLY projection is UNCHANGED: it is still
+		// exactly two operations.
+		expect(CONTROL_SEAM_OPERATIONS).toHaveLength(6)
 		for (const operation of CONTROL_SEAM_OPERATIONS) {
 			if (operation.mutating) {
 				expect(operation.writeScope).toBeDefined()

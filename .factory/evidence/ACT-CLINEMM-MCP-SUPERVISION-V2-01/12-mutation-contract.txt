@@ -1,0 +1,192 @@
+ACT-CLINEMM-MCP-SUPERVISION-V2-01 - MUTATION CONTRACT
+====================================================
+
+THE OPERATION SURFACE (exactly six; the four V1 operations are UNCHANGED)
+------------------------------------------------------------------------
+  READ-ONLY PROJECTION (the default installation) - EXACTLY TWO:
+    clinemm_capabilities
+    clinemm_get_run
+
+  MUTATION PROJECTION (requires the operator's separate mutation grant) - EXACTLY SIX:
+    clinemm_capabilities        (read-only)
+    clinemm_get_run             (read-only)
+    clinemm_start_act           (V1, unchanged)
+    clinemm_read_events         (V1, unchanged)
+    clinemm_send_feedback       (V2, NEW)
+    clinemm_cancel_run          (V2, NEW)
+
+  Pinned by: control-seam-proxy.test.ts PX01 (read-only == exactly 2),
+  PX01b (mutation == exactly 6), PX03 (the capabilities payload lists
+  exactly the two read-only operations).
+
+  Both NEW operations require the SAME explicit mutation grant as
+  `clinemm_start_act`. There is NO new token, NO new authorization
+  system, and NO separate feedback/cancel credential.
+
+
+clinemm_send_feedback
+---------------------
+REQUEST
+  {
+    "requestId":     "unique-feedback-request",   // required
+    "sessionId":     "actual-session-id",          // required
+    "expectedEpoch": 3,                            // required
+    "expectedRunId": "run_actual_if_present",      // optional
+    "text":          "Please run the focused test."// required, TEXT ONLY
+  }
+
+  `expectedEpoch` is the CONVERSATION epoch (`MessageIdMinter.epoch`).
+  It is NEVER a UI sequence number and NEVER a publication `stateVersion`.
+  `expectedRunId` is OPTIONAL: an absent run id does NOT widen the fence
+  (the session + epoch fences still apply), and a supplied-but-different
+  run id is a REJECTION.
+
+RESPONSE OUTCOMES (explicit, never a bare boolean)
+  accepted        - the authoritative feedback was ACCEPTED. It does NOT
+                    mean the agent executed it or that the task completed.
+  queued          - the EXISTING production pending-prompt queue acknowledged
+                    the item WITH a correlatable identity. The response
+                    carries `queuedPromptId` - the queue's OWN
+                    `SessionPendingPrompt.id`. The seam NEVER mints one.
+                    If the queue does not acknowledge with an identity, the
+                    outcome is `unknown_outcome`, NOT `queued`.
+  rejected        - a precondition failed (foreign session, epoch mismatch,
+                    run mismatch, approval pending, compaction, error phase,
+                    workspace mismatch, unauthorized credential, request-id
+                    conflict, a supervision operation already in flight).
+  superseded      - the session was replaced or switched away WHILE the
+                    operation was in flight. Nothing was delivered to the
+                    replacement task.
+  unknown_outcome - the outcome could NOT be proven (the authority threw, or
+                    the queue acknowledgement was unavailable). The client
+                    MUST reconcile with clinemm_get_run / clinemm_read_events
+                    and MUST NOT blindly repeat the prompt.
+
+  The outcome vocabulary is DISJOINT from the cancellation vocabulary:
+  `already_terminal` can never be recorded for a feedback operation.
+
+
+clinemm_cancel_run
+------------------
+REQUEST
+  {
+    "requestId":     "unique-cancel-request",
+    "sessionId":     "actual-session-id",
+    "expectedEpoch": 3,
+    "expectedRunId": "run_actual_if_present"    // optional
+  }
+
+RESPONSE OUTCOMES
+  accepted         - the EXISTING cancellation lifecycle ACCEPTED the
+                     cancellation. IT IS NOT PROOF THAT THE RUN STOPPED.
+  already_terminal - the task had already reached an authoritative terminal
+                     outcome. The cancellation is a NO-OP and does NOT
+                     overwrite a committed terminal completion.
+  superseded       - the session was replaced WHILE the cancellation was in
+                     flight. The replacement task was NOT cancelled.
+  rejected         - a precondition failed.
+  unknown_outcome  - the outcome could not be proven.
+
+  The response ALSO exposes `phase` when safely available.
+
+
+THE PRECONDITIONS, IN ORDER (both operations)
+---------------------------------------------
+  1. PAYLOAD SHAPE - the codec discriminates it.
+  2. AUTHORIZATION - the mutation grant must be present, the write
+     credential must match in CONSTANT TIME, and the CURRENT workspace
+     must still equal the grant's workspace (re-verified per request).
+  3. THE LEDGER IS CONSULTED FIRST - a replay returns the SAME recorded
+     outcome, so a repeated cancel NEVER initiates a second cancellation
+     and a repeated feedback NEVER delivers a second message.
+  4. SESSION OWNERSHIP - the requested session must be the session THIS
+     mutation client started (`ownedSessionId`). A foreign or
+     never-started session id is refused without disclosing whether it
+     exists.
+  5. THE EPOCH FENCE - the current conversation epoch must equal
+     `expectedEpoch`. When the epoch cannot be established, the request is
+     REJECTED (the conservative direction).
+  6. THE RUN IDENTITY FENCE - when the runtime reports a run id, it must
+     equal `expectedRunId` (when supplied).
+  7. THE PHASE POLICY - see below.
+  8. THE SINGLE-SLOT SUPERVISION RESERVATION - at most one supervision
+     operation is in flight at a time; a second is REJECTED with
+     `supervision-already-in-flight` rather than racing.
+  9. THE DISPATCH-BOUNDARY RE-CHECK - the session identity is re-checked
+     AFTER the dispatch await. A task switch yields `superseded`.
+
+
+THE PHASE POLICY (derived from the production follow-up semantics)
+-------------------------------------------------------------------
+  awaiting_followup  -> the ordinary text response path through the REAL
+                         follow-up authority.
+  streaming          -> the EXISTING pending-prompt queue, with
+                         `delivery: "queue"`. The outcome is `queued` ONLY
+                         when the queue acknowledges with an identity.
+  awaiting_approval  -> REJECTED (`approval-pending`). The approval
+                         interaction and the feedback would COMPETE for
+                         the same interaction slot; the approval fence
+                         wins and the pending approval is left untouched
+                         for the operator in the UI.
+  compacting         -> REJECTED (`compaction-in-progress`). An internal
+                         SYSTEM transition owns the next step.
+  error              -> REJECTED (`task-in-error-state`). No proven safe
+                         ordinary-message recovery path.
+  completed          -> the same-task continuation path, when the
+                         production lifecycle supports it.
+  unknown / stale    -> REJECTED (`phase-unavailable`).
+
+
+THE APPROVAL FENCE (the load-bearing property)
+-----------------------------------------------
+  `clinemm_send_feedback` MUST NEVER be able to answer a tool approval.
+
+  * The operation carries TEXT ONLY. It never passes a webview interaction
+    enum (`yesButtonClicked` / `noButtonClicked` / `messageResponse`).
+  * The seam-side phase policy rejects `awaiting_approval` BEFORE dispatch.
+  * The controller-side phase policy rejects it AGAIN, independently.
+  * THE ROUTE: the controller calls `SdkFollowupCoordinator.askResponse()`
+    DIRECTLY, with NO response type. It does NOT call
+    `SdkController.askResponse()`, which forwards the PERSISTED
+    `taskState.askResponse` - the value the UI's "Approve" click leaves on
+    the task proxy for the REST of the task's life. Forwarding it would
+    APPROVE the NEXT pending tool. Pinned by RP-1 / RP-2 (route pin) and
+    AF-4 / AF-5 (the real `TaskProxy` persisting the stale value).
+
+  No conversion of free-text input into approval, automatic retry,
+  provider override or permission escalation. No auto-approval setting is
+  changed.
+
+
+THE CANCELLATION ROUTE
+----------------------
+  `clinemm_cancel_run` -> `SdkController.cancelTask()` ->
+  `SdkTaskControlCoordinator.cancelTask()`. It is the SAME method the
+  webview's Cancel button reaches, so the cancel fence
+  (`raiseCancelFence`), the interaction cleanup (`clearPending`), the
+  background-job containment and the terminal-phase authority are ALL
+  preserved.
+
+  No PID is killed. No independent SDK abort path is used. No session is
+  aborted directly. Pinned by RP-3.
+
+
+THE LEDGER
+----------
+  ONE shared, bounded operation ledger serves both new operations. It
+  prevents a request id from being reused ACROSS the two operations (the
+  operation discriminator is part of the fingerprint), so a cancel under a
+  feedback's request id is a `request-id-conflict`, not a silent
+  cancellation.
+
+  The ledger stores a SHA-256 FINGERPRINT of the payload, NEVER the
+  feedback text. A ledger dump cannot leak task content.
+
+  Same request id + same payload  -> the SAME recorded outcome.
+  Same request id + different payload -> `rejected` / `request-id-conflict`.
+  Concurrent duplicates -> ONE dispatch; the duplicate JOINS the in-flight
+  operation and observes the SAME recorded outcome.
+
+  The ledger is INSTANCE-LOCAL: a restart invalidates the instance-local
+  mutation grant. Durable exactly-once semantics ACROSS restarts are NOT
+  claimed.

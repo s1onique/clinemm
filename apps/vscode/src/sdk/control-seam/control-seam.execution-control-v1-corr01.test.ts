@@ -128,6 +128,7 @@ function makeAuthority(fixture: AuthorityFixture) {
 		readRuntimeSnapshot: () => undefined,
 		readPublishedTaskState: () => undefined,
 		readCurrentEpoch: () => 0,
+		readCurrentTurnPhase: () => undefined,
 		readWorkspaceRoot: async () => fixture.workspace,
 		startAct: async (input: { readonly prompt: string }) => {
 			fixture.startCalls.push(input.prompt)
@@ -149,6 +150,10 @@ function makeAuthority(fixture: AuthorityFixture) {
 			}
 			return { outcome: "accepted" as const, sessionId }
 		},
+		// ACT-CLINEMM-MCP-SUPERVISION-V2-01: the supervision members are
+		// not exercised by this fixture.
+		sendFeedback: async () => ({ outcome: "rejected" as const, reason: "not-authorized-in-this-fixture" }),
+		cancelRun: async () => ({ outcome: "rejected" as const, reason: "not-authorized-in-this-fixture" }),
 	}
 }
 
@@ -662,7 +667,7 @@ describe("ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-CORR01 - conservation", () => {
 		expect(capabilities.operations.map((operation) => operation.id)).toEqual(["clinemm_capabilities", "clinemm_get_run"])
 	})
 
-	it("CN-3: the mutation-AUTHORIZED view still shows exactly the two write operations", async () => {
+	it("CN-3: the mutation-AUTHORIZED view shows the V1 write operations plus the two supervision operations", async () => {
 		const harness = await startHarness({ workspace: "/tmp/workspace" }, { mutationEnabled: true })
 		const response = await send(
 			harness,
@@ -677,11 +682,16 @@ describe("ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-CORR01 - conservation", () => {
 		expect(response.ok).toBe(true)
 		const capabilities = response.result as { operations: { id: string }[]; readOnly: boolean }
 		expect(capabilities.readOnly).toBe(false)
+		// ACT-CLINEMM-MCP-SUPERVISION-V2-01: the mutation-authorized view
+		// now carries the two SUPERVISION operations in addition to the
+		// V1 pair. The registry order is the declaration order.
 		expect(capabilities.operations.map((operation) => operation.id)).toEqual([
 			"clinemm_capabilities",
 			"clinemm_get_run",
 			"clinemm_start_act",
 			"clinemm_read_events",
+			"clinemm_send_feedback",
+			"clinemm_cancel_run",
 		])
 	})
 })

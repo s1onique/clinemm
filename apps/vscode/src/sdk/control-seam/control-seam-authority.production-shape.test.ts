@@ -108,11 +108,16 @@ describe("ACT-CLINEMM-EMBEDDED-MCP-CONTROL-SEAM-RECON01 — production-shape aut
 			// TaskHeader record in this fixture.
 			readPublishedTaskState: () => undefined,
 			readCurrentEpoch: () => 0,
+			readCurrentTurnPhase: () => undefined,
 			// ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: this fixture is
 			// READ-ONLY. The mutation members exist so the authority
 			// shape stays complete; they are never exercised here.
 			readWorkspaceRoot: async () => "/tmp/csps-workspace",
 			startAct: async () => ({ outcome: "rejected" as const, reason: "not-authorized-in-this-fixture" }),
+			// ACT-CLINEMM-MCP-SUPERVISION-V2-01: the supervision members
+			// are not exercised by this READ-ONLY fixture.
+			sendFeedback: async () => ({ outcome: "rejected" as const, reason: "not-authorized-in-this-fixture" }),
+			cancelRun: async () => ({ outcome: "rejected" as const, reason: "not-authorized-in-this-fixture" }),
 		})
 
 		expect(identity).toEqual({
@@ -166,10 +171,15 @@ describe("ACT-CLINEMM-EMBEDDED-MCP-CONTROL-SEAM-RECON01 — production-shape aut
 				// TaskHeader record in this fixture.
 				readPublishedTaskState: () => undefined,
 				readCurrentEpoch: () => 0,
+				readCurrentTurnPhase: () => undefined,
 				// ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: READ-ONLY
 				// fixture. The mutation members are never exercised.
 				readWorkspaceRoot: async () => "/tmp/csps-workspace",
 				startAct: async () => ({ outcome: "rejected" as const, reason: "not-authorized-in-this-fixture" }),
+				// ACT-CLINEMM-MCP-SUPERVISION-V2-01: the supervision members
+				// are not exercised by this READ-ONLY fixture.
+				sendFeedback: async () => ({ outcome: "rejected" as const, reason: "not-authorized-in-this-fixture" }),
+				cancelRun: async () => ({ outcome: "rejected" as const, reason: "not-authorized-in-this-fixture" }),
 			},
 			extensionVersion: "0.0.0-test",
 			platform: "darwin",

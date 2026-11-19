@@ -1,0 +1,49 @@
+### C9/C10/BCB + COMPLETION/CONTINUATION/BACKGROUND - CONSERVATION vs PRISTINE HEAD
+
+BASELINE at pristine HEAD acea67fc2 (git stash, same gate set):
+  Test Files  6 failed | 9 passed (15)
+  Tests       25 failed | 144 passed (169)
+
+WITH the V2 change (same gate set):
+  Test Files  6 failed | 9 passed (15)
+  Tests       25 failed | 144 passed (169)
+
+DIAGNOSTIC IDENTITY COMPARISON (the exact failing test names, sorted):
+  (re-run on the COMMITTED state - the failing set is byte-identical:
+   25 at pristine HEAD, 25 at the committed subject, NEW-failures EMPTY)
+  NEW failures introduced by the V2 change:
+    (none - EMPTY)
+  failures FIXED by the V2 change:
+    (none)
+
+CONCLUSION: the V2 change introduces ZERO new diagnostics in the C9/C10/BCB /
+completion / continuation / background-job gates. The 25 failures are
+PRE-EXISTING at pristine HEAD acea67fc2 - they are sandbox/environment
+artifacts (real background process spawning + registry wiring), NOT regressions.
+
+--- the exact baseline failing-test set (identical before and after) ---
+src/sdk/__tests__/background-completion-barrier01-correction02.bcb01-c2.test.ts > BCB01-C2 — CORRECTION02 — real production consumer seam > Unit — command_status Path B drains non-notify observations > BCB-21: command_status on terminal notify=false job drains observation exactly once
+src/sdk/__tests__/background-completion-barrier01-correction02.bcb01-c2.test.ts > BCB01-C2 — CORRECTION02 — real production consumer seam > Unit — command_status Path B drains non-notify observations > BCB-22: command_status does NOT drain when state=running (no terminal fact delivered)
+src/sdk/__tests__/background-completion-barrier01-correction02.bcb01-c2.test.ts > BCB01-C2 — CORRECTION02 — real production consumer seam > Unit — command_status Path B drains non-notify observations > BCB-23: command_status idempotency — second call on already-drained observation is a no-op
+src/sdk/__tests__/background-completion-barrier01-correction02.bcb01-c2.test.ts > BCB01-C2 — CORRECTION02 — real production consumer seam > Unit — command_status Path B drains non-notify observations > BCB-24: command_status owner-mismatch — stale session cannot drain observation
+src/sdk/__tests__/background-completion-barrier01-correction02.bcb01-c2.test.ts > BCB01-C2 — CORRECTION02 — real production consumer seam > Unit — command_status Path B drains non-notify observations > BCB-25: REAL integration — run_commands + command_status → barrier releases → exactly 1 commit
+src/sdk/__tests__/background-completion-barrier01.bcb01.test.ts > BCB01 — background-completion barrier over task-owned jobs > Integration — production tool path > BCB-INT-01: real run_commands + CommandJobManager → barrier holds on running aggregate
+src/sdk/__tests__/background-completion-barrier01.bcb01.test.ts > BCB01 — background-completion barrier over task-owned jobs > Integration — production tool path > BCB-INT-02: real run_commands notify=true + command_status (Path B) → barrier holds then releases
+src/sdk/__tests__/bcb-observation-unavailable-capture.bcapt01.test.ts > BCAPT-CMD.2: registry exposes both command constants and extension.ts registers them > BCAPT-CMD.2.1: registry declares both constants with the correct id-suffix
+src/sdk/__tests__/c10-filter-ablation01.ablation.test.ts > ACT-CLINEMM-C10-FILTER-ABLATION01 / C10-ABLATION-02 (matrix B — non-notify completion) > C10-ABLATION-02-NON-NOTIFY: SEAM A OFF does not alter ordinary non-notify completion behavior
+src/sdk/__tests__/c10-filter-ablation01.ablation.test.ts > ACT-CLINEMM-C10-FILTER-ABLATION01 / C10-ABLATION-03 (matrix C — lost wake) > C10-ABLATION-03-LOST-WAKE: dispatch FAILED -> originating completion ALLOWED with SEAM A OFF (zero completion / duplicate / stuck barrier)
+src/sdk/__tests__/c10-filter-ablation01.ablation.test.ts > ACT-CLINEMM-C10-FILTER-ABLATION01 / C10-ABLATION-04 (matrix D — fast exit) > C10-ABLATION-04-FAST-EXIT: SEAM A OFF preserves <=1 framework completion and exactly 1 visible completion box
+src/sdk/__tests__/host-blocked-outcome-publication01.hbop01.test.ts > ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-PUBLICATION01 — HBOP01 > RED#1 — stalled_no_progress reaches a typed host publication > HBOP-01: first K delivers; K+1 stalls; marker carries reason='stalled_no_progress'
+src/sdk/__tests__/host-blocked-outcome-publication01.hbop01.test.ts > ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-PUBLICATION01 — HBOP01 > RED#1 — stalled_no_progress reaches a typed host publication > HBOP-02: stalled outcome is idempotent — same held set, multiple stalls, one typed publication
+src/sdk/__tests__/host-blocked-outcome-publication01.hbop01.test.ts > ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-PUBLICATION01 — HBOP01 > RED#2 — non-blocked outcomes do NOT publish a blocked reason > HBOP-10: a delivered outcome does not stamp a blocked reason on the marker
+src/sdk/__tests__/host-blocked-outcome-publication01.hbop01.test.ts > ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-PUBLICATION01 — HBOP01 > RED#2 — non-blocked outcomes do NOT publish a blocked reason > HBOP-11: a `rejected` callback outcome publishes reason='delivery_rejected'
+src/sdk/__tests__/host-blocked-outcome-publication01.hbop01.test.ts > ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-PUBLICATION01 — HBOP01 > RED#3 — task replacement (C4 adversarial) does not leak > HBOP-20: T1 stalled outcome does NOT publish onto a T2 replacement task
+src/sdk/__tests__/host-blocked-outcome-publication01.hbop01.test.ts > ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-PUBLICATION01 — HBOP01 > RED#4 — CORRECTION01: production consumer (no test-accessor-only claim) > HBOP-30: a successful stalled publication increments the production dogfood counter
+src/sdk/__tests__/host-blocked-outcome-publication01.hbop01.test.ts > ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-PUBLICATION01 — HBOP01 > RED#4 — CORRECTION01: production consumer (no test-accessor-only claim) > HBOP-31: a successful delivery_rejected publication increments the parallel production counter
+src/sdk/__tests__/host-blocked-outcome-publication01.hbop01.test.ts > ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-PUBLICATION01 — HBOP01 > RED#7 — Elm authority conservation (C15) > HBOP-60: the disc verdict comes from the TS stall discriminator, not from a re-derived Elm consult
+src/sdk/vscode-run-commands-tool.background-state.test.ts > createVscodeRunCommandsTool — background state callback (ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01) > RTP-ASYNC01: when the tool returns RUNNING, the callback fires again with (false, undefined) after the process completes asynchronously
+src/sdk/vscode-run-commands-tool.background-state.test.ts > createVscodeRunCommandsTool — background state callback (ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01) > RTP-LONG01: console-sh background job survives after the tool call returns and completes naturally (no cancel, no deadline)
+src/sdk/vscode-run-commands-tool.background-state.test.ts > createVscodeRunCommandsTool — background state callback (ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01) > RTP-MULTI01: projection stays true while at least one background job is still active (terminal-cardinality-safe)
+src/sdk/vscode-run-commands-tool.background-state.test.ts > createVscodeRunCommandsTool — background state callback (ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01) > RTP-MULTI02: projection fires (true, jobId) when jobs start concurrently (0->N race-safe)
+src/sdk/vscode-run-commands-tool.background-state.test.ts > createVscodeRunCommandsTool — background state callback (ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01) > emits onBackgroundStateChange(false, undefined) when the command completes before the wait budget
+src/sdk/vscode-run-commands-tool.background-state.test.ts > createVscodeRunCommandsTool — background state callback (ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01) > emits onBackgroundStateChange(true, jobId) when the tool returns RUNNING

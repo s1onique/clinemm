@@ -72,10 +72,14 @@ import {
 	CONTROL_SEAM_OPERATIONS,
 	CONTROL_SEAM_PROTOCOL_VERSION,
 	CONTROL_SEAM_READ_OPERATIONS,
+	type ControlSeamCancelRunOutcome,
+	type ControlSeamCancelRunResult,
 	type ControlSeamCapabilities,
 	type ControlSeamEventsResult,
 	type ControlSeamRequest,
 	type ControlSeamResponse,
+	type ControlSeamSendFeedbackOutcome,
+	type ControlSeamSendFeedbackResult,
 	type ControlSeamStartActResult,
 	constantTimeEquals,
 	controlSeamError,
@@ -240,6 +244,42 @@ export class ControlSeamServer {
 	 * dead extension host leaves NO mutation credential behind.
 	 */
 	private writeTokenPath: string | undefined
+	/**
+	 * ACT-CLINEMM-MCP-SUPERVISION-V2-01: the SINGLE-SLOT in-flight
+	 * SUPERVISION reservation.
+	 *
+	 * `clinemm_send_feedback` and `clinemm_cancel_run` are both
+	 * interaction-consuming operations on the SAME owned session: a
+	 * feedback message and a cancellation must never race each other,
+	 * and two concurrent feedback operations must not both claim the
+	 * interaction.
+	 *
+	 * The slot holds the request id of the supervision operation that is
+	 * currently in flight. A DIFFERENT request id is refused with
+	 * `rejected(supervision-already-in-flight)` and never reaches the
+	 * lifecycle. A request id that is ALREADY in flight joins it through
+	 * the ledger (same key + same payload -> the same recorded outcome).
+	 *
+	 * The slot is INSTANCE-LOCAL, like the ledger, and is released when
+	 * the in-flight operation settles — including on the failure path.
+	 */
+	private inFlightSupervisionRequestId: string | undefined
+	/**
+	 * ACT-CLINEMM-MCP-SUPERVISION-V2-01: the IN-FLIGHT SUPERVISION
+	 * OPERATIONS, keyed by request id.
+	 *
+	 * A duplicate delivery that arrives WHILE the first operation is
+	 * still running must JOIN it, not report an ambiguous outcome and
+	 * not start a second operation. The ledger records an in-flight
+	 * entry, and this map holds the SETTLEMENT PROMISE for it: a
+	 * duplicate awaits that promise and then returns the SAME recorded
+	 * outcome.
+	 *
+	 * The map is bounded by the number of simultaneously pending
+	 * supervision operations, which the single-slot reservation bounds
+	 * to ONE.
+	 */
+	private readonly inFlightSupervisionOperations = new Map<string, Promise<ControlSeamLedgerOutcome>>()
 
 	constructor(options: ControlSeamServerOptions) {
 		this.options = options
@@ -510,6 +550,11 @@ export class ControlSeamServer {
 		// the previous instance's ownership.
 		this.inFlightStartRequestId = undefined
 		this.ownedSessionId = undefined
+		// ACT-CLINEMM-MCP-SUPERVISION-V2-01: drop the supervision
+		// reservation too. It is instance-local state and MUST NOT
+		// survive a host replacement.
+		this.inFlightSupervisionRequestId = undefined
+		this.inFlightSupervisionOperations.clear()
 		if (server) {
 			await new Promise<void>((resolve) => server.close(() => resolve()))
 		}
@@ -719,6 +764,10 @@ export class ControlSeamServer {
 				return this.handleStartAct(request)
 			case "clinemm_read_events":
 				return this.handleReadEvents(request)
+			case "clinemm_send_feedback":
+				return this.handleSendFeedback(request)
+			case "clinemm_cancel_run":
+				return this.handleCancelRun(request)
 			default:
 				return controlSeamError(CONTROL_SEAM_ERROR_CODES.unknownOperation, "unknown control-seam operation")
 		}
@@ -984,6 +1033,623 @@ export class ControlSeamServer {
 	}
 
 	/**
+	 * ACT-CLINEMM-MCP-SUPERVISION-V2-01: `clinemm_send_feedback`.
+	 *
+	 * THE ORDER OF THE CHECKS IS LOAD-BEARING:
+	 *
+	 *   1. The payload MUST be present and well-formed (the codec
+	 *      already discriminated it).
+	 *   2. The mutation grant MUST be present, the write credential MUST
+	 *      match in constant time, and the CURRENT workspace MUST still
+	 *      equal the grant's workspace (re-verified at request time —
+	 *      the user may have opened a different folder since the grant
+	 *      was minted).
+	 *   3. The LEDGER MUST be consulted FIRST, before the ownership
+	 *      fence. A replay of an already-accepted request must return
+	 *      the SAME recorded outcome even though the owned session is
+	 *      now active.
+	 *   4. The requested session MUST be the session THIS mutation
+	 *      client owns (`ownedSessionId`). A foreign or never-started
+	 *      session id is refused without disclosing whether it exists.
+	 *   5. The SINGLE-SLOT supervision reservation MUST be free.
+	 *   6. ONLY THEN is the real follow-up authority invoked.
+	 *
+	 * THE APPROVAL FENCE. Nothing in this handler can answer a tool
+	 * approval: the operation carries TEXT ONLY, it never passes a
+	 * webview interaction enum (`yesButtonClicked` / `noButtonClicked` /
+	 * `messageResponse`), and the authority member it reaches is
+	 * contractually forbidden from touching
+	 * `resolvePendingToolApproval`.
+	 */
+	private async handleSendFeedback(request: ControlSeamRequest): Promise<ControlSeamResponse> {
+		const payload = request.payload
+		if (!payload || payload.op !== "clinemm_send_feedback") {
+			return controlSeamError(CONTROL_SEAM_ERROR_CODES.rejected, "clinemm_send_feedback requires its input payload")
+		}
+		const input = payload.input
+
+		// (2) AUTHORIZATION.
+		const authorization = authorizeControlSeamMutation({
+			grant: this.mutationGrant,
+			writeToken: request.writeToken,
+		})
+		if (!authorization.authorized) {
+			return controlSeamError(
+				CONTROL_SEAM_ERROR_CODES.mutationNotAuthorized,
+				"clinemm_send_feedback is not authorized for this client",
+			)
+		}
+		const currentWorkspace = await this.options.authority.readWorkspaceRoot()
+		if (currentWorkspace !== authorization.grant.workspace) {
+			return controlSeamError(
+				CONTROL_SEAM_ERROR_CODES.mutationNotAuthorized,
+				"clinemm_send_feedback is not authorized for this client",
+			)
+		}
+
+		// (3) IDEMPOTENCY - FIRST.
+		const fingerprint = this.fingerprintSupervisionPayload("feedback", {
+			sessionId: input.sessionId,
+			expectedEpoch: input.expectedEpoch,
+			expectedRunId: input.expectedRunId,
+			text: input.text,
+		})
+		const lookup = this.ledger.lookup(input.requestId, fingerprint)
+		if (lookup.kind === "conflict") {
+			return this.feedbackResult({
+				outcome: "rejected",
+				requestId: input.requestId,
+				sessionId: input.sessionId,
+				reason: "request-id-conflict",
+			})
+		}
+		if (lookup.kind === "found") {
+			const recorded = lookup.outcome
+			if (recorded.status === "pending") {
+				// THE IN-FLIGHT JOIN. A duplicate delivery that arrives
+				// while the first operation is still running joins it
+				// and observes the SAME recorded outcome - it never
+				// starts a second dispatch and never reports a
+				// fabricated outcome of its own.
+				const pending = this.inFlightSupervisionOperations.get(input.requestId)
+				if (pending) {
+					const settled = await pending
+					return this.feedbackResultFromLedger(settled, input.requestId, input.sessionId)
+				}
+			}
+			return this.feedbackResultFromLedger(recorded, input.requestId, input.sessionId)
+		}
+
+		// (4) SESSION OWNERSHIP. The feedback may only reach the session
+		// THIS mutation client started.
+		const ownedSessionId = this.ownedSessionId
+		if (ownedSessionId === undefined || ownedSessionId !== input.sessionId) {
+			return this.feedbackResult({
+				outcome: "rejected",
+				requestId: input.requestId,
+				sessionId: input.sessionId,
+				reason: "foreign-session",
+			})
+		}
+
+		// (4b) THE EPOCH FENCE. The seam enforces it ITSELF, before it
+		// dispatches: a stale epoch means the conversation moved on, and
+		// the message would land in the wrong turn. The fence is a
+		// CONVERSATION epoch (`MessageIdMinter.epoch`) — never a UI
+		// sequence number and never a publication `stateVersion`.
+		//
+		// When the current epoch cannot be established, the fence cannot
+		// be satisfied, so the request is rejected: the conservative
+		// direction.
+		const currentEpoch = this.options.authority.readCurrentEpoch()
+		if (currentEpoch === undefined) {
+			return this.feedbackResult({
+				outcome: "rejected",
+				requestId: input.requestId,
+				sessionId: input.sessionId,
+				reason: "epoch-unavailable",
+			})
+		}
+		if (currentEpoch !== input.expectedEpoch) {
+			return this.feedbackResult({
+				outcome: "rejected",
+				requestId: input.requestId,
+				sessionId: input.sessionId,
+				reason: "epoch-mismatch",
+			})
+		}
+
+		// (4c) THE RUN IDENTITY FENCE. When the runtime reports a run
+		// id, it MUST match the one the client asserted. An ABSENT
+		// expected run id does NOT widen the fence: the session + epoch
+		// fences still apply, and a supplied-but-different run id is a
+		// rejection.
+		const snapshot = this.options.authority.readRuntimeSnapshot()
+		if (input.expectedRunId !== undefined && snapshot?.runId !== input.expectedRunId) {
+			return this.feedbackResult({
+				outcome: "rejected",
+				requestId: input.requestId,
+				sessionId: input.sessionId,
+				reason: "run-mismatch",
+			})
+		}
+
+		// (4d) THE PHASE POLICY — THE APPROVAL FENCE.
+		//
+		// The seam applies the policy ITSELF, before it dispatches, so
+		// the fence holds independently of what the authority does.
+		// The policy is derived from the production follow-up semantics:
+		//
+		//   - `awaiting_approval`: a tool approval is pending. The
+		//     approval interaction and the feedback would COMPETE for
+		//     the same interaction slot. The approval fence wins: the
+		//     feedback is REJECTED and the pending approval is left
+		//     untouched for the operator in the UI.
+		//   - `compacting`: an internal SYSTEM transition owns the next
+		//     step; no user action is actionable while it runs.
+		//   - `error`: there is no proven ordinary-message recovery path
+		//     that is safe to assert from here.
+		//
+		// A phase that cannot be established is treated as UNKNOWN, and
+		// the request is rejected: the conservative direction.
+		const phase = this.options.authority.readCurrentTurnPhase()
+		if (phase === undefined) {
+			return this.feedbackResult({
+				outcome: "rejected",
+				requestId: input.requestId,
+				sessionId: input.sessionId,
+				reason: "phase-unavailable",
+			})
+		}
+		if (phase === "awaiting_approval") {
+			return this.feedbackResult({
+				outcome: "rejected",
+				requestId: input.requestId,
+				sessionId: input.sessionId,
+				reason: "approval-pending",
+				phase,
+			})
+		}
+		if (phase === "compacting") {
+			return this.feedbackResult({
+				outcome: "rejected",
+				requestId: input.requestId,
+				sessionId: input.sessionId,
+				reason: "compaction-in-progress",
+				phase,
+			})
+		}
+		if (phase === "error") {
+			return this.feedbackResult({
+				outcome: "rejected",
+				requestId: input.requestId,
+				sessionId: input.sessionId,
+				reason: "task-in-error-state",
+				phase,
+			})
+		}
+
+		// (5) THE SINGLE-SLOT SUPERVISION RESERVATION.
+		if (this.inFlightSupervisionRequestId !== undefined) {
+			return this.feedbackResult({
+				outcome: "rejected",
+				requestId: input.requestId,
+				sessionId: input.sessionId,
+				reason: "supervision-already-in-flight",
+			})
+		}
+		this.inFlightSupervisionRequestId = input.requestId
+		this.ledger.begin(input.requestId, fingerprint)
+
+		// REGISTER THE SETTLEMENT PROMISE BEFORE the dispatch starts, so
+		// a duplicate delivery that arrives while the operation is in
+		// flight can JOIN it.
+		const settlement = this.dispatchSupervisionFeedback(input)
+		this.inFlightSupervisionOperations.set(input.requestId, settlement)
+
+		let outcome: ControlSeamLedgerOutcome
+		try {
+			outcome = await settlement
+		} catch (error) {
+			// The authority threw. We CANNOT prove whether the feedback
+			// was delivered, so the outcome is `unknown_outcome` — and
+			// it is RECORDED, so a replay does not deliver a SECOND
+			// message.
+			Logger.error("[ControlSeam] clinemm_send_feedback failed with an unprovable outcome:", error)
+			outcome = { status: "unknown_outcome", reason: "host-failure" }
+		} finally {
+			this.inFlightSupervisionRequestId = undefined
+			this.inFlightSupervisionOperations.delete(input.requestId)
+		}
+		this.ledger.complete(input.requestId, outcome, fingerprint)
+		return this.feedbackResultFromLedger(outcome, input.requestId, input.sessionId)
+	}
+
+	/**
+	 * ACT-CLINEMM-MCP-SUPERVISION-V2-01: `clinemm_cancel_run`.
+	 *
+	 * The check order mirrors `clinemm_send_feedback`:
+	 *
+	 *   1. Payload shape.
+	 *   2. Authorization (grant + constant-time credential + the CURRENT
+	 *      workspace still equals the grant's workspace).
+	 *   3. The LEDGER FIRST — a replay returns the SAME recorded
+	 *      outcome, so a repeated cancel NEVER initiates a second
+	 *      cancellation.
+	 *   4. Session ownership — the session must be the one THIS client
+	 *      owns.
+	 *   5. The single-slot supervision reservation.
+	 *   6. The authoritative `cancelTask()` lifecycle.
+	 *
+	 * AN ACCEPTED CANCELLATION IS NOT PROOF THAT THE RUN STOPPED. The
+	 * authoritative lifecycle owns the abort, the interaction cleanup and
+	 * the background-job containment, and it publishes the resulting
+	 * phase asynchronously. The result therefore reports the LIFECYCLE
+	 * outcome — never a fabricated "the run is gone".
+	 */
+	private async handleCancelRun(request: ControlSeamRequest): Promise<ControlSeamResponse> {
+		const payload = request.payload
+		if (!payload || payload.op !== "clinemm_cancel_run") {
+			return controlSeamError(CONTROL_SEAM_ERROR_CODES.rejected, "clinemm_cancel_run requires its input payload")
+		}
+		const input = payload.input
+
+		// (2) AUTHORIZATION.
+		const authorization = authorizeControlSeamMutation({
+			grant: this.mutationGrant,
+			writeToken: request.writeToken,
+		})
+		if (!authorization.authorized) {
+			return controlSeamError(
+				CONTROL_SEAM_ERROR_CODES.mutationNotAuthorized,
+				"clinemm_cancel_run is not authorized for this client",
+			)
+		}
+		const currentWorkspace = await this.options.authority.readWorkspaceRoot()
+		if (currentWorkspace !== authorization.grant.workspace) {
+			return controlSeamError(
+				CONTROL_SEAM_ERROR_CODES.mutationNotAuthorized,
+				"clinemm_cancel_run is not authorized for this client",
+			)
+		}
+
+		// (3) IDEMPOTENCY - FIRST.
+		const fingerprint = this.fingerprintSupervisionPayload("cancel", {
+			sessionId: input.sessionId,
+			expectedEpoch: input.expectedEpoch,
+			expectedRunId: input.expectedRunId,
+		})
+		const lookup = this.ledger.lookup(input.requestId, fingerprint)
+		if (lookup.kind === "conflict") {
+			return this.cancelResult({
+				outcome: "rejected",
+				requestId: input.requestId,
+				sessionId: input.sessionId,
+				reason: "request-id-conflict",
+			})
+		}
+		if (lookup.kind === "found") {
+			const recorded = lookup.outcome
+			if (recorded.status === "pending") {
+				// THE IN-FLIGHT JOIN — a concurrent duplicate observes the
+				// SAME recorded outcome and never starts a second
+				// cancellation.
+				const pending = this.inFlightSupervisionOperations.get(input.requestId)
+				if (pending) {
+					const settled = await pending
+					return this.cancelResultFromLedger(settled, input.requestId, input.sessionId)
+				}
+			}
+			return this.cancelResultFromLedger(recorded, input.requestId, input.sessionId)
+		}
+
+		// (4) SESSION OWNERSHIP.
+		const ownedSessionId = this.ownedSessionId
+		if (ownedSessionId === undefined || ownedSessionId !== input.sessionId) {
+			return this.cancelResult({
+				outcome: "rejected",
+				requestId: input.requestId,
+				sessionId: input.sessionId,
+				reason: "foreign-session",
+			})
+		}
+
+		// (4b) THE EPOCH FENCE. The seam enforces it ITSELF. A stale
+		// epoch means the conversation moved on, and the cancellation
+		// would target the wrong turn.
+		const currentEpoch = this.options.authority.readCurrentEpoch()
+		if (currentEpoch === undefined) {
+			return this.cancelResult({
+				outcome: "rejected",
+				requestId: input.requestId,
+				sessionId: input.sessionId,
+				reason: "epoch-unavailable",
+			})
+		}
+		if (currentEpoch !== input.expectedEpoch) {
+			return this.cancelResult({
+				outcome: "rejected",
+				requestId: input.requestId,
+				sessionId: input.sessionId,
+				reason: "epoch-mismatch",
+			})
+		}
+
+		// (4c) THE RUN IDENTITY FENCE.
+		const snapshot = this.options.authority.readRuntimeSnapshot()
+		if (input.expectedRunId !== undefined && snapshot?.runId !== input.expectedRunId) {
+			return this.cancelResult({
+				outcome: "rejected",
+				requestId: input.requestId,
+				sessionId: input.sessionId,
+				reason: "run-mismatch",
+			})
+		}
+
+		// (4d) THE TERMINAL-PHASE FENCE. A task that already reached an
+		// authoritative terminal outcome KEEPS that outcome. Cancelling
+		// it must NOT publish a `resumable` phase over a committed
+		// `completed`.
+		const phaseBefore = this.options.authority.readCurrentTurnPhase()
+		if (phaseBefore === "completed" || phaseBefore === "error" || phaseBefore === "resumable") {
+			return this.cancelResult({
+				outcome: "already_terminal",
+				requestId: input.requestId,
+				sessionId: input.sessionId,
+				phase: phaseBefore,
+			})
+		}
+
+		// (5) THE SINGLE-SLOT SUPERVISION RESERVATION.
+		if (this.inFlightSupervisionRequestId !== undefined) {
+			return this.cancelResult({
+				outcome: "rejected",
+				requestId: input.requestId,
+				sessionId: input.sessionId,
+				reason: "supervision-already-in-flight",
+			})
+		}
+		this.inFlightSupervisionRequestId = input.requestId
+		this.ledger.begin(input.requestId, fingerprint)
+
+		// REGISTER THE SETTLEMENT PROMISE BEFORE the dispatch starts, so
+		// a duplicate delivery that arrives while the operation is in
+		// flight can JOIN it.
+		const settlement = this.dispatchSupervisionCancellation(input)
+		this.inFlightSupervisionOperations.set(input.requestId, settlement)
+
+		let outcome: ControlSeamLedgerOutcome
+		try {
+			outcome = await settlement
+		} catch (error) {
+			Logger.error("[ControlSeam] clinemm_cancel_run failed with an unprovable outcome:", error)
+			outcome = { status: "unknown_outcome", reason: "host-failure" }
+		} finally {
+			this.inFlightSupervisionRequestId = undefined
+			this.inFlightSupervisionOperations.delete(input.requestId)
+		}
+		this.ledger.complete(input.requestId, outcome, fingerprint)
+		return this.cancelResultFromLedger(outcome, input.requestId, input.sessionId)
+	}
+
+	/**
+	 * ACT-CLINEMM-MCP-SUPERVISION-V2-01: the feedback DISPATCH.
+	 *
+	 * It reaches the EXISTING follow-up authority and NOTHING else. It
+	 * carries TEXT ONLY, so it cannot answer a tool approval.
+	 *
+	 * THE DISPATCH-BOUNDARY RE-CHECK lives here: a task switch that
+	 * happened while the message was in flight yields `superseded` — the
+	 * message is NEVER reported as delivered to the replacement task.
+	 */
+	private async dispatchSupervisionFeedback(input: {
+		readonly sessionId: string
+		readonly expectedEpoch: number
+		readonly expectedRunId?: string
+		readonly text: string
+	}): Promise<ControlSeamLedgerOutcome> {
+		const authorityOutcome = await this.options.authority.sendFeedback({
+			sessionId: input.sessionId,
+			expectedEpoch: input.expectedEpoch,
+			...(input.expectedRunId !== undefined ? { expectedRunId: input.expectedRunId } : {}),
+			text: input.text,
+		})
+		if (this.options.authority.readActiveSessionId() !== input.sessionId) {
+			return { status: "superseded", reason: "session-changed-during-dispatch" }
+		}
+		return authorityOutcome.outcome === "accepted"
+			? { status: "accepted" }
+			: authorityOutcome.outcome === "queued"
+				? { status: "queued", queuedPromptId: authorityOutcome.queuedPromptId }
+				: { status: authorityOutcome.outcome, reason: authorityOutcome.reason }
+	}
+
+	/**
+	 * ACT-CLINEMM-MCP-SUPERVISION-V2-01: the cancellation DISPATCH.
+	 *
+	 * It reaches the EXISTING cancellation lifecycle and NOTHING else. It
+	 * never kills a PID and never uses an independent SDK abort path.
+	 *
+	 * THE DISPATCH-BOUNDARY RE-CHECK lives here: a task switch that
+	 * happened while the cancellation was in flight yields `superseded` —
+	 * the replacement task is NEVER cancelled by a late request.
+	 */
+	private async dispatchSupervisionCancellation(input: {
+		readonly sessionId: string
+		readonly expectedEpoch: number
+		readonly expectedRunId?: string
+	}): Promise<ControlSeamLedgerOutcome> {
+		const authorityOutcome = await this.options.authority.cancelRun({
+			sessionId: input.sessionId,
+			expectedEpoch: input.expectedEpoch,
+			...(input.expectedRunId !== undefined ? { expectedRunId: input.expectedRunId } : {}),
+		})
+		if (this.options.authority.readActiveSessionId() !== input.sessionId) {
+			return { status: "superseded", reason: "session-changed-during-cancellation" }
+		}
+		return authorityOutcome.outcome === "accepted"
+			? { status: "accepted" }
+			: authorityOutcome.outcome === "already_terminal"
+				? { status: "already_terminal" }
+				: { status: authorityOutcome.outcome, reason: authorityOutcome.reason }
+	}
+
+	/**
+	 * The payload fingerprint used to bind a supervision `requestId` to
+	 * its payload.
+	 *
+	 * It is a SHA-256 over the canonical encoding of the payload. The
+	 * ledger NEVER stores the feedback text itself, so a ledger dump
+	 * cannot leak task content.
+	 *
+	 * The operation discriminator (`feedback` / `cancel`) is part of the
+	 * canonical encoding, so the SAME request id cannot be reused across
+	 * the two operations: a cancel under a feedback's request id is a
+	 * `request-id-conflict`, not a silent cancellation.
+	 */
+	private fingerprintSupervisionPayload(
+		operation: "feedback" | "cancel",
+		input: {
+			readonly sessionId: string
+			readonly expectedEpoch: number
+			readonly expectedRunId?: string
+			readonly text?: string
+		},
+	): string {
+		return createHash("sha256")
+			.update(
+				[operation, input.sessionId, String(input.expectedEpoch), input.expectedRunId ?? "", input.text ?? ""].join(""),
+				"utf8",
+			)
+			.digest("hex")
+	}
+
+	/**
+	 * Build the `clinemm_send_feedback` response from a ledger outcome.
+	 */
+	private feedbackResultFromLedger(
+		outcome: ControlSeamLedgerOutcome,
+		requestId: string,
+		sessionId: string,
+	): ControlSeamResponse {
+		switch (outcome.status) {
+			case "pending":
+				return this.feedbackResult({
+					outcome: "unknown_outcome",
+					requestId,
+					sessionId,
+					reason: "in-flight",
+				})
+			case "accepted":
+				return this.feedbackResult({ outcome: "accepted", requestId, sessionId })
+			case "queued":
+				return this.feedbackResult({
+					outcome: "queued",
+					requestId,
+					sessionId,
+					queuedPromptId: outcome.queuedPromptId,
+				})
+			case "rejected":
+			case "superseded":
+			case "unknown_outcome":
+				return this.feedbackResult({
+					outcome: outcome.status,
+					requestId,
+					sessionId,
+					reason: outcome.reason,
+				})
+			default:
+				// `already_terminal` belongs to the CANCELLATION vocabulary.
+				// It can never be recorded for a feedback operation, so it
+				// is reported as an unprovable outcome rather than being
+				// silently coerced into a feedback outcome.
+				return this.feedbackResult({
+					outcome: "unknown_outcome",
+					requestId,
+					sessionId,
+					reason: "host-failure",
+				})
+		}
+	}
+
+	/** Build the `clinemm_send_feedback` response envelope. */
+	private feedbackResult(result: {
+		outcome: ControlSeamSendFeedbackOutcome
+		requestId: string
+		sessionId: string
+		queuedPromptId?: string
+		phase?: string
+		reason?: string
+	}): ControlSeamResponse {
+		const payload: ControlSeamSendFeedbackResult = {
+			outcome: result.outcome,
+			requestId: result.requestId,
+			sessionId: result.sessionId,
+			...(result.queuedPromptId !== undefined ? { queuedPromptId: result.queuedPromptId } : {}),
+			...(result.phase !== undefined ? { phase: result.phase } : {}),
+			...(result.reason !== undefined ? { reason: result.reason } : {}),
+		}
+		return { v: CONTROL_SEAM_PROTOCOL_VERSION, ok: true, result: payload }
+	}
+
+	/**
+	 * Build the `clinemm_cancel_run` response from a ledger outcome.
+	 */
+	private cancelResultFromLedger(outcome: ControlSeamLedgerOutcome, requestId: string, sessionId: string): ControlSeamResponse {
+		switch (outcome.status) {
+			case "pending":
+				return this.cancelResult({
+					outcome: "unknown_outcome",
+					requestId,
+					sessionId,
+					reason: "in-flight",
+				})
+			case "accepted":
+				return this.cancelResult({ outcome: "accepted", requestId, sessionId })
+			case "already_terminal":
+				return this.cancelResult({ outcome: "already_terminal", requestId, sessionId })
+			case "rejected":
+			case "superseded":
+			case "unknown_outcome":
+				return this.cancelResult({
+					outcome: outcome.status,
+					requestId,
+					sessionId,
+					reason: outcome.reason,
+				})
+			default:
+				// `queued` belongs to the FEEDBACK vocabulary. It can never
+				// be recorded for a cancellation operation, so it is
+				// reported as an unprovable outcome rather than being
+				// silently coerced into a cancellation outcome.
+				return this.cancelResult({
+					outcome: "unknown_outcome",
+					requestId,
+					sessionId,
+					reason: "host-failure",
+				})
+		}
+	}
+
+	/** Build the `clinemm_cancel_run` response envelope. */
+	private cancelResult(result: {
+		outcome: ControlSeamCancelRunOutcome
+		requestId: string
+		sessionId: string
+		phase?: string
+		reason?: string
+	}): ControlSeamResponse {
+		const payload: ControlSeamCancelRunResult = {
+			outcome: result.outcome,
+			requestId: result.requestId,
+			sessionId: result.sessionId,
+			...(result.phase !== undefined ? { phase: result.phase } : {}),
+			...(result.reason !== undefined ? { reason: result.reason } : {}),
+		}
+		return { v: CONTROL_SEAM_PROTOCOL_VERSION, ok: true, result: payload }
+	}
+
+	/**
 	 * The payload fingerprint used to bind a `requestId` to its
 	 * payload.
 	 *
@@ -997,28 +1663,42 @@ export class ControlSeamServer {
 
 	/** Build the `clinemm_start_act` response from a ledger outcome. */
 	private startActResultFromLedger(outcome: ControlSeamLedgerOutcome, requestId: string): ControlSeamResponse {
-		if (outcome.status === "pending") {
-			// The operation is still in flight. Report an ambiguous
-			// outcome rather than a fabricated acceptance.
-			return this.startActResult({
-				outcome: "unknown_outcome",
-				requestId,
-				reason: "in-flight",
-			})
+		switch (outcome.status) {
+			case "pending":
+				// The operation is still in flight. Report an ambiguous
+				// outcome rather than a fabricated acceptance.
+				return this.startActResult({
+					outcome: "unknown_outcome",
+					requestId,
+					reason: "in-flight",
+				})
+			case "accepted":
+				return this.startActResult({
+					outcome: "accepted",
+					requestId,
+					...(outcome.sessionId !== undefined ? { sessionId: outcome.sessionId } : {}),
+					...(outcome.taskId !== undefined ? { taskId: outcome.taskId } : {}),
+				})
+			case "rejected":
+			case "superseded":
+			case "unknown_outcome":
+				return this.startActResult({
+					outcome: outcome.status,
+					requestId,
+					reason: outcome.reason,
+				})
+			default:
+				// `queued` and `already_terminal` belong to the SUPERVISION
+				// vocabulary. They can never be recorded for a start
+				// operation, so they are reported as an unprovable outcome
+				// rather than being silently coerced into a start
+				// outcome.
+				return this.startActResult({
+					outcome: "unknown_outcome",
+					requestId,
+					reason: "host-failure",
+				})
 		}
-		if (outcome.status === "accepted") {
-			return this.startActResult({
-				outcome: "accepted",
-				requestId,
-				sessionId: outcome.sessionId,
-				...(outcome.taskId !== undefined ? { taskId: outcome.taskId } : {}),
-			})
-		}
-		return this.startActResult({
-			outcome: outcome.status,
-			requestId,
-			reason: outcome.reason,
-		})
 	}
 
 	/** Build the `clinemm_start_act` response envelope. */

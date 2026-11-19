@@ -149,6 +149,7 @@ function makeAuthority(fixture: AuthorityFixture) {
 		readRuntimeSnapshot: () => undefined,
 		readPublishedTaskState: () => undefined,
 		readCurrentEpoch: () => 0,
+		readCurrentTurnPhase: () => undefined,
 		readWorkspaceRoot: async () => fixture.workspace,
 		startAct: async (input: { readonly prompt: string }) => {
 			fixture.startCalls.push(input.prompt)
@@ -188,6 +189,10 @@ function makeAuthority(fixture: AuthorityFixture) {
 				...(fixture.taskId !== undefined ? { taskId: fixture.taskId } : {}),
 			}
 		},
+		// ACT-CLINEMM-MCP-SUPERVISION-V2-01: the supervision members are
+		// not exercised by this fixture.
+		sendFeedback: async () => ({ outcome: "rejected" as const, reason: "not-authorized-in-this-fixture" }),
+		cancelRun: async () => ({ outcome: "rejected" as const, reason: "not-authorized-in-this-fixture" }),
 	}
 }
 
@@ -974,11 +979,16 @@ describe("ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01 - R6 safety and adversarial", 
 		expect(response.ok).toBe(true)
 		const capabilities = response.result as { operations: { id: string }[]; readOnly: boolean }
 		expect(capabilities.readOnly).toBe(false)
+		// ACT-CLINEMM-MCP-SUPERVISION-V2-01: the mutation-authorized view
+		// now carries the two SUPERVISION operations in addition to the
+		// V1 pair. The registry order is the declaration order.
 		expect(capabilities.operations.map((operation) => operation.id)).toEqual([
 			"clinemm_capabilities",
 			"clinemm_get_run",
 			"clinemm_start_act",
 			"clinemm_read_events",
+			"clinemm_send_feedback",
+			"clinemm_cancel_run",
 		])
 	})
 
@@ -1031,7 +1041,7 @@ describe("ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01 - R6 safety and adversarial", 
 		rmSync(dir, { recursive: true, force: true })
 	})
 
-	it("R6-10: the seam exposes NO approval bypass, no cancel, no feedback, and no shell shortcut", async () => {
+	it("R6-10: the seam exposes NO approval bypass and NO shell shortcut", async () => {
 		const harness = await startHarness({ workspace: "/tmp/workspace" }, { mutationEnabled: true })
 		const response = await send(
 			harness,
@@ -1045,10 +1055,20 @@ describe("ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01 - R6 safety and adversarial", 
 		)
 		const capabilities = response.result as { operations: { id: string }[] }
 		const ids = capabilities.operations.map((operation) => operation.id)
+		// ACT-CLINEMM-MCP-SUPERVISION-V2-01: `clinemm_cancel_run` and
+		// `clinemm_send_feedback` were ADDED by V2 — they are the two
+		// bounded supervision operations and they are NOT approval
+		// bypasses (the feedback operation carries TEXT ONLY and is
+		// rejected while an approval is pending).
+		//
+		// The invariant this test protects is UNCHANGED: there is NO
+		// operation that can answer a tool approval, and no
+		// general-purpose file / shell shortcut.
 		for (const forbidden of [
-			"clinemm_cancel_run",
-			"clinemm_send_feedback",
 			"clinemm_respond_approval",
+			"clinemm_answer_approval",
+			"clinemm_approve",
+			"clinemm_yes",
 			"run_commands",
 			"editor",
 			"read_file",
@@ -1056,5 +1076,9 @@ describe("ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01 - R6 safety and adversarial", 
 		]) {
 			expect(ids).not.toContain(forbidden)
 		}
+		// The supervision operations ARE present, and they are the ONLY
+		// mutation surfaces beyond the V1 pair.
+		expect(ids).toContain("clinemm_send_feedback")
+		expect(ids).toContain("clinemm_cancel_run")
 	})
 })

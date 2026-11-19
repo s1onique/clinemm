@@ -1,0 +1,507 @@
+(node:28823) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode
+
+ ❯ src/sdk/control-seam/control-seam.supervision-v2.test.ts (30 tests | 25 failed) 261ms
+     × F1-1: an ordinary text feedback on an idle owned session is ACCEPTED, and exactly ONE message is delivered to the owned session 10ms
+     × F2-1: feedback during a running turn is QUEUED, and the outcome carries the queue's OWN correlatable identity 2ms
+     × F2-2: a queued outcome WITHOUT a correlatable identity is reported as unknown_outcome, never as a bare `queued` 2ms
+     × F3-1: while an approval is pending, feedback is REJECTED and the pending approval is NEVER answered 2ms
+     × F3-2: the feedback operation carries TEXT ONLY - it can carry no webview interaction enum 2ms
+     ✓ F3-3: a cancel request carries NO text field - a request that carries one is rejected at the codec 2ms
+     × F4-1: two IDENTICAL requests produce exactly ONE delivered message and the SAME recorded outcome 2ms
+     × F4-2: the SAME request id with a DIFFERENT payload is REJECTED and delivers nothing 2ms
+     × F4-3: CONCURRENT duplicates produce ONE delivered message 63ms
+     × F4-4: the SAME request id cannot be reused across the two operations - a cancel under a feedback's id is a conflict 2ms
+     × F5-1: a session switch while the feedback is in flight yields `superseded`, and the replacement task is untouched 33ms
+     × C1-1: cancelling an owned active run reaches the authoritative lifecycle and returns the LIFECYCLE outcome 3ms
+     × C1-2: an accepted cancellation is NOT proof that the run stopped - the outcome is the lifecycle's, not a fabricated 'cancelled' 2ms
+     × C2-1: a task that already reached a terminal phase yields `already_terminal` and the lifecycle is NOT re-entered 2ms
+     × C3-1: a delayed cancellation of session A NEVER stops session B 33ms
+     × C4-1: the cancellation outcome is the AUTHORITY's - the seam never claims the background job was contained 3ms
+     × C5-1: a repeated cancellation NEVER initiates a second cancellation 3ms
+     × C5-2: CONCURRENT cancellations with DIFFERENT request ids do not both reach the lifecycle 70ms
+     × S1-1: a feedback WITHOUT the write credential is refused 5ms
+     × S1-2: a feedback with an INVALID write credential is refused 2ms
+     × S1-3: a feedback for a FOREIGN session is refused and delivers nothing 2ms
+     × S1-4: a feedback with a STALE epoch is refused and delivers nothing 2ms
+     × S1-5: a cancellation for a FOREIGN session is refused and cancels nothing 2ms
+     × S1-6: a cancellation with a STALE epoch is refused and cancels nothing 2ms
+     × S1-7: the mutation control is DEFAULT OFF - both operations are refused without the grant 2ms
+     ✓ S2-1: the READ-ONLY view still exposes EXACTLY the original two operations 2ms
+     ✓ S2-2: the protocol version is UNCHANGED - V2 adds operations without breaking the wire 0ms
+     ✓ S2-3: a malformed feedback envelope is rejected at the codec, before any authorization 2ms
+     ✓ S2-4: the existing V1 operations are UNCHANGED - `clinemm_start_act` still behaves exactly as before 1ms
+     × S2-5: an unprovable authority failure is reported as `unknown_outcome` and is RECORDED - a replay does not deliver a second message 2ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 25 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - F1 normal feedback > F1-1: an ordinary text feedback on an idle owned session is ACCEPTED, and exactly ONE message is delivered to the owned session
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/sdk/control-seam/control-seam.supervision-v2.test.ts:423:23
+    421|   })
+    422|
+    423|   expect(response.ok).toBe(true)
+       |                       ^
+    424|   expect(response.result).toMatchObject({ outcome: "accepted", request…
+    425|   // EXACTLY ONE delivery, to the OWNED session.
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/25]⎯
+
+ FAIL  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - F2 feedback during an active run > F2-1: feedback during a running turn is QUEUED, and the outcome carries the queue's OWN correlatable identity
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/sdk/control-seam/control-seam.supervision-v2.test.ts:448:23
+    446|   })
+    447|
+    448|   expect(response.ok).toBe(true)
+       |                       ^
+    449|   // `queued` is permitted ONLY because the EXISTING queue
+    450|   // acknowledged the item with a correlatable identity.
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/25]⎯
+
+ FAIL  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - F2 feedback during an active run > F2-2: a queued outcome WITHOUT a correlatable identity is reported as unknown_outcome, never as a bare `queued`
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/sdk/control-seam/control-seam.supervision-v2.test.ts:475:23
+    473|   })
+    474|
+    475|   expect(response.ok).toBe(true)
+       |                       ^
+    476|   expect((response.result as { outcome: string }).outcome).toBe("queue…
+    477|   // The queue identity is the queue's OWN - the seam never mints
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/25]⎯
+
+ FAIL  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - F3 approval separation > F3-1: while an approval is pending, feedback is REJECTED and the pending approval is NEVER answered
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/sdk/control-seam/control-seam.supervision-v2.test.ts:498:23
+    496|   })
+    497|
+    498|   expect(response.ok).toBe(true)
+       |                       ^
+    499|   expect(response.result).toMatchObject({ outcome: "rejected" })
+    500|   // The approval interaction was NEVER consumed by the feedback.
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/25]⎯
+
+ FAIL  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - F3 approval separation > F3-2: the feedback operation carries TEXT ONLY - it can carry no webview interaction enum
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/sdk/control-seam/control-seam.supervision-v2.test.ts:529:23
+    527|   const response = await send(harness, smuggled, { withWriteToken: tru…
+    528|
+    529|   expect(response.ok).toBe(true)
+       |                       ^
+    530|   expect(response.result).toMatchObject({ outcome: "accepted" })
+    531|   // The interaction enum did NOT reach the authority: the recorded
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/25]⎯
+
+ FAIL  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - F4 duplicate feedback > F4-1: two IDENTICAL requests produce exactly ONE delivered message and the SAME recorded outcome
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/sdk/control-seam/control-seam.supervision-v2.test.ts:574:20
+    572|   const second = await send(harness, request, { withWriteToken: true, …
+    573|
+    574|   expect(first.ok).toBe(true)
+       |                    ^
+    575|   expect(second.ok).toBe(true)
+    576|   expect(second.result).toEqual(first.result)
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/25]⎯
+
+ FAIL  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - F4 duplicate feedback > F4-2: the SAME request id with a DIFFERENT payload is REJECTED and delivers nothing
+AssertionError: expected undefined to match object { outcome: 'accepted' }
+
+- Expected:
+{
+  "outcome": "accepted",
+}
+
++ Received:
+undefined
+
+ ❯ src/sdk/control-seam/control-seam.supervision-v2.test.ts:589:24
+    587|    writeToken: harness.writeToken,
+    588|   })
+    589|   expect(first.result).toMatchObject({ outcome: "accepted" })
+       |                        ^
+    590|
+    591|   const conflicting = await send(harness, feedbackRequest({ requestId:…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/25]⎯
+
+ FAIL  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - F4 duplicate feedback > F4-3: CONCURRENT duplicates produce ONE delivered message
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/sdk/control-seam/control-seam.supervision-v2.test.ts:618:28
+    616|
+    617|   const [firstResponse, secondResponse] = await Promise.all([first, se…
+    618|   expect(firstResponse.ok).toBe(true)
+       |                            ^
+    619|   expect(secondResponse.ok).toBe(true)
+    620|   expect(secondResponse.result).toEqual(firstResponse.result)
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/25]⎯
+
+ FAIL  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - F4 duplicate feedback > F4-4: the SAME request id cannot be reused across the two operations - a cancel under a feedback's id is a conflict
+AssertionError: expected undefined to match object { outcome: 'queued' }
+
+- Expected:
+{
+  "outcome": "queued",
+}
+
++ Received:
+undefined
+
+ ❯ src/sdk/control-seam/control-seam.supervision-v2.test.ts:633:27
+    631|    writeToken: harness.writeToken,
+    632|   })
+    633|   expect(feedback.result).toMatchObject({ outcome: "queued" })
+       |                           ^
+    634|
+    635|   const cancel = await send(harness, cancelRequest({ requestId: "f4-4"…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/25]⎯
+
+ FAIL  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - F5 session-switch race > F5-1: a session switch while the feedback is in flight yields `superseded`, and the replacement task is untouched
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/sdk/control-seam/control-seam.supervision-v2.test.ts:668:23
+    666|
+    667|   const response = await pending
+    668|   expect(response.ok).toBe(true)
+       |                       ^
+    669|   expect(response.result).toMatchObject({ outcome: "superseded" })
+    670|   // The message was NOT delivered to the replacement task.
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/25]⎯
+
+ FAIL  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - C1 cancel an active run > C1-1: cancelling an owned active run reaches the authoritative lifecycle and returns the LIFECYCLE outcome
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/sdk/control-seam/control-seam.supervision-v2.test.ts:691:23
+    689|   })
+    690|
+    691|   expect(response.ok).toBe(true)
+       |                       ^
+    692|   expect(response.result).toMatchObject({ outcome: "accepted", request…
+    693|   // The EXISTING cancellation lifecycle was reached exactly once.
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/25]⎯
+
+ FAIL  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - C1 cancel an active run > C1-2: an accepted cancellation is NOT proof that the run stopped - the outcome is the lifecycle's, not a fabricated 'cancelled'
+TypeError: undefined is not an object (evaluating 'result.outcome')
+ ❯ src/sdk/control-seam/control-seam.supervision-v2.test.ts:707:10
+    705|   })
+    706|   const result = response.result as { outcome: string; phase?: string }
+    707|   expect(result.outcome).toBe("accepted")
+       |          ^
+    708|   // The outcome vocabulary has NO "cancelled" member: an accepted
+    709|   // cancellation is a LIFECYCLE acknowledgement.
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/25]⎯
+
+ FAIL  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - C2 cancel versus completion > C2-1: a task that already reached a terminal phase yields `already_terminal` and the lifecycle is NOT re-entered
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/sdk/control-seam/control-seam.supervision-v2.test.ts:731:23
+    729|   })
+    730|
+    731|   expect(response.ok).toBe(true)
+       |                       ^
+    732|   expect(response.result).toMatchObject({ outcome: "already_terminal",…
+    733|   // The committed terminal completion was NOT overwritten.
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/25]⎯
+
+ FAIL  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - C3 cancel versus task replacement > C3-1: a delayed cancellation of session A NEVER stops session B
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/sdk/control-seam/control-seam.supervision-v2.test.ts:761:23
+    759|
+    760|   const response = await pending
+    761|   expect(response.ok).toBe(true)
+       |                       ^
+    762|   expect(response.result).toMatchObject({ outcome: "superseded" })
+    763|   // B was never cancelled.
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/25]⎯
+
+ FAIL  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - C4 cancel with background work > C4-1: the cancellation outcome is the AUTHORITY's - the seam never claims the background job was contained
+TypeError: undefined is not an object (evaluating 'Object.keys(result)')
+ ❯ src/sdk/control-seam/control-seam.supervision-v2.test.ts:785:17
+    783|   // authority owns it, and the seam reports only the lifecycle
+    784|   // outcome.
+    785|   expect(Object.keys(result).sort()).toEqual(["outcome", "requestId", …
+       |                 ^
+    786|   expect(result.outcome).toBe("accepted")
+    787|  })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/25]⎯
+
+ FAIL  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - C5 duplicate cancellation > C5-1: a repeated cancellation NEVER initiates a second cancellation
+AssertionError: expected undefined to match object { outcome: 'accepted' }
+
+- Expected:
+{
+  "outcome": "accepted",
+}
+
++ Received:
+undefined
+
+ ❯ src/sdk/control-seam/control-seam.supervision-v2.test.ts:803:24
+    801|   const second = await send(harness, request, { withWriteToken: true, …
+    802|
+    803|   expect(first.result).toMatchObject({ outcome: "accepted" })
+       |                        ^
+    804|   expect(second.result).toEqual(first.result)
+    805|   // EXACTLY ONE cancellation effect.
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/25]⎯
+
+ FAIL  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - C5 duplicate cancellation > C5-2: CONCURRENT cancellations with DIFFERENT request ids do not both reach the lifecycle
+AssertionError: expected undefined to match object { outcome: 'accepted' }
+
+- Expected:
+{
+  "outcome": "accepted",
+}
+
++ Received:
+undefined
+
+ ❯ src/sdk/control-seam/control-seam.supervision-v2.test.ts:829:32
+    827|
+    828|   const [firstResponse, secondResponse] = await Promise.all([first, se…
+    829|   expect(firstResponse.result).toMatchObject({ outcome: "accepted" })
+       |                                ^
+    830|   // The SECOND concurrent cancellation is refused - it never claims
+    831|   // the same interaction.
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/25]⎯
+
+ FAIL  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - S1 authorization > S1-1: a feedback WITHOUT the write credential is refused
+AssertionError: expected 'control_seam_bad_request' to be 'control_seam_mutation_not_authorized' // Object.is equality
+
+Expected: "control_seam_mutation_not_authorized"
+Received: "control_seam_bad_request"
+
+ ❯ src/sdk/control-seam/control-seam.supervision-v2.test.ts:849:32
+    847|   const response = await send(harness, feedbackRequest({ requestId: "s…
+    848|   expect(response.ok).toBe(false)
+    849|   expect(response.error?.code).toBe(CONTROL_SEAM_ERROR_CODES.mutationN…
+       |                                ^
+    850|   expect(harness.fixture.feedbackCalls).toHaveLength(0)
+    851|  })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/25]⎯
+
+ FAIL  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - S1 authorization > S1-2: a feedback with an INVALID write credential is refused
+AssertionError: expected 'control_seam_bad_request' to be 'control_seam_mutation_not_authorized' // Object.is equality
+
+Expected: "control_seam_mutation_not_authorized"
+Received: "control_seam_bad_request"
+
+ ❯ src/sdk/control-seam/control-seam.supervision-v2.test.ts:862:32
+    860|   })
+    861|   expect(response.ok).toBe(false)
+    862|   expect(response.error?.code).toBe(CONTROL_SEAM_ERROR_CODES.mutationN…
+       |                                ^
+    863|   expect(harness.fixture.feedbackCalls).toHaveLength(0)
+    864|  })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[19/25]⎯
+
+ FAIL  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - S1 authorization > S1-3: a feedback for a FOREIGN session is refused and delivers nothing
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/sdk/control-seam/control-seam.supervision-v2.test.ts:874:23
+    872|    writeToken: harness.writeToken,
+    873|   })
+    874|   expect(response.ok).toBe(true)
+       |                       ^
+    875|   expect(response.result).toMatchObject({ outcome: "rejected", reason:…
+    876|   expect(harness.fixture.feedbackCalls).toHaveLength(0)
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[20/25]⎯
+
+ FAIL  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - S1 authorization > S1-4: a feedback with a STALE epoch is refused and delivers nothing
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/sdk/control-seam/control-seam.supervision-v2.test.ts:890:23
+    888|    { withWriteToken: true, writeToken: harness.writeToken },
+    889|   )
+    890|   expect(response.ok).toBe(true)
+       |                       ^
+    891|   expect(response.result).toMatchObject({ outcome: "rejected" })
+    892|   expect(harness.fixture.feedbackCalls).toHaveLength(0)
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[21/25]⎯
+
+ FAIL  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - S1 authorization > S1-5: a cancellation for a FOREIGN session is refused and cancels nothing
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/sdk/control-seam/control-seam.supervision-v2.test.ts:903:23
+    901|    writeToken: harness.writeToken,
+    902|   })
+    903|   expect(response.ok).toBe(true)
+       |                       ^
+    904|   expect(response.result).toMatchObject({ outcome: "rejected", reason:…
+    905|   expect(harness.fixture.cancelCalls).toHaveLength(0)
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22/25]⎯
+
+ FAIL  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - S1 authorization > S1-6: a cancellation with a STALE epoch is refused and cancels nothing
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/sdk/control-seam/control-seam.supervision-v2.test.ts:918:23
+    916|    writeToken: harness.writeToken,
+    917|   })
+    918|   expect(response.ok).toBe(true)
+       |                       ^
+    919|   expect(response.result).toMatchObject({ outcome: "rejected" })
+    920|   expect(harness.fixture.cancelCalls).toHaveLength(0)
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[23/25]⎯
+
+ FAIL  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - S1 authorization > S1-7: the mutation control is DEFAULT OFF - both operations are refused without the grant
+AssertionError: expected 'control_seam_bad_request' to be 'control_seam_mutation_not_authorized' // Object.is equality
+
+Expected: "control_seam_mutation_not_authorized"
+Received: "control_seam_bad_request"
+
+ ❯ src/sdk/control-seam/control-seam.supervision-v2.test.ts:930:32
+    928|   const feedback = await send(harness, feedbackRequest({ requestId: "s…
+    929|   expect(feedback.ok).toBe(false)
+    930|   expect(feedback.error?.code).toBe(CONTROL_SEAM_ERROR_CODES.mutationN…
+       |                                ^
+    931|
+    932|   const cancel = await send(harness, cancelRequest({ requestId: "s1-8"…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[24/25]⎯
+
+ FAIL  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - S2 conservation > S2-5: an unprovable authority failure is reported as `unknown_outcome` and is RECORDED - a replay does not deliver a second message
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/sdk/control-seam/control-seam.supervision-v2.test.ts:995:20
+    993|   const request = feedbackRequest({ requestId: "s2-5", sessionId })
+    994|   const first = await send(harness, request, { withWriteToken: true, w…
+    995|   expect(first.ok).toBe(true)
+       |                    ^
+    996|   expect(first.result).toMatchObject({ outcome: "unknown_outcome" })
+    997|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[25/25]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  25 failed | 5 passed (30)
+   Start at  03:45:46
+   Duration  1.79s (transform 968ms, setup 1.45s, import 32ms, tests 261ms, environment 0ms)

@@ -18,7 +18,12 @@ import { Logger } from "@shared/services/Logger"
 
 import type { PublishedTaskState } from "@/sdk/published-task-state"
 
-import type { ControlSeamAuthority, ControlSeamStartActAuthorityOutcome } from "./control-seam-authority"
+import type {
+	ControlSeamAuthority,
+	ControlSeamCancelAuthorityOutcome,
+	ControlSeamFeedbackAuthorityOutcome,
+	ControlSeamStartActAuthorityOutcome,
+} from "./control-seam-authority"
 import { ControlSeamEventBuffer } from "./control-seam-event-buffer"
 import { ControlSeamServer, type ControlSeamServerHandle } from "./control-seam-server"
 
@@ -62,6 +67,11 @@ export interface ControlSeamControllerSurface {
 	/** The controller's current conversation epoch, or `undefined`. */
 	readCurrentEpoch(): number | undefined
 	/**
+	 * ACT-CLINEMM-MCP-SUPERVISION-V2-01: the controller's CURRENT
+	 * authoritative turn phase, or `undefined`.
+	 */
+	readCurrentTurnPhase(): string | undefined
+	/**
 	 * ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: the controller's OWN
 	 * installed-workspace root.
 	 */
@@ -71,6 +81,27 @@ export interface ControlSeamControllerSurface {
 	 * the EXISTING `initTask()` lifecycle.
 	 */
 	startAct(input: { readonly prompt: string }): Promise<ControlSeamStartActAuthorityOutcome>
+	/**
+	 * ACT-CLINEMM-MCP-SUPERVISION-V2-01: send ONE ordinary TEXT feedback
+	 * message to the OWNED session through the EXISTING follow-up
+	 * authority. See `ControlSeamAuthority.sendFeedback` for the
+	 * approval-fence contract.
+	 */
+	sendFeedback(input: {
+		readonly sessionId: string
+		readonly expectedEpoch: number
+		readonly expectedRunId?: string
+		readonly text: string
+	}): Promise<ControlSeamFeedbackAuthorityOutcome>
+	/**
+	 * ACT-CLINEMM-MCP-SUPERVISION-V2-01: cancel the OWNED session through
+	 * the EXISTING `cancelTask()` lifecycle.
+	 */
+	cancelRun(input: {
+		readonly sessionId: string
+		readonly expectedEpoch: number
+		readonly expectedRunId?: string
+	}): Promise<ControlSeamCancelAuthorityOutcome>
 }
 
 /**
@@ -88,8 +119,11 @@ export function createControlSeamAuthority(surface: ControlSeamControllerSurface
 		readRuntimeSnapshot: () => surface.readRuntimeSnapshot(),
 		readPublishedTaskState: () => surface.readPublishedTaskState(),
 		readCurrentEpoch: () => surface.readCurrentEpoch(),
+		readCurrentTurnPhase: () => surface.readCurrentTurnPhase(),
 		readWorkspaceRoot: () => surface.readWorkspaceRoot(),
 		startAct: (input) => surface.startAct(input),
+		sendFeedback: (input) => surface.sendFeedback(input),
+		cancelRun: (input) => surface.cancelRun(input),
 	}
 }
 

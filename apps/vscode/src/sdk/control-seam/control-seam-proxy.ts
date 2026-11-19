@@ -291,6 +291,132 @@ export function createControlSeamProxyServer(options: ControlSeamProxyOptions = 
 					}),
 				),
 		)
+
+		// ACT-CLINEMM-MCP-SUPERVISION-V2-01: the SUPERVISION tools. They
+		// are registered under the SAME mutation grant as the two tools
+		// above, so a read-only installation still exposes EXACTLY the
+		// original two operations.
+		server.registerTool(
+			"clinemm_send_feedback",
+			{
+				description: [
+					"Send ONE ordinary text message to the ClineMM task this client owns, through the extension's existing follow-up authority.",
+					"",
+					"Requires the operator's separate mutation grant. The extension host rejects",
+					"the call when the session is not the one this client started, when the",
+					"epoch does not match the current conversation epoch, or when a tool",
+					"approval is pending.",
+					"",
+					"This operation CANNOT answer a tool approval. While ClineMM awaits a tool",
+					"approval, the call is rejected and the approval stays pending for the",
+					"operator in the UI. Native approvals and the Cancel control are unchanged.",
+					"",
+					"The response outcome is one of:",
+					"  accepted        — the extension acknowledged the message (NOT execution or completion).",
+					"  queued          — the extension's own prompt queue accepted it; `queuedPromptId`",
+					"                    is the queue's identity for the item.",
+					"  rejected        — a precondition failed; nothing was delivered.",
+					"  superseded      — the task changed while the request was in flight.",
+					"  unknown_outcome — the host could not prove delivery. Do NOT retry blindly;",
+					"                    reconcile with clinemm_get_run / clinemm_read_events first.",
+					"",
+					"`expectedEpoch` is the conversation epoch reported by clinemm_get_run",
+					"(`taskState.epoch`) or by the `epoch` field of the owned session's events.",
+					"It is NOT a UI sequence number and NOT a publication `stateVersion`.",
+					"Reuse the SAME requestId to retry: an identical replay returns the SAME",
+					"recorded outcome and never delivers a second message; a different payload",
+					"under the same requestId is rejected.",
+					"",
+					"Text only: this operation forwards no attachments and no file paths.",
+				].join("\n"),
+				inputSchema: {
+					requestId: z.string().describe("Unique client-supplied idempotency key for this operation."),
+					sessionId: z.string().describe("The session id this client owns, as returned by clinemm_start_act."),
+					expectedEpoch: z.number().int().min(0).describe("The CURRENT conversation epoch of the owned session."),
+					expectedRunId: z
+						.string()
+						.optional()
+						.describe("The run id this client believes is active, when the extension reported one."),
+					text: z.string().describe("The ordinary, free-form user message to send to the task."),
+				},
+				annotations: {
+					readOnlyHint: false,
+					destructiveHint: false,
+					idempotentHint: true,
+					openWorldHint: false,
+				},
+			},
+			async (args) =>
+				toToolResult(
+					await call("clinemm_send_feedback", undefined, {
+						op: "clinemm_send_feedback",
+						input: {
+							requestId: args.requestId,
+							sessionId: args.sessionId,
+							expectedEpoch: args.expectedEpoch,
+							...(args.expectedRunId !== undefined ? { expectedRunId: args.expectedRunId } : {}),
+							text: args.text,
+						},
+					}),
+				),
+		)
+
+		server.registerTool(
+			"clinemm_cancel_run",
+			{
+				description: [
+					"Cancel the ClineMM task this client owns, through the extension's existing cancellation lifecycle.",
+					"",
+					"Requires the operator's separate mutation grant. The extension host rejects",
+					"the call when the session is not the one this client started, when the",
+					"epoch does not match the current conversation epoch, or when the run identity",
+					"does not match.",
+					"",
+					"The response outcome is one of:",
+					"  accepted         — the extension's cancellation lifecycle accepted the request.",
+					"  already_terminal — the task had already reached a terminal phase; nothing changed.",
+					"  rejected         — a precondition failed; nothing was cancelled.",
+					"  superseded       — the task changed while the request was in flight.",
+					"  unknown_outcome  — the host could not prove the effect. Do NOT retry blindly.",
+					"",
+					"`accepted` is NOT proof that the run stopped: the extension owns the abort,",
+					"the interaction cleanup and the background-job containment. Read `phase` and",
+					"clinemm_get_run to observe the authoritative lifecycle state.",
+					"",
+					"The operator's Cancel control in the UI keeps working exactly as before.",
+					"",
+					"Reuse the SAME requestId to retry: a repeated cancellation never initiates a",
+					"second cancellation.",
+				].join("\n"),
+				inputSchema: {
+					requestId: z.string().describe("Unique client-supplied idempotency key for this operation."),
+					sessionId: z.string().describe("The session id this client owns, as returned by clinemm_start_act."),
+					expectedEpoch: z.number().int().min(0).describe("The CURRENT conversation epoch of the owned session."),
+					expectedRunId: z
+						.string()
+						.optional()
+						.describe("The run id this client believes is active, when the extension reported one."),
+				},
+				annotations: {
+					readOnlyHint: false,
+					destructiveHint: true,
+					idempotentHint: true,
+					openWorldHint: false,
+				},
+			},
+			async (args) =>
+				toToolResult(
+					await call("clinemm_cancel_run", undefined, {
+						op: "clinemm_cancel_run",
+						input: {
+							requestId: args.requestId,
+							sessionId: args.sessionId,
+							expectedEpoch: args.expectedEpoch,
+							...(args.expectedRunId !== undefined ? { expectedRunId: args.expectedRunId } : {}),
+						},
+					}),
+				),
+		)
 	}
 
 	return server

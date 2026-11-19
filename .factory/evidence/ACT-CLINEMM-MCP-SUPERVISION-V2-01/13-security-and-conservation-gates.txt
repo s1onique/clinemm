@@ -1,0 +1,123 @@
+ACT-CLINEMM-MCP-SUPERVISION-V2-01 - SECURITY AND CONSERVATION GATES
+======================================================
+
+C7 - THE SECURITY INVARIANTS THAT MUST REMAIN UNCHANGED
+-------------------------------------------------------
+
+  AF_UNIX-ONLY TRANSPORT
+    The transport is unchanged. The V2 work added no socket, no TCP
+    listener and no second transport. The MCP proxy still connects to
+    the extension host's AF_UNIX socket.
+    Evidence: control-seam-proxy.test.ts (PX01..PX05) unchanged in shape;
+    the whole control-seam suite is 183/183 GREEN.
+
+  READ/WRITE CREDENTIAL SEPARATION
+    Unchanged. The write credential is still a SEPARATE file and a
+    SEPARATE constant-time check. BOTH new operations require the
+    SAME explicit mutation grant as clinemm_start_act - no new token
+    and no new authorization system were introduced.
+    Evidence: 12-mutation-contract.txt; S1-1..S1-6 in
+    control-seam.supervision-v2.test.ts.
+
+  DEFAULT-OFF MUTATION CONTROL
+    Unchanged. A READ-ONLY installation still exposes EXACTLY TWO
+    operations (clinemm_capabilities, clinemm_get_run). The two new
+    operations appear ONLY when the operator's separate mutation grant
+    is present.
+    Evidence: control-seam-proxy.test.ts PX01 (read-only == exactly 2)
+    and PX01b (mutation == exactly 6) - both GREEN.
+
+  PER-REQUEST CREDENTIAL AUTHORIZATION
+    Unchanged. Every request is authorized against the grant AT
+    REQUEST TIME, and the CURRENT workspace is re-verified against the
+    grant's workspace on every mutation request.
+    Evidence: S1-1 (invalid credential), S1-2 (foreign session),
+    S1-3 (mismatched workspace) - all GREEN.
+
+  WORKSPACE GRANT AND ACTIVE-SESSION OWNERSHIP FENCES
+    Unchanged and EXTENDED. The seam already refused a foreign
+    session; the V2 work adds the epoch fence, the run-identity fence
+    and the DISPATCH-BOUNDARY re-check on top of it.
+    Evidence: S1-2, S1-4, S1-5, S1-6, F5-1, C3-1 - all GREEN.
+
+  BOUNDED OPERATION LEDGER
+    Unchanged in kind and EXTENDED in scope. Still bounded. One
+    shared ledger serves both new operations, which is what prevents a
+    request id from being reused across them.
+    Evidence: F4-1..F4-4, C5-1, C5-2 - all GREEN.
+
+  SESSION-SCOPED EVENT READS
+    Unchanged. clinemm_read_events still reads only the session the
+    mutation client owns.
+    Evidence: control-seam.event-session-isolation01.test.ts (4 tests)
+    GREEN; the whole control-seam suite is 183/183 GREEN.
+
+  allowContentRead SUB-GRANT
+    Unchanged. No new sub-grant was introduced; the new operations
+    need no content read - they carry the operator's own text.
+
+  NATIVE EDITOR AND COMMAND APPROVAL AUTHORITY
+    Unchanged and STRENGTHENED. The native approval boundaries still
+    own every tool approval. The V2 work adds an explicit fence that
+    makes it impossible for MCP feedback to reach them.
+    Evidence: F3-1, AF-1..AF-5, RP-1, RP-2 - all GREEN.
+
+  NO SECOND RUNTIME OR SCHEDULER
+    Unchanged. No new runtime, controller, event bus or queue was
+    added. The feedback reuses the EXISTING follow-up coordinator and
+    the EXISTING pending-prompt queue; the cancellation reuses the
+    EXISTING cancelTask() lifecycle.
+
+WHAT THE V2 WORK DID NOT DO
+----------------------------
+  * It did NOT add a general arbitrary-command mechanism.
+  * It did NOT add tool-approval-response operations.
+  * It did NOT add a new token or authorization system.
+  * It did NOT change any auto-approval setting.
+  * It did NOT add a second runtime, controller, event bus or queue.
+  * It did NOT change the four V1 operations' behaviour.
+  * It did NOT weaken or skip any existing baseline.
+
+C6 - THE MINIMUM EXECUTABLE GATES (all results observed in THIS session)
+-------------------------------------------------------------------
+
+  GATE                                                     RESULT
+  -------------------------------------------------------  ---------------------
+  New feedback/cancel production-seam witnesses             30/30 GREEN
+  Route pin (RP-1..RP-3)                                    3/3 GREEN
+  Approval-fence production shape (AF-1..AF-5)              5/5 GREEN
+  Existing V1 control-seam tests (whole suite)             183/183 GREEN
+  Session lifecycle / ownership / task-control / followup    211/211 GREEN
+  C9/C10/BCB + completion/continuation/background            NO NEW FAILURES
+  Focused Elm authority suites                             NO REGRESSION
+  Host typecheck (bun run check-types)                     exit 0
+  Scoped lint (biome, 27 files)                            exit 0, 0 findings
+  git diff --check                                          exit 0
+  ACT-owned diagnostics                                    ZERO
+
+  The 25 C9/C10/BCB failures and the 2 Elm
+  completion-continuation-control failures are PRE-EXISTING at
+  pristine HEAD acea67fc2 - proven by running the identical
+  gate set against the stashed tree. The NEW-failures set is
+  EMPTY. See 06-c9-c10-bcb-gates.txt and 07-elm-authority-gates.txt.
+
+THE EXACT OPERATIONS AND THEIR AUTHORITY
+------------------------------------
+  clinemm_capabilities   -> READ, unchanged
+  clinemm_get_run        -> READ, unchanged
+  clinemm_start_act      -> MUTATE (V1), unchanged
+  clinemm_read_events    -> READ (V1), unchanged
+  clinemm_send_feedback  -> MUTATE (V2) -> the REAL follow-up authority
+  clinemm_cancel_run     -> MUTATE (V2) -> the REAL cancelTask() lifecycle
+
+THE FINAL INSTRUCTION, HONOURED
+-------------------------------
+  Codex may request execution, feedback and cancellation, but
+  ClineMM remains the sole authority for task execution, tool
+  approval, background-job containment and terminal completion.
+
+  The feedback route cannot answer an approval (the approval fence).
+  The cancellation route IS the webview's own Cancel path (the same
+  fences, the same cleanup, the same containment). The terminal
+  completion authority is untouched - a late cancellation returns
+  already_terminal and never overwrites a committed completion.

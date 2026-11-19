@@ -1,0 +1,64 @@
+ACT-CLINEMM-MCP-SUPERVISION-V2-01 - EXACT-HEAD ARTIFACT MANIFEST
+===================================================
+
+ENTRY_HEAD    acea67fc28296e768357da278db9ff88a7cb0560
+             the HEAD this ACT started from; the V1 control seam was
+             present and verified here.
+
+SUBJECT_HEAD  4375a4aa3bee3fad3996bc1c43ab706470223416
+             the git TREE SHA of the committed subject.
+
+PRODUCTION SOURCE TREE (the identifier the BUNDLE binds to)
+-------------------------------------------------------------
+  apps/vscode/src  7e889724f01453351144583e587e9c3c5b669e61
+             This is the tree the bundle was built from. It is IDENTICAL
+             at HEAD and in the final index, so the artifact and the
+             committed production source are provably the same subject.
+             It is recorded INSTEAD of the whole-tree SHA because the
+             evidence files themselves live in the tree - recording the
+             whole-tree SHA inside them would be self-referential.
+
+BUNDLE
+------
+  Built with: bun esbuild.mjs (exit 0), run against the committed
+  production source tree 7e889724f01453351144583e587e9c3c5b669e61.
+  The bundle is NOT bound to a pre-change tree.
+
+  path          apps/vscode/dist/extension.js
+  byte size     57809190
+  sha256        72753476732d84a3b6dba98fd48f1250323dd3886702b48def55a3979cc566a6
+  built at      2026-11-19T04:08:25+0300
+
+  NOTE ON REPRODUCIBILITY: esbuild embeds build-time metadata, so the
+  bundle is NOT byte-reproducible across builds. What IS bound here is
+  the SOURCE tree 7e889724f01453351144583e587e9c3c5b669e61.
+
+SOURCE MAP
+-----------
+  path          apps/vscode/dist/extension.js.map
+  byte size     32966649
+  sha256        eb1a1baa6e226954fc70deeef15c54ff9aee902fd4abe38c79c3ae69a605d624
+
+EMBEDDED / INSTALLED BUNDLE
+-----------------------------
+  embedded extension bundle sha256 = 72753476732d84a3b6dba98fd48f1250323dd3886702b48def55a3979cc566a6
+  (the embedded bundle IS the bundle above - the extension host loads
+   dist/extension.js)
+
+  installed bundle sha256          = NOT AVAILABLE
+  reason: the sandbox cannot install a VSIX, and the ACT forbids the
+          sandboxed ClineMM agent from installing one. Per C8, the work
+          stops at structural qualification and the operator commands
+          are supplied.
+  see: 10-live-qualification-report.txt (STEP 1 records the installed
+        hash into this file).
+
+WEBVIEW BUNDLE (unchanged by this ACT - the V2 work is extension-host only)
+------------------------------------------------------------------------------
+  8e45ee6e626b79a2291de71179c520bf376e68697d9d268157ae6ed5706beb2a  apps/vscode/webview-ui/build/assets/index.js  10059487 bytes
+
+DIAGNOSTIC IDENTITY COMPARISON
+------------------------------
+  See 06-c9-c10-bcb-gates.txt: the failing-test set in the C9/C10/BCB /
+  completion / continuation / background gates is IDENTICAL before and
+  after the change - the NEW-failures set is EMPTY.

@@ -80,11 +80,16 @@ function makeAuthority(fixture: AuthorityFixture = {}): ControlSeamAuthority {
 		// published TaskHeader record, so `taskState` is omitted.
 		readPublishedTaskState: () => undefined,
 		readCurrentEpoch: () => 0,
+		readCurrentTurnPhase: () => undefined,
 		// ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: READ-ONLY fixture.
 		// The mutation members are never exercised by the qualification
 		// tests.
 		readWorkspaceRoot: async () => "/tmp/cq-workspace",
 		startAct: async () => ({ outcome: "rejected" as const, reason: "not-authorized-in-this-fixture" }),
+		// ACT-CLINEMM-MCP-SUPERVISION-V2-01: the supervision members are not
+		// exercised by this READ-ONLY fixture.
+		sendFeedback: async () => ({ outcome: "rejected" as const, reason: "not-authorized-in-this-fixture" }),
+		cancelRun: async () => ({ outcome: "rejected" as const, reason: "not-authorized-in-this-fixture" }),
 	}
 }
 

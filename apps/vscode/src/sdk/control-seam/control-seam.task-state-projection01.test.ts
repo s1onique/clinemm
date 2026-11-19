@@ -78,11 +78,16 @@ function makeAuthority(fixture: Fixture): ControlSeamAuthority {
 		readRuntimeSnapshot: () => undefined,
 		readPublishedTaskState: () => fixture.published,
 		readCurrentEpoch: () => fixture.epoch ?? 4,
+		readCurrentTurnPhase: () => undefined,
 		// ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: READ-ONLY fixture.
 		// The mutation members are never exercised by the projection
 		// tests.
 		readWorkspaceRoot: async () => "/tmp/ctsp-workspace",
 		startAct: async () => ({ outcome: "rejected" as const, reason: "not-authorized-in-this-fixture" }),
+		// ACT-CLINEMM-MCP-SUPERVISION-V2-01: the supervision members are not
+		// exercised by this READ-ONLY fixture.
+		sendFeedback: async () => ({ outcome: "rejected" as const, reason: "not-authorized-in-this-fixture" }),
+		cancelRun: async () => ({ outcome: "rejected" as const, reason: "not-authorized-in-this-fixture" }),
 	}
 }
 
@@ -305,15 +310,23 @@ describe("ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01 — R3 other user-visible stat
 				taskId: "task-a",
 				published: published({ phase: "streaming", source: "shadow", seq: 1 }),
 			})
+			// ACT-CLINEMM-MCP-SUPERVISION-V2-01: the authority gained the
+			// two SUPERVISION members (`sendFeedback` / `cancelRun`). They
+			// are NOT reachable from the READ path: the read operations
+			// never consult them. The member set stays CLOSED — no new
+			// read surface appeared.
 			expect(Object.keys(authority).sort()).toEqual([
+				"cancelRun",
 				"readActiveSessionId",
 				"readActiveTaskId",
 				"readCurrentEpoch",
+				"readCurrentTurnPhase",
 				"readIsRunning",
 				"readPublishedTaskState",
 				"readQueuedPromptCount",
 				"readRuntimeSnapshot",
 				"readWorkspaceRoot",
+				"sendFeedback",
 				"startAct",
 			])
 

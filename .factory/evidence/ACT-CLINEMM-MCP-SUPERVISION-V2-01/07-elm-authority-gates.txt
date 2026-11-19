@@ -1,0 +1,39 @@
+### ELM AUTHORITY SUITES (elm 0.19.2 / elm-test 0.19.2-0)
+
+NOTE ON THE ENVIRONMENT: the sandbox denies read-write on the default
+~/.elm/0.19.2/packages/lock, so ELM_HOME is pointed at the repo-local
+.bun-tmp/elm-home (the same cache the repo's own scripts use).
+
+--- task-header-orchestration ---
+TEST RUN PASSED
+[2mPassed:   [22m48
+[2mFailed:   [22m0
+
+--- completion-authority ---
+TEST RUN PASSED
+[2mPassed:   [22m31
+[2mFailed:   [22m0
+
+--- completion-continuation-control ---
+TEST RUN FAILED[39m[24m[31m
+[2mPassed:   [22m39
+[2mFailed:   [22m2
+
+--- background-notify-authority ---
+TEST RUN PASSED
+[2mPassed:   [22m25
+[2mFailed:   [22m0
+
+--- deferred-completion-barrier ---
+HALT_ELM_TEST_DEPS_MISSING (pre-existing repo config gap:)
+  test-dependencies.direct = []
+  -> elm-explorations/test is absent, so elm-test refuses to run this suite.
+  -> IDENTICAL at pristine HEAD acea67fc2 (the gap is in the committed elm.json).
+
+### CONSERVATION vs PRISTINE HEAD acea67fc2
+  completion-continuation-control: 2 failures AT PRISTINE HEAD, the SAME 2 with V2:
+    BASELINE: C9 facts-isolation > negative unconsumedCount is always MalformedFacts
+    BASELINE: HELD-SET-PROGRESS-AUTHORITY01 C2: classifyHeldSetProgress > long passive accumulation (LIVE STALLED-REARM-LOOP01)
+    WITH V2 : C9 facts-isolation > negative unconsumedCount is always MalformedFacts
+    WITH V2 : HELD-SET-PROGRESS-AUTHORITY01 C2: classifyHeldSetProgress > long passive accumulation (LIVE STALLED-REARM-LOOP01)
+  -> the failing set is IDENTICAL. The V2 change introduces NO Elm regression.

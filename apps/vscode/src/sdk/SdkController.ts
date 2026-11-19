@@ -69,6 +69,10 @@ import { WorkspaceRootManager } from "@/core/workspace/WorkspaceRootManager"
 import { HostProvider } from "@/hosts/host-provider"
 import { VscodeTerminalManager } from "@/hosts/vscode/terminal/VscodeTerminalManager"
 import { ExtensionRegistryInfo } from "@/registry"
+import type {
+	ControlSeamCancelAuthorityOutcome,
+	ControlSeamFeedbackAuthorityOutcome,
+} from "@/sdk/control-seam/control-seam-authority"
 import { ControlSeamEventBuffer, projectControlSeamBufferedEvent } from "@/sdk/control-seam/control-seam-event-buffer"
 import { CONTROL_SEAM_MAX_EVENT_TEXT_LENGTH } from "@/sdk/control-seam/control-seam-protocol"
 import { ControlSeamRuntime, createControlSeamAuthority } from "@/sdk/control-seam/control-seam-runtime"
@@ -3341,6 +3345,12 @@ export class Controller {
 					// never posts state, and never touches the runtime.
 					readPublishedTaskState: () => this.publishedTaskState.read(),
 					readCurrentEpoch: () => this.messageTranslatorState.getMinter().epoch,
+					// ACT-CLINEMM-MCP-SUPERVISION-V2-01: the CURRENT
+					// authoritative turn phase — the EXISTING
+					// `TurnStateTracker.currentPhase`, the same phase the
+					// TaskHeader renders. A pure READ of an existing
+					// controller-owned record.
+					readCurrentTurnPhase: () => this.turnStateTracker.currentPhase,
 					// ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: the
 					// controller's OWN installed-workspace owner. The
 					// client may only ASSERT a workspace; it can never
@@ -3370,6 +3380,39 @@ export class Controller {
 							...(this.task?.taskId !== undefined ? { taskId: this.task.taskId } : {}),
 						}
 					},
+					// ACT-CLINEMM-MCP-SUPERVISION-V2-01: send ONE ordinary
+					// TEXT feedback message to the owned session.
+					//
+					// The route is the EXISTING follow-up authority
+					// (`SdkFollowupCoordinator`), NOT
+					// `SdkController.askResponse()`. The reason is the
+					// APPROVAL FENCE:
+					//
+					//   `SdkController.askResponse()` forwards
+					//   `this.task?.taskState?.askResponse` into the
+					//   follow-up coordinator, and
+					//   `TaskProxy.handleWebviewAskResponse` PERSISTS the
+					//   response type on the task proxy. After a UI
+					//   "Approve" click, that stored value is
+					//   `"yesButtonClicked"`, and
+					//   `SdkInteractionCoordinator.resolvePendingToolApproval`
+					//   would then APPROVE the NEXT pending tool.
+					//
+					// So the MCP feedback path calls
+					// `SdkFollowupCoordinator.askResponse()` DIRECTLY with
+					// NO response-type argument. The coordinator's own
+					// approval resolver then receives `undefined` as the
+					// response type — which never approves and never
+					// denies a pending approval — and the message is
+					// routed as ordinary follow-up text.
+					sendFeedback: (input) => this.sendSupervisionFeedback(input),
+					// ACT-CLINEMM-MCP-SUPERVISION-V2-01: cancel the owned
+					// session through the EXISTING `cancelTask()`
+					// lifecycle. It is the SAME method the webview's
+					// Cancel button reaches, so the cancel fence, the
+					// interaction cleanup, the background-job containment
+					// and the terminal-phase authority are all preserved.
+					cancelRun: (input) => this.cancelSupervisionRun(input),
 				}),
 				extensionVersion: ExtensionRegistryInfo.version,
 				platform: process.platform,
@@ -4871,6 +4914,227 @@ export class Controller {
 			this.attachRecoveryTelemetrySubscription(sessionId)
 			this.attachCanonicalRuntimeEventSubscription(sessionId)
 		}
+	}
+
+	/**
+	 * ACT-CLINEMM-MCP-SUPERVISION-V2-01: send ONE ordinary TEXT feedback
+	 * message to the session the MCP mutation client owns.
+	 *
+	 * WHY THIS IS NOT `SdkController.askResponse()`
+	 *
+	 * `SdkController.askResponse()` forwards `this.task?.taskState?.askResponse`
+	 * into the follow-up coordinator, and
+	 * `TaskProxy.handleWebviewAskResponse` PERSISTS that response type on
+	 * the task proxy (`state.askResponse = askResponse`). After a UI
+	 * "Approve" click the stored value is `"yesButtonClicked"`, and
+	 * `SdkFollowupCoordinator.askResponse` forwards it into
+	 * `SdkInteractionCoordinator.resolvePendingToolApproval`, which
+	 * APPROVES the pending tool.
+	 *
+	 * An MCP text message must never be able to answer an approval. So
+	 * this method calls the follow-up coordinator DIRECTLY, with NO
+	 * response-type argument: the coordinator's approval resolver then
+	 * receives `undefined`, which approves nothing and denies nothing,
+	 * and the message is routed as ordinary follow-up text.
+	 *
+	 * THE FENCES, IN ORDER
+	 *
+	 *   1. The session MUST be the ACTIVE session (the seam enforces
+	 *      ownership; this method re-checks it at the boundary).
+	 *   2. The epoch MUST equal the CURRENT conversation epoch.
+	 *   3. The run identity MUST match when the runtime reports one.
+	 *   4. The phase MUST be one the production follow-up path supports.
+	 *   5. The session identity is RE-CHECKED AFTER the dispatch await,
+	 *      so a task switch that happened while the message was in
+	 *      flight yields `superseded` and the replacement task is
+	 *      untouched.
+	 */
+	private async sendSupervisionFeedback(input: {
+		readonly sessionId: string
+		readonly expectedEpoch: number
+		readonly expectedRunId?: string
+		readonly text: string
+	}): Promise<ControlSeamFeedbackAuthorityOutcome> {
+		const activeSession = this.sessions.getActiveSession()
+		if (!activeSession || activeSession.sessionId !== input.sessionId) {
+			// The owned session is no longer the active one — a task
+			// switch or a session replacement happened.
+			return { outcome: "superseded", reason: "session-is-not-active" }
+		}
+		const currentEpoch = this.messageTranslatorState.getMinter().epoch
+		if (currentEpoch !== input.expectedEpoch) {
+			return { outcome: "rejected", reason: "epoch-mismatch" }
+		}
+		const phase = this.turnStateTracker.currentPhase
+		// THE PHASE POLICY, derived from the production follow-up
+		// semantics — NOT invented to satisfy a table.
+		//
+		//   - `awaiting_approval`: the follow-up coordinator's
+		//     `resolvePendingToolApproval` would be consulted with an
+		//     UNDEFINED response type, which leaves the approval
+		//     pending and routes the text as a queued follow-up. That is
+		//     safe in itself, but the approval interaction and the
+		//     feedback would then COMPETE for the same interaction
+		//     slot. The approval fence wins: feedback is REJECTED while
+		//     an approval is pending.
+		//   - `compacting`: an internal SYSTEM transition owns the next
+		//     step; no user action is actionable while it runs.
+		//   - `error`: there is no proven ordinary-message recovery path
+		//     that is safe to assert from here.
+		if (phase === "awaiting_approval") {
+			return { outcome: "rejected", reason: "approval-pending", phase }
+		}
+		if (phase === "compacting") {
+			return { outcome: "rejected", reason: "compaction-in-progress", phase }
+		}
+		if (phase === "error") {
+			return { outcome: "rejected", reason: "task-in-error-state", phase }
+		}
+
+		// THE RUN IDENTITY FENCE. When the runtime reports a run id, it
+		// MUST match the one the client asserted. An absent expected run
+		// id does NOT widen the fence: the session + epoch fences still
+		// apply, and a supplied-but-different run id is a rejection.
+		const snapshot = activeSession.sdkHost?.runtimeSnapshot?.(activeSession.sessionId)
+		if (input.expectedRunId !== undefined && snapshot?.runId !== input.expectedRunId) {
+			return { outcome: "rejected", reason: "run-mismatch", phase }
+		}
+
+		// THE DISPATCH BOUNDARY. The message is delivered through the
+		// EXISTING follow-up authority. When the session's turn is still
+		// running, that authority routes the message into the EXISTING
+		// pending-prompt queue with `delivery: "queue"` — the queue
+		// acknowledges it with its OWN prompt id, which is the
+		// correlatable identity the `queued` outcome reports.
+		const wasRunning = activeSession.isRunning
+		try {
+			await this.followups.askResponse(input.text, undefined, undefined, undefined, phase)
+		} catch (error) {
+			Logger.error("[SdkController] supervision feedback failed:", error)
+			return { outcome: "unknown_outcome", reason: "host-failure", phase }
+		}
+
+		// RE-CHECK THE OWNERSHIP AT THE ACTUAL DISPATCH BOUNDARY. A
+		// task switch during the dispatch must NOT deliver the message
+		// to the replacement task.
+		const afterSession = this.sessions.getActiveSession()
+		if (!afterSession || afterSession.sessionId !== input.sessionId) {
+			return { outcome: "superseded", reason: "session-changed-during-dispatch", phase }
+		}
+
+		if (wasRunning) {
+			// The message went into the EXISTING queue. Read the queue's
+			// OWN state to obtain the correlatable identity of the item
+			// that was just enqueued.
+			const queuedPromptId = await this.findQueuedPromptId(input.sessionId, input.text)
+			if (!queuedPromptId) {
+				// The queue did not acknowledge the item with a
+				// correlatable identity. Reporting `queued` without one
+				// would violate the contract, so the outcome is
+				// `unknown_outcome` — the client must reconcile rather
+				// than blindly repeat the prompt.
+				return { outcome: "unknown_outcome", reason: "queue-acknowledgement-unavailable", phase }
+			}
+			return { outcome: "queued", queuedPromptId, phase }
+		}
+		return { outcome: "accepted", phase }
+	}
+
+	/**
+	 * ACT-CLINEMM-MCP-SUPERVISION-V2-01: read the EXISTING pending-prompt
+	 * queue and return the id of the item that carries `prompt`.
+	 *
+	 * The id is the QUEUE'S OWN identity (`SessionPendingPrompt.id`) — the
+	 * seam never mints one. The item is bound to `sessionId`, so a
+	 * replacement session's queue can never be matched by mistake.
+	 *
+	 * Returns `undefined` when the queue does not (yet) carry the item —
+	 * the caller then reports `unknown_outcome` rather than a `queued`
+	 * outcome without a correlatable identity.
+	 */
+	private async findQueuedPromptId(sessionId: string, prompt: string): Promise<string | undefined> {
+		const activeSession = this.sessions.getActiveSession()
+		if (!activeSession || activeSession.sessionId !== sessionId) {
+			return undefined
+		}
+		const host = activeSession.sdkHost
+		if (typeof host?.pendingPrompts !== "function") {
+			return undefined
+		}
+		try {
+			const prompts = await host.pendingPrompts("list", { sessionId })
+			// The queue dedupes by prompt text, so the LAST matching entry
+			// is the one this dispatch created.
+			for (let index = prompts.length - 1; index >= 0; index--) {
+				const entry = prompts[index]
+				if (entry?.prompt === prompt) {
+					return entry.id
+				}
+			}
+		} catch (error) {
+			Logger.warn("[SdkController] failed to read the pending-prompt queue for a supervision feedback:", error)
+		}
+		return undefined
+	}
+
+	/**
+	 * ACT-CLINEMM-MCP-SUPERVISION-V2-01: cancel the session the MCP
+	 * mutation client owns, through the EXISTING `cancelTask()` lifecycle.
+	 *
+	 * It is the SAME method the webview's Cancel button reaches, so the
+	 * cancel fence, the interaction cleanup, the background-job
+	 * containment and the terminal-phase authority are all preserved. No
+	 * PID is killed and no independent SDK abort path is used.
+	 *
+	 * THE FENCES, IN ORDER
+	 *
+	 *   1. The session MUST be the ACTIVE session (the seam enforces
+	 *      ownership; this method re-checks it).
+	 *   2. The epoch MUST equal the CURRENT conversation epoch.
+	 *   3. The run identity MUST match when the runtime reports one.
+	 *   4. A session that already reached a TERMINAL phase yields
+	 *      `already_terminal` — the cancellation is a no-op and must NOT
+	 *      overwrite the committed terminal completion.
+	 *   5. The session identity is RE-CHECKED at the dispatch boundary,
+	 *      so a late cancellation never stops a replacement task.
+	 */
+	private async cancelSupervisionRun(input: {
+		readonly sessionId: string
+		readonly expectedEpoch: number
+		readonly expectedRunId?: string
+	}): Promise<ControlSeamCancelAuthorityOutcome> {
+		const activeSession = this.sessions.getActiveSession()
+		if (!activeSession || activeSession.sessionId !== input.sessionId) {
+			return { outcome: "superseded", reason: "session-is-not-active" }
+		}
+		const currentEpoch = this.messageTranslatorState.getMinter().epoch
+		if (currentEpoch !== input.expectedEpoch) {
+			return { outcome: "rejected", reason: "epoch-mismatch" }
+		}
+		const snapshot = activeSession.sdkHost?.runtimeSnapshot?.(activeSession.sessionId)
+		if (input.expectedRunId !== undefined && snapshot?.runId !== input.expectedRunId) {
+			return { outcome: "rejected", reason: "run-mismatch" }
+		}
+		const phaseBefore = this.turnStateTracker.currentPhase
+		// A session that already reached an authoritative terminal
+		// outcome keeps that outcome. Cancelling it must NOT publish a
+		// `resumable` phase over a committed `completed`.
+		if (phaseBefore === "completed" || phaseBefore === "error" || phaseBefore === "resumable") {
+			return { outcome: "already_terminal", phase: phaseBefore }
+		}
+		try {
+			await this.cancelTask()
+		} catch (error) {
+			Logger.error("[SdkController] supervision cancellation failed:", error)
+			return { outcome: "unknown_outcome", reason: "host-failure", phase: phaseBefore }
+		}
+		// RE-CHECK THE OWNERSHIP AT THE ACTUAL DISPATCH BOUNDARY. A
+		// replacement task must never be cancelled by a late request.
+		const afterSession = this.sessions.getActiveSession()
+		if (afterSession && afterSession.sessionId !== input.sessionId) {
+			return { outcome: "superseded", reason: "session-changed-during-cancellation", phase: phaseBefore }
+		}
+		return { outcome: "accepted", phase: this.turnStateTracker.currentPhase }
 	}
 
 	async cancelTask(): Promise<void> {

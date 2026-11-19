@@ -95,10 +95,25 @@ export const CONTROL_SEAM_MAX_REQUEST_BYTES = 64 * 1024
  * a BOUNDED, ordered slice of the task's REAL emitted events for the
  * session this mutation client owns. Requires the separate mutation
  * grant.
+ *
+ * `clinemm_send_feedback` — ACT-CLINEMM-MCP-SUPERVISION-V2-01. Send ONE
+ * ordinary TEXT feedback message to the session this mutation client
+ * owns, through the EXISTING follow-up authority. MUTATING. Requires the
+ * separate mutation grant. It can NEVER answer a tool approval.
+ *
+ * `clinemm_cancel_run` — ACT-CLINEMM-MCP-SUPERVISION-V2-01. Cancel the
+ * session this mutation client owns through the EXISTING
+ * `SdkController.cancelTask()` lifecycle. MUTATING. Requires the
+ * separate mutation grant.
  */
 export const CONTROL_SEAM_READ_OPERATION_IDS = ["clinemm_capabilities", "clinemm_get_run"] as const
 
-export const CONTROL_SEAM_WRITE_OPERATION_IDS = ["clinemm_start_act", "clinemm_read_events"] as const
+export const CONTROL_SEAM_WRITE_OPERATION_IDS = [
+	"clinemm_start_act",
+	"clinemm_read_events",
+	"clinemm_send_feedback",
+	"clinemm_cancel_run",
+] as const
 
 export const CONTROL_SEAM_OPERATION_IDS = [...CONTROL_SEAM_READ_OPERATION_IDS, ...CONTROL_SEAM_WRITE_OPERATION_IDS] as const
 
@@ -185,6 +200,26 @@ export const CONTROL_SEAM_OPERATIONS: readonly ControlSeamOperation[] = [
 		// grant.
 		writeScope: "mutation",
 	},
+	{
+		id: "clinemm_send_feedback",
+		mutating: true,
+		description:
+			"Send one ordinary text feedback message to the task this client owns, through the extension's existing follow-up authority.",
+		// ACT-CLINEMM-MCP-SUPERVISION-V2-01: the scope is `"mutation"`.
+		// The CONTENT-READ grant governs READING task message text; it
+		// does not govern WRITING one. A mutation-authorized client may
+		// steer its own task without gaining any read access to the
+		// transcript.
+		writeScope: "mutation",
+	},
+	{
+		id: "clinemm_cancel_run",
+		mutating: true,
+		description: "Cancel the task this client owns through the extension's existing cancellation lifecycle.",
+		// ACT-CLINEMM-MCP-SUPERVISION-V2-01: the scope is `"mutation"`.
+		// Cancelling needs no transcript read access.
+		writeScope: "mutation",
+	},
 ] as const
 
 /** The READ-ONLY registry projection — what a read-only client sees. */
@@ -257,6 +292,8 @@ export interface ControlSeamRequest {
 export type ControlSeamWritePayload =
 	| { readonly op: "clinemm_start_act"; readonly input: ControlSeamStartActInput }
 	| { readonly op: "clinemm_read_events"; readonly input: ControlSeamReadEventsInput }
+	| { readonly op: "clinemm_send_feedback"; readonly input: ControlSeamSendFeedbackInput }
+	| { readonly op: "clinemm_cancel_run"; readonly input: ControlSeamCancelRunInput }
 
 /**
  * The `clinemm_start_act` input.
@@ -290,10 +327,74 @@ export interface ControlSeamReadEventsInput {
 }
 
 /**
+ * ACT-CLINEMM-MCP-SUPERVISION-V2-01 — the `clinemm_send_feedback` input.
+ *
+ * `requestId` is the CLIENT-SUPPLIED idempotency key. It is scoped to ONE
+ * extension-host instance and is bounded by the instance-local operation
+ * ledger (the SAME ledger `clinemm_start_act` uses).
+ *
+ * `sessionId` MUST be the session this mutation client owns. The extension
+ * host rejects a foreign session id — the client can never steer a task it
+ * did not start.
+ *
+ * `expectedEpoch` MUST be the CURRENT conversation epoch of the owned
+ * session, as reported by `clinemm_get_run` (`taskState.epoch`) or by the
+ * `epoch` field of the owned session's published events. It is the
+ * CONVERSATION epoch (`MessageIdMinter.epoch`) — NEVER a UI sequence
+ * number and NEVER a publication `stateVersion`. Those are different
+ * clocks; substituting either of them for the epoch would make the fence
+ * meaningless (a `stateVersion` monotonically increases across epochs, so
+ * a stale-epoch request could pass a `stateVersion` check).
+ *
+ * `expectedRunId` is OPTIONAL. When the runtime reports a run identity, the
+ * client MUST supply it, and the extension host compares it against the
+ * run identity observed at the dispatch boundary. When it is ABSENT, the
+ * request is NOT treated as permission to steer an arbitrary task: the
+ * session-ownership fence and the epoch fence still apply, and an absent
+ * run id never widens the fence.
+ *
+ * `text` is the ordinary, free-form user message. It is TEXT-ONLY: this
+ * ACT does not forward attachments, file paths, or images.
+ */
+export interface ControlSeamSendFeedbackInput {
+	readonly requestId: string
+	readonly sessionId: string
+	readonly expectedEpoch: number
+	readonly expectedRunId?: string
+	readonly text: string
+}
+
+/**
+ * ACT-CLINEMM-MCP-SUPERVISION-V2-01 — the `clinemm_cancel_run` input.
+ *
+ * The fences are IDENTICAL to `clinemm_send_feedback`: the session must be
+ * the one this client owns, the epoch must be the current conversation
+ * epoch, and the run id (when supplied) must match the run observed at the
+ * dispatch boundary.
+ *
+ * There is deliberately NO `text` field: cancellation carries no
+ * user-authored content, so there is nothing to leak and nothing to
+ * interpret.
+ */
+export interface ControlSeamCancelRunInput {
+	readonly requestId: string
+	readonly sessionId: string
+	readonly expectedEpoch: number
+	readonly expectedRunId?: string
+}
+
+/**
  * The maximum accepted prompt length for `clinemm_start_act`, in
  * characters. A longer prompt is rejected before any lifecycle call.
  */
 export const CONTROL_SEAM_MAX_PROMPT_LENGTH = 32_000
+
+/**
+ * ACT-CLINEMM-MCP-SUPERVISION-V2-01: the maximum accepted feedback text
+ * length, in characters. It matches the start-prompt bound so a feedback
+ * message can never be larger than the prompt that started the task.
+ */
+export const CONTROL_SEAM_MAX_FEEDBACK_LENGTH = 32_000
 
 /**
  * The maximum accepted `requestId` length, in characters.
@@ -421,7 +522,107 @@ export interface ControlSeamStartActResult {
 }
 
 /**
- * ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01: ONE observed event.
+ * ACT-CLINEMM-MCP-SUPERVISION-V2-01: the outcome vocabulary of
+ * `clinemm_send_feedback`.
+ *
+ *   - `accepted` — the authoritative follow-up authority ACKNOWLEDGED
+ *     the feedback as an ordinary user message for the owned session.
+ *     This says NOTHING about whether the agent executed it, acted on
+ *     it, or completed. It is NOT completion authority.
+ *   - `queued` — the EXISTING production pending-prompt queue accepted
+ *     the message AND returned a correlatable identity for it (the
+ *     queue's own prompt id). The item is bound to the owned session
+ *     and its owner; it is not yet consumed.
+ *   - `rejected` — a precondition failed (fence mismatch, unsupported
+ *     phase, competing interaction). NOTHING was delivered.
+ *   - `superseded` — the session/task changed while the request was in
+ *     flight. NOTHING was delivered to the replacement task.
+ *   - `unknown_outcome` — the host could not prove whether the feedback
+ *     was delivered. It MUST NOT be retried automatically: the client
+ *     has to reconcile through `clinemm_get_run` /
+ *     `clinemm_read_events` first.
+ */
+export type ControlSeamSendFeedbackOutcome = "accepted" | "queued" | "rejected" | "superseded" | "unknown_outcome"
+
+/**
+ * ACT-CLINEMM-MCP-SUPERVISION-V2-01: the `clinemm_send_feedback` result.
+ *
+ * `outcome` is the AUTHORITATIVE disposition of the feedback operation.
+ *
+ * `queuedPromptId` is present IFF the outcome is `"queued"`. It is the
+ * queue's OWN identity for the enqueued item, so the client can later
+ * correlate the item's consumption by the intended run. It is NEVER
+ * minted locally by the seam.
+ */
+export interface ControlSeamSendFeedbackResult {
+	readonly outcome: ControlSeamSendFeedbackOutcome
+	/** The client-supplied idempotency key this outcome was recorded under. */
+	readonly requestId: string
+	/** The session the feedback was addressed to. */
+	readonly sessionId: string
+	/**
+	 * The queue's own identity for the enqueued item. Present IFF the
+	 * outcome is `"queued"`.
+	 */
+	readonly queuedPromptId?: string
+	/**
+	 * The authoritative task phase observed at the dispatch boundary,
+	 * when it could be established safely. It is a STATUS ENUM only —
+	 * never a fabricated `idle` and never a completion claim.
+	 */
+	readonly phase?: string
+	/**
+	 * A non-informative reason for a `rejected` / `superseded` /
+	 * `unknown_outcome` outcome. It NEVER carries task content, a
+	 * credential, or a file path.
+	 */
+	readonly reason?: string
+}
+
+/**
+ * ACT-CLINEMM-MCP-SUPERVISION-V2-01: the outcome vocabulary of
+ * `clinemm_cancel_run`.
+ *
+ *   - `accepted` — the EXISTING cancellation lifecycle accepted the
+ *     cancellation for the owned session. This is NOT proof that the run
+ *     stopped: the authoritative `cancelTask()` path owns the abort, the
+ *     interaction cleanup, and the background-job containment, and it
+ *     publishes the resulting phase asynchronously.
+ *   - `already_terminal` — the owned session had already reached a
+ *     terminal phase. The cancellation was a no-op and did NOT overwrite
+ *     the committed terminal completion.
+ *   - `superseded` — the session/task changed while the request was in
+ *     flight. The cancellation did NOT touch the replacement task.
+ *   - `rejected` — a precondition failed. NOTHING was cancelled.
+ *   - `unknown_outcome` — the host could not prove whether the
+ *     cancellation took effect. It MUST NOT be retried automatically.
+ */
+export type ControlSeamCancelRunOutcome = "accepted" | "already_terminal" | "superseded" | "rejected" | "unknown_outcome"
+
+/**
+ * ACT-CLINEMM-MCP-SUPERVISION-V2-01: the `clinemm_cancel_run` result.
+ *
+ * `phase` is the authoritative task phase observed AFTER the cancellation
+ * lifecycle settled, when it could be established safely. It is a STATUS
+ * ENUM only.
+ */
+export interface ControlSeamCancelRunResult {
+	readonly outcome: ControlSeamCancelRunOutcome
+	/** The client-supplied idempotency key this outcome was recorded under. */
+	readonly requestId: string
+	/** The session the cancellation was addressed to. */
+	readonly sessionId: string
+	/** The authoritative task phase after the cancellation settled, if known. */
+	readonly phase?: string
+	/**
+	 * A non-informative reason for a `rejected` / `superseded` /
+	 * `unknown_outcome` outcome.
+	 */
+	readonly reason?: string
+}
+
+/**
+ * ACT-CLINEMM-MCP-SUPERVISION-V2-01: ONE observed event.
  *
  * The event's identity and ordering come from the EXISTING production
  * message stream (`ClineMessage.seq` / `.epoch`), NOT from a
@@ -813,6 +1014,12 @@ function decodeControlSeamWritePayload(op: ControlSeamOperationId, raw: unknown)
 			},
 		}
 	}
+	if (op === "clinemm_send_feedback") {
+		return decodeControlSeamSendFeedbackPayload(record.input)
+	}
+	if (op === "clinemm_cancel_run") {
+		return decodeControlSeamCancelRunPayload(record.input)
+	}
 	// clinemm_read_events
 	const input = record.input
 	if (typeof input !== "object" || input === null || Array.isArray(input)) {
@@ -840,6 +1047,111 @@ function decodeControlSeamWritePayload(op: ControlSeamOperationId, raw: unknown)
 			...(inputRecord.afterCursor !== undefined ? { afterCursor: inputRecord.afterCursor } : {}),
 			...(inputRecord.limit !== undefined ? { limit: inputRecord.limit } : {}),
 		},
+	}
+}
+
+/**
+ * ACT-CLINEMM-MCP-SUPERVISION-V2-01: decode + validate the shared
+ * SUPERVISION input fields.
+ *
+ * `clinemm_send_feedback` and `clinemm_cancel_run` share the same fence
+ * fields (requestId / sessionId / expectedEpoch / expectedRunId?), so the
+ * validation lives here ONCE — the two operations cannot drift apart on
+ * their fences.
+ *
+ * Returns `null` when any field fails its schema.
+ */
+function decodeControlSeamSupervisionInput(input: unknown): {
+	requestId: string
+	sessionId: string
+	expectedEpoch: number
+	expectedRunId?: string
+} | null {
+	if (typeof input !== "object" || input === null || Array.isArray(input)) {
+		return null
+	}
+	const inputRecord = input as Record<string, unknown>
+	if (typeof inputRecord.requestId !== "string" || inputRecord.requestId.length === 0) {
+		return null
+	}
+	if (inputRecord.requestId.length > CONTROL_SEAM_MAX_REQUEST_ID_LENGTH) {
+		return null
+	}
+	if (typeof inputRecord.sessionId !== "string" || inputRecord.sessionId.length === 0) {
+		return null
+	}
+	// The epoch is a NON-NEGATIVE INTEGER. A float, a negative number, a
+	// string, or `NaN` is rejected at the codec: a malformed epoch would
+	// otherwise compare unequal to every real epoch and produce a
+	// confusing `rejected` instead of a `bad_request`.
+	if (
+		typeof inputRecord.expectedEpoch !== "number" ||
+		!Number.isInteger(inputRecord.expectedEpoch) ||
+		inputRecord.expectedEpoch < 0
+	) {
+		return null
+	}
+	if (inputRecord.expectedRunId !== undefined) {
+		if (typeof inputRecord.expectedRunId !== "string" || inputRecord.expectedRunId.length === 0) {
+			return null
+		}
+	}
+	return {
+		requestId: inputRecord.requestId,
+		sessionId: inputRecord.sessionId,
+		expectedEpoch: inputRecord.expectedEpoch,
+		...(inputRecord.expectedRunId !== undefined ? { expectedRunId: inputRecord.expectedRunId } : {}),
+	}
+}
+
+/**
+ * ACT-CLINEMM-MCP-SUPERVISION-V2-01: `clinemm_send_feedback`.
+ *
+ * The feedback text is TEXT-ONLY. An `images` / `files` / `attachments`
+ * field is NOT part of the contract, and the codec DROPS unknown keys
+ * rather than forwarding them — so an attachment can never be smuggled
+ * through the feedback path.
+ */
+function decodeControlSeamSendFeedbackPayload(input: unknown): ControlSeamWritePayload | null {
+	const decoded = decodeControlSeamSupervisionInput(input)
+	if (!decoded) {
+		return null
+	}
+	const inputRecord = input as Record<string, unknown>
+	if (typeof inputRecord.text !== "string" || inputRecord.text.length === 0) {
+		return null
+	}
+	if (inputRecord.text.length > CONTROL_SEAM_MAX_FEEDBACK_LENGTH) {
+		return null
+	}
+	return {
+		op: "clinemm_send_feedback",
+		input: {
+			...decoded,
+			text: inputRecord.text,
+		},
+	}
+}
+
+/**
+ * ACT-CLINEMM-MCP-SUPERVISION-V2-01: `clinemm_cancel_run`.
+ *
+ * There is NO `text` field. A request that carries one is REJECTED at the
+ * codec: cancellation carries no user-authored content, and accepting an
+ * unused field would widen the operation's surface for no reason.
+ */
+function decodeControlSeamCancelRunPayload(input: unknown): ControlSeamWritePayload | null {
+	const decoded = decodeControlSeamSupervisionInput(input)
+	if (!decoded) {
+		return null
+	}
+	const inputRecord = input as Record<string, unknown>
+	if (inputRecord.text !== undefined) {
+		return null
+	}
+	return {
+		op: "clinemm_cancel_run",
+		input: decoded,
 	}
 }
 

@@ -1,0 +1,30 @@
+### SCOPED LINT (biome, the changed files)
+Checked 27 files in 280ms. No fixes applied.
+lint exit=0
+
+### HOST TYPECHECK
+bun run check-types -> exit 0 (protos regenerated + tsc --noEmit + compat project + webview tsc)
+
+### git diff --check (whitespace / conflict-marker check)
+git diff --check exit=0
+
+### whitespace check on the NEW files
+  apps/vscode/src/sdk/control-seam/control-seam.supervision-v2.test.ts -> check exit=1
+  apps/vscode/src/sdk/control-seam/control-seam.supervision-route-pin.test.ts -> check exit=1
+  apps/vscode/src/sdk/control-seam/control-seam.supervision-approval-fence.production-shape.test.ts -> check exit=1
+
+### git diff --check --cached (INCLUDING the new files, now staged)
+.factory/evidence/ACT-CLINEMM-MCP-SUPERVISION-V2-01/01-red.txt:508: new blank line at EOF.
+.factory/evidence/ACT-CLINEMM-MCP-SUPERVISION-V2-01/02-green.txt:15: new blank line at EOF.
+.factory/evidence/ACT-CLINEMM-MCP-SUPERVISION-V2-01/03-control-seam-suite.txt:19: new blank line at EOF.
+.factory/evidence/ACT-CLINEMM-MCP-SUPERVISION-V2-01/05-lifecycle-and-ownership-gates.txt:15: new blank line at EOF.
+git diff --check --cached exit=2
+
+### FINAL GATE RE-RUN ON THE COMMITTED STATE (HEAD c1d80c35a)
+-----------------------------------------------------------------
+  control-seam suite (V1 + CORR01 + ISO01 + V2)      183/183 passed
+  lifecycle / ownership / followup / interaction     211/211 passed
+  the V2 witnesses (38)                              38/38 passed
+  C9/C10/BCB conservation                             0 new failures
+  git diff --check --cached                           exit 0
+  working tree after the commit                       clean

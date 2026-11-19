@@ -1,0 +1,14 @@
+### SESSION LIFECYCLE / OWNERSHIP / TASK-CONTROL / FOLLOWUP / INTERACTION
+(Use `bun --trace-warnings ...` to show where the warning was created)
+ ✓ src/sdk/sdk-session-lifecycle.test.ts (38 tests) 192ms
+stderr | src/sdk/SdkController.test.ts > SDK remote-config coordination > posts the current remote-config revision to the webview
+Compiled in DEV mode. Follow the advice at https://elm-lang.org/0.19.2/optimize for better performance and smaller assets.
+
+ ✓ src/sdk/SdkController.test.ts (44 tests) 22ms
+ ✓ src/sdk/sdk-task-control-coordinator.test.ts (24 tests) 121ms
+ ✓ src/sdk/sdk-interaction-coordinator.test.ts (56 tests) 1792ms
+
+ Test Files  7 passed (7)
+      Tests  211 passed (211)
+   Start at  03:54:24
+   Duration  4.04s (transform 10.25s, setup 11.26s, import 6.09s, tests 2.16s, environment 1ms)

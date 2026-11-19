@@ -36257,3 +36257,141 @@ cancel row names the session it replaced,
 an approximate attribution would place that other task's transcript in the wrong
 session's view. Ablation C proves this part is load-bearing.
 
+
+# ACT-CLINEMM-MCP-SUPERVISION-V2-01 — PASS_STRUCTURAL_ONLY — 2026-11-19
+
+```yaml
+ACT_ID: ACT-CLINEMM-MCP-SUPERVISION-V2-01
+STATUS: PASS_STRUCTURAL_ONLY
+DATE: 2026-11-19
+BRANCH: main
+ENTRY_HEAD: acea67fc28296e768357da278db9ff88a7cb0560
+WORKSTREAM: W01 (successor of ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-CORR01)
+IMPLEMENTATION: bounded - exactly two new MCP operations
+  clinemm_send_feedback
+  clinemm_cancel_run
+READ_ONLY_VIEW: UNCHANGED - exactly 2 operations
+MUTATION_VIEW: 6 operations (the 4 V1 ones unchanged + the 2 new ones)
+PROTOCOL_VERSION: UNCHANGED (1)
+VERDICT: PASS_STRUCTURAL_ONLY
+EVIDENCE: .factory/evidence/ACT-CLINEMM-MCP-SUPERVISION-V2-01/
+```
+
+## What was built
+
+Two new MCP operations on the EXISTING Codex Desktop → ClineMM control seam,
+implemented against the EXISTING production authorities:
+
+| Operation | Reaches | Authority preserved |
+|---|---|---|
+| `clinemm_send_feedback` | `SdkFollowupCoordinator.askResponse()` — called DIRECTLY, with **no response type** | the real follow-up path and the real pending-prompt queue |
+| `clinemm_cancel_run` | `SdkController.cancelTask()` → `SdkTaskControlCoordinator.cancelTask()` | the webview's own Cancel path: the cancel fence, the interaction cleanup, the background-job containment and the terminal-phase authority |
+
+No new runtime, controller, event bus or queue. No new token or authorization
+system — both operations require the SAME explicit mutation grant as
+`clinemm_start_act`. The four V1 operations are byte-for-byte unchanged in
+behaviour and the wire protocol version stays `1`.
+
+## The P0 finding that shaped the implementation
+
+`SdkController.askResponse()` forwards the **persisted**
+`taskState.askResponse` into the follow-up coordinator. That value is written
+by the UI's "Approve" click and **persists for the rest of the task's life**.
+Routing MCP feedback through it would let a stale `"yesButtonClicked"`
+**approve the next pending tool**.
+
+The MCP route therefore calls the follow-up coordinator **directly**, with
+`undefined` as the response type, and the seam rejects feedback outright
+while `awaiting_approval`. Both halves are witnessed:
+
+* **RP-1 / RP-2** (route pin) — the controller's route is the safe one; they
+  FAIL when the route is ablated to `this.askResponse()`.
+* **AF-4 / AF-5** (production shape) — the REAL `TaskProxy` really does
+  persist `"yesButtonClicked"`, and the MCP route never consults it.
+
+## Behavioural RED → GREEN
+
+| | Result |
+|---|---|
+| RED (pristine `acea67fc2`, witnesses copied in, implementation absent) | **28 failed / 10 passed** |
+| GREEN (the staged subject) | **38 / 38 passed** |
+
+## Necessity ablations (5/5, isolated)
+
+Each revert is applied ALONE from the same pristine snapshot, so the failures
+are NOT cumulative.
+
+| ID | Production revert | Failing witness | Verdict |
+|---|---|---|---|
+| A | the seam-side epoch fence | S1-4, S1-6 | LOAD-BEARING |
+| B | the seam-side approval fence | F3-1 | LOAD-BEARING |
+| C | the dispatch-boundary session re-check | F5-1, C3-1 | LOAD-BEARING |
+| D | the in-flight join | F4-3 | LOAD-BEARING |
+| E | the safe feedback route → `SdkController.askResponse()` | RP-1, RP-2 | LOAD-BEARING |
+
+## Conservation (proven, not asserted)
+
+| Gate | Result |
+|---|---|
+| the whole control-seam suite (V1 + CORR01 + ISO01 + V2) | **183 / 183 passed** |
+| session lifecycle / ownership / task-control / followup / interaction | **211 / 211 passed** |
+| C9/C10/BCB + completion / continuation / background | **0 NEW failures** (the 25 failures are PRE-EXISTING at pristine HEAD — proven by running the identical gate set against the stashed tree; the new-failures set is EMPTY) |
+| focused Elm authority suites | **NO REGRESSION** (task-header 48/48, completion-authority 31/31, background-notify 25/25; the 2 completion-continuation-control failures are PRE-EXISTING at pristine HEAD) |
+| host typecheck (`bun run check-types`) | exit 0 |
+| scoped lint (biome, 27 files) | exit 0, 0 findings |
+| `git diff --check` | exit 0 |
+| ACT-owned diagnostics | **ZERO** |
+
+The read-only projection is still **exactly two** operations
+(`control-seam-proxy.test.ts` PX01 / PX03) and the mutation projection is
+**exactly six** (PX01b). The AF_UNIX-only transport, the read/write credential
+separation, the default-OFF mutation control, the per-request credential
+authorization, the workspace grant and active-session ownership fences, the
+bounded operation ledger, the session-scoped event reads, the `allowContentRead`
+sub-grant and the native editor/command approval authority are all unchanged.
+
+The ledger stores a **SHA-256 fingerprint**, never the feedback text, and the
+operation discriminator is part of the fingerprint — so one request id cannot
+be reused across the two operations.
+
+## The final instruction, honoured
+
+Codex may request execution, feedback and cancellation, but ClineMM remains
+the sole authority for task execution, tool approval, background-job
+containment and terminal completion.
+
+* The feedback route **cannot** answer an approval (the approval fence).
+* The cancellation route **is** the webview's own Cancel path.
+* The terminal completion authority is untouched: a late cancellation returns
+  `already_terminal` and never overwrites a committed completion.
+* An accepted cancellation is **not** proof the run stopped, and an accepted
+  feedback is **not** proof the agent executed it.
+
+## Installed qualification — PENDING
+
+The sandbox cannot install a VSIX, and the ACT forbids the sandboxed agent
+from installing one. The installed-bundle SHA-256 is therefore unavailable and
+**no LIVE claim is made**. The operator procedure (build → package → install →
+verify the installed hash → the 10-step Codex Desktop exercise) is in
+`.factory/evidence/ACT-CLINEMM-MCP-SUPERVISION-V2-01/10-live-qualification-report.txt`.
+
+The exact-head artifact was built **from the staged subject**, not from a
+pre-change tree:
+
+```
+BUNDLE   apps/vscode/dist/extension.js
+SIZE     57809190 bytes
+SHA256   72753476732d84a3b6dba98fd48f1250323dd3886702b48def55a3979cc566a6
+```
+
+## Operator qualifications carried forward
+
+1. `mkdir -p dist` is REQUIRED before `vsce package --out` — `vsce` stats the
+   output path before writing it and fails with a confusing `ENOENT` when the
+   directory is missing.
+2. The documented `code --install-extension` command targets the **`code` CLI**.
+   Use the CLI of the editor actually being qualified (`codium-clinemm`).
+3. The dogfood control-seam path is
+   **`~/.vscodium-clinemm/cline-data/control-seam`**, not
+   `~/.cline/data/control-seam`. Use the actual profile's path, without
+   exposing either credential.

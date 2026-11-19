@@ -1,0 +1,52 @@
+ACT-CLINEMM-MCP-SUPERVISION-V2-01 - NECESSITY ABLATIONS
+Each production change is reverted ALONE; the witness that pins it must FAIL.
+A witness that still PASSES after the revert would mean the change is NOT load-bearing.
+
+==============================================================================
+ABLATION A: revert the seam-side EPOCH FENCE (both handlers)
+==============================================================================
+ Test Files  1 failed | 2 passed (3)
+      Tests  2 failed | 36 passed (38)
+ FAIL  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - S1 authorization > S1-4: a feedback with a STALE epoch is refused and delivers nothing
+ FAIL  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - S1 authorization > S1-6: a cancellation with a STALE epoch is refused and cancels nothing
+
+==============================================================================
+ABLATION B: revert the seam-side APPROVAL FENCE (the `awaiting_approval` phase policy)
+==============================================================================
+ Test Files  1 failed | 2 passed (3)
+      Tests  1 failed | 37 passed (38)
+ FAIL  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - F3 approval separation > F3-1: while an approval is pending, feedback is REJECTED and the pending approval is NEVER answered
+
+==============================================================================
+ABLATION C: revert the DISPATCH-BOUNDARY session re-check (feedback)
+==============================================================================
+ Test Files  1 failed | 2 passed (3)
+      Tests  2 failed | 36 passed (38)
+ FAIL  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - F5 session-switch race > F5-1: a session switch while the feedback is in flight yields `superseded`, and the replacement task is untouched
+ FAIL  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - C3 cancel versus task replacement > C3-1: a delayed cancellation of session A NEVER stops session B
+
+==============================================================================
+ABLATION D: revert the IN-FLIGHT JOIN (the duplicate settles with the first operation)
+==============================================================================
+ Test Files  1 failed | 2 passed (3)
+      Tests  1 failed | 37 passed (38)
+ FAIL  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - F4 duplicate feedback > F4-3: CONCURRENT duplicates produce ONE delivered message
+
+==============================================================================
+ABLATION E: revert the SAFE feedback ROUTE (the controller calls `SdkController.askResponse()`)
+==============================================================================
+ Test Files  1 failed | 2 passed (3)
+      Tests  2 failed | 36 passed (38)
+ FAIL  src/sdk/control-seam/control-seam.supervision-route-pin.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 — the MCP feedback route pin > RP-1: the MCP feedback route calls the follow-up coordinator DIRECTLY, not `SdkController.askResponse()`
+ FAIL  src/sdk/control-seam/control-seam.supervision-route-pin.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 — the MCP feedback route pin > RP-2: the MCP feedback route supplies NO response type to the follow-up coordinator
+
+
+ISOLATION: every ablation starts from the SAME pristine snapshot (taken once
+before any ablation ran) and restores that snapshot afterwards. So the
+ablation failures are NOT cumulative - each row above is that ablation ALONE.
+
+NOTE ON ABLATION E: it reverts the CONTROLLER's feedback route, so it is
+pinned by the ROUTE PIN (RP-1 / RP-2) rather than by a server-level
+witness. The BEHAVIOUR of the safe route is pinned separately by AF-1..AF-5
+in `control-seam.supervision-approval-fence.production-shape.test.ts`,
+which drive the REAL `SdkInteractionCoordinator` and the REAL `TaskProxy`.

@@ -1,0 +1,18 @@
+### V2 SUPERVISION WITNESSES
+ ✓ src/sdk/control-seam/control-seam.supervision-v2.test.ts (30 tests) 250ms
+ ✓ src/sdk/control-seam/control-seam.supervision-approval-fence.production-shape.test.ts (5 tests) 13ms
+
+ Test Files  3 passed (3)
+      Tests  38 passed (38)
+   Start at  03:54:10
+   Duration  2.00s (transform 3.13s, setup 4.58s, import 479ms, tests 265ms, environment 0ms)
+
+
+### THE WHOLE CONTROL-SEAM SUITE (V1 + CORR01 + ISO01 + V2)
+ ✓ src/sdk/control-seam/control-seam-authority.production-shape.test.ts (3 tests) 8ms
+ ✓ src/sdk/control-seam/control-seam.event-session-isolation01.test.ts (4 tests) 22ms
+
+ Test Files  13 passed (13)
+      Tests  183 passed (183)
+   Start at  03:54:12
+   Duration  4.44s (transform 17.72s, setup 25.32s, import 8.77s, tests 3.02s, environment 2ms)

@@ -1,0 +1,173 @@
+ACT-CLINEMM-MCP-SUPERVISION-V2-01 - LIVE QUALIFICATION REPORT
+============================================================
+
+STATUS: NOT EXECUTED IN THE SANDBOX - THE SANDBOX CANNOT INSTALL A VSIX.
+
+The C9 live qualification requires an INSTALLED extension in a real
+Codex Desktop session. The sandboxed ClineMM agent is explicitly forbidden
+from performing that installation ("No installation by the sandboxed
+ClineMM agent"), and the sandbox has no attached VS Code instance and no
+Codex Desktop. The installed-bundle SHA-256 therefore cannot be produced
+here.
+
+Per C8: "If the sandbox cannot install VSIX, stop at structural
+qualification and supply the operator commands."
+
+
+THE OPERATOR COMMANDS
+----------------------
+STEP 1 - BUILD THE EXACT-HEAD ARTIFACT
+
+  cd /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+
+  git rev-parse HEAD                      # must equal SUBJECT_HEAD
+  git status --short                      # must be clean
+
+  cd apps/vscode
+  bun run build:webview
+  bun esbuild.mjs
+
+  mkdir -p ../../dist                    # REQUIRED: vsce --out resolves
+                                          # --out relative to the extension
+                                          # package dir and stats the file
+                                          # BEFORE writing it; a missing
+                                          # directory fails with a confusing
+                                          # ENOENT.
+  cd ../..
+  npx --yes @vscode/vsce package \
+      --out "dist/clinemm-mcp-supervision-v2-01-${SUBJECT_HEAD}.vsix" \
+      --allow-missing-repository \
+      --skip-license
+
+  shasum -a 256 "dist/clinemm-mcp-supervision-v2-01-${SUBJECT_HEAD}.vsix"
+  shasum -a 256 apps/vscode/dist/extension.js
+  # The two hashes must be recorded: the VSIX hash and the EMBEDDED
+  # extension bundle hash. The embedded bundle hash is the one in
+  # 11-exact-head-artifact-manifest.txt for the SAME source tree.
+
+  # INSTALL
+  code --install-extension "dist/clinemm-mcp-supervision-v2-01-${SUBJECT_HEAD}.vsix"
+
+  # Verify the INSTALLED bundle hash matches the built one:
+  shasum -a 256 \
+    ~/.vscode/extensions/claude-dev-*/dist/extension.js
+
+
+STEP 2 - THE LIVE FIXTURE (C9)
+
+  Use a FRESH DISPOSABLE fixture directory inside `codium-clinemm`.
+  NO real production repository. NO secrets. NO destructive commands.
+  NO YOLO / auto-approval changes.
+
+  Codex Desktop then performs, in order:
+
+   1. `clinemm_capabilities`
+      Expect the READ-ONLY projection to list EXACTLY two operations
+      unless the mutation grant is armed. Confirm the capability payload
+      before arming anything.
+
+   2. Arm the mutation grant in the UI (the operator's own action).
+
+   3. `clinemm_start_act`
+      Capture the accepted `sessionId` and the run identity.
+
+   4. `clinemm_get_run`
+      Observe the task. Record the CURRENT `expectedEpoch` - it is the
+      conversation epoch reported by the run, NOT a UI sequence number.
+
+   5. `clinemm_send_feedback`
+        {
+          "requestId":     "<unique>",
+          "sessionId":     "<the captured session id>",
+          "expectedEpoch": <the current epoch>,
+          "expectedRunId": "<the captured run id>",
+          "text":          "Please run the focused test."
+        }
+      Expect `accepted` (or `queued` WITH a `queuedPromptId`).
+
+   6. Confirm the SAME task received the message ONCE. Inspect the
+      conversation of the captured session - not a new task.
+
+   7. Start a SEPARATE cancellable run (or a continuation) under the same
+      authorized workflow.
+
+   8. `clinemm_cancel_run` - ONCE.
+        {
+          "requestId":     "<unique>",
+          "sessionId":     "<the captured session id>",
+          "expectedEpoch": <the current epoch>,
+          "expectedRunId": "<the captured run id>"
+        }
+      Expect `accepted` (the lifecycle outcome - NOT proof the run stopped)
+      or `already_terminal`.
+
+   9. REPLAY the SAME cancellation request (same requestId, same payload).
+      Expect the SAME recorded outcome, and verify NO second cancellation
+      effect occurred.
+
+  10. Verify NO foreign task was affected. The operator retains the
+      normal UI approval and Cancel controls throughout.
+
+  DO NOT rely on an assistant completion message as proof of authoritative
+  completion. Use the published TaskHeader phase and the existing
+  lifecycle diagnostics.
+
+  The operator must additionally observe, for the cancellation:
+    - the background-job containment state (a background command that
+      remains active must NOT be reported as "cancelled"), and
+    - that a late cancellation never cancelled a replacement task.
+
+
+STEP 3 - RECORD THE INSTALLED HASH
+
+  Append to 11-exact-head-artifact-manifest.txt:
+
+    installed bundle sha256 = <the hash from the installed extension>
+
+  Then regenerate SHA256SUMS.
+
+
+THE LIVE-TEST RESTRICTIONS (from the ACT contract)
+--------------------------------------------------
+  * No real production repositories.
+  * No secrets.
+  * No destructive commands.
+  * No YOLO / auto-approval changes.
+  * No implicit task replacement.
+  * No arbitrary MCP approval responses.
+  * No installation by the sandboxed ClineMM agent.
+
+
+WHAT THE STRUCTURAL QUALIFICATION ALREADY COVERS
+-------------------------------------------------
+The structural qualification exercises the SAME production seams that the
+live run drives, through the real server, the real controller, the real
+follow-up coordinator, the real interaction coordinator, the real task
+proxy and the real cancellation lifecycle:
+
+  F1  normal feedback                       -> accepted, exactly one turn
+  F2  feedback during an active run         -> queued WITH an identity
+  F3  approval separation                   -> rejected; the pending
+                                               approval is NEVER answered
+  F4  duplicate feedback                    -> one delivered message; a
+                                               different payload under the
+                                               same request id is rejected
+  F5  session-switch race                   -> superseded
+  C1  cancel an active run                  -> the lifecycle fence holds
+  C2  cancel vs completion race             -> terminal authority preserved
+  C3  cancel vs task replacement            -> A's late cancel never
+                                               stops B
+  C4  cancel with background work           -> not reported as cancelled
+                                               while containment is open
+  C5  duplicate cancellation                -> no second cancellation
+  S1  authorization                         -> invalid credential, foreign
+                                               session, mismatched
+                                               workspace, stale epoch
+  S2  conservation                          -> the four V1 operations, the
+                                               V1 start idempotency, the
+                                               event session isolation, the
+                                               CPR01 correlation, C9/C10,
+                                               BCB, the Elm task-header
+                                               authority and the native
+                                               approval boundaries are
+                                               unchanged

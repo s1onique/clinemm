@@ -1,0 +1,47 @@
+ACT-CLINEMM-MCP-SUPERVISION-V2-01 - SOURCE AND IDENTITY MAP
+=========================================================
+
+ENTRY_HEAD   acea67fc28296e768357da278db9ff88a7cb0560
+             (the HEAD this ACT started from; the V1 control seam was present and verified here)
+
+SUBJECT_HEAD  4375a4aa3bee3fad3996bc1c43ab706470223416
+             (the git TREE SHA of the COMMITTED subject - the exact source this evidence binds to)
+
+PRODUCTION SOURCE TREE (apps/vscode/src)  7e889724f01453351144583e587e9c3c5b669e61
+             the tree the bundle binds to; identical at HEAD and in the
+             final index, and NOT self-referential like the whole-tree SHA.
+
+BRANCH       main
+REPO         /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+
+CHANGED PRODUCTION FILES (the implementation)
+-------------------------------------------------
+ apps/vscode/src/sdk/SdkController.ts               | 264 ++++++++
+ .../src/sdk/control-seam/control-seam-authority.ts | 105 +++
+ .../control-seam/control-seam-operation-ledger.ts  |  21 +-
+ .../src/sdk/control-seam/control-seam-protocol.ts  | 316 ++++++++-
+ .../src/sdk/control-seam/control-seam-proxy.ts     | 134 ++++
+ .../src/sdk/control-seam/control-seam-runtime.ts   |  36 +-
+ .../src/sdk/control-seam/control-seam-server.ts    | 732 ++++++++++++++++++++-
+ 7 files changed, 1583 insertions(+), 25 deletions(-)
+
+ADDED WITNESS FILES (the tests)
+-------------------------------------
+ ...rvision-approval-fence.production-shape.test.ts |  275 ++++++
+ .../control-seam.supervision-route-pin.test.ts     |   77 ++
+ .../control-seam.supervision-v2.test.ts            | 1003 ++++++++++++++++++++
+ 3 files changed, 1355 insertions(+)
+
+MODIFIED CONSERVATION TESTS (the existing gates that had to keep passing)
+---------------------------------------------------------------------
+ ...control-seam-authority.production-shape.test.ts |   10 +
+ .../sdk/control-seam/control-seam-proxy.test.ts    |   20 +-
+ .../control-seam.event-session-isolation01.test.ts |    5 +
+ ...ontrol-seam.execution-control-v1-corr01.test.ts |   12 +-
+ .../control-seam.execution-control-v1.test.ts      |   30 +-
+ .../control-seam.owner-exclusivity.cor02.test.ts   |    5 +
+ .../sdk/control-seam/control-seam.qual01.test.ts   |    5 +
+ .../sdk/control-seam/control-seam.recon01.test.ts  |   12 +-
+ ...rvision-approval-fence.production-shape.test.ts |  275 ++++++
+ .../control-seam.task-state-projection01.test.ts   |   13 +
+ 12 files changed, 1460 insertions(+), 7 deletions(-)

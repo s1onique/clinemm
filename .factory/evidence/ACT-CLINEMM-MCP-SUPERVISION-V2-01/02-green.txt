@@ -1,0 +1,51 @@
+ACT-CLINEMM-MCP-SUPERVISION-V2-01 - BEHAVIORAL GREEN
+=================================================
+
+SUBJECT: the staged subject tree 94781b0dae20a6e3760bd5e35af2d7dfa0d7ff34
+         (the V2 implementation IS present)
+
+--- COMMAND ---
+  bun x vitest run --config vitest.config.ts \
+    src/sdk/control-seam/control-seam.supervision-v2.test.ts \
+    src/sdk/control-seam/control-seam.supervision-route-pin.test.ts \
+    src/sdk/control-seam/control-seam.supervision-approval-fence.production-shape.test.ts
+
+--- OUTPUT ---
+ ✓ src/sdk/control-seam/control-seam.supervision-route-pin.test.ts (3 tests) 3ms
+ ✓ src/sdk/control-seam/control-seam.supervision-v2.test.ts (30 tests) 256ms
+ ✓ src/sdk/control-seam/control-seam.supervision-approval-fence.production-shape.test.ts (5 tests) 15ms
+ Test Files  3 passed (3)
+      Tests  38 passed (38)
+   Duration  2.20s (transform 3.40s, setup 4.88s, import 575ms, tests 274ms, environment 0ms)
+
+--- THE PER-WITNESS BREAKDOWN ---
+  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - F1 normal feedback > F1-1: an ordinary text feedback on an idle owned session is ACCEPTED, and exactly ONE message is delivered to the owned session 8ms
+  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - F2 feedback during an active run > F2-1: feedback during a running turn is QUEUED, and the outcome carries the queue's OWN correlatable identity 2ms
+  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - F2 feedback during an active run > F2-2: a queued outcome WITHOUT a correlatable identity is reported as unknown_outcome, never as a bare `queued` 2ms
+  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - F3 approval separation > F3-1: while an approval is pending, feedback is REJECTED and the pending approval is NEVER answered 2ms
+  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - F3 approval separation > F3-2: the feedback operation carries TEXT ONLY - it can carry no webview interaction enum 3ms
+  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - F3 approval separation > F3-3: a cancel request carries NO text field - a request that carries one is rejected at the codec 2ms
+  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - F4 duplicate feedback > F4-1: two IDENTICAL requests produce exactly ONE delivered message and the SAME recorded outcome 2ms
+  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - F4 duplicate feedback > F4-2: the SAME request id with a DIFFERENT payload is REJECTED and delivers nothing 2ms
+  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - F4 duplicate feedback > F4-3: CONCURRENT duplicates produce ONE delivered message 65ms
+  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - F4 duplicate feedback > F4-4: the SAME request id cannot be reused across the two operations - a cancel under a feedback's id is a conflict 3ms
+  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - F5 session-switch race > F5-1: a session switch while the feedback is in flight yields `superseded`, and the replacement task is untouched 33ms
+  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - C1 cancel an active run > C1-1: cancelling an owned active run reaches the authoritative lifecycle and returns the LIFECYCLE outcome 2ms
+  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - C1 cancel an active run > C1-2: an accepted cancellation is NOT proof that the run stopped - the outcome is the lifecycle's, not a fabricated 'cancelled' 2ms
+  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - C2 cancel versus completion > C2-1: a task that already reached a terminal phase yields `already_terminal` and the lifecycle is NOT re-entered 2ms
+  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - C3 cancel versus task replacement > C3-1: a delayed cancellation of session A NEVER stops session B 33ms
+  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - C4 cancel with background work > C4-1: the cancellation outcome is the AUTHORITY's - the seam never claims the background job was contained 3ms
+  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - C5 duplicate cancellation > C5-1: a repeated cancellation NEVER initiates a second cancellation 2ms
+  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - C5 duplicate cancellation > C5-2: CONCURRENT cancellations with DIFFERENT request ids do not both reach the lifecycle 64ms
+  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - S1 authorization > S1-1: a feedback WITHOUT the write credential is refused 2ms
+  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - S1 authorization > S1-2: a feedback with an INVALID write credential is refused 1ms
+  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - S1 authorization > S1-3: a feedback for a FOREIGN session is refused and delivers nothing 2ms
+  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - S1 authorization > S1-4: a feedback with a STALE epoch is refused and delivers nothing 2ms
+  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - S1 authorization > S1-5: a cancellation for a FOREIGN session is refused and cancels nothing 2ms
+  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - S1 authorization > S1-6: a cancellation with a STALE epoch is refused and cancels nothing 2ms
+  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - S1 authorization > S1-7: the mutation control is DEFAULT OFF - both operations are refused without the grant 1ms
+  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - S2 conservation > S2-1: the READ-ONLY view still exposes EXACTLY the original two operations 1ms
+  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - S2 conservation > S2-2: the protocol version is UNCHANGED - V2 adds operations without breaking the wire 0ms
+  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - S2 conservation > S2-3: a malformed feedback envelope is rejected at the codec, before any authorization 2ms
+  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - S2 conservation > S2-4: the existing V1 operations are UNCHANGED - `clinemm_start_act` still behaves exactly as before 1ms
+  src/sdk/control-seam/control-seam.supervision-v2.test.ts > ACT-CLINEMM-MCP-SUPERVISION-V2-01 - S2 conservation > S2-5: an unprovable authority failure is reported as `unknown_outcome` and is RECORDED - a replay does not deliver a second message 2ms

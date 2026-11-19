@@ -133,6 +133,7 @@ function makeAuthority(fixture: AuthorityFixture) {
 		readRuntimeSnapshot: () => undefined,
 		readPublishedTaskState: () => undefined,
 		readCurrentEpoch: () => 0,
+		readCurrentTurnPhase: () => undefined,
 		readWorkspaceRoot: async () => fixture.workspace,
 		startAct: async (input: { readonly prompt: string }) => {
 			fixture.startCalls.push(input.prompt)
@@ -142,6 +143,10 @@ function makeAuthority(fixture: AuthorityFixture) {
 			}
 			return { outcome: "accepted" as const, sessionId }
 		},
+		// ACT-CLINEMM-MCP-SUPERVISION-V2-01: the supervision members are
+		// not exercised by this fixture.
+		sendFeedback: async () => ({ outcome: "rejected" as const, reason: "not-authorized-in-this-fixture" }),
+		cancelRun: async () => ({ outcome: "rejected" as const, reason: "not-authorized-in-this-fixture" }),
 	}
 }
 
