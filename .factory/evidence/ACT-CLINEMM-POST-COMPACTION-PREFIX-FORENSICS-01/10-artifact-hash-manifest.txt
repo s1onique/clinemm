@@ -1,0 +1,49 @@
+# ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01 — ARTIFACT HASH MANIFEST
+
+Generated: 2026-11-20
+Subject HEAD (entry): b0c5a0b232d4fb13291a754e1ac337e4e99b87fb
+Branch: main
+
+## Evidence artifacts (committed)
+
+```
+db8d2804ec77aae1317908432f9fdcb2bbd3f34d3047ab81c77091fb26f57860  01-source-and-capture-seam-map.md
+c329a1a2c18401a80ae9f2b3cb91d95d7efc32f959da0b6baec9741e35805619  02-sanitized-request-difference-matrix.md
+74ca504c827e97b2251481e7540699203a172cea2a5a28439ebe2cc871a4cd83  03-request-difference-matrix.json
+a6f4d58d7cdd9443b62776cc3c4bdd11c88ff47756fbbed28ac51e987b622555  04-discriminator-report.md
+740c32829b0ef9cf57eccd955749c0fab539f26892a4632264cb24f0aee30b24  05-structural-versus-token-level-comparison.md
+bf75705b1423db2eb08decce02bfa532e41d5578a00662298fce8e6f6f010546  06-test-receipts.txt
+3804f4a7423562c9e29af50b0d6a569250cfa43edaebac1e841c9128042247c4  07-privacy-audit.md
+504c651734d10e4c3d58b4f6568e7a8a7a45a2584024d62cf0d9970704fa3797  08-entry-and-identity-evidence.md
+3af192c24f2b50add36ab0d93f2a99af011f193bd252bfa68ef7b4e70d8a273b  09-causal-classification.md
+18a43892cf7ad34ff4850ff04afc44877897efbb201682fd84359b091855f6eb  10-artifact-hash-manifest.txt
+```
+
+## Instrumented source (new files, committed)
+
+```
+ea7e87ecb94fd0fa3cd42a9af6dac48a225cfa71214b931e33938a0d7123fe49  sdk/packages/shared/src/runtime/prefix-forensics.ts
+2cd8f219e3c7c22b28572e814cb326e0b0b0ec3ff6b37cccdc9362a91c462a56  sdk/packages/shared/src/runtime/prefix-forensics-analyzer.ts
+a033511f3ec60ef8c8877d01ea85e0d13562a9da22a8aac1319a409e8fc1625e  sdk/packages/shared/src/runtime/prefix-forensics-analyzer-cli.ts
+18c21386b3474ae518f8fe77b2c66886cd1768a57c7968b2a073e2a24aa98e16  sdk/packages/shared/src/runtime/prefix-forensics-analyzer.test.ts
+c58e448d1d077d8465f1d4039e6a1477cc81458682fcb8a85b1278cd099bd7b5  sdk/packages/llms/src/providers/prefix-forensics-capture.ts
+d906b174376eb88bee80465a9e976cc3bdbec29548cf8ffec15ca5831d27dd5e  sdk/packages/llms/src/providers/prefix-forensics-capture.test.ts
+```
+
+## Modified production files (committed)
+
+```
+d996debcf28b54081e58f912901c919d926937b505f680483ae188be04c2c21f  sdk/packages/shared/src/index.ts
+21976ea0a3d19147edad9f5c0c702d12978f0aca083228d4eab5afff3ca1c4e5  sdk/packages/llms/src/index.ts
+81f23f38201bfcddad54cae25249ede4217a506522b8aac6f20ec46d24f0ad2e  sdk/packages/llms/src/providers/ai-sdk.ts
+3867544cf54fee92a2afc66644d5d0324e40f1435051cb33b4c1f3e14be02777  sdk/packages/llms/src/providers/provider-request-capture.ts
+4a87cdbfd546e5fbe2fea025a8681f78dd5e5a91a10db47d9148f764c7bb74f8  sdk/packages/agents/src/agent-runtime.ts
+0b4da2607802052e0b8376373562505878da4f2755712b6fc0e1e7ddc46a470f  sdk/packages/llms/vitest.config.ts
+```
+
+## NOT committed (outside Git, by contract)
+
+- The preserved provider-request capture corpus (~/.vscodium-*/cline-data/provider-request-captures/) — 24,862 full-payload records, read only
+- The cohort HMAC key used for the sanitized records — never written to disk by the capture writer
+- The sanitized forensic records themselves (~/.cline*/prefix-forensics-<cohort>/) — outside Git
+- The raw Strata engine logs — outside Git

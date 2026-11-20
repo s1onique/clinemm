@@ -1,0 +1,2623 @@
+{
+  "schema": "cline.prefix-forensics-difference-matrix.v1",
+  "captureCount": 173,
+  "pairCount": 172,
+  "pairs": [
+    {
+      "before": "pf_live_course_000.prefix-forensics.json",
+      "after": "pf_live_course_001.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 2,
+      "firstDifference": {
+        "index": 2,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 616,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_001.prefix-forensics.json",
+      "after": "pf_live_course_002.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 4,
+      "firstDifference": {
+        "index": 4,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 526,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_002.prefix-forensics.json",
+      "after": "pf_live_course_003.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 6,
+      "firstDifference": {
+        "index": 6,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 425,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_003.prefix-forensics.json",
+      "after": "pf_live_course_004.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 8,
+      "firstDifference": {
+        "index": 8,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 337,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_004.prefix-forensics.json",
+      "after": "pf_live_course_005.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 10,
+      "firstDifference": {
+        "index": 10,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 265,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_005.prefix-forensics.json",
+      "after": "pf_live_course_006.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 12,
+      "firstDifference": {
+        "index": 12,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 266,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_006.prefix-forensics.json",
+      "after": "pf_live_course_007.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 14,
+      "firstDifference": {
+        "index": 14,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 266,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_007.prefix-forensics.json",
+      "after": "pf_live_course_008.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 16,
+      "firstDifference": {
+        "index": 16,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 390,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_008.prefix-forensics.json",
+      "after": "pf_live_course_009.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 18,
+      "firstDifference": {
+        "index": 18,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 367,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_009.prefix-forensics.json",
+      "after": "pf_live_course_010.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 20,
+      "firstDifference": {
+        "index": 20,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 278,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_010.prefix-forensics.json",
+      "after": "pf_live_course_011.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 22,
+      "firstDifference": {
+        "index": 22,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 279,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_011.prefix-forensics.json",
+      "after": "pf_live_course_012.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 11,
+      "firstDifference": {
+        "index": 11,
+        "kind": "modified",
+        "roleBefore": "tool",
+        "roleAfter": "tool",
+        "bytesBefore": 26426,
+        "bytesAfter": 317,
+        "partBytesBefore": [
+          26398
+        ],
+        "partBytesAfter": [
+          289
+        ],
+        "counterpartIndex": 11,
+        "involvesToolResult": true,
+        "involvesCompactionSummary": false,
+        "changedPartTypes": [
+          "tool-result"
+        ]
+      }
+    },
+    {
+      "before": "pf_live_course_012.prefix-forensics.json",
+      "after": "pf_live_course_013.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 26,
+      "firstDifference": {
+        "index": 26,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 280,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_013.prefix-forensics.json",
+      "after": "pf_live_course_014.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 28,
+      "firstDifference": {
+        "index": 28,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 279,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_014.prefix-forensics.json",
+      "after": "pf_live_course_015.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 30,
+      "firstDifference": {
+        "index": 30,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 278,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_015.prefix-forensics.json",
+      "after": "pf_live_course_016.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 32,
+      "firstDifference": {
+        "index": 32,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 279,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_016.prefix-forensics.json",
+      "after": "pf_live_course_017.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 34,
+      "firstDifference": {
+        "index": 34,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 419,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_017.prefix-forensics.json",
+      "after": "pf_live_course_018.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 36,
+      "firstDifference": {
+        "index": 36,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 383,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_018.prefix-forensics.json",
+      "after": "pf_live_course_019.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 27,
+      "firstDifference": {
+        "index": 27,
+        "kind": "modified",
+        "roleBefore": "tool",
+        "roleAfter": "tool",
+        "bytesBefore": 17380,
+        "bytesAfter": 332,
+        "partBytesBefore": [
+          17352
+        ],
+        "partBytesAfter": [
+          304
+        ],
+        "counterpartIndex": 27,
+        "involvesToolResult": true,
+        "involvesCompactionSummary": false,
+        "changedPartTypes": [
+          "tool-result"
+        ]
+      }
+    },
+    {
+      "before": "pf_live_course_019.prefix-forensics.json",
+      "after": "pf_live_course_020.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 40,
+      "firstDifference": {
+        "index": 40,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 266,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_020.prefix-forensics.json",
+      "after": "pf_live_course_021.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 42,
+      "firstDifference": {
+        "index": 42,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 266,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_021.prefix-forensics.json",
+      "after": "pf_live_course_022.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 44,
+      "firstDifference": {
+        "index": 44,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 266,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_022.prefix-forensics.json",
+      "after": "pf_live_course_023.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 46,
+      "firstDifference": {
+        "index": 46,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 266,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_023.prefix-forensics.json",
+      "after": "pf_live_course_024.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 48,
+      "firstDifference": {
+        "index": 48,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 266,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_024.prefix-forensics.json",
+      "after": "pf_live_course_025.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 50,
+      "firstDifference": {
+        "index": 50,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 265,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_025.prefix-forensics.json",
+      "after": "pf_live_course_026.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 52,
+      "firstDifference": {
+        "index": 52,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 278,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_026.prefix-forensics.json",
+      "after": "pf_live_course_027.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 41,
+      "firstDifference": {
+        "index": 41,
+        "kind": "modified",
+        "roleBefore": "tool",
+        "roleAfter": "tool",
+        "bytesBefore": 16522,
+        "bytesAfter": 318,
+        "partBytesBefore": [
+          16494
+        ],
+        "partBytesAfter": [
+          290
+        ],
+        "counterpartIndex": 41,
+        "involvesToolResult": true,
+        "involvesCompactionSummary": false,
+        "changedPartTypes": [
+          "tool-result"
+        ]
+      }
+    },
+    {
+      "before": "pf_live_course_027.prefix-forensics.json",
+      "after": "pf_live_course_028.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 56,
+      "firstDifference": {
+        "index": 56,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 279,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_028.prefix-forensics.json",
+      "after": "pf_live_course_029.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 58,
+      "firstDifference": {
+        "index": 58,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 278,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_029.prefix-forensics.json",
+      "after": "pf_live_course_030.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 60,
+      "firstDifference": {
+        "index": 60,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 279,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_030.prefix-forensics.json",
+      "after": "pf_live_course_031.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 62,
+      "firstDifference": {
+        "index": 62,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 279,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_031.prefix-forensics.json",
+      "after": "pf_live_course_032.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 64,
+      "firstDifference": {
+        "index": 64,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 279,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_032.prefix-forensics.json",
+      "after": "pf_live_course_033.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 66,
+      "firstDifference": {
+        "index": 66,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 279,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_033.prefix-forensics.json",
+      "after": "pf_live_course_034.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 68,
+      "firstDifference": {
+        "index": 68,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 279,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_034.prefix-forensics.json",
+      "after": "pf_live_course_035.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 70,
+      "firstDifference": {
+        "index": 70,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 280,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_035.prefix-forensics.json",
+      "after": "pf_live_course_036.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 72,
+      "firstDifference": {
+        "index": 72,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 281,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_036.prefix-forensics.json",
+      "after": "pf_live_course_037.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 74,
+      "firstDifference": {
+        "index": 74,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 281,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_037.prefix-forensics.json",
+      "after": "pf_live_course_038.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 76,
+      "firstDifference": {
+        "index": 76,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 281,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_038.prefix-forensics.json",
+      "after": "pf_live_course_039.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 78,
+      "firstDifference": {
+        "index": 78,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 381,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_039.prefix-forensics.json",
+      "after": "pf_live_course_040.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 80,
+      "firstDifference": {
+        "index": 80,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 250,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_040.prefix-forensics.json",
+      "after": "pf_live_course_041.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 82,
+      "firstDifference": {
+        "index": 82,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 250,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_041.prefix-forensics.json",
+      "after": "pf_live_course_042.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 84,
+      "firstDifference": {
+        "index": 84,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 250,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_042.prefix-forensics.json",
+      "after": "pf_live_course_043.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 86,
+      "firstDifference": {
+        "index": 86,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 250,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_043.prefix-forensics.json",
+      "after": "pf_live_course_044.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 88,
+      "firstDifference": {
+        "index": 88,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 467,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_044.prefix-forensics.json",
+      "after": "pf_live_course_045.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 90,
+      "firstDifference": {
+        "index": 90,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 250,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_045.prefix-forensics.json",
+      "after": "pf_live_course_046.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 92,
+      "firstDifference": {
+        "index": 92,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 494,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_046.prefix-forensics.json",
+      "after": "pf_live_course_047.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 94,
+      "firstDifference": {
+        "index": 94,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 250,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_047.prefix-forensics.json",
+      "after": "pf_live_course_048.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 96,
+      "firstDifference": {
+        "index": 96,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 1514,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_048.prefix-forensics.json",
+      "after": "pf_live_course_049.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 98,
+      "firstDifference": {
+        "index": 98,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 2240,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_049.prefix-forensics.json",
+      "after": "pf_live_course_050.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 100,
+      "firstDifference": {
+        "index": 100,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 5716,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_050.prefix-forensics.json",
+      "after": "pf_live_course_051.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 102,
+      "firstDifference": {
+        "index": 102,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 4785,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_051.prefix-forensics.json",
+      "after": "pf_live_course_052.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 104,
+      "firstDifference": {
+        "index": 104,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 424,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_052.prefix-forensics.json",
+      "after": "pf_live_course_053.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 106,
+      "firstDifference": {
+        "index": 106,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 444,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_053.prefix-forensics.json",
+      "after": "pf_live_course_054.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 108,
+      "firstDifference": {
+        "index": 108,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 2626,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_054.prefix-forensics.json",
+      "after": "pf_live_course_055.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 110,
+      "firstDifference": {
+        "index": 110,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 985,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_055.prefix-forensics.json",
+      "after": "pf_live_course_056.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 112,
+      "firstDifference": {
+        "index": 112,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 2604,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_056.prefix-forensics.json",
+      "after": "pf_live_course_057.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 114,
+      "firstDifference": {
+        "index": 114,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 185,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_057.prefix-forensics.json",
+      "after": "pf_live_course_058.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 116,
+      "firstDifference": {
+        "index": 116,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 2488,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_058.prefix-forensics.json",
+      "after": "pf_live_course_059.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 118,
+      "firstDifference": {
+        "index": 118,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 207,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_059.prefix-forensics.json",
+      "after": "pf_live_course_060.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 120,
+      "firstDifference": {
+        "index": 120,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 1397,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_060.prefix-forensics.json",
+      "after": "pf_live_course_061.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 122,
+      "firstDifference": {
+        "index": 122,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 2951,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_061.prefix-forensics.json",
+      "after": "pf_live_course_062.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 124,
+      "firstDifference": {
+        "index": 124,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 2105,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_062.prefix-forensics.json",
+      "after": "pf_live_course_063.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 126,
+      "firstDifference": {
+        "index": 126,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 2799,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_063.prefix-forensics.json",
+      "after": "pf_live_course_064.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 128,
+      "firstDifference": {
+        "index": 128,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 877,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_064.prefix-forensics.json",
+      "after": "pf_live_course_065.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 130,
+      "firstDifference": {
+        "index": 130,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 2196,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_065.prefix-forensics.json",
+      "after": "pf_live_course_066.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 132,
+      "firstDifference": {
+        "index": 132,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 2688,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_066.prefix-forensics.json",
+      "after": "pf_live_course_067.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 134,
+      "firstDifference": {
+        "index": 134,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 6457,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_067.prefix-forensics.json",
+      "after": "pf_live_course_068.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 136,
+      "firstDifference": {
+        "index": 136,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 208,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_068.prefix-forensics.json",
+      "after": "pf_live_course_069.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 138,
+      "firstDifference": {
+        "index": 138,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 13070,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_069.prefix-forensics.json",
+      "after": "pf_live_course_070.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 140,
+      "firstDifference": {
+        "index": 140,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 4550,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_070.prefix-forensics.json",
+      "after": "pf_live_course_071.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 142,
+      "firstDifference": {
+        "index": 142,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 6895,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_071.prefix-forensics.json",
+      "after": "pf_live_course_072.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 144,
+      "firstDifference": {
+        "index": 144,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 3121,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_072.prefix-forensics.json",
+      "after": "pf_live_course_073.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 146,
+      "firstDifference": {
+        "index": 146,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 3120,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_073.prefix-forensics.json",
+      "after": "pf_live_course_074.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 148,
+      "firstDifference": {
+        "index": 148,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 3962,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_074.prefix-forensics.json",
+      "after": "pf_live_course_075.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 150,
+      "firstDifference": {
+        "index": 150,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 227,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_075.prefix-forensics.json",
+      "after": "pf_live_course_076.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 152,
+      "firstDifference": {
+        "index": 152,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 700,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_076.prefix-forensics.json",
+      "after": "pf_live_course_077.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 154,
+      "firstDifference": {
+        "index": 154,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 793,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_077.prefix-forensics.json",
+      "after": "pf_live_course_078.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 156,
+      "firstDifference": {
+        "index": 156,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 1145,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_078.prefix-forensics.json",
+      "after": "pf_live_course_079.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 158,
+      "firstDifference": {
+        "index": 158,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 2123,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_079.prefix-forensics.json",
+      "after": "pf_live_course_080.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 160,
+      "firstDifference": {
+        "index": 160,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 1561,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_080.prefix-forensics.json",
+      "after": "pf_live_course_081.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 162,
+      "firstDifference": {
+        "index": 162,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 1002,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_081.prefix-forensics.json",
+      "after": "pf_live_course_082.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 164,
+      "firstDifference": {
+        "index": 164,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 1859,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_082.prefix-forensics.json",
+      "after": "pf_live_course_083.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 166,
+      "firstDifference": {
+        "index": 166,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 5738,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_083.prefix-forensics.json",
+      "after": "pf_live_course_084.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 168,
+      "firstDifference": {
+        "index": 168,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 212,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_084.prefix-forensics.json",
+      "after": "pf_live_course_085.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 170,
+      "firstDifference": {
+        "index": 170,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 954,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_085.prefix-forensics.json",
+      "after": "pf_live_course_086.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 172,
+      "firstDifference": {
+        "index": 172,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 356,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_086.prefix-forensics.json",
+      "after": "pf_live_course_087.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 174,
+      "firstDifference": {
+        "index": 174,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 1141,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_087.prefix-forensics.json",
+      "after": "pf_live_course_088.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 176,
+      "firstDifference": {
+        "index": 176,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 1900,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_088.prefix-forensics.json",
+      "after": "pf_live_course_089.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 178,
+      "firstDifference": {
+        "index": 178,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 3199,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_089.prefix-forensics.json",
+      "after": "pf_live_course_090.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 180,
+      "firstDifference": {
+        "index": 180,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 845,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_090.prefix-forensics.json",
+      "after": "pf_live_course_091.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 182,
+      "firstDifference": {
+        "index": 182,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 1239,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_091.prefix-forensics.json",
+      "after": "pf_live_course_092.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 184,
+      "firstDifference": {
+        "index": 184,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 2261,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_092.prefix-forensics.json",
+      "after": "pf_live_course_093.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 186,
+      "firstDifference": {
+        "index": 186,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 4241,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_093.prefix-forensics.json",
+      "after": "pf_live_course_094.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 188,
+      "firstDifference": {
+        "index": 188,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 873,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_094.prefix-forensics.json",
+      "after": "pf_live_course_095.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 190,
+      "firstDifference": {
+        "index": 190,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 2650,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_095.prefix-forensics.json",
+      "after": "pf_live_course_096.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 192,
+      "firstDifference": {
+        "index": 192,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 172,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_096.prefix-forensics.json",
+      "after": "pf_live_course_097.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 194,
+      "firstDifference": {
+        "index": 194,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 1254,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_097.prefix-forensics.json",
+      "after": "pf_live_course_098.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 196,
+      "firstDifference": {
+        "index": 196,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 849,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_098.prefix-forensics.json",
+      "after": "pf_live_course_099.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 198,
+      "firstDifference": {
+        "index": 198,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 2318,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_099.prefix-forensics.json",
+      "after": "pf_live_course_100.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 200,
+      "firstDifference": {
+        "index": 200,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 186,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_100.prefix-forensics.json",
+      "after": "pf_live_course_101.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 202,
+      "firstDifference": {
+        "index": 202,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 2064,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_101.prefix-forensics.json",
+      "after": "pf_live_course_102.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 204,
+      "firstDifference": {
+        "index": 204,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 207,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_102.prefix-forensics.json",
+      "after": "pf_live_course_103.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 206,
+      "firstDifference": {
+        "index": 206,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 1024,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_103.prefix-forensics.json",
+      "after": "pf_live_course_104.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 208,
+      "firstDifference": {
+        "index": 208,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 2629,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_104.prefix-forensics.json",
+      "after": "pf_live_course_105.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 210,
+      "firstDifference": {
+        "index": 210,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 2950,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_105.prefix-forensics.json",
+      "after": "pf_live_course_106.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 212,
+      "firstDifference": {
+        "index": 212,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 1672,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_106.prefix-forensics.json",
+      "after": "pf_live_course_107.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 214,
+      "firstDifference": {
+        "index": 214,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 564,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_107.prefix-forensics.json",
+      "after": "pf_live_course_108.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 216,
+      "firstDifference": {
+        "index": 216,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 642,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_108.prefix-forensics.json",
+      "after": "pf_live_course_109.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 218,
+      "firstDifference": {
+        "index": 218,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 1312,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_109.prefix-forensics.json",
+      "after": "pf_live_course_110.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 220,
+      "firstDifference": {
+        "index": 220,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 1087,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_110.prefix-forensics.json",
+      "after": "pf_live_course_111.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 222,
+      "firstDifference": {
+        "index": 222,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 967,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_111.prefix-forensics.json",
+      "after": "pf_live_course_112.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 224,
+      "firstDifference": {
+        "index": 224,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 1636,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_112.prefix-forensics.json",
+      "after": "pf_live_course_113.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 226,
+      "firstDifference": {
+        "index": 226,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 1655,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_113.prefix-forensics.json",
+      "after": "pf_live_course_114.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 228,
+      "firstDifference": {
+        "index": 228,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 6765,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_114.prefix-forensics.json",
+      "after": "pf_live_course_115.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 230,
+      "firstDifference": {
+        "index": 230,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 207,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_115.prefix-forensics.json",
+      "after": "pf_live_course_116.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 232,
+      "firstDifference": {
+        "index": 232,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 3900,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_116.prefix-forensics.json",
+      "after": "pf_live_course_117.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 234,
+      "firstDifference": {
+        "index": 234,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 737,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_117.prefix-forensics.json",
+      "after": "pf_live_course_118.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 236,
+      "firstDifference": {
+        "index": 236,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 467,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_118.prefix-forensics.json",
+      "after": "pf_live_course_119.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 238,
+      "firstDifference": {
+        "index": 238,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 1548,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_119.prefix-forensics.json",
+      "after": "pf_live_course_120.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 240,
+      "firstDifference": {
+        "index": 240,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 3845,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_120.prefix-forensics.json",
+      "after": "pf_live_course_121.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 242,
+      "firstDifference": {
+        "index": 242,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 227,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_121.prefix-forensics.json",
+      "after": "pf_live_course_122.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 244,
+      "firstDifference": {
+        "index": 244,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 182,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_122.prefix-forensics.json",
+      "after": "pf_live_course_123.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 246,
+      "firstDifference": {
+        "index": 246,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 657,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_123.prefix-forensics.json",
+      "after": "pf_live_course_124.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 248,
+      "firstDifference": {
+        "index": 248,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 182,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_124.prefix-forensics.json",
+      "after": "pf_live_course_125.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 250,
+      "firstDifference": {
+        "index": 250,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 889,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_125.prefix-forensics.json",
+      "after": "pf_live_course_126.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 252,
+      "firstDifference": {
+        "index": 252,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 5292,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_126.prefix-forensics.json",
+      "after": "pf_live_course_127.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 254,
+      "firstDifference": {
+        "index": 254,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 4690,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_127.prefix-forensics.json",
+      "after": "pf_live_course_128.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 256,
+      "firstDifference": {
+        "index": 256,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 2417,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_128.prefix-forensics.json",
+      "after": "pf_live_course_129.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 258,
+      "firstDifference": {
+        "index": 258,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 1128,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_129.prefix-forensics.json",
+      "after": "pf_live_course_130.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 260,
+      "firstDifference": {
+        "index": 260,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 1044,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_130.prefix-forensics.json",
+      "after": "pf_live_course_131.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 262,
+      "firstDifference": {
+        "index": 262,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 474,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_131.prefix-forensics.json",
+      "after": "pf_live_course_132.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 264,
+      "firstDifference": {
+        "index": 264,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 1250,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_132.prefix-forensics.json",
+      "after": "pf_live_course_133.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 266,
+      "firstDifference": {
+        "index": 266,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 314,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_133.prefix-forensics.json",
+      "after": "pf_live_course_134.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 268,
+      "firstDifference": {
+        "index": 268,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 484,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_134.prefix-forensics.json",
+      "after": "pf_live_course_135.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 270,
+      "firstDifference": {
+        "index": 270,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 406,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_135.prefix-forensics.json",
+      "after": "pf_live_course_136.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 272,
+      "firstDifference": {
+        "index": 272,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 577,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_136.prefix-forensics.json",
+      "after": "pf_live_course_137.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 274,
+      "firstDifference": {
+        "index": 274,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 534,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_137.prefix-forensics.json",
+      "after": "pf_live_course_138.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 276,
+      "firstDifference": {
+        "index": 276,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 1170,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_138.prefix-forensics.json",
+      "after": "pf_live_course_139.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 278,
+      "firstDifference": {
+        "index": 278,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 586,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_139.prefix-forensics.json",
+      "after": "pf_live_course_140.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 280,
+      "firstDifference": {
+        "index": 280,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 5600,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_140.prefix-forensics.json",
+      "after": "pf_live_course_141.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 282,
+      "firstDifference": {
+        "index": 282,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 532,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_141.prefix-forensics.json",
+      "after": "pf_live_course_142.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 284,
+      "firstDifference": {
+        "index": 284,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 2836,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_142.prefix-forensics.json",
+      "after": "pf_live_course_143.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 286,
+      "firstDifference": {
+        "index": 286,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 175,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_143.prefix-forensics.json",
+      "after": "pf_live_course_144.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 288,
+      "firstDifference": {
+        "index": 288,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 1917,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_144.prefix-forensics.json",
+      "after": "pf_live_course_145.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 290,
+      "firstDifference": {
+        "index": 290,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 455,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_145.prefix-forensics.json",
+      "after": "pf_live_course_146.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 292,
+      "firstDifference": {
+        "index": 292,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 1831,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_146.prefix-forensics.json",
+      "after": "pf_live_course_147.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 294,
+      "firstDifference": {
+        "index": 294,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 616,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_147.prefix-forensics.json",
+      "after": "pf_live_course_148.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 296,
+      "firstDifference": {
+        "index": 296,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 698,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_148.prefix-forensics.json",
+      "after": "pf_live_course_149.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 298,
+      "firstDifference": {
+        "index": 298,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 692,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_149.prefix-forensics.json",
+      "after": "pf_live_course_150.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 300,
+      "firstDifference": {
+        "index": 300,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 453,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_150.prefix-forensics.json",
+      "after": "pf_live_course_151.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 302,
+      "firstDifference": {
+        "index": 302,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 449,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_151.prefix-forensics.json",
+      "after": "pf_live_course_152.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 304,
+      "firstDifference": {
+        "index": 304,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 27845,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_152.prefix-forensics.json",
+      "after": "pf_live_course_153.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 306,
+      "firstDifference": {
+        "index": 306,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 14260,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_153.prefix-forensics.json",
+      "after": "pf_live_course_154.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 308,
+      "firstDifference": {
+        "index": 308,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 18472,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_154.prefix-forensics.json",
+      "after": "pf_live_course_155.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 310,
+      "firstDifference": {
+        "index": 310,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 1761,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_155.prefix-forensics.json",
+      "after": "pf_live_course_156.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 312,
+      "firstDifference": {
+        "index": 312,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 624,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_156.prefix-forensics.json",
+      "after": "pf_live_course_157.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 314,
+      "firstDifference": {
+        "index": 314,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 1502,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_157.prefix-forensics.json",
+      "after": "pf_live_course_158.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 316,
+      "firstDifference": {
+        "index": 316,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 8495,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_158.prefix-forensics.json",
+      "after": "pf_live_course_159.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 318,
+      "firstDifference": {
+        "index": 318,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 279,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_159.prefix-forensics.json",
+      "after": "pf_live_course_160.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 320,
+      "firstDifference": {
+        "index": 320,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 3723,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": false
+      }
+    },
+    {
+      "before": "pf_live_course_160.prefix-forensics.json",
+      "after": "pf_live_course_161.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 322,
+      "firstDifference": {
+        "index": 322,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 577,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_161.prefix-forensics.json",
+      "after": "pf_live_course_162.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 324,
+      "firstDifference": {
+        "index": 324,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 1651,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_162.prefix-forensics.json",
+      "after": "pf_live_course_163.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 326,
+      "firstDifference": {
+        "index": 326,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 1562,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_163.prefix-forensics.json",
+      "after": "pf_live_course_164.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 328,
+      "firstDifference": {
+        "index": 328,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 2310,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_164.prefix-forensics.json",
+      "after": "pf_live_course_165.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 330,
+      "firstDifference": {
+        "index": 330,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 568,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_165.prefix-forensics.json",
+      "after": "pf_live_course_166.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 332,
+      "firstDifference": {
+        "index": 332,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 513,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_166.prefix-forensics.json",
+      "after": "pf_live_course_167.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 334,
+      "firstDifference": {
+        "index": 334,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 713,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_167.prefix-forensics.json",
+      "after": "pf_live_course_168.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 336,
+      "firstDifference": {
+        "index": 336,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 729,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_168.prefix-forensics.json",
+      "after": "pf_live_course_169.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 338,
+      "firstDifference": {
+        "index": 338,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 1427,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_169.prefix-forensics.json",
+      "after": "pf_live_course_170.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 340,
+      "firstDifference": {
+        "index": 340,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 731,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_170.prefix-forensics.json",
+      "after": "pf_live_course_171.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 342,
+      "firstDifference": {
+        "index": 342,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 552,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    },
+    {
+      "before": "pf_live_course_171.prefix-forensics.json",
+      "after": "pf_live_course_172.prefix-forensics.json",
+      "authoritative": true,
+      "earliestDifferingStage": "ai_sdk_prompt",
+      "commonPrefixLength": 344,
+      "firstDifference": {
+        "index": 344,
+        "kind": "inserted",
+        "roleAfter": "assistant",
+        "bytesAfter": 1045,
+        "involvesToolResult": false,
+        "involvesCompactionSummary": true
+      }
+    }
+  ]
+}

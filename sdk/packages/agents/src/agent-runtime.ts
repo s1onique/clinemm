@@ -3,6 +3,7 @@ import {
 	createGateway,
 	type GatewayProviderSettings,
 	isRetryableProviderError,
+	recordPrefixForensicsRuntimeProjection,
 } from "@cline/llms";
 import type {
 	AgentAfterToolResult,
@@ -3030,6 +3031,16 @@ export class AgentRuntime {
 		// provider round trip. The preparation span closes HERE, so the
 		// provider's response time is never charged to preparation.
 		this.observeRequestPrepared(request);
+		// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01: the FINAL runtime
+		// projection (stage A). This seam is AFTER compaction, AFTER every
+		// `beforeModel` hook and AFTER the request-budget enforcement, so it
+		// observes exactly what the runtime INTENDED to submit. DEFAULT OFF.
+		recordPrefixForensicsRuntimeProjection(request, {
+			preparationRequestId:
+				this.modelBehaviorTraceIdentity().preparationRequestId,
+			providerAttemptId: this.modelBehaviorTraceIdentity().modelRequestId,
+			iteration: this.state.iteration,
+		});
 		// Steering cancels provider generation, while request preparation keeps
 		// the run-level signal so compaction and hooks can finish consistently.
 		request = {

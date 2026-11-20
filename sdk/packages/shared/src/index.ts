@@ -661,6 +661,48 @@ export {
 	registerModelBehaviorWireReasoningObserver,
 	unregisterModelBehaviorWireReasoningObserver,
 } from "./runtime/model-wire-reasoning";
+// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01: the shared primitives for
+// the post-compaction prefix-cache forensics boundary — the opt-in switch, the
+// KEYED fingerprint primitive and the structural request inventory.
+export type {
+	PrefixForensicsCaptureRecord,
+	PrefixForensicsMessageFingerprint,
+	PrefixForensicsPartFingerprint,
+	PrefixForensicsRepresentation,
+} from "./runtime/prefix-forensics";
+export {
+	_resetPrefixForensicsCohortForTests,
+	canonicalizeForFingerprint,
+	computeCaptureRecordSha256,
+	computeRepresentationFingerprint,
+	getPrefixForensicsCohortId,
+	getPrefixForensicsCohortKey,
+	isPrefixForensicsEnabled,
+	keyedFingerprintHex,
+	PREFIX_FORENSICS_AI_SDK_PROMPT,
+	PREFIX_FORENSICS_ENV,
+	PREFIX_FORENSICS_FINGERPRINT_PRODUCER,
+	PREFIX_FORENSICS_RUNTIME_PROJECTION,
+	PREFIX_FORENSICS_SCHEMA_VERSION,
+	PREFIX_FORENSICS_WIRE_REQUEST,
+	utf8ByteLength,
+} from "./runtime/prefix-forensics";
+// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01: the offline
+// request-difference analyzer over the sanitized capture records.
+export type {
+	PrefixForensicsMessageChangeKind,
+	PrefixForensicsMessageDifference,
+	PrefixForensicsRequestDifference,
+	PrefixForensicsStageComparison,
+	PrefixForensicsStageName,
+	PrefixForensicsSystemDifference,
+	PrefixForensicsToolDifference,
+} from "./runtime/prefix-forensics-analyzer";
+export {
+	comparePrefixForensicsRequests,
+	PREFIX_FORENSICS_STAGES,
+	UNAVAILABLE_FROM_TRACE,
+} from "./runtime/prefix-forensics-analyzer";
 export {
 	disableCurrentDirectoryExecutableSearch,
 	NO_DEFAULT_CURRENT_DIRECTORY_IN_EXE_PATH_ENV,

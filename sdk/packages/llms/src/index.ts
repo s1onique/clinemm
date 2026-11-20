@@ -99,8 +99,8 @@ export {
 	isClinePassLimitMessage,
 	isProviderApiLine,
 	isRegisteredHandlerAsync,
-	isUnsupportedReasoningConfigurationError,
 	isRetryableProviderError,
+	isUnsupportedReasoningConfigurationError,
 	normalizeProviderId,
 	OLLAMA_DEFAULT_CONTEXT_WINDOW,
 	type ProviderApiLine,
@@ -134,6 +134,17 @@ export {
 	providerOffersModelTool,
 	supportsModelTool,
 } from "./providers/model-tools";
+// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01: the opt-in structural
+// capture of the three request representation boundaries. DEFAULT OFF.
+export type {
+	PrefixForensicsRuntimeRequest,
+	PrefixForensicsStage,
+} from "./providers/prefix-forensics-capture";
+export {
+	_resetPrefixForensicsAttemptCountersForTests,
+	recordPrefixForensics,
+	recordPrefixForensicsRuntimeProjection,
+} from "./providers/prefix-forensics-capture";
 export { resolveProviderModelCatalogKeys } from "./providers/provider-keys";
 export {
 	type OpenAICodexRequestHeaderContext,

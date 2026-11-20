@@ -1,0 +1,142 @@
+=== ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01 — EXECUTABLE TEST RECEIPTS ===
+
+Toolchain: Bun (package manager + task runner), Node >= 22 (runtime).
+Host: darwin (macOS arm64).
+
+################ GATE 1 — analyzer witnesses ################
+$ cd sdk/packages/shared && bun x vitest run --config vitest.config.ts src/runtime/prefix-forensics-analyzer.test.ts
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/shared
+
+ ✓ src/runtime/prefix-forensics-analyzer.test.ts (12 tests) 6ms
+
+ Test Files  1 passed (1)
+      Tests  12 passed (12)
+   Start at  17:51:28
+   Duration  83ms (transform 24ms, setup 0ms, import 31ms, tests 6ms, environment 0ms)
+
+
+################ GATE 2 — capture-writer witnesses ################
+$ cd sdk/packages/llms && bun x vitest run --config vitest.config.ts src/providers/prefix-forensics-capture.test.ts
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/llms
+
+ ✓ src/providers/prefix-forensics-capture.test.ts (8 tests) 12ms
+
+ Test Files  1 passed (1)
+      Tests  8 passed (8)
+   Start at  17:51:28
+   Duration  453ms (transform 294ms, setup 0ms, import 394ms, tests 12ms, environment 0ms)
+
+
+################ GATE 3 — RED ABLATIONS (the witnesses CAN fail) ################
+
+--- ABLATION A: the analyzer stops detecting a tool REORDER ---
+    (removed the `sameOrder -> "order_changed"` branch in compareTools)
+$ cd sdk/packages/shared && bun x vitest run --config vitest.config.ts src/runtime/prefix-forensics-analyzer.test.ts
+  x V4: a tool REORDER is detected independently of a tool definition change
+  AssertionError: expected (unchanged) to be (order_changed)
+  => 1 failed | 11 passed   EXIT=1
+
+--- ABLATION B: the capture writer loses its DEFAULT-OFF guard ---
+    (removed the `if (!isPrefixForensicsEnabled()) return;` early return)
+$ cd sdk/packages/llms && bun x vitest run --config vitest.config.ts src/providers/prefix-forensics-capture.test.ts
+  x V1: the DISABLED path writes nothing and touches no filesystem
+  AssertionError: expected [ Array(1) ] to have a length of +0 but got 1
+  x V1: only the exact value 1 arms the capture
+  => 2 failed | 6 passed   EXIT=1
+
+--- ABLATION C: the analyzer stops failing closed on a missing capture ---
+    (a missing capture now yields an empty, AUTHORITATIVE comparison)
+$ cd sdk/packages/shared && bun x vitest run --config vitest.config.ts src/runtime/prefix-forensics-analyzer.test.ts
+  x V9: a missing capture does NOT generate a fabricated comparison
+  AssertionError: expected true to be false
+  => 1 failed | 11 passed   EXIT=1
+
+All three ablations were REVERTED; the sources above are the restored originals.
+
+################ GATE 4 — regression sweep (no ACT-owned failures) ################
+
+--- shared: the whole runtime/ suite ---
+$ cd sdk/packages/shared && bun x vitest run --config vitest.config.ts src/runtime/
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/shared
+
+ ✓ src/runtime/host-helper-socket.test.ts (6 tests) 2ms
+ ✓ src/runtime/hub-daemon-env.test.ts (16 tests) 4ms
+ ✓ src/runtime/bun-embedded-path.test.ts (14 tests) 3ms
+ ✓ src/runtime/compaction-token-evidence.test.ts (5 tests) 9ms
+ ✓ src/runtime/cline-environment.test.ts (19 tests) 4ms
+ ✓ src/runtime/windows-exe-path.test.ts (3 tests | 1 skipped) 2ms
+ ✓ src/runtime/build-env.test.ts (11 tests) 4ms
+ ✓ src/runtime/loopback-proxy-bypass.test.ts (15 tests) 4ms
+ ✓ src/runtime/model-wire-reasoning.test.ts (13 tests) 5ms
+ ✓ src/runtime/model-behavior-trace.test.ts (18 tests) 9ms
+ ✓ src/runtime/prefix-forensics-analyzer.test.ts (12 tests) 6ms
+
+ Test Files  11 passed (11)
+      Tests  131 passed | 1 skipped (132)
+   Start at  17:51:38
+   Duration  137ms (transform 304ms, setup 0ms, import 511ms, tests 52ms, environment 1ms)
+
+
+--- llms: the provider-capture + ai-sdk suites ---
+$ cd sdk/packages/llms && bun x vitest run --config vitest.config.ts src/providers/provider-request-capture.wire-reasoning-off-fast-path.test.ts src/providers/ai-sdk.test.ts
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/llms
+
+ ✓ src/providers/provider-request-capture.wire-reasoning-off-fast-path.test.ts (7 tests) 13ms
+ ✓ src/providers/ai-sdk.test.ts (41 tests) 6ms
+
+ Test Files  2 passed (2)
+      Tests  48 passed (48)
+   Start at  17:51:38
+   Duration  1.19s (transform 1.18s, setup 0ms, import 1.55s, tests 19ms, environment 0ms)
+
+
+################ GATE 5 — typecheck / build / lint ################
+
+--- SDK build (all packages) ---
+$ bun run build:sdk
+  @cline/shared, @cline/core, @cline/agents, @cline/sdk, @cline/llms, @cline/ui -> all Done
+
+--- typecheck: the packages this ACT touched ---
+$ cd sdk/packages/shared && bun tsc --noEmit          -> EXIT=0 (clean)
+$ cd sdk/packages/llms   && bun tsc -p tsconfig.dev.json --noEmit -> EXIT=0 (clean)
+$ cd sdk/packages/agents && bun tsc --noEmit          -> EXIT=0 (clean)
+
+--- typecheck: @cline/core (NOT touched by this ACT) ---
+$ cd sdk/packages/core && bun tsc --noEmit
+  70 pre-existing errors in:
+    src/runtime/observability/model-behavior-trace.test.ts
+    src/runtime/orchestration/session-runtime-orchestrator.tool-outcome-hook.tes02.test.ts
+    src/runtime/orchestration/session-runtime.model-behavior-trace.test.ts
+  PROVEN PRE-EXISTING:
+    - this ACT modified 0 files under sdk/packages/core/ (git diff --name-only HEAD -- sdk/packages/core/ => 0)
+    - the pristine HEAD copy (git archive HEAD sdk/packages/core) contains the identical
+      enableTools usages that fail to typecheck
+  => PRE-EXISTING AT HEAD, NOT ACT-OWNED
+
+################ GATE 6 — PRE-EXISTING FAILURE BASELINE (pristine HEAD) ################
+
+The ACT changes were STASHED (git stash push -u) so the tree was pristine HEAD b0c5a0b23,
+and the same failing suites were re-run there:
+
+$ cd sdk/packages/llms && bun x vitest run --config vitest.config.ts \
+    src/providers/ai-sdk-reasoning.test.ts \
+    src/providers/vendors/community.process-hygiene.test.ts \
+    src/providers/vendors/community.process-hygiene-failure.test.ts \
+    src/providers/vendors/openai-compatible.wire.test.ts
+ FAIL  src/providers/ai-sdk-reasoning.test.ts [ src/providers/ai-sdk-reasoning.test.ts ]
+ FAIL  src/providers/vendors/openai-compatible.wire.test.ts [ src/providers/vendors/openai-compatible.wire.test.ts ]
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/providers/vendors/community.process-hygiene.test.ts > SAP provider process hygiene > removes the SAP SDK's exit handlers and keeps host listeners registered mid-load
+ FAIL  src/providers/vendors/community.process-hygiene-failure.test.ts > SAP provider process hygiene on a failed construction > removes the SAP SDK's exit handlers even when the first construction rejects
+ Test Files  4 failed (4)
+      Tests  2 failed (2)
+
+  => The SAME 4 files fail at pristine HEAD. PRE-EXISTING, NOT ACT-OWNED.
+
+  Failing files (unchanged by this ACT):
+    src/providers/ai-sdk-reasoning.test.ts                (model-catalog reasoning)
+    src/providers/vendors/community.process-hygiene.test.ts       (SAP SDK process listeners)
+    src/providers/vendors/community.process-hygiene-failure.test.ts
+    src/providers/vendors/openai-compatible.wire.test.ts
+
+  The ACT then RESTORED its changes with: git stash pop

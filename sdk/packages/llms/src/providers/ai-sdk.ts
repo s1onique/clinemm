@@ -61,6 +61,9 @@ import {
 	modelSupportsImageInput,
 	resolveModelFamily,
 } from "./model-facts";
+// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01: the opt-in structural
+// capture of the AI SDK prompt representation. DEFAULT OFF.
+import { recordPrefixForensics } from "./prefix-forensics-capture";
 import {
 	recordProviderRequestCapture,
 	wrapFetchForProviderRequestCapture,
@@ -2447,6 +2450,24 @@ function createAiSdkProvider(
 						...requestConfig,
 						...(portableReasoning ? { reasoning: portableReasoning } : {}),
 					},
+				});
+				// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01: the AI SDK
+				// prompt representation (stage B). This is the adapter's OWN
+				// view, AFTER `buildAiSdkRequestMessages()` and the final tool
+				// conversion — so a difference that first appears here is
+				// attributable to the ADAPTER, not to the runtime.
+				recordPrefixForensics({
+					stage: "ai_sdk_prompt",
+					messages,
+					...(useSystemOption ? { system: systemPrompt } : {}),
+					...(tools !== undefined ? { tools } : {}),
+					sessionId: request.metadata?.sessionId as string | undefined,
+					providerAttemptId: request.metadata?.modelRequestId as
+						| string
+						| undefined,
+					iteration: request.metadata?.iteration as number | undefined,
+					providerId: request.providerId,
+					modelId: request.modelId,
 				});
 				stream = await withAiSdkLangfuseTraceContext(
 					aiSdkTelemetry.isEnabled,

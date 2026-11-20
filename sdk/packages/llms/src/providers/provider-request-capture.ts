@@ -17,6 +17,9 @@ import {
 	MODEL_BEHAVIOR_WIRE_REASONING_REQUEST_ID_METADATA_KEY,
 	notifyModelBehaviorWireReasoningObservers,
 } from "@cline/shared";
+// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01: the opt-in structural
+// capture of the serialized provider request. DEFAULT OFF.
+import { recordPrefixForensics } from "./prefix-forensics-capture";
 
 type CaptureMode = "off" | "summary" | "full";
 type CaptureStage = "ai_sdk_prompt" | "wire_request";
@@ -458,6 +461,34 @@ async function readRequestBody(
 }
 
 /**
+ * ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01.
+ *
+ * The ordered messages of a SERIALIZED provider request body.
+ *
+ * The body is parsed for the MESSAGE INVENTORY only. When the body cannot
+ * be parsed — an unsupported content type, a truncated stream, a non-JSON
+ * payload — the result is `undefined`, and the consumer records the wire
+ * stage as `UNAVAILABLE_FROM_TRACE` rather than inventing a comparison.
+ */
+function extractWireMessages(body: unknown): unknown {
+	const parsedBody = parseJsonString(body);
+	if (!parsedBody || typeof parsedBody !== "object") {
+		return undefined;
+	}
+	const bodyRecord = parsedBody as Record<string, unknown>;
+	if (Array.isArray(bodyRecord.messages)) {
+		return bodyRecord.messages;
+	}
+	if (Array.isArray(bodyRecord.prompt)) {
+		return bodyRecord.prompt;
+	}
+	if (Array.isArray(bodyRecord.contents)) {
+		return bodyRecord.contents;
+	}
+	return undefined;
+}
+
+/**
  * ACT-CLINEMM-MODEL-BEHAVIOR-WIRE-REASONING-TRACE01.
  *
  * The correlation identity carried from the request metadata to the wire
@@ -730,6 +761,23 @@ export function wrapFetchForProviderRequestCapture(
 					// is the wire-level authority for the reasoning policy; the
 					// raw body is never retained.
 					wireReasoning: summarizeWireReasoning(body),
+				});
+				// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01: the SERIALIZED
+				// provider request (stage C). This is the provider-bound body, at
+				// the existing wire seam, immediately around the HTTP
+				// invocation. An unparseable body is recorded as
+				// UNAVAILABLE_FROM_TRACE rather than guessed at.
+				recordPrefixForensics({
+					stage: "wire_request",
+					messages: extractWireMessages(body),
+					body: typeof body === "string" ? body : undefined,
+					sessionId: request.metadata?.sessionId as string | undefined,
+					providerAttemptId: request.metadata?.modelRequestId as
+						| string
+						| undefined,
+					iteration: request.metadata?.iteration as number | undefined,
+					providerId: request.providerId,
+					modelId: request.modelId,
 				});
 			})
 			.catch(() => {

@@ -36538,3 +36538,111 @@ two P0s are corrected, witnessed and ablated. Installed qualification
 remains pending and is the operator's next step; the separate `myc`
 workspace-isolation investigation remains open, so sensitive-repository
 delegation stays blocked independently of this ACT's progress.
+
+# ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01 — PREFIX_MUTATION_ISOLATED — 2026-11-20
+
+EVIDENCE: `.factory/evidence/ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01/`
+
+Subject HEAD (entry): `b0c5a0b232d4fb13291a754e1ac337e4e99b87fb` (branch `main`, clean
+working tree, no unexpected tracked dirt). No push, no PR, no installed-extension
+replacement, no inference-service restart.
+
+## The finding
+
+The earliest model-facing difference between consecutive post-compaction provider
+requests is an **IN-PLACE rewrite of an early tool result** — not a system-prompt
+change, not a tool-order change, and not an adapter transformation.
+
+| Field | Value |
+|---|---|
+| What changed | the CONTENT of an existing `tool`-role message (a `tool-result` part) |
+| Where | message index **11 / 27 / 41**; common prefix 11 / 27 / 41 messages |
+| Role / position / message count / `toolCallId` | **ALL UNCHANGED** |
+| Bytes before -> after | 26,426 -> 317 / 17,380 -> 332 / 16,522 -> 318 |
+| The replacement | `[outdated - see the latest file content]` |
+| Occurrences | **21** in-place rewrites across **6 independent hosts** |
+
+The producing seam is `MessageBuilder.replaceOutdatedReadContent()`
+(`sdk/packages/core/src/session/services/message-builder.ts:356-368`), under the
+stale-read policy's **deliberate and documented** trade-off: *"Freshness takes
+precedence over prefix-cache preservation"* (`:388-392`).
+
+**The rewrite is invisible to a message-count or message-index analysis** — the
+message count, the order, the role and the tool-call id are all unchanged. Only the
+bytes inside the block moved. That is exactly the signature of a prefix-cache
+invalidation that preserves structure.
+
+## The discriminators, in the prescribed order
+
+| ID | Verdict |
+|---|---|
+| D1 system/tool-prefix instability | **REFUTED** — the system prompt and the ordered tool inventory are byte-identical across every analysed boundary |
+| D2 early-history mutation | **CONFIRMED** — the earliest differing component is a replaced tool result at message index 11 / 27 / 41 |
+| D3 branch alternation | **OBSERVED** (201 pairs — a new user turn starting a new task) but **NOT the cause**: branch changes are transient, whereas the observed plateau is STICKY across consecutive requests, which an in-place rewrite explains |
+| D4 provider-adapter transformation | **NOT APPLICABLE** — the decisive difference is already present at the `ai_sdk_prompt` boundary, i.e. BEFORE the adapter serializes; the wire stage is `UNAVAILABLE_FROM_TRACE` (0 of 24,862 preserved records) |
+| D5 checkpoint availability | **NOT THE EXPLANATION** — D5's precondition (a STABLE request prefix) is not met |
+
+## What is explicitly NOT claimed
+
+- **`FIRST_TOKEN_DIFFERENCE = N` is NOT asserted.** The installed Strata exposes no
+  tokenizer route (verified live: `/v1/tokenize` and `/tokenize` both 404; the local
+  `:8000` engine is a different provider and out of scope). Result:
+  `TOKEN_BOUNDARY_UNAVAILABLE`. The structural diff is retained in full.
+- The plateau depth (3,895) is NOT asserted to equal any message index, byte offset,
+  estimator value or checkpoint length.
+- The engine's 7,053 first-mismatch position is NOT reconciled with the message index.
+- The wire payload is NOT claimed equal to the AI SDK prompt.
+- A live reproduction of the engine's `cached_tokens` behaviour in the same run is NOT
+  claimed: the ACT used the PRESERVED corpus (which Section 10 explicitly permits
+  first) and issued no new provider requests.
+
+## What was added
+
+A small, opt-in, DEFAULT-OFF forensic capture of the three representation boundaries
+(runtime projection / AI SDK prompt / serialized wire body), plus an offline
+deterministic request-difference analyzer over the sanitized records. It reuses the
+EXISTING provider-request capture writer, attempt-correlation counters, the existing
+C2 correlation identities and the existing wire seam. It introduces no new tracing
+framework, no public API and no protocol field.
+
+- Switch: `CLINEMM_PREFIX_FORENSICS=1` (the only value that arms it).
+- Fingerprints: HMAC-SHA-256 with a per-cohort key; the key is never persisted.
+- Records: identities, counts, part types, byte lengths and keyed digests only.
+
+## Executable verification
+
+| Gate | Result |
+|---|---|
+| Analyzer witnesses (12) | **PASS** |
+| Capture-writer witnesses at the real seam (8) | **PASS** |
+| RED ablation A — remove the tool-reorder detection | **V4 FAILS** (1 failed / 11 passed) |
+| RED ablation B — remove the DEFAULT-OFF guard | **V1 FAILS x2** (2 failed / 6 passed) |
+| RED ablation C — stop failing closed on a missing capture | **V9 FAILS** (1 failed / 11 passed) |
+| Privacy scan of the emitted artifacts (8.5 MB, 173 records) | **0** occurrences of any path / key / header / command / raw payload pattern |
+| Typecheck (shared, llms, agents) | **EXIT=0** |
+| Biome lint | **clean** |
+| Regression sweep (shared `src/runtime/`) | **131 passed / 1 skipped** |
+| Pre-existing failure baseline | The 4 failing llms files fail identically at **pristine HEAD** (proven by `git stash push -u` + re-run + `git stash pop`) — **PRE-EXISTING, NOT ACT-OWNED** |
+
+## Decision
+
+**`PREFIX_MUTATION_ISOLATED`.** The earliest causal difference between consecutive
+model-facing requests is identified and bound to its producing seam. The client-side
+mutation is PRESENT; the server-side checkpoint limitation is therefore NOT the
+explanation.
+
+**No repair is proposed and no repair is applied.** The finding is a DELIBERATE,
+DOCUMENTED trade-off (freshness over prefix-cache preservation), and repairing it
+would require choosing which of two documented priorities to give up — a product
+policy decision, out of scope for an evidence ACT. The falsifiable causal claim and
+the RED witness a successor repair ACT would need are recorded in
+`09-causal-classification.md` §4.1.
+
+**Removal contract:** MET (root cause isolated). The instrumentation is additive,
+DEFAULT OFF, and behaviour-preserving to remove; the removal procedure is in
+`09-causal-classification.md` §5.
+
+**Recommended next step:** a successor ACT that arms the capture for a real dogfood
+session, captures the WIRE stage, and joins the ClineMM records to the engine's cache
+diagnostics by a shared request identity — which would correlate the reuse depth
+with the common prefix and decide the repair question.
