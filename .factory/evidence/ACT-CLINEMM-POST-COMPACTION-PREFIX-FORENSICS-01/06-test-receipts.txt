@@ -140,3 +140,20 @@ $ cd sdk/packages/llms && bun x vitest run --config vitest.config.ts \
     src/providers/vendors/openai-compatible.wire.test.ts
 
   The ACT then RESTORED its changes with: git stash pop
+
+################ CLOSURE ################
+
+Commit            : 616c9db8a
+Parent (entry)    : b0c5a0b232d4fb13291a754e1ac337e4e99b87fb
+Branch            : main (NOT pushed)
+Working tree      : CLEAN after commit
+Stashes           : EMPTY (none created, none popped, none dropped)
+Worktrees         : UNCHANGED (5, all pre-existing)
+Push / PR         : NONE
+Installed ext.    : NOT replaced
+Inference service : NOT restarted
+
+Classification    : PREFIX_MUTATION_ISOLATED
+Token boundary    : TOKEN_BOUNDARY_UNAVAILABLE (Strata exposes no tokenizer route)
+Repair proposed   : NO (deliberate documented trade-off; successor claim recorded)
+Removal contract  : MET (root cause isolated)
