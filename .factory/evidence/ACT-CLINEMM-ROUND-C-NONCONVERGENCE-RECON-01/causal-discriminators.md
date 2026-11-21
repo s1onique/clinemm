@@ -5,8 +5,10 @@
 > review. Three overclaims were corrected:
 >
 > * **F1** — "257 compactions" → **257 requests carried a compacted summary;
->   16 compaction EVENTS were observed** (summary-identity changes). The
->   retention conclusion (257/257) is unchanged.
+>   8 compaction EVENTS were observed** (CORRECTION02: not 16 — the payload
+>   identity also changes when an existing generation is enriched with a
+>   duplicated contract heading). The retention conclusion (257/257) is
+>   unchanged.
 > * **F2** — "novel results ⇒ information gain" → the result tiers are now
 >   `EMPTY` / `NONEMPTY` / `CONTENT_DISTINCT`, and `FACTUALLY_NOVEL` is
 >   explicitly **unproven**. A separate per-source novelty measurement was
@@ -86,7 +88,9 @@ readiness point of turn 271. That was a promotion beyond the rubric:
   was, on the model's own account, not final — so its turn is **not** a
   defensible synthesis point for that subject.
 * Consequently no turn can be claimed as a point of *defensible* synthesis
-  for all ten subjects, and `last_turn_all_ten_verdicts_STABLE` is `null`.
+  for all ten subjects, and `all_first_assertions_stable` is `false`
+  (`turn_all_first_assertions_stable` is `null` — CORRECTION02 P1: this does
+  **not** establish that no later turn had stable coverage).
 
 **What survives.** The claim that does **not** depend on readiness is the one
 that carries the causal weight: the model had a **working completion route**
@@ -132,9 +136,9 @@ re-assert it mid-run**.
 harness-owned *defect* under this ACT's definition**, because:
 
 1. the completion contract was **exposed** (tool present),
-2. the completion contract was **preserved** (through **16 compaction
+2. the completion contract was **preserved** (through **8 compaction
    events**; 257 / 257 requests carrying a compacted summary retained it —
-   CORRECTION01 F1),
+   CORRECTION02 F1),
 3. the completion contract was **enforceable** (a `completesRun` call
    terminates the run — proven by the two post-intervention calls),
 4. and the harness's existing conservation guarantees all held.
@@ -181,8 +185,8 @@ same registration.
 
 See H3 below: **257 / 257 requests carrying a compacted summary** preserved the
 task contract, the runtime completion obligation and the canonical evidence
-record. (CORRECTION01 F1: 16 compaction EVENTS, not 257 — the 257 is a request
-count.)
+record. (CORRECTION02 F1: **8 compaction EVENTS** + 8 enrichments — the 257 is a
+request count and the 16 is a payload count.)
 
 ### Evidence — enforce
 
@@ -208,33 +212,52 @@ count.)
 > "compare canonical evidence, persisted sidecars and provider-visible
 > representations across real compaction boundaries."
 
-### CORRECTION01 F1 — the compaction count was wrong
+### CORRECTION02 F1 — the compaction count was still wrong
 
-The parent ACT reported **"257 real compaction boundaries"**. That number
-counted provider requests whose `messages[0]` was a compacted summary. A
-summary **persists** across many requests, so that was a **state** count, not
-an **event** count.
+The parent ACT reported **"257 real compaction boundaries"** — a **state**
+count (requests carrying a compacted summary), not an event count.
 
-The corrected count is derived from authoritative state transitions: a new
-compaction **replaces** the summary, so a change in the carried summary's
-**identity** is the observable signature of a new compaction.
+CORRECTION01 then reported **16 compaction events** by counting changes in
+the carried summary's *payload* identity. That was still an overcount: the
+payload identity also changes when an existing generation is merely
+**enriched** with a duplicated contract heading. CORRECTION02 distinguishes
+the two.
+
+**The actual difference between a generation and its enrichment.** In all 8
+adjacent pairs the ONLY change is a duplicated
+`## Active task contract (authoritative)` heading (plus the blank line
+separating it), inserted before the existing `<!-- cline-task-contract:begin -->`
+marker: +2 added lines, 0 removed lines, +41 bytes, +2 provider-visible
+messages. The generation identity must therefore be computed on the
+**contract-stripped** summary.
 
 ```
-$ python3 tools/compaction-probe.py --capture-dir <private> --out compaction-probe.json
+$ python3 tools/compaction_probe.py --capture-dir <private> --out compaction-probe.json
 provider requests total                       : 277
 requests carrying a compacted summary (STATE) : 257
 requests without a compacted summary          : 20
-distinct summary generations                  : 16
-compaction EVENTS observed (identity change)  : 16
+distinct PROVIDER-VISIBLE summary payloads    : 16
+distinct COMPACTION GENERATIONS               : 8
+compaction EVENTS observed                    : 8
+generation TRANSFORMATIONS observed           : 8
 ```
 
-**16 compaction events**, across **16 distinct summary generations**, each
-generation persisting for 1–38 subsequent requests. The structure is
-consistent and verifiable: each generation appears as a base summary, then
-reappears once more with the `## Active task contract (authoritative)`
-section appended (a 41-byte delta, the task-contract carry-forward applied
-to the already-compacted summary). That yields 8 compaction generations ×
-2 projections = 16 distinct payloads.
+| Quantity | Value | Meaning |
+|---|---|---|
+| Provider requests | 277 | total requests in the autonomous run |
+| Requests carrying a compacted summary | 257 | a **state** count |
+| Distinct provider-visible summary payloads | 16 | 8 generations x 2 projections |
+| **Distinct compaction generations** | **8** | the contract-stripped identity space |
+| **Compaction events** | **8** | new generations that began |
+| **Generation transformations** | **8** | existing generations merely enriched (NOT compactions) |
+
+The 8 compaction events occur at iterations **21, 55, 82, 104, 130, 164, 203,
+240**; the 8 enrichments at **22, 56, 83, 105, 131, 165, 204, 241** — exactly
+the pair-firsts and pair-seconds of the review's table.
+
+**Actual compaction-event count: 8.** The runtime's own compaction event
+record is **UNAVAILABLE_FROM_TRACE**; the count above is derived from the
+summary-identity transition, which is the authoritative observable available.
 
 ### Evidence — retention (the H3 question)
 
@@ -408,7 +431,7 @@ applied to any pre-intervention request.
 |---|---|---|
 | **H1** model stopping judgment | **SUPPORTED (primary), not proved exclusive** | tool in schema 277/277 and obligation 277/277; 0 calls emitted; model stated sufficiency at turn 634. The "had the evidence" half is UNPROVEN (F3) |
 | **H2** harness completion-contract failure | **REFUTED** (unchanged) | tool in schema 277/277; obligation 277/277; contract retained 257/257; enforcement path green; 0 calls to reject |
-| **H3** compaction-induced progress loss | **NARROWED** (was REFUTED) | 16 compaction EVENTS (not 257); contract/obligation/evidence-record retained 257/257; full evidence completeness NOT established |
+| **H3** compaction-induced progress loss | **NARROWED** (was REFUTED) | **8 compaction EVENTS** + 8 enrichments (not 16, not 257); contract/obligation/evidence-record retained 257/257; full evidence completeness NOT established |
 | **H4** ineffective evidence collection loop | **INCONCLUSIVE** (was REFUTED) | per-source novelty 129/136 reads added new content (redundancy clause strongly evidenced against); unwarranted-change clause unassessed |
 | **H5** output-budget / generation-boundary | **REFUTED** (unchanged) | max 3,130 / 16,384 output tokens per autonomous turn (19.1 %); 0 truncations |
 

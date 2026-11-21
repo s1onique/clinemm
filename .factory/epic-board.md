@@ -37881,3 +37881,137 @@ arms.
 
 `ACT-CLINEMM-COMPACTION-STABLE-PREFIX-LIVE-QUALIFICATION-01` remains open and
 separate and was **not** merged into this continuation.
+
+---
+
+# ACT-CLINEMM-ROUND-C-NONCONVERGENCE-RECON-CORRECTION02 — PASS_PROBE_SEMANTICS_CORRECTED — 2026-11-21
+
+**Type:** Evidence-only corrective continuation of
+`ACT-CLINEMM-ROUND-C-NONCONVERGENCE-RECON-CORRECTION01` (`a8231e416`),
+itself a continuation of `ACT-CLINEMM-ROUND-C-NONCONVERGENCE-RECON-01`
+(`1df0217fb`).
+
+**Production changes: NONE.** No production file was modified, rebuilt,
+packaged or installed. No inference was re-run against a new capture — every
+number comes from the existing provider-request captures and existing session
+artifacts.
+
+## Why
+
+Expert review of `a8231e416` returned `HALT_NEW_P0_EVIDENCE_DEFECTS` with two
+P0 and one P1 finding against the **evidence-generating probes** (not against
+ClineMM production). The review confirmed there is still **no reproduced
+ClineMM completion-path defect**, so no speculative product repair is
+justified. This continuation performs exactly the three bounded corrections
+the review specified, plus the two P2 cleanups it deferred to terminal
+cleanup.
+
+## The three corrections
+
+**P0-1 — compaction generation identity.** CORRECTION01 counted 16 compaction
+events by tracking the carried summary's **payload** identity. The probe's own
+event index contains **eight adjacent pairs**, each second element differing by
+exactly +41 bytes and +2 provider-visible messages — an *enriched projection*
+of a generation, not a new generation. Generation identity is now computed on
+the **contract-stripped** summary, and the transition classifier emits three
+distinct labels (`FIRST_SUMMARY` / `NEW_COMPACTION` /
+`SAME_GENERATION_ENRICHED`).
+
+```
+provider requests total                       : 277
+requests carrying a compacted summary (STATE) : 257
+requests without a compacted summary          : 20
+distinct PROVIDER-VISIBLE summary payloads    : 16
+distinct COMPACTION GENERATIONS               : 8
+compaction EVENTS observed                    : 8
+generation TRANSFORMATIONS observed           : 8
+retention (task contract / obligation / evidence record) : 257/257 each
+```
+
+Compaction events at iterations **21, 55, 82, 104, 130, 164, 203, 240**;
+enrichments at **22, 56, 83, 105, 131, 165, 204, 241** — exactly the review's
+pair-firsts and pair-seconds. The runtime's own compaction-event record is
+`UNAVAILABLE_FROM_TRACE`; the count is derived from the summary-identity
+transition. **Retention is unchanged at 257/257.**
+
+**P0-2 — timeline fingerprint ordering.** The timeline added the result
+fingerprint to the seen set **before** testing membership, so every nonempty
+result classified as `NONEMPTY` and `CONTENT_DISTINCT` was unreachable.
+Membership is now tested **before** insertion. The regenerated timeline reports
+**342** `CONTENT_DISTINCT`, matching the independently-implemented
+`novelty-probe.py` exactly. The legacy `information_gain` key is removed.
+`FACTUALLY_NOVEL` remains **`UNPROVEN`**.
+
+**P1 — verdict-stability metric.** CORRECTION01 published
+`last_stable_coverage_turn = null` and used it to assert that no turn had
+stable verdict coverage. The measurement only tested whether each subject's
+**first** assertion was revised, which cannot establish that no **later** point
+had stable coverage. The metric is renamed **`first_assertion_stability`**, the
+unsupported conclusion is withdrawn, and the answerable companion metric
+`last_verdict_change_turn = 638` is reported instead. Independent factual
+sufficiency remains **`UNPROVEN`**.
+
+## Focused assertions
+
+`tools/assert-corrections.py` — **24/24 passed, exit 0**: 21 positive
+assertions (A1–A11 compaction identity, B1–B5 fingerprint ordering, C1–C5
+verdict stability) plus **3 negative controls** (N1–N3) that reconstruct each
+pre-correction defect in isolation and prove the suite can fail.
+
+## Verification
+
+| Check | Result |
+|---|---|
+| Focused assertions | **24/24 passed, exit 0** |
+| Deterministic reproduction | **byte-identical** for `compaction-probe.json`, `timeline.jsonl`, `novelty-probe.json`, `readiness-probe.json` |
+| Production diff (`git diff HEAD -- sdk/ apps/ src/`) | **empty** |
+| Credential scan | **clean** |
+| Artifact hashes | regenerated, 19 published artifacts |
+
+## P2 cleanup
+
+| Item | Disposition |
+|---|---|
+| Extra blank line at EOF | **FIXED** — `tools/novelty-probe.py`; output verified unchanged |
+| Invalid legacy gate-summary binding | **NOT MODIFIED — out of ACT scope** |
+
+The gate summary (`.factory/gate-summary.json`) is bound to
+`ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01`, not to this ACT.
+The review classified it as a separate non-blocking Factory metadata issue
+that does not invalidate the independently recorded 87 passing tests, and
+directed that no cleanup campaign is warranted. Writing a new gate summary
+here would assert gate coverage this ACT did not run, so it is recorded as an
+outstanding non-blocking Factory item rather than silently fixed.
+
+## Decision
+
+**PASS_PROBE_SEMANTICS_CORRECTED.** The central result is unchanged and is
+now stated on corrected evidence: the completion tool was exposed in the
+schema in **277/277** requests, the completion obligation was present in
+**277/277**, and the model never invoked the route autonomously
+(**0/277**).
+
+| Hypothesis | Disposition |
+|---|---|
+| H1 — model stopping judgment | **SUPPORTED**, not proved exclusive |
+| H2 — completion-contract failure | **SUBSTANTIALLY REFUTED** |
+| H3 — compaction-induced progress loss | **NARROWED** (8 events + 8 enrichments; retention 257/257 presence only) |
+| H4 — ineffective evidence collection | **INCONCLUSIVE** (`FACTUALLY_NOVEL` unproven) |
+| H5 — output-budget boundary | **REFUTED** for the observed autonomous turns |
+
+**No ClineMM production defect has been reproduced; no repair is justified.**
+
+**C1: GO** for `ACT-CLINEMM-ROUND-C-CONVERGENCE-EXPERIMENT-01` as a **bounded
+paired feasibility pilot**, not conclusive evidence of model superiority. It
+must vary only the evidence-neutral completion reminder, keep tool calls
+permitted, and measure **autonomous completion** alongside **independently
+assessed, blinded verdict quality**, tool use and source-content novelty.
+One pair, not an unrestricted multi-hour run.
+
+`ACT-CLINEMM-COMPACTION-STABLE-PREFIX-LIVE-QUALIFICATION-01` remains open and
+separate and was **not** merged into this continuation.
+
+## Evidence
+
+`.factory/evidence/ACT-CLINEMM-ROUND-C-NONCONVERGENCE-RECON-CORRECTION02.md`
+`.factory/evidence/ACT-CLINEMM-ROUND-C-NONCONVERGENCE-RECON-01/`

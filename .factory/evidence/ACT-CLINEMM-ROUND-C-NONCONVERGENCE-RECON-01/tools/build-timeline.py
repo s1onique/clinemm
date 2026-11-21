@@ -40,6 +40,15 @@ import os
 import sys
 from typing import Any
 
+# CORRECTION02 P0-1: the compaction-generation identity and the summary
+# transition classification are defined ONCE, in `compaction_probe.py`, and
+# imported here so the timeline and the probe can never disagree.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from compaction_probe import (  # noqa: E402
+    classify_transition,
+    strip_contract_section,
+)
+
 # --------------------------------------------------------------------------
 # Phase boundaries (derived from the real trace; see timeline-summary.md).
 # --------------------------------------------------------------------------
@@ -196,6 +205,15 @@ def build_events(
                 text = tool_result_text(b)
                 cmd = tool_result_command(b)
                 result_fp = short_fp(text) if text else None
+                # CORRECTION02 P0-2: the membership test MUST happen BEFORE
+                # the insertion. The previous order inserted the fingerprint
+                # first, so every nonempty result was already "seen" and the
+                # classifier could never emit CONTENT_DISTINCT (measured:
+                # 0 of 375 results were classified CONTENT_DISTINCT).
+                is_content_distinct = (
+                    result_fp is not None
+                    and result_fp not in seen_result_fingerprints
+                )
                 if result_fp is not None:
                     seen_result_fingerprints.add(result_fp)
                 events.append(
@@ -224,7 +242,7 @@ def build_events(
                             if not text.strip()
                             else (
                                 "CONTENT_DISTINCT"
-                                if short_fp(text) not in seen_result_fingerprints
+                                if is_content_distinct
                                 else "NONEMPTY"
                             )
                         ),
@@ -283,6 +301,8 @@ def attach_provider_requests(
     # CORRECTION01 F1: distinct compacted-summary generations seen so far.
     # A new generation id marks ONE compaction event.
     seen_generation_ids: set[str] = set()
+    # The previously carried summary text, for transition classification.
+    previous_summary_text: str | None = None
     for ordinal, event in enumerate(assistant_events, start=1):
         capture = capture_index.get(ordinal)
         if capture is None:
@@ -333,7 +353,18 @@ def attach_provider_requests(
         #                                marks a new compaction event
         #   compaction_event            -- True only at the FIRST request that
         #                                carries a given generation id
-        generation_id = short_fp(first_text) if carries_summary else None
+        # CORRECTION02 P0-1: generation identity is computed on the
+        # CONTRACT-STRIPPED summary, so the enriched projection of an
+        # existing generation is the SAME generation, not a new compaction.
+        core_text = strip_contract_section(first_text) if carries_summary else None
+        generation_id = short_fp(core_text) if core_text else None
+        transition = (
+            classify_transition(previous_summary_text, first_text)
+            if carries_summary
+            else "NO_SUMMARY"
+        )
+        if carries_summary:
+            previous_summary_text = first_text
         event["provider_request"] = {
             "join": "DIRECT_TRACE",
             "capture_file": capture.get("_file"),
@@ -354,12 +385,12 @@ def attach_provider_requests(
             in first_text,
             "carries_compacted_summary": carries_summary,
             "compaction_generation_id": generation_id,
-            "compaction_event": bool(
-                generation_id is not None
-                and generation_id not in seen_generation_ids
-            ),
+            "compaction_event": transition in ("FIRST_SUMMARY", "NEW_COMPACTION"),
+            "generation_transformation": transition == "SAME_GENERATION_ENRICHED",
+            "summary_transition": transition,
+            "distinct_compaction_generations_observed": len(seen_generation_ids),
         }
-        if generation_id is not None:
+        if generation_id is not None and generation_id not in seen_generation_ids:
             seen_generation_ids.add(generation_id)
 
 

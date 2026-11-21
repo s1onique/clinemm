@@ -198,12 +198,31 @@ def main() -> int:
             }
             stable_coverage_turns.append(assertions[0][0])
 
-    # The turn at which every subject had a verdict assertion that was never
-    # subsequently refined. This is the strongest readiness statement the
-    # trace supports.
-    last_stable_turn = None
-    if len(stable_coverage_turns) == len(SUBJECTS):
-        last_stable_turn = max(stable_coverage_turns)
+    # CORRECTION02 P1: this metric measured FIRST-ASSERTION stability only.
+    # It did NOT establish that no LATER turn had stable verdict coverage --
+    # a subject whose first assertion was later refined may still have had a
+    # stable verdict from some later point onward. The metric is therefore
+    # renamed to describe exactly what it measures, and the unsupported
+    # "no later stable turn exists" conclusion is removed.
+    #
+    # What it DOES establish: the set of subjects whose FIRST assertion was
+    # never subsequently revised. `all_first_assertions_stable` is True only
+    # when every subject's first assertion was final.
+    all_first_assertions_stable = len(stable_coverage_turns) == len(SUBJECTS)
+    first_assertion_stable_turn = (
+        max(stable_coverage_turns) if all_first_assertions_stable else None
+    )
+    # A genuinely different question, which IS answerable from the trace:
+    # the earliest turn after which NO subject produced a NEW verdict
+    # assertion (i.e. the verdict set stopped changing).
+    last_verdict_change_turn = None
+    for subject in SUBJECTS:
+        assertions = subject_assertions.get(subject, [])
+        if assertions:
+            last_verdict_change_turn = max(
+                last_verdict_change_turn or 0,
+                max(index for index, _ in assertions),
+            )
 
     cost_after: dict[str, Any] = {}
     if readiness_turn is not None:
@@ -256,7 +275,20 @@ def main() -> int:
         # CORRECTION01 F3: per-subject verdict stability.
         "verdict_stability": verdict_stability,
         "subjects_refined_after_first_assertion": sorted(refined_subjects),
-        "last_stable_coverage_turn": last_stable_turn,
+        "first_assertion_stability": {
+            "measures": (
+                "whether each subject's FIRST verdict assertion was ever "
+                "subsequently revised. It does NOT establish that no later "
+                "turn had stable verdict coverage."
+            ),
+            "all_first_assertions_stable": all_first_assertions_stable,
+            "turn_all_first_assertions_stable": first_assertion_stable_turn,
+            "note": (
+                "A null value means at least one first assertion was later "
+                "revised; it does NOT mean no later stable turn exists."
+            ),
+        },
+        "last_verdict_change_turn": last_verdict_change_turn,
     }
 
     with open(args.out, "w", encoding="utf-8") as handle:
@@ -286,9 +318,18 @@ def main() -> int:
         f"{sorted(refined_subjects)} ({len(refined_subjects)}/{len(SUBJECTS)})"
     )
     print(
-        "last_turn_all_ten_verdicts_STABLE="
-        f"{last_stable_turn} "
-        "(null when any subject's first assertion was later refined)"
+        "all_first_assertions_stable="
+        f"{all_first_assertions_stable} "
+        f"(turn_all_first_assertions_stable={first_assertion_stable_turn})"
+    )
+    print(
+        "last_verdict_change_turn="
+        f"{last_verdict_change_turn} "
+        "(the last turn at which any subject produced a verdict assertion)"
+    )
+    print(
+        "NOTE: a null first-assertion-stability turn does NOT establish that "
+        "no later stable turn exists."
     )
     return 0
 

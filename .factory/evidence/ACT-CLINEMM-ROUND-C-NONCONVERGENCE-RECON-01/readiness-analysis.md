@@ -300,10 +300,25 @@ assertion that the model itself later refined was, on the model's own
 account, **not final** — so its turn is **not** a defensible synthesis point
 for that subject.
 
+**CORRECTION02 P1 — the metric was renamed and the overclaim removed.**
+CORRECTION01 published `last_stable_coverage_turn = null` and used it to
+assert that there is "no turn at which all ten subjects had a verdict that was
+never subsequently revised". That did not follow from the measurement: the
+metric tested only whether each subject's **first** assertion was revised,
+which cannot establish that no **later** point had stable coverage. The
+metric is now `first_assertion_stability` and the unsupported conclusion is
+withdrawn.
+
 Consequently:
 
-* `last_turn_all_ten_verdicts_STABLE` = **`null`** — there is **no** turn at
-  which all ten subjects had a verdict that was never subsequently revised.
+* `all_first_assertions_stable` = **false**;
+  `turn_all_first_assertions_stable` = **`null`** — meaning *at least one
+  first assertion was later revised*, and **nothing more**. The artifact
+  carries an explicit note that a null value does **not** establish that no
+  later stable turn exists.
+* The companion metric `last_verdict_change_turn` = **638** — the last turn
+  at which any subject produced a verdict assertion — is reported instead,
+  because it *is* answerable from the trace.
 * **Independent readiness is `UNPROVEN`.**
 * The parent's "readiness established" phrasing is **withdrawn**.
 

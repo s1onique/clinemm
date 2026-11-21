@@ -1,0 +1,151 @@
+# CORRECTION02 probe receipts — each command's exact invocation, exit code and output
+
+All captures are referenced by their `~`-relative location. No capture content is
+reproduced here.
+
+## 0. Production-seam control (production unchanged)
+
+```
+$ cd sdk/packages/core && bun x vitest run src/extensions/tools/definitions.test.ts
+ ✓ src/extensions/tools/definitions.test.ts (87 tests) 40ms
+ Test Files  1 passed (1)
+      Tests  87 passed (87)
+EXIT=0
+```
+
+```
+$ git diff --stat HEAD -- sdk/ apps/ src/
+(no output)
+```
+
+## 1. compaction_probe.py (P0-1 — compaction generation identity)
+
+```
+$ python3 tools/compaction_probe.py \
+    --capture-dir ~/.vscodium-roz/cline-data/provider-request-captures \
+    --out compaction-probe.json
+provider requests total                       : 277
+requests carrying a compacted summary (STATE) : 257
+requests without a compacted summary          : 20
+distinct PROVIDER-VISIBLE summary payloads    : 16
+distinct COMPACTION GENERATIONS               : 8
+compaction EVENTS observed                     : 8
+generation TRANSFORMATIONS observed           : 8
+retention (task contract)                     : 257/257
+retention (completion obligation)             : 257/257
+retention (canonical evidence record)         : 257/257
+EXIT=0
+```
+
+## 2. build-timeline.py (P0-2 — result fingerprint ordering)
+
+```
+$ python3 tools/build-timeline.py \
+    --session-dir ~/.vscodium-roz/cline-data/sessions/1795252560069_t82cp \
+    --capture-dir ~/.vscodium-roz/cline-data/provider-request-captures \
+    --out timeline.jsonl
+wrote 661 events to timeline.jsonl
+EXIT=0
+```
+
+Regenerated timeline body-tier counts: `CONTENT_DISTINCT` 342, `EMPTY` 26,
+`NONEMPTY` 3. Before the ordering fix the timeline emitted **0**
+`CONTENT_DISTINCT`.
+
+## 3. novelty-probe.py (F2 — independent novelty measurement)
+
+```
+$ python3 tools/novelty-probe.py \
+    --session-dir ~/.vscodium-roz/cline-data/sessions/1795252560069_t82cp \
+    --out novelty-probe.json
+body tiers: {"CONTENT_DISTINCT": 342, "EMPTY": 26, "NONEMPTY_DUPLICATE_BODY": 3}
+source reads: 136 total; 129 added new lines; 7 were pure re-reads
+total new distinct lines added: 4388
+distinct sources read: 50
+FACTUALLY_NOVEL (decision-relevant): UNPROVEN at this layer
+EXIT=0
+```
+
+## 4. readiness-probe.py (P1 — verdict-stability metric)
+
+```
+$ python3 tools/readiness-probe.py \
+    --session-dir ~/.vscodium-roz/cline-data/sessions/1795252560069_t82cp \
+    --out readiness-probe.json
+all_ten_subjects_verdicted=True
+readiness_turn_index=271
+cost_after_readiness={"output_tokens_after_readiness": 71194, "tool_calls_after_readiness": 202, "turns_after_readiness": 174}
+readiness_semantics: first_recorded_verdict_coverage=271; independent_factual_sufficiency=UNPROVEN
+subjects_refined_after_first_assertion=[2, 3, 4, 5, 6, 7, 9, 10] (8/10)
+all_first_assertions_stable=False (turn_all_first_assertions_stable=None)
+last_verdict_change_turn=638 (the last turn at which any subject produced a verdict assertion)
+NOTE: a null first-assertion-stability turn does NOT establish that no later stable turn exists.
+EXIT=0
+```
+
+## 5. assert-corrections.py (focused assertions, incl. negative controls)
+
+```
+$ python3 tools/assert-corrections.py --act-dir . --out assertions.json
+  [PASS] A1 enriched projection strips to the same generation text as its base
+  [PASS] A2 a genuinely different summary does NOT strip to the same text
+  [PASS] A3 transition classifier: base -> enriched is SAME_GENERATION_ENRICHED
+  [PASS] A4 transition classifier: base -> different is NEW_COMPACTION
+  [PASS] A5 transition classifier: first summary is FIRST_SUMMARY
+  [PASS] A6 historical run: 8 distinct compaction generations (not 16)
+  [PASS] A7 historical run: 16 distinct provider-visible payloads retained
+  [PASS] A8 historical run: 8 compaction events + 8 transformations
+  [PASS] A9 the 8 transformation iterations are exactly the pair-seconds 22,56,83,105,131,165,204,241
+  [PASS] A10 the 8 compaction-event iterations are exactly the pair-firsts 21,55,82,104,130,164,203,240
+  [PASS] A11 retention unchanged: 257/257 on all three markers
+  [PASS] B1 synthetic 3-result probe yields CONTENT_DISTINCT, NONEMPTY, EMPTY
+  [PASS] B2 the classifier tests membership BEFORE insertion
+  [PASS] B3 regenerated timeline classifies CONTENT_DISTINCT (was 0 before the fix)
+  [PASS] B4 the legacy information_gain key is absent from the timeline
+  [PASS] B5 timeline CONTENT_DISTINCT count equals the independently-implemented novelty probe's distinct-body count
+  [PASS] C1 the metric is named for what it measures (first-assertion stability)
+  [PASS] C2 a null first-assertion-stability turn is NOT accompanied by a claim that no later stable turn exists
+  [PASS] C3 last_verdict_change_turn is reported and is a real turn
+  [PASS] C4 first-assertion refinement count is 8/10
+  [PASS] C5 independent factual sufficiency remains UNPROVEN
+  [PASS] N1 negative control: pre-fix ordering yields no CONTENT_DISTINCT (so B1 would fail)
+  [PASS] N2 negative control: pre-fix strip leaves base != enriched (so A1 would fail)
+  [PASS] N3 negative control: pre-fix counting yields 16 events, not 8 (so A8 would fail)
+
+24/24 assertions passed
+EXIT=0
+```
+
+## 6. build-artifact-hashes.py (artifact binding)
+
+```
+$ python3 tools/build-artifact-hashes.py \
+    --repo-root <repo> --act-dir . \
+    --session-dir ~/.vscodium-roz/cline-data/sessions/1795252560069_t82cp \
+    --capture-dir ~/.vscodium-roz/cline-data/provider-request-captures \
+    --extension-dir ~/.vscodium-roz/extensions/s1onique.clinemm-4.1.26-6883c7c52 \
+    --out artifact-hashes.json
+wrote artifact-hashes.json (19 published artifacts)
+EXIT=0
+```
+
+## 7. Deterministic reproduction
+
+Each artifact regenerated into a scratch directory and compared byte-for-byte
+against the published artifact.
+
+```
+=== byte-identical check ===
+IDENTICAL  compaction-probe.json
+IDENTICAL  timeline.jsonl
+IDENTICAL  novelty-probe.json
+IDENTICAL  readiness-probe.json
+```
+
+## 8. Credential scan
+
+```
+$ grep -rEn "sk-[A-Za-z0-9]{16,}|api[_-]?key[\"']?\s*[:=]\s*[\"'][A-Za-z0-9_-]{16,}|Bearer [A-Za-z0-9._-]{20,}|ghp_[A-Za-z0-9]{20,}|x-access-token" .
+(no matches)
+EXIT=1   # grep: no match
+```

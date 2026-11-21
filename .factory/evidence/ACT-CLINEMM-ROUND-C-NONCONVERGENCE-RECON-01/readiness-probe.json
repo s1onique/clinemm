@@ -5,7 +5,13 @@
     "tool_calls_after_readiness": 202,
     "turns_after_readiness": 174
   },
-  "last_stable_coverage_turn": null,
+  "first_assertion_stability": {
+    "all_first_assertions_stable": false,
+    "measures": "whether each subject's FIRST verdict assertion was ever subsequently revised. It does NOT establish that no later turn had stable verdict coverage.",
+    "note": "A null value means at least one first assertion was later revised; it does NOT mean no later stable turn exists.",
+    "turn_all_first_assertions_stable": null
+  },
+  "last_verdict_change_turn": 638,
   "operator_input_index": 650,
   "per_subject_first_verdict": {
     "R1": {

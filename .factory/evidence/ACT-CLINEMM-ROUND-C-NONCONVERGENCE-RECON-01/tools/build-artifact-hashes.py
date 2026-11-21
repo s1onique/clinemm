@@ -74,6 +74,8 @@ def collect(act: str, subdir: str) -> list[dict[str, Any]]:
     if not os.path.isdir(directory):
         return out
     for name in sorted(os.listdir(directory)):
+        if name == "__pycache__" or name.endswith(".pyc"):
+            continue
         path = os.path.join(directory, name)
         if os.path.isfile(path):
             relative = os.path.join(os.path.basename(act), subdir, name) if subdir else os.path.join(os.path.basename(act), name)

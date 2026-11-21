@@ -1,0 +1,192 @@
+{
+  "checks": [
+    {
+      "assertion": "A1 enriched projection strips to the same generation text as its base",
+      "detail": {
+        "base_len": 403,
+        "enriched_len": 403
+      },
+      "ok": true
+    },
+    {
+      "assertion": "A2 a genuinely different summary does NOT strip to the same text",
+      "detail": null,
+      "ok": true
+    },
+    {
+      "assertion": "A3 transition classifier: base -> enriched is SAME_GENERATION_ENRICHED",
+      "detail": "SAME_GENERATION_ENRICHED",
+      "ok": true
+    },
+    {
+      "assertion": "A4 transition classifier: base -> different is NEW_COMPACTION",
+      "detail": "NEW_COMPACTION",
+      "ok": true
+    },
+    {
+      "assertion": "A5 transition classifier: first summary is FIRST_SUMMARY",
+      "detail": "FIRST_SUMMARY",
+      "ok": true
+    },
+    {
+      "assertion": "A6 historical run: 8 distinct compaction generations (not 16)",
+      "detail": 8,
+      "ok": true
+    },
+    {
+      "assertion": "A7 historical run: 16 distinct provider-visible payloads retained",
+      "detail": 16,
+      "ok": true
+    },
+    {
+      "assertion": "A8 historical run: 8 compaction events + 8 transformations",
+      "detail": {
+        "events": 8,
+        "transformations": 8
+      },
+      "ok": true
+    },
+    {
+      "assertion": "A9 the 8 transformation iterations are exactly the pair-seconds 22,56,83,105,131,165,204,241",
+      "detail": [
+        22,
+        56,
+        83,
+        105,
+        131,
+        165,
+        204,
+        241
+      ],
+      "ok": true
+    },
+    {
+      "assertion": "A10 the 8 compaction-event iterations are exactly the pair-firsts 21,55,82,104,130,164,203,240",
+      "detail": [
+        21,
+        55,
+        82,
+        104,
+        130,
+        164,
+        203,
+        240
+      ],
+      "ok": true
+    },
+    {
+      "assertion": "A11 retention unchanged: 257/257 on all three markers",
+      "detail": {
+        "carries_canonical_evidence_record": 257,
+        "carries_completion_obligation": 257,
+        "carries_task_contract": 257
+      },
+      "ok": true
+    },
+    {
+      "assertion": "B1 synthetic 3-result probe yields CONTENT_DISTINCT, NONEMPTY, EMPTY",
+      "detail": [
+        "CONTENT_DISTINCT",
+        "NONEMPTY",
+        "EMPTY"
+      ],
+      "ok": true
+    },
+    {
+      "assertion": "B2 the classifier tests membership BEFORE insertion",
+      "detail": null,
+      "ok": true
+    },
+    {
+      "assertion": "B3 regenerated timeline classifies CONTENT_DISTINCT (was 0 before the fix)",
+      "detail": {
+        "CONTENT_DISTINCT": 342,
+        "EMPTY": 30,
+        "NONEMPTY": 3
+      },
+      "ok": true
+    },
+    {
+      "assertion": "B4 the legacy information_gain key is absent from the timeline",
+      "detail": null,
+      "ok": true
+    },
+    {
+      "assertion": "B5 timeline CONTENT_DISTINCT count equals the independently-implemented novelty probe's distinct-body count",
+      "detail": {
+        "novelty_probe": 342,
+        "timeline": 342
+      },
+      "ok": true
+    },
+    {
+      "assertion": "C1 the metric is named for what it measures (first-assertion stability)",
+      "detail": [
+        "first_assertion_stability",
+        "verdict_stability"
+      ],
+      "ok": true
+    },
+    {
+      "assertion": "C2 a null first-assertion-stability turn is NOT accompanied by a claim that no later stable turn exists",
+      "detail": {
+        "all_first_assertions_stable": false,
+        "measures": "whether each subject's FIRST verdict assertion was ever subsequently revised. It does NOT establish that no later turn had stable verdict coverage.",
+        "note": "A null value means at least one first assertion was later revised; it does NOT mean no later stable turn exists.",
+        "turn_all_first_assertions_stable": null
+      },
+      "ok": true
+    },
+    {
+      "assertion": "C3 last_verdict_change_turn is reported and is a real turn",
+      "detail": 638,
+      "ok": true
+    },
+    {
+      "assertion": "C4 first-assertion refinement count is 8/10",
+      "detail": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        9,
+        10
+      ],
+      "ok": true
+    },
+    {
+      "assertion": "C5 independent factual sufficiency remains UNPROVEN",
+      "detail": "UNPROVEN",
+      "ok": true
+    },
+    {
+      "assertion": "N1 negative control: pre-fix ordering yields no CONTENT_DISTINCT (so B1 would fail)",
+      "detail": [
+        "NONEMPTY",
+        "NONEMPTY",
+        "EMPTY"
+      ],
+      "ok": true
+    },
+    {
+      "assertion": "N2 negative control: pre-fix strip leaves base != enriched (so A1 would fail)",
+      "detail": null,
+      "ok": true
+    },
+    {
+      "assertion": "N3 negative control: pre-fix counting yields 16 events, not 8 (so A8 would fail)",
+      "detail": {
+        "corrected_events": 8,
+        "legacy_events": 16
+      },
+      "ok": true
+    }
+  ],
+  "failed": 0,
+  "failures": [],
+  "passed": 24,
+  "probe_id": "CORRECTION02_FOCUSED_ASSERTIONS_V1",
+  "total": 24
+}

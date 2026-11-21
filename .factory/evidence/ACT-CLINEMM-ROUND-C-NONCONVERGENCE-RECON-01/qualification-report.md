@@ -10,7 +10,7 @@ The causal boundary is classified. **No harness-owned defect was reproduced.**
 >
 > | | Parent ACT claim | Corrected claim |
 > |---|---|---|
-> | **F1** | "257 compaction boundaries" | **257 requests carried a compacted summary; 16 compaction EVENTS observed** (summary-identity changes). Retention 257/257 unchanged. |
+> | **F1** | "257 compaction boundaries" | **257 requests carried a compacted summary; 8 compaction EVENTS observed** (+ 8 enrichments). CORRECTION02: not 16 — payload identity also changes on enrichment. Retention 257/257 unchanged. |
 > | **F2** | "186 novel results ⇒ productive" | tiers separated: `EMPTY` 26 / `CONTENT_DISTINCT` 342 / `NONEMPTY_DUPLICATE_BODY` 3 / `FACTUALLY_NOVEL` **UNPROVEN**. New per-source novelty measurement added. **H4 → INCONCLUSIVE.** |
 > | **F3** | "readiness established at turn 271" | **first recorded verdict COVERAGE at turn 271**; independent sufficiency **UNPROVEN**; 8/10 first assertions later **REFINED**. **H1 SUPPORTED but not proved exclusive.** |
 >
@@ -57,10 +57,23 @@ refining, without emitting.
 *own* adjudication language, so turn 271 establishes **first recorded verdict
 COVERAGE**, **not** independent factual sufficiency. The corrected probe
 shows **8 of 10 subjects' first assertions were later REFINED** (R2, R3, R4,
-R5, R6, R7, R9, R10); only R1 and R8 were stable. `last_turn_all_ten_verdicts_STABLE`
-is **`null`**, and independent readiness is **UNPROVEN**. The model may have
-been correcting early errors — which is exactly why the successor experiment
-must measure **independently assessed** verdict quality.
+R5, R6, R7, R9, R10); only R1 and R8 were stable.
+`all_first_assertions_stable` is **`false`** and
+`turn_all_first_assertions_stable` is **`null`** — meaning *at least one first
+assertion was later revised*, and nothing more. Independent readiness is
+**UNPROVEN**. The model may have been correcting early errors — which is
+exactly why the successor experiment must measure **independently assessed**
+verdict quality.
+
+**CORRECTION02 P1 — the stability metric was renamed.** CORRECTION01
+published `last_stable_coverage_turn = null` and used it to assert that there
+is "no turn at which all ten subjects had a verdict that was never
+subsequently revised". That did not follow: the metric measured only whether
+each subject's **first** assertion was revised, which cannot establish that
+no **later** point had stable coverage. The metric is now
+`first_assertion_stability`; the unsupported conclusion is withdrawn; and the
+answerable companion metric `last_verdict_change_turn` = **638** is reported
+instead.
 
 ### F4 — The post-readiness work added new source content (CORRECTED)
 
@@ -82,10 +95,15 @@ rather than refuted.
 
 ### F5 — Contract retention held; the compaction count is corrected (CORRECTION01 F1)
 
-**16 compaction EVENTS** were observed, not 257: a summary *persists* across
-requests, so the parent ACT's "257 compaction boundaries" was a request count
-mistaken for an event count. The authoritative discriminator is a change in
-the carried summary's **identity** (a new compaction replaces the summary).
+**8 compaction EVENTS** were observed, not 257 and not 16: a summary
+*persists* across requests, so the parent ACT's "257 compaction boundaries"
+was a request count mistaken for an event count; and CORRECTION01's "16
+events" was a *payload*-identity count that also counted enrichments.
+
+The authoritative discriminator is a change in the carried summary's
+**contract-stripped identity**: a new compaction produces a new summary,
+whereas an enrichment only re-inserts the duplicated contract heading (+41
+bytes, +2 messages) into an existing one.
 
 **257 / 257** requests carrying a compacted summary retained the task
 contract, the runtime completion obligation **and** the canonical evidence
@@ -305,7 +323,7 @@ and were joined authoritatively.
 
 | Requirement | Status |
 |---|---|
-| Correct the compaction count or mark it unavailable | ✅ **corrected**: 16 compaction EVENTS (identity-change transitions) vs 257 requests carrying a summary; both numbers published with their meaning (`compaction-probe.json`) |
+| Correct the compaction count or mark it unavailable | ✅ **corrected** (CORRECTION02): **8 compaction EVENTS** + 8 generation enrichments, vs **16** distinct provider-visible payloads, vs **257** requests carrying a summary; all three numbers published with their meaning (`compaction-probe.json`) |
 | Relabel the novelty/readiness measurements to their actual evidence strength | ✅ tiers separated (`EMPTY`/`NONEMPTY`/`CONTENT_DISTINCT`); `FACTUALLY_NOVEL` marked unproven; readiness relabelled as first recorded verdict COVERAGE with stability measured |
 | Narrow H3/H4 conclusions where necessary | ✅ H3 REFUTED → **NARROWED**; H4 REFUTED → **INCONCLUSIVE**; H1 SUPPORTED → **SUPPORTED, not proved exclusive** |
 | Re-run the existing probes, regenerate affected artifacts and hashes, and commit | ✅ all five probes re-run; `timeline.jsonl`, `readiness-probe.json`, `compaction-probe.json`, `novelty-probe.json` regenerated; `artifact-hashes.json` regenerated; committed |

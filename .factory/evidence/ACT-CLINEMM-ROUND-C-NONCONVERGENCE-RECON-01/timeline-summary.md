@@ -5,13 +5,15 @@
 
 **Ledger:** `timeline.jsonl` — 661 events, one JSON object per line, sanitized.
 
-> **CORRECTION01 notice.** This file was corrected under
-> `ACT-CLINEMM-ROUND-C-NONCONVERGENCE-RECON-CORRECTION01`: the compaction
-> count was corrected from 257 requests to **16 compaction events**
-> (F1), the result classification was relabelled to its real evidence
-> strength (F2), and the readiness claim was narrowed (F3, in
-> `readiness-analysis.md`). The four intervals, the terminality facts and
-> the H2/H5 conclusions are unchanged and were re-verified.
+> **CORRECTION01 + CORRECTION02 notice.** This file was corrected under
+> `ACT-CLINEMM-ROUND-C-NONCONVERGENCE-RECON-CORRECTION01` and again under
+> `ACT-CLINEMM-ROUND-C-NONCONVERGENCE-RECON-CORRECTION02`: the compaction
+> count was corrected from 257 requests to **16 payload identities** and then
+> to **8 compaction events** (+ 8 enrichments) (F1); the result
+> classification was relabelled to its real evidence strength and its
+> fingerprint-ordering defect repaired (F2); the readiness claim was narrowed
+> (F3, in `readiness-analysis.md`). The four intervals, the terminality facts
+> and the H2/H5 conclusions are unchanged and were re-verified.
 
 ---
 
@@ -75,7 +77,7 @@ interval-B quiescence).
 | Tool calls | **371** (335 `run_commands`, 27 `fetch_web_content`, 7 `read_files`, 4 `command_status`) |
 | Tool results | **371** (100 % correlated, 0 orphans) |
 | Error results | 5 |
-| Compaction boundaries crossed | **16 EVENTS** (257 requests carried a compacted summary — CORRECTION01 F1) |
+| Compaction boundaries crossed | **8 EVENTS** + 8 enrichments (257 requests carried a compacted summary — CORRECTION02 F1) |
 | `submit_and_exit` calls | **0** |
 | Turns with **no** tool call | **0 / 277** |
 | Output tokens | sum 129,045 · p50 **380** · max **3,130** (19.1 % of the 16,384 budget) |
@@ -161,7 +163,7 @@ a change in the carried summary's **identity**, because a new compaction
 replaces the summary.
 
 ```
-$ python3 tools/compaction-probe.py --capture-dir <private> --out compaction-probe.json
+$ python3 tools/compaction_probe.py --capture-dir <private> --out compaction-probe.json
 provider requests total                       : 277
 requests carrying a compacted summary (STATE) : 257
 requests without a compacted summary          : 20
@@ -174,12 +176,21 @@ compaction EVENTS observed (identity change)  : 16
 | Provider requests total | 277 |
 | Requests carrying a compacted summary (**state**) | **257** |
 | Requests without a compacted summary | 20 (iterations 1–20, i.e. before the first compaction) |
-| Distinct summary generations | **16** |
-| **Compaction EVENTS (summary-identity changes)** | **16** |
+| Distinct provider-visible summary payloads | **16** |
+| **Distinct compaction generations** (contract-stripped identity) | **8** |
+| **Compaction EVENTS** (new generation) | **8** |
+| **Generation transformations** (enrichment, NOT a compaction) | **8** |
 
-The 16 payloads decompose into **8 compaction generations × 2 projections**:
-each generation appears once as the base summary and once more with the
-`## Active task contract (authoritative)` section appended (a 41-byte delta).
+**CORRECTION02.** CORRECTION01 counted 16 compaction events by tracking the
+carried summary's *payload* identity. That still overcounted: the payload
+identity also changes when an existing generation is enriched with a
+duplicated contract heading. In all 8 adjacent pairs the only change is
++2 lines (one blank, one duplicated `## Active task contract (authoritative)`
+heading), +41 bytes and +2 provider-visible messages. The generation
+identity is therefore computed on the **contract-stripped** summary.
+
+Compaction events occur at iterations **21, 55, 82, 104, 130, 164, 203, 240**;
+enrichments at **22, 56, 83, 105, 131, 165, 204, 241**.
 
 | Retention check (over the 257 requests carrying a summary) | Result |
 |---|---|

@@ -4,101 +4,145 @@
       "generation_id": "sha256:931dadfb33c07cd5",
       "iteration": 21,
       "message_count": 9,
-      "summary_bytes": 14571
-    },
-    {
-      "generation_id": "sha256:6906fa0911895618",
-      "iteration": 22,
-      "message_count": 11,
-      "summary_bytes": 14612
+      "payload_bytes": 14571,
+      "payload_id": "sha256:931dadfb33c07cd5",
+      "transition": "FIRST_SUMMARY"
     },
     {
       "generation_id": "sha256:e427d5320f5c7691",
       "iteration": 55,
       "message_count": 9,
-      "summary_bytes": 17737
-    },
-    {
-      "generation_id": "sha256:91814409e86f7c5a",
-      "iteration": 56,
-      "message_count": 11,
-      "summary_bytes": 17778
+      "payload_bytes": 17737,
+      "payload_id": "sha256:e427d5320f5c7691",
+      "transition": "NEW_COMPACTION"
     },
     {
       "generation_id": "sha256:17bc9eb62edd3c5f",
       "iteration": 82,
       "message_count": 13,
-      "summary_bytes": 18534
-    },
-    {
-      "generation_id": "sha256:a7523ad61d331b12",
-      "iteration": 83,
-      "message_count": 15,
-      "summary_bytes": 18575
+      "payload_bytes": 18534,
+      "payload_id": "sha256:17bc9eb62edd3c5f",
+      "transition": "NEW_COMPACTION"
     },
     {
       "generation_id": "sha256:76ee386a5c258313",
       "iteration": 104,
       "message_count": 17,
-      "summary_bytes": 15475
-    },
-    {
-      "generation_id": "sha256:24a4691a6dcd8329",
-      "iteration": 105,
-      "message_count": 19,
-      "summary_bytes": 15516
+      "payload_bytes": 15475,
+      "payload_id": "sha256:76ee386a5c258313",
+      "transition": "NEW_COMPACTION"
     },
     {
       "generation_id": "sha256:9905ae129361dbc3",
       "iteration": 130,
       "message_count": 17,
-      "summary_bytes": 21250
-    },
-    {
-      "generation_id": "sha256:145c38e2a487d020",
-      "iteration": 131,
-      "message_count": 19,
-      "summary_bytes": 21291
+      "payload_bytes": 21250,
+      "payload_id": "sha256:9905ae129361dbc3",
+      "transition": "NEW_COMPACTION"
     },
     {
       "generation_id": "sha256:42424e72002b70cf",
       "iteration": 164,
       "message_count": 17,
-      "summary_bytes": 23037
-    },
-    {
-      "generation_id": "sha256:343c9f47f4011b55",
-      "iteration": 165,
-      "message_count": 19,
-      "summary_bytes": 23078
+      "payload_bytes": 23037,
+      "payload_id": "sha256:42424e72002b70cf",
+      "transition": "NEW_COMPACTION"
     },
     {
       "generation_id": "sha256:019d3d07e2460258",
       "iteration": 203,
       "message_count": 27,
-      "summary_bytes": 20298
-    },
-    {
-      "generation_id": "sha256:48210a2b7d83fcc1",
-      "iteration": 204,
-      "message_count": 29,
-      "summary_bytes": 20339
+      "payload_bytes": 20298,
+      "payload_id": "sha256:019d3d07e2460258",
+      "transition": "NEW_COMPACTION"
     },
     {
       "generation_id": "sha256:213f4be654e392c4",
       "iteration": 240,
       "message_count": 25,
-      "summary_bytes": 20223
-    },
-    {
-      "generation_id": "sha256:d575480b4c6c4341",
-      "iteration": 241,
-      "message_count": 27,
-      "summary_bytes": 20264
+      "payload_bytes": 20223,
+      "payload_id": "sha256:213f4be654e392c4",
+      "transition": "NEW_COMPACTION"
     }
   ],
-  "compaction_events_observed": 16,
-  "distinct_summary_generations": 16,
+  "compaction_events_observed": 8,
+  "distinct_compaction_generations": 8,
+  "distinct_provider_visible_summary_payloads": 16,
+  "generation_transformation_index": [
+    {
+      "generation_id": "sha256:931dadfb33c07cd5",
+      "iteration": 22,
+      "message_count": 11,
+      "note": "the task-contract section was appended to an existing compaction generation; NOT a new compaction",
+      "payload_bytes": 14612,
+      "payload_id": "sha256:6906fa0911895618",
+      "transition": "SAME_GENERATION_ENRICHED"
+    },
+    {
+      "generation_id": "sha256:e427d5320f5c7691",
+      "iteration": 56,
+      "message_count": 11,
+      "note": "the task-contract section was appended to an existing compaction generation; NOT a new compaction",
+      "payload_bytes": 17778,
+      "payload_id": "sha256:91814409e86f7c5a",
+      "transition": "SAME_GENERATION_ENRICHED"
+    },
+    {
+      "generation_id": "sha256:17bc9eb62edd3c5f",
+      "iteration": 83,
+      "message_count": 15,
+      "note": "the task-contract section was appended to an existing compaction generation; NOT a new compaction",
+      "payload_bytes": 18575,
+      "payload_id": "sha256:a7523ad61d331b12",
+      "transition": "SAME_GENERATION_ENRICHED"
+    },
+    {
+      "generation_id": "sha256:76ee386a5c258313",
+      "iteration": 105,
+      "message_count": 19,
+      "note": "the task-contract section was appended to an existing compaction generation; NOT a new compaction",
+      "payload_bytes": 15516,
+      "payload_id": "sha256:24a4691a6dcd8329",
+      "transition": "SAME_GENERATION_ENRICHED"
+    },
+    {
+      "generation_id": "sha256:9905ae129361dbc3",
+      "iteration": 131,
+      "message_count": 19,
+      "note": "the task-contract section was appended to an existing compaction generation; NOT a new compaction",
+      "payload_bytes": 21291,
+      "payload_id": "sha256:145c38e2a487d020",
+      "transition": "SAME_GENERATION_ENRICHED"
+    },
+    {
+      "generation_id": "sha256:42424e72002b70cf",
+      "iteration": 165,
+      "message_count": 19,
+      "note": "the task-contract section was appended to an existing compaction generation; NOT a new compaction",
+      "payload_bytes": 23078,
+      "payload_id": "sha256:343c9f47f4011b55",
+      "transition": "SAME_GENERATION_ENRICHED"
+    },
+    {
+      "generation_id": "sha256:019d3d07e2460258",
+      "iteration": 204,
+      "message_count": 29,
+      "note": "the task-contract section was appended to an existing compaction generation; NOT a new compaction",
+      "payload_bytes": 20339,
+      "payload_id": "sha256:48210a2b7d83fcc1",
+      "transition": "SAME_GENERATION_ENRICHED"
+    },
+    {
+      "generation_id": "sha256:213f4be654e392c4",
+      "iteration": 241,
+      "message_count": 27,
+      "note": "the task-contract section was appended to an existing compaction generation; NOT a new compaction",
+      "payload_bytes": 20264,
+      "payload_id": "sha256:d575480b4c6c4341",
+      "transition": "SAME_GENERATION_ENRICHED"
+    }
+  ],
+  "generation_transformations_observed": 8,
   "probe_id": "CORRECTION01_F1_COMPACTION_IDENTITY_V1",
   "provider_requests_total": 277,
   "requests_with_compacted_summary": 257,
@@ -111,122 +155,2225 @@
   "retention_denominator": 257,
   "run_id": "run_3tw2rDtz",
   "semantics": {
-    "compaction_events_observed": "how many times the carried summary IDENTITY changed, i.e. how many new compaction generations began. A new compaction replaces the summary, so an identity change is the observable signature of a new compaction.",
+    "compaction_events_observed": "how many NEW compaction generations began, i.e. transitions where the contract-stripped summary changed. This is the authoritative observable for a new compaction.",
+    "distinct_compaction_generations": "how many distinct compaction GENERATIONS existed. The generation identity is computed on the CONTRACT-STRIPPED summary, so an enriched projection of an existing generation is the SAME generation, not a new one.",
+    "distinct_provider_visible_summary_payloads": "how many distinct provider-visible summary payloads existed. This counts the enriched projections as separate payloads.",
     "distinct_summary_generations": "how many distinct summary payloads existed over the run",
+    "generation_transformations_observed": "how many times an existing generation was merely TRANSFORMED (the task-contract section was appended). These are NOT compaction events.",
     "requests_with_compacted_summary": "how many provider requests carried a compacted summary -- a STATE count, NOT a count of compaction events"
   },
   "summary_generations": [
     {
       "first_iteration": 21,
+      "generation_bytes": 14571,
       "generation_id": "sha256:931dadfb33c07cd5",
-      "last_iteration": 21,
-      "request_count": 1,
-      "summary_bytes": 14571
-    },
-    {
-      "first_iteration": 22,
-      "generation_id": "sha256:6906fa0911895618",
       "last_iteration": 54,
-      "request_count": 33,
-      "summary_bytes": 14612
+      "request_count": 34
     },
     {
       "first_iteration": 55,
+      "generation_bytes": 17737,
       "generation_id": "sha256:e427d5320f5c7691",
-      "last_iteration": 55,
-      "request_count": 1,
-      "summary_bytes": 17737
-    },
-    {
-      "first_iteration": 56,
-      "generation_id": "sha256:91814409e86f7c5a",
       "last_iteration": 81,
-      "request_count": 26,
-      "summary_bytes": 17778
+      "request_count": 27
     },
     {
       "first_iteration": 82,
+      "generation_bytes": 18534,
       "generation_id": "sha256:17bc9eb62edd3c5f",
-      "last_iteration": 82,
-      "request_count": 1,
-      "summary_bytes": 18534
-    },
-    {
-      "first_iteration": 83,
-      "generation_id": "sha256:a7523ad61d331b12",
       "last_iteration": 103,
-      "request_count": 21,
-      "summary_bytes": 18575
+      "request_count": 22
     },
     {
       "first_iteration": 104,
+      "generation_bytes": 15475,
       "generation_id": "sha256:76ee386a5c258313",
-      "last_iteration": 104,
-      "request_count": 1,
-      "summary_bytes": 15475
-    },
-    {
-      "first_iteration": 105,
-      "generation_id": "sha256:24a4691a6dcd8329",
       "last_iteration": 129,
-      "request_count": 25,
-      "summary_bytes": 15516
+      "request_count": 26
     },
     {
       "first_iteration": 130,
+      "generation_bytes": 21250,
       "generation_id": "sha256:9905ae129361dbc3",
-      "last_iteration": 130,
-      "request_count": 1,
-      "summary_bytes": 21250
-    },
-    {
-      "first_iteration": 131,
-      "generation_id": "sha256:145c38e2a487d020",
       "last_iteration": 163,
-      "request_count": 33,
-      "summary_bytes": 21291
+      "request_count": 34
     },
     {
       "first_iteration": 164,
+      "generation_bytes": 23037,
       "generation_id": "sha256:42424e72002b70cf",
-      "last_iteration": 164,
-      "request_count": 1,
-      "summary_bytes": 23037
-    },
-    {
-      "first_iteration": 165,
-      "generation_id": "sha256:343c9f47f4011b55",
       "last_iteration": 202,
-      "request_count": 38,
-      "summary_bytes": 23078
+      "request_count": 39
     },
     {
       "first_iteration": 203,
+      "generation_bytes": 20298,
       "generation_id": "sha256:019d3d07e2460258",
-      "last_iteration": 203,
-      "request_count": 1,
-      "summary_bytes": 20298
-    },
-    {
-      "first_iteration": 204,
-      "generation_id": "sha256:48210a2b7d83fcc1",
       "last_iteration": 239,
-      "request_count": 36,
-      "summary_bytes": 20339
+      "request_count": 37
     },
     {
       "first_iteration": 240,
+      "generation_bytes": 20223,
       "generation_id": "sha256:213f4be654e392c4",
-      "last_iteration": 240,
-      "request_count": 1,
-      "summary_bytes": 20223
+      "last_iteration": 277,
+      "request_count": 38
+    }
+  ],
+  "summary_payloads": [
+    {
+      "first_iteration": 21,
+      "payload_bytes": 14571,
+      "payload_id": "sha256:931dadfb33c07cd5",
+      "request_count": 1
+    },
+    {
+      "first_iteration": 22,
+      "payload_bytes": 14612,
+      "payload_id": "sha256:6906fa0911895618",
+      "request_count": 33
+    },
+    {
+      "first_iteration": 55,
+      "payload_bytes": 17737,
+      "payload_id": "sha256:e427d5320f5c7691",
+      "request_count": 1
+    },
+    {
+      "first_iteration": 56,
+      "payload_bytes": 17778,
+      "payload_id": "sha256:91814409e86f7c5a",
+      "request_count": 26
+    },
+    {
+      "first_iteration": 82,
+      "payload_bytes": 18534,
+      "payload_id": "sha256:17bc9eb62edd3c5f",
+      "request_count": 1
+    },
+    {
+      "first_iteration": 83,
+      "payload_bytes": 18575,
+      "payload_id": "sha256:a7523ad61d331b12",
+      "request_count": 21
+    },
+    {
+      "first_iteration": 104,
+      "payload_bytes": 15475,
+      "payload_id": "sha256:76ee386a5c258313",
+      "request_count": 1
+    },
+    {
+      "first_iteration": 105,
+      "payload_bytes": 15516,
+      "payload_id": "sha256:24a4691a6dcd8329",
+      "request_count": 25
+    },
+    {
+      "first_iteration": 130,
+      "payload_bytes": 21250,
+      "payload_id": "sha256:9905ae129361dbc3",
+      "request_count": 1
+    },
+    {
+      "first_iteration": 131,
+      "payload_bytes": 21291,
+      "payload_id": "sha256:145c38e2a487d020",
+      "request_count": 33
+    },
+    {
+      "first_iteration": 164,
+      "payload_bytes": 23037,
+      "payload_id": "sha256:42424e72002b70cf",
+      "request_count": 1
+    },
+    {
+      "first_iteration": 165,
+      "payload_bytes": 23078,
+      "payload_id": "sha256:343c9f47f4011b55",
+      "request_count": 38
+    },
+    {
+      "first_iteration": 203,
+      "payload_bytes": 20298,
+      "payload_id": "sha256:019d3d07e2460258",
+      "request_count": 1
+    },
+    {
+      "first_iteration": 204,
+      "payload_bytes": 20339,
+      "payload_id": "sha256:48210a2b7d83fcc1",
+      "request_count": 36
+    },
+    {
+      "first_iteration": 240,
+      "payload_bytes": 20223,
+      "payload_id": "sha256:213f4be654e392c4",
+      "request_count": 1
     },
     {
       "first_iteration": 241,
-      "generation_id": "sha256:d575480b4c6c4341",
-      "last_iteration": 277,
-      "request_count": 37,
-      "summary_bytes": 20264
+      "payload_bytes": 20264,
+      "payload_id": "sha256:d575480b4c6c4341",
+      "request_count": 37
+    }
+  ],
+  "transition_index": [
+    {
+      "generation_id": "sha256:931dadfb33c07cd5",
+      "iteration": 21,
+      "message_count": 9,
+      "payload_bytes": 14571,
+      "payload_id": "sha256:931dadfb33c07cd5",
+      "transition": "FIRST_SUMMARY"
+    },
+    {
+      "generation_id": "sha256:931dadfb33c07cd5",
+      "iteration": 22,
+      "message_count": 11,
+      "payload_bytes": 14612,
+      "payload_id": "sha256:6906fa0911895618",
+      "transition": "SAME_GENERATION_ENRICHED"
+    },
+    {
+      "generation_id": "sha256:931dadfb33c07cd5",
+      "iteration": 23,
+      "message_count": 13,
+      "payload_bytes": 14612,
+      "payload_id": "sha256:6906fa0911895618",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:931dadfb33c07cd5",
+      "iteration": 24,
+      "message_count": 15,
+      "payload_bytes": 14612,
+      "payload_id": "sha256:6906fa0911895618",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:931dadfb33c07cd5",
+      "iteration": 25,
+      "message_count": 17,
+      "payload_bytes": 14612,
+      "payload_id": "sha256:6906fa0911895618",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:931dadfb33c07cd5",
+      "iteration": 26,
+      "message_count": 19,
+      "payload_bytes": 14612,
+      "payload_id": "sha256:6906fa0911895618",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:931dadfb33c07cd5",
+      "iteration": 27,
+      "message_count": 21,
+      "payload_bytes": 14612,
+      "payload_id": "sha256:6906fa0911895618",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:931dadfb33c07cd5",
+      "iteration": 28,
+      "message_count": 23,
+      "payload_bytes": 14612,
+      "payload_id": "sha256:6906fa0911895618",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:931dadfb33c07cd5",
+      "iteration": 29,
+      "message_count": 25,
+      "payload_bytes": 14612,
+      "payload_id": "sha256:6906fa0911895618",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:931dadfb33c07cd5",
+      "iteration": 30,
+      "message_count": 27,
+      "payload_bytes": 14612,
+      "payload_id": "sha256:6906fa0911895618",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:931dadfb33c07cd5",
+      "iteration": 31,
+      "message_count": 29,
+      "payload_bytes": 14612,
+      "payload_id": "sha256:6906fa0911895618",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:931dadfb33c07cd5",
+      "iteration": 32,
+      "message_count": 31,
+      "payload_bytes": 14612,
+      "payload_id": "sha256:6906fa0911895618",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:931dadfb33c07cd5",
+      "iteration": 33,
+      "message_count": 33,
+      "payload_bytes": 14612,
+      "payload_id": "sha256:6906fa0911895618",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:931dadfb33c07cd5",
+      "iteration": 34,
+      "message_count": 35,
+      "payload_bytes": 14612,
+      "payload_id": "sha256:6906fa0911895618",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:931dadfb33c07cd5",
+      "iteration": 35,
+      "message_count": 37,
+      "payload_bytes": 14612,
+      "payload_id": "sha256:6906fa0911895618",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:931dadfb33c07cd5",
+      "iteration": 36,
+      "message_count": 39,
+      "payload_bytes": 14612,
+      "payload_id": "sha256:6906fa0911895618",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:931dadfb33c07cd5",
+      "iteration": 37,
+      "message_count": 41,
+      "payload_bytes": 14612,
+      "payload_id": "sha256:6906fa0911895618",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:931dadfb33c07cd5",
+      "iteration": 38,
+      "message_count": 43,
+      "payload_bytes": 14612,
+      "payload_id": "sha256:6906fa0911895618",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:931dadfb33c07cd5",
+      "iteration": 39,
+      "message_count": 45,
+      "payload_bytes": 14612,
+      "payload_id": "sha256:6906fa0911895618",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:931dadfb33c07cd5",
+      "iteration": 40,
+      "message_count": 47,
+      "payload_bytes": 14612,
+      "payload_id": "sha256:6906fa0911895618",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:931dadfb33c07cd5",
+      "iteration": 41,
+      "message_count": 49,
+      "payload_bytes": 14612,
+      "payload_id": "sha256:6906fa0911895618",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:931dadfb33c07cd5",
+      "iteration": 42,
+      "message_count": 51,
+      "payload_bytes": 14612,
+      "payload_id": "sha256:6906fa0911895618",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:931dadfb33c07cd5",
+      "iteration": 43,
+      "message_count": 53,
+      "payload_bytes": 14612,
+      "payload_id": "sha256:6906fa0911895618",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:931dadfb33c07cd5",
+      "iteration": 44,
+      "message_count": 55,
+      "payload_bytes": 14612,
+      "payload_id": "sha256:6906fa0911895618",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:931dadfb33c07cd5",
+      "iteration": 45,
+      "message_count": 57,
+      "payload_bytes": 14612,
+      "payload_id": "sha256:6906fa0911895618",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:931dadfb33c07cd5",
+      "iteration": 46,
+      "message_count": 59,
+      "payload_bytes": 14612,
+      "payload_id": "sha256:6906fa0911895618",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:931dadfb33c07cd5",
+      "iteration": 47,
+      "message_count": 61,
+      "payload_bytes": 14612,
+      "payload_id": "sha256:6906fa0911895618",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:931dadfb33c07cd5",
+      "iteration": 48,
+      "message_count": 63,
+      "payload_bytes": 14612,
+      "payload_id": "sha256:6906fa0911895618",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:931dadfb33c07cd5",
+      "iteration": 49,
+      "message_count": 65,
+      "payload_bytes": 14612,
+      "payload_id": "sha256:6906fa0911895618",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:931dadfb33c07cd5",
+      "iteration": 50,
+      "message_count": 67,
+      "payload_bytes": 14612,
+      "payload_id": "sha256:6906fa0911895618",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:931dadfb33c07cd5",
+      "iteration": 51,
+      "message_count": 69,
+      "payload_bytes": 14612,
+      "payload_id": "sha256:6906fa0911895618",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:931dadfb33c07cd5",
+      "iteration": 52,
+      "message_count": 71,
+      "payload_bytes": 14612,
+      "payload_id": "sha256:6906fa0911895618",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:931dadfb33c07cd5",
+      "iteration": 53,
+      "message_count": 73,
+      "payload_bytes": 14612,
+      "payload_id": "sha256:6906fa0911895618",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:931dadfb33c07cd5",
+      "iteration": 54,
+      "message_count": 75,
+      "payload_bytes": 14612,
+      "payload_id": "sha256:6906fa0911895618",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:e427d5320f5c7691",
+      "iteration": 55,
+      "message_count": 9,
+      "payload_bytes": 17737,
+      "payload_id": "sha256:e427d5320f5c7691",
+      "transition": "NEW_COMPACTION"
+    },
+    {
+      "generation_id": "sha256:e427d5320f5c7691",
+      "iteration": 56,
+      "message_count": 11,
+      "payload_bytes": 17778,
+      "payload_id": "sha256:91814409e86f7c5a",
+      "transition": "SAME_GENERATION_ENRICHED"
+    },
+    {
+      "generation_id": "sha256:e427d5320f5c7691",
+      "iteration": 57,
+      "message_count": 13,
+      "payload_bytes": 17778,
+      "payload_id": "sha256:91814409e86f7c5a",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:e427d5320f5c7691",
+      "iteration": 58,
+      "message_count": 15,
+      "payload_bytes": 17778,
+      "payload_id": "sha256:91814409e86f7c5a",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:e427d5320f5c7691",
+      "iteration": 59,
+      "message_count": 17,
+      "payload_bytes": 17778,
+      "payload_id": "sha256:91814409e86f7c5a",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:e427d5320f5c7691",
+      "iteration": 60,
+      "message_count": 19,
+      "payload_bytes": 17778,
+      "payload_id": "sha256:91814409e86f7c5a",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:e427d5320f5c7691",
+      "iteration": 61,
+      "message_count": 21,
+      "payload_bytes": 17778,
+      "payload_id": "sha256:91814409e86f7c5a",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:e427d5320f5c7691",
+      "iteration": 62,
+      "message_count": 23,
+      "payload_bytes": 17778,
+      "payload_id": "sha256:91814409e86f7c5a",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:e427d5320f5c7691",
+      "iteration": 63,
+      "message_count": 25,
+      "payload_bytes": 17778,
+      "payload_id": "sha256:91814409e86f7c5a",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:e427d5320f5c7691",
+      "iteration": 64,
+      "message_count": 27,
+      "payload_bytes": 17778,
+      "payload_id": "sha256:91814409e86f7c5a",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:e427d5320f5c7691",
+      "iteration": 65,
+      "message_count": 29,
+      "payload_bytes": 17778,
+      "payload_id": "sha256:91814409e86f7c5a",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:e427d5320f5c7691",
+      "iteration": 66,
+      "message_count": 31,
+      "payload_bytes": 17778,
+      "payload_id": "sha256:91814409e86f7c5a",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:e427d5320f5c7691",
+      "iteration": 67,
+      "message_count": 33,
+      "payload_bytes": 17778,
+      "payload_id": "sha256:91814409e86f7c5a",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:e427d5320f5c7691",
+      "iteration": 68,
+      "message_count": 35,
+      "payload_bytes": 17778,
+      "payload_id": "sha256:91814409e86f7c5a",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:e427d5320f5c7691",
+      "iteration": 69,
+      "message_count": 37,
+      "payload_bytes": 17778,
+      "payload_id": "sha256:91814409e86f7c5a",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:e427d5320f5c7691",
+      "iteration": 70,
+      "message_count": 39,
+      "payload_bytes": 17778,
+      "payload_id": "sha256:91814409e86f7c5a",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:e427d5320f5c7691",
+      "iteration": 71,
+      "message_count": 41,
+      "payload_bytes": 17778,
+      "payload_id": "sha256:91814409e86f7c5a",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:e427d5320f5c7691",
+      "iteration": 72,
+      "message_count": 43,
+      "payload_bytes": 17778,
+      "payload_id": "sha256:91814409e86f7c5a",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:e427d5320f5c7691",
+      "iteration": 73,
+      "message_count": 45,
+      "payload_bytes": 17778,
+      "payload_id": "sha256:91814409e86f7c5a",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:e427d5320f5c7691",
+      "iteration": 74,
+      "message_count": 47,
+      "payload_bytes": 17778,
+      "payload_id": "sha256:91814409e86f7c5a",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:e427d5320f5c7691",
+      "iteration": 75,
+      "message_count": 49,
+      "payload_bytes": 17778,
+      "payload_id": "sha256:91814409e86f7c5a",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:e427d5320f5c7691",
+      "iteration": 76,
+      "message_count": 51,
+      "payload_bytes": 17778,
+      "payload_id": "sha256:91814409e86f7c5a",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:e427d5320f5c7691",
+      "iteration": 77,
+      "message_count": 53,
+      "payload_bytes": 17778,
+      "payload_id": "sha256:91814409e86f7c5a",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:e427d5320f5c7691",
+      "iteration": 78,
+      "message_count": 55,
+      "payload_bytes": 17778,
+      "payload_id": "sha256:91814409e86f7c5a",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:e427d5320f5c7691",
+      "iteration": 79,
+      "message_count": 57,
+      "payload_bytes": 17778,
+      "payload_id": "sha256:91814409e86f7c5a",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:e427d5320f5c7691",
+      "iteration": 80,
+      "message_count": 59,
+      "payload_bytes": 17778,
+      "payload_id": "sha256:91814409e86f7c5a",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:e427d5320f5c7691",
+      "iteration": 81,
+      "message_count": 61,
+      "payload_bytes": 17778,
+      "payload_id": "sha256:91814409e86f7c5a",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:17bc9eb62edd3c5f",
+      "iteration": 82,
+      "message_count": 13,
+      "payload_bytes": 18534,
+      "payload_id": "sha256:17bc9eb62edd3c5f",
+      "transition": "NEW_COMPACTION"
+    },
+    {
+      "generation_id": "sha256:17bc9eb62edd3c5f",
+      "iteration": 83,
+      "message_count": 15,
+      "payload_bytes": 18575,
+      "payload_id": "sha256:a7523ad61d331b12",
+      "transition": "SAME_GENERATION_ENRICHED"
+    },
+    {
+      "generation_id": "sha256:17bc9eb62edd3c5f",
+      "iteration": 84,
+      "message_count": 17,
+      "payload_bytes": 18575,
+      "payload_id": "sha256:a7523ad61d331b12",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:17bc9eb62edd3c5f",
+      "iteration": 85,
+      "message_count": 19,
+      "payload_bytes": 18575,
+      "payload_id": "sha256:a7523ad61d331b12",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:17bc9eb62edd3c5f",
+      "iteration": 86,
+      "message_count": 21,
+      "payload_bytes": 18575,
+      "payload_id": "sha256:a7523ad61d331b12",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:17bc9eb62edd3c5f",
+      "iteration": 87,
+      "message_count": 23,
+      "payload_bytes": 18575,
+      "payload_id": "sha256:a7523ad61d331b12",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:17bc9eb62edd3c5f",
+      "iteration": 88,
+      "message_count": 25,
+      "payload_bytes": 18575,
+      "payload_id": "sha256:a7523ad61d331b12",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:17bc9eb62edd3c5f",
+      "iteration": 89,
+      "message_count": 27,
+      "payload_bytes": 18575,
+      "payload_id": "sha256:a7523ad61d331b12",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:17bc9eb62edd3c5f",
+      "iteration": 90,
+      "message_count": 29,
+      "payload_bytes": 18575,
+      "payload_id": "sha256:a7523ad61d331b12",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:17bc9eb62edd3c5f",
+      "iteration": 91,
+      "message_count": 31,
+      "payload_bytes": 18575,
+      "payload_id": "sha256:a7523ad61d331b12",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:17bc9eb62edd3c5f",
+      "iteration": 92,
+      "message_count": 33,
+      "payload_bytes": 18575,
+      "payload_id": "sha256:a7523ad61d331b12",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:17bc9eb62edd3c5f",
+      "iteration": 93,
+      "message_count": 35,
+      "payload_bytes": 18575,
+      "payload_id": "sha256:a7523ad61d331b12",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:17bc9eb62edd3c5f",
+      "iteration": 94,
+      "message_count": 37,
+      "payload_bytes": 18575,
+      "payload_id": "sha256:a7523ad61d331b12",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:17bc9eb62edd3c5f",
+      "iteration": 95,
+      "message_count": 39,
+      "payload_bytes": 18575,
+      "payload_id": "sha256:a7523ad61d331b12",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:17bc9eb62edd3c5f",
+      "iteration": 96,
+      "message_count": 41,
+      "payload_bytes": 18575,
+      "payload_id": "sha256:a7523ad61d331b12",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:17bc9eb62edd3c5f",
+      "iteration": 97,
+      "message_count": 43,
+      "payload_bytes": 18575,
+      "payload_id": "sha256:a7523ad61d331b12",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:17bc9eb62edd3c5f",
+      "iteration": 98,
+      "message_count": 45,
+      "payload_bytes": 18575,
+      "payload_id": "sha256:a7523ad61d331b12",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:17bc9eb62edd3c5f",
+      "iteration": 99,
+      "message_count": 47,
+      "payload_bytes": 18575,
+      "payload_id": "sha256:a7523ad61d331b12",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:17bc9eb62edd3c5f",
+      "iteration": 100,
+      "message_count": 49,
+      "payload_bytes": 18575,
+      "payload_id": "sha256:a7523ad61d331b12",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:17bc9eb62edd3c5f",
+      "iteration": 101,
+      "message_count": 51,
+      "payload_bytes": 18575,
+      "payload_id": "sha256:a7523ad61d331b12",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:17bc9eb62edd3c5f",
+      "iteration": 102,
+      "message_count": 53,
+      "payload_bytes": 18575,
+      "payload_id": "sha256:a7523ad61d331b12",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:17bc9eb62edd3c5f",
+      "iteration": 103,
+      "message_count": 55,
+      "payload_bytes": 18575,
+      "payload_id": "sha256:a7523ad61d331b12",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:76ee386a5c258313",
+      "iteration": 104,
+      "message_count": 17,
+      "payload_bytes": 15475,
+      "payload_id": "sha256:76ee386a5c258313",
+      "transition": "NEW_COMPACTION"
+    },
+    {
+      "generation_id": "sha256:76ee386a5c258313",
+      "iteration": 105,
+      "message_count": 19,
+      "payload_bytes": 15516,
+      "payload_id": "sha256:24a4691a6dcd8329",
+      "transition": "SAME_GENERATION_ENRICHED"
+    },
+    {
+      "generation_id": "sha256:76ee386a5c258313",
+      "iteration": 106,
+      "message_count": 21,
+      "payload_bytes": 15516,
+      "payload_id": "sha256:24a4691a6dcd8329",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:76ee386a5c258313",
+      "iteration": 107,
+      "message_count": 23,
+      "payload_bytes": 15516,
+      "payload_id": "sha256:24a4691a6dcd8329",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:76ee386a5c258313",
+      "iteration": 108,
+      "message_count": 25,
+      "payload_bytes": 15516,
+      "payload_id": "sha256:24a4691a6dcd8329",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:76ee386a5c258313",
+      "iteration": 109,
+      "message_count": 27,
+      "payload_bytes": 15516,
+      "payload_id": "sha256:24a4691a6dcd8329",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:76ee386a5c258313",
+      "iteration": 110,
+      "message_count": 29,
+      "payload_bytes": 15516,
+      "payload_id": "sha256:24a4691a6dcd8329",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:76ee386a5c258313",
+      "iteration": 111,
+      "message_count": 31,
+      "payload_bytes": 15516,
+      "payload_id": "sha256:24a4691a6dcd8329",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:76ee386a5c258313",
+      "iteration": 112,
+      "message_count": 33,
+      "payload_bytes": 15516,
+      "payload_id": "sha256:24a4691a6dcd8329",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:76ee386a5c258313",
+      "iteration": 113,
+      "message_count": 35,
+      "payload_bytes": 15516,
+      "payload_id": "sha256:24a4691a6dcd8329",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:76ee386a5c258313",
+      "iteration": 114,
+      "message_count": 37,
+      "payload_bytes": 15516,
+      "payload_id": "sha256:24a4691a6dcd8329",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:76ee386a5c258313",
+      "iteration": 115,
+      "message_count": 39,
+      "payload_bytes": 15516,
+      "payload_id": "sha256:24a4691a6dcd8329",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:76ee386a5c258313",
+      "iteration": 116,
+      "message_count": 41,
+      "payload_bytes": 15516,
+      "payload_id": "sha256:24a4691a6dcd8329",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:76ee386a5c258313",
+      "iteration": 117,
+      "message_count": 43,
+      "payload_bytes": 15516,
+      "payload_id": "sha256:24a4691a6dcd8329",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:76ee386a5c258313",
+      "iteration": 118,
+      "message_count": 45,
+      "payload_bytes": 15516,
+      "payload_id": "sha256:24a4691a6dcd8329",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:76ee386a5c258313",
+      "iteration": 119,
+      "message_count": 47,
+      "payload_bytes": 15516,
+      "payload_id": "sha256:24a4691a6dcd8329",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:76ee386a5c258313",
+      "iteration": 120,
+      "message_count": 49,
+      "payload_bytes": 15516,
+      "payload_id": "sha256:24a4691a6dcd8329",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:76ee386a5c258313",
+      "iteration": 121,
+      "message_count": 51,
+      "payload_bytes": 15516,
+      "payload_id": "sha256:24a4691a6dcd8329",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:76ee386a5c258313",
+      "iteration": 122,
+      "message_count": 53,
+      "payload_bytes": 15516,
+      "payload_id": "sha256:24a4691a6dcd8329",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:76ee386a5c258313",
+      "iteration": 123,
+      "message_count": 55,
+      "payload_bytes": 15516,
+      "payload_id": "sha256:24a4691a6dcd8329",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:76ee386a5c258313",
+      "iteration": 124,
+      "message_count": 57,
+      "payload_bytes": 15516,
+      "payload_id": "sha256:24a4691a6dcd8329",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:76ee386a5c258313",
+      "iteration": 125,
+      "message_count": 59,
+      "payload_bytes": 15516,
+      "payload_id": "sha256:24a4691a6dcd8329",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:76ee386a5c258313",
+      "iteration": 126,
+      "message_count": 61,
+      "payload_bytes": 15516,
+      "payload_id": "sha256:24a4691a6dcd8329",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:76ee386a5c258313",
+      "iteration": 127,
+      "message_count": 63,
+      "payload_bytes": 15516,
+      "payload_id": "sha256:24a4691a6dcd8329",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:76ee386a5c258313",
+      "iteration": 128,
+      "message_count": 65,
+      "payload_bytes": 15516,
+      "payload_id": "sha256:24a4691a6dcd8329",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:76ee386a5c258313",
+      "iteration": 129,
+      "message_count": 67,
+      "payload_bytes": 15516,
+      "payload_id": "sha256:24a4691a6dcd8329",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:9905ae129361dbc3",
+      "iteration": 130,
+      "message_count": 17,
+      "payload_bytes": 21250,
+      "payload_id": "sha256:9905ae129361dbc3",
+      "transition": "NEW_COMPACTION"
+    },
+    {
+      "generation_id": "sha256:9905ae129361dbc3",
+      "iteration": 131,
+      "message_count": 19,
+      "payload_bytes": 21291,
+      "payload_id": "sha256:145c38e2a487d020",
+      "transition": "SAME_GENERATION_ENRICHED"
+    },
+    {
+      "generation_id": "sha256:9905ae129361dbc3",
+      "iteration": 132,
+      "message_count": 21,
+      "payload_bytes": 21291,
+      "payload_id": "sha256:145c38e2a487d020",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:9905ae129361dbc3",
+      "iteration": 133,
+      "message_count": 23,
+      "payload_bytes": 21291,
+      "payload_id": "sha256:145c38e2a487d020",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:9905ae129361dbc3",
+      "iteration": 134,
+      "message_count": 25,
+      "payload_bytes": 21291,
+      "payload_id": "sha256:145c38e2a487d020",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:9905ae129361dbc3",
+      "iteration": 135,
+      "message_count": 27,
+      "payload_bytes": 21291,
+      "payload_id": "sha256:145c38e2a487d020",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:9905ae129361dbc3",
+      "iteration": 136,
+      "message_count": 29,
+      "payload_bytes": 21291,
+      "payload_id": "sha256:145c38e2a487d020",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:9905ae129361dbc3",
+      "iteration": 137,
+      "message_count": 31,
+      "payload_bytes": 21291,
+      "payload_id": "sha256:145c38e2a487d020",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:9905ae129361dbc3",
+      "iteration": 138,
+      "message_count": 33,
+      "payload_bytes": 21291,
+      "payload_id": "sha256:145c38e2a487d020",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:9905ae129361dbc3",
+      "iteration": 139,
+      "message_count": 35,
+      "payload_bytes": 21291,
+      "payload_id": "sha256:145c38e2a487d020",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:9905ae129361dbc3",
+      "iteration": 140,
+      "message_count": 37,
+      "payload_bytes": 21291,
+      "payload_id": "sha256:145c38e2a487d020",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:9905ae129361dbc3",
+      "iteration": 141,
+      "message_count": 39,
+      "payload_bytes": 21291,
+      "payload_id": "sha256:145c38e2a487d020",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:9905ae129361dbc3",
+      "iteration": 142,
+      "message_count": 41,
+      "payload_bytes": 21291,
+      "payload_id": "sha256:145c38e2a487d020",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:9905ae129361dbc3",
+      "iteration": 143,
+      "message_count": 43,
+      "payload_bytes": 21291,
+      "payload_id": "sha256:145c38e2a487d020",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:9905ae129361dbc3",
+      "iteration": 144,
+      "message_count": 45,
+      "payload_bytes": 21291,
+      "payload_id": "sha256:145c38e2a487d020",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:9905ae129361dbc3",
+      "iteration": 145,
+      "message_count": 47,
+      "payload_bytes": 21291,
+      "payload_id": "sha256:145c38e2a487d020",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:9905ae129361dbc3",
+      "iteration": 146,
+      "message_count": 49,
+      "payload_bytes": 21291,
+      "payload_id": "sha256:145c38e2a487d020",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:9905ae129361dbc3",
+      "iteration": 147,
+      "message_count": 51,
+      "payload_bytes": 21291,
+      "payload_id": "sha256:145c38e2a487d020",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:9905ae129361dbc3",
+      "iteration": 148,
+      "message_count": 53,
+      "payload_bytes": 21291,
+      "payload_id": "sha256:145c38e2a487d020",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:9905ae129361dbc3",
+      "iteration": 149,
+      "message_count": 55,
+      "payload_bytes": 21291,
+      "payload_id": "sha256:145c38e2a487d020",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:9905ae129361dbc3",
+      "iteration": 150,
+      "message_count": 57,
+      "payload_bytes": 21291,
+      "payload_id": "sha256:145c38e2a487d020",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:9905ae129361dbc3",
+      "iteration": 151,
+      "message_count": 59,
+      "payload_bytes": 21291,
+      "payload_id": "sha256:145c38e2a487d020",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:9905ae129361dbc3",
+      "iteration": 152,
+      "message_count": 61,
+      "payload_bytes": 21291,
+      "payload_id": "sha256:145c38e2a487d020",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:9905ae129361dbc3",
+      "iteration": 153,
+      "message_count": 63,
+      "payload_bytes": 21291,
+      "payload_id": "sha256:145c38e2a487d020",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:9905ae129361dbc3",
+      "iteration": 154,
+      "message_count": 65,
+      "payload_bytes": 21291,
+      "payload_id": "sha256:145c38e2a487d020",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:9905ae129361dbc3",
+      "iteration": 155,
+      "message_count": 67,
+      "payload_bytes": 21291,
+      "payload_id": "sha256:145c38e2a487d020",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:9905ae129361dbc3",
+      "iteration": 156,
+      "message_count": 69,
+      "payload_bytes": 21291,
+      "payload_id": "sha256:145c38e2a487d020",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:9905ae129361dbc3",
+      "iteration": 157,
+      "message_count": 71,
+      "payload_bytes": 21291,
+      "payload_id": "sha256:145c38e2a487d020",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:9905ae129361dbc3",
+      "iteration": 158,
+      "message_count": 73,
+      "payload_bytes": 21291,
+      "payload_id": "sha256:145c38e2a487d020",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:9905ae129361dbc3",
+      "iteration": 159,
+      "message_count": 75,
+      "payload_bytes": 21291,
+      "payload_id": "sha256:145c38e2a487d020",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:9905ae129361dbc3",
+      "iteration": 160,
+      "message_count": 77,
+      "payload_bytes": 21291,
+      "payload_id": "sha256:145c38e2a487d020",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:9905ae129361dbc3",
+      "iteration": 161,
+      "message_count": 79,
+      "payload_bytes": 21291,
+      "payload_id": "sha256:145c38e2a487d020",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:9905ae129361dbc3",
+      "iteration": 162,
+      "message_count": 81,
+      "payload_bytes": 21291,
+      "payload_id": "sha256:145c38e2a487d020",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:9905ae129361dbc3",
+      "iteration": 163,
+      "message_count": 83,
+      "payload_bytes": 21291,
+      "payload_id": "sha256:145c38e2a487d020",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:42424e72002b70cf",
+      "iteration": 164,
+      "message_count": 17,
+      "payload_bytes": 23037,
+      "payload_id": "sha256:42424e72002b70cf",
+      "transition": "NEW_COMPACTION"
+    },
+    {
+      "generation_id": "sha256:42424e72002b70cf",
+      "iteration": 165,
+      "message_count": 19,
+      "payload_bytes": 23078,
+      "payload_id": "sha256:343c9f47f4011b55",
+      "transition": "SAME_GENERATION_ENRICHED"
+    },
+    {
+      "generation_id": "sha256:42424e72002b70cf",
+      "iteration": 166,
+      "message_count": 21,
+      "payload_bytes": 23078,
+      "payload_id": "sha256:343c9f47f4011b55",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:42424e72002b70cf",
+      "iteration": 167,
+      "message_count": 23,
+      "payload_bytes": 23078,
+      "payload_id": "sha256:343c9f47f4011b55",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:42424e72002b70cf",
+      "iteration": 168,
+      "message_count": 25,
+      "payload_bytes": 23078,
+      "payload_id": "sha256:343c9f47f4011b55",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:42424e72002b70cf",
+      "iteration": 169,
+      "message_count": 27,
+      "payload_bytes": 23078,
+      "payload_id": "sha256:343c9f47f4011b55",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:42424e72002b70cf",
+      "iteration": 170,
+      "message_count": 29,
+      "payload_bytes": 23078,
+      "payload_id": "sha256:343c9f47f4011b55",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:42424e72002b70cf",
+      "iteration": 171,
+      "message_count": 31,
+      "payload_bytes": 23078,
+      "payload_id": "sha256:343c9f47f4011b55",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:42424e72002b70cf",
+      "iteration": 172,
+      "message_count": 33,
+      "payload_bytes": 23078,
+      "payload_id": "sha256:343c9f47f4011b55",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:42424e72002b70cf",
+      "iteration": 173,
+      "message_count": 35,
+      "payload_bytes": 23078,
+      "payload_id": "sha256:343c9f47f4011b55",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:42424e72002b70cf",
+      "iteration": 174,
+      "message_count": 37,
+      "payload_bytes": 23078,
+      "payload_id": "sha256:343c9f47f4011b55",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:42424e72002b70cf",
+      "iteration": 175,
+      "message_count": 39,
+      "payload_bytes": 23078,
+      "payload_id": "sha256:343c9f47f4011b55",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:42424e72002b70cf",
+      "iteration": 176,
+      "message_count": 41,
+      "payload_bytes": 23078,
+      "payload_id": "sha256:343c9f47f4011b55",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:42424e72002b70cf",
+      "iteration": 177,
+      "message_count": 43,
+      "payload_bytes": 23078,
+      "payload_id": "sha256:343c9f47f4011b55",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:42424e72002b70cf",
+      "iteration": 178,
+      "message_count": 45,
+      "payload_bytes": 23078,
+      "payload_id": "sha256:343c9f47f4011b55",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:42424e72002b70cf",
+      "iteration": 179,
+      "message_count": 47,
+      "payload_bytes": 23078,
+      "payload_id": "sha256:343c9f47f4011b55",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:42424e72002b70cf",
+      "iteration": 180,
+      "message_count": 49,
+      "payload_bytes": 23078,
+      "payload_id": "sha256:343c9f47f4011b55",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:42424e72002b70cf",
+      "iteration": 181,
+      "message_count": 51,
+      "payload_bytes": 23078,
+      "payload_id": "sha256:343c9f47f4011b55",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:42424e72002b70cf",
+      "iteration": 182,
+      "message_count": 53,
+      "payload_bytes": 23078,
+      "payload_id": "sha256:343c9f47f4011b55",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:42424e72002b70cf",
+      "iteration": 183,
+      "message_count": 55,
+      "payload_bytes": 23078,
+      "payload_id": "sha256:343c9f47f4011b55",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:42424e72002b70cf",
+      "iteration": 184,
+      "message_count": 57,
+      "payload_bytes": 23078,
+      "payload_id": "sha256:343c9f47f4011b55",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:42424e72002b70cf",
+      "iteration": 185,
+      "message_count": 59,
+      "payload_bytes": 23078,
+      "payload_id": "sha256:343c9f47f4011b55",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:42424e72002b70cf",
+      "iteration": 186,
+      "message_count": 61,
+      "payload_bytes": 23078,
+      "payload_id": "sha256:343c9f47f4011b55",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:42424e72002b70cf",
+      "iteration": 187,
+      "message_count": 63,
+      "payload_bytes": 23078,
+      "payload_id": "sha256:343c9f47f4011b55",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:42424e72002b70cf",
+      "iteration": 188,
+      "message_count": 65,
+      "payload_bytes": 23078,
+      "payload_id": "sha256:343c9f47f4011b55",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:42424e72002b70cf",
+      "iteration": 189,
+      "message_count": 67,
+      "payload_bytes": 23078,
+      "payload_id": "sha256:343c9f47f4011b55",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:42424e72002b70cf",
+      "iteration": 190,
+      "message_count": 69,
+      "payload_bytes": 23078,
+      "payload_id": "sha256:343c9f47f4011b55",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:42424e72002b70cf",
+      "iteration": 191,
+      "message_count": 71,
+      "payload_bytes": 23078,
+      "payload_id": "sha256:343c9f47f4011b55",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:42424e72002b70cf",
+      "iteration": 192,
+      "message_count": 73,
+      "payload_bytes": 23078,
+      "payload_id": "sha256:343c9f47f4011b55",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:42424e72002b70cf",
+      "iteration": 193,
+      "message_count": 75,
+      "payload_bytes": 23078,
+      "payload_id": "sha256:343c9f47f4011b55",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:42424e72002b70cf",
+      "iteration": 194,
+      "message_count": 77,
+      "payload_bytes": 23078,
+      "payload_id": "sha256:343c9f47f4011b55",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:42424e72002b70cf",
+      "iteration": 195,
+      "message_count": 79,
+      "payload_bytes": 23078,
+      "payload_id": "sha256:343c9f47f4011b55",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:42424e72002b70cf",
+      "iteration": 196,
+      "message_count": 81,
+      "payload_bytes": 23078,
+      "payload_id": "sha256:343c9f47f4011b55",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:42424e72002b70cf",
+      "iteration": 197,
+      "message_count": 83,
+      "payload_bytes": 23078,
+      "payload_id": "sha256:343c9f47f4011b55",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:42424e72002b70cf",
+      "iteration": 198,
+      "message_count": 85,
+      "payload_bytes": 23078,
+      "payload_id": "sha256:343c9f47f4011b55",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:42424e72002b70cf",
+      "iteration": 199,
+      "message_count": 87,
+      "payload_bytes": 23078,
+      "payload_id": "sha256:343c9f47f4011b55",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:42424e72002b70cf",
+      "iteration": 200,
+      "message_count": 89,
+      "payload_bytes": 23078,
+      "payload_id": "sha256:343c9f47f4011b55",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:42424e72002b70cf",
+      "iteration": 201,
+      "message_count": 91,
+      "payload_bytes": 23078,
+      "payload_id": "sha256:343c9f47f4011b55",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:42424e72002b70cf",
+      "iteration": 202,
+      "message_count": 93,
+      "payload_bytes": 23078,
+      "payload_id": "sha256:343c9f47f4011b55",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:019d3d07e2460258",
+      "iteration": 203,
+      "message_count": 27,
+      "payload_bytes": 20298,
+      "payload_id": "sha256:019d3d07e2460258",
+      "transition": "NEW_COMPACTION"
+    },
+    {
+      "generation_id": "sha256:019d3d07e2460258",
+      "iteration": 204,
+      "message_count": 29,
+      "payload_bytes": 20339,
+      "payload_id": "sha256:48210a2b7d83fcc1",
+      "transition": "SAME_GENERATION_ENRICHED"
+    },
+    {
+      "generation_id": "sha256:019d3d07e2460258",
+      "iteration": 205,
+      "message_count": 31,
+      "payload_bytes": 20339,
+      "payload_id": "sha256:48210a2b7d83fcc1",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:019d3d07e2460258",
+      "iteration": 206,
+      "message_count": 33,
+      "payload_bytes": 20339,
+      "payload_id": "sha256:48210a2b7d83fcc1",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:019d3d07e2460258",
+      "iteration": 207,
+      "message_count": 35,
+      "payload_bytes": 20339,
+      "payload_id": "sha256:48210a2b7d83fcc1",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:019d3d07e2460258",
+      "iteration": 208,
+      "message_count": 37,
+      "payload_bytes": 20339,
+      "payload_id": "sha256:48210a2b7d83fcc1",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:019d3d07e2460258",
+      "iteration": 209,
+      "message_count": 39,
+      "payload_bytes": 20339,
+      "payload_id": "sha256:48210a2b7d83fcc1",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:019d3d07e2460258",
+      "iteration": 210,
+      "message_count": 41,
+      "payload_bytes": 20339,
+      "payload_id": "sha256:48210a2b7d83fcc1",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:019d3d07e2460258",
+      "iteration": 211,
+      "message_count": 43,
+      "payload_bytes": 20339,
+      "payload_id": "sha256:48210a2b7d83fcc1",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:019d3d07e2460258",
+      "iteration": 212,
+      "message_count": 45,
+      "payload_bytes": 20339,
+      "payload_id": "sha256:48210a2b7d83fcc1",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:019d3d07e2460258",
+      "iteration": 213,
+      "message_count": 47,
+      "payload_bytes": 20339,
+      "payload_id": "sha256:48210a2b7d83fcc1",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:019d3d07e2460258",
+      "iteration": 214,
+      "message_count": 49,
+      "payload_bytes": 20339,
+      "payload_id": "sha256:48210a2b7d83fcc1",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:019d3d07e2460258",
+      "iteration": 215,
+      "message_count": 51,
+      "payload_bytes": 20339,
+      "payload_id": "sha256:48210a2b7d83fcc1",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:019d3d07e2460258",
+      "iteration": 216,
+      "message_count": 53,
+      "payload_bytes": 20339,
+      "payload_id": "sha256:48210a2b7d83fcc1",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:019d3d07e2460258",
+      "iteration": 217,
+      "message_count": 55,
+      "payload_bytes": 20339,
+      "payload_id": "sha256:48210a2b7d83fcc1",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:019d3d07e2460258",
+      "iteration": 218,
+      "message_count": 57,
+      "payload_bytes": 20339,
+      "payload_id": "sha256:48210a2b7d83fcc1",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:019d3d07e2460258",
+      "iteration": 219,
+      "message_count": 59,
+      "payload_bytes": 20339,
+      "payload_id": "sha256:48210a2b7d83fcc1",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:019d3d07e2460258",
+      "iteration": 220,
+      "message_count": 61,
+      "payload_bytes": 20339,
+      "payload_id": "sha256:48210a2b7d83fcc1",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:019d3d07e2460258",
+      "iteration": 221,
+      "message_count": 63,
+      "payload_bytes": 20339,
+      "payload_id": "sha256:48210a2b7d83fcc1",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:019d3d07e2460258",
+      "iteration": 222,
+      "message_count": 65,
+      "payload_bytes": 20339,
+      "payload_id": "sha256:48210a2b7d83fcc1",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:019d3d07e2460258",
+      "iteration": 223,
+      "message_count": 67,
+      "payload_bytes": 20339,
+      "payload_id": "sha256:48210a2b7d83fcc1",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:019d3d07e2460258",
+      "iteration": 224,
+      "message_count": 69,
+      "payload_bytes": 20339,
+      "payload_id": "sha256:48210a2b7d83fcc1",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:019d3d07e2460258",
+      "iteration": 225,
+      "message_count": 71,
+      "payload_bytes": 20339,
+      "payload_id": "sha256:48210a2b7d83fcc1",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:019d3d07e2460258",
+      "iteration": 226,
+      "message_count": 73,
+      "payload_bytes": 20339,
+      "payload_id": "sha256:48210a2b7d83fcc1",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:019d3d07e2460258",
+      "iteration": 227,
+      "message_count": 75,
+      "payload_bytes": 20339,
+      "payload_id": "sha256:48210a2b7d83fcc1",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:019d3d07e2460258",
+      "iteration": 228,
+      "message_count": 77,
+      "payload_bytes": 20339,
+      "payload_id": "sha256:48210a2b7d83fcc1",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:019d3d07e2460258",
+      "iteration": 229,
+      "message_count": 79,
+      "payload_bytes": 20339,
+      "payload_id": "sha256:48210a2b7d83fcc1",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:019d3d07e2460258",
+      "iteration": 230,
+      "message_count": 81,
+      "payload_bytes": 20339,
+      "payload_id": "sha256:48210a2b7d83fcc1",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:019d3d07e2460258",
+      "iteration": 231,
+      "message_count": 83,
+      "payload_bytes": 20339,
+      "payload_id": "sha256:48210a2b7d83fcc1",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:019d3d07e2460258",
+      "iteration": 232,
+      "message_count": 85,
+      "payload_bytes": 20339,
+      "payload_id": "sha256:48210a2b7d83fcc1",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:019d3d07e2460258",
+      "iteration": 233,
+      "message_count": 87,
+      "payload_bytes": 20339,
+      "payload_id": "sha256:48210a2b7d83fcc1",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:019d3d07e2460258",
+      "iteration": 234,
+      "message_count": 89,
+      "payload_bytes": 20339,
+      "payload_id": "sha256:48210a2b7d83fcc1",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:019d3d07e2460258",
+      "iteration": 235,
+      "message_count": 91,
+      "payload_bytes": 20339,
+      "payload_id": "sha256:48210a2b7d83fcc1",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:019d3d07e2460258",
+      "iteration": 236,
+      "message_count": 93,
+      "payload_bytes": 20339,
+      "payload_id": "sha256:48210a2b7d83fcc1",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:019d3d07e2460258",
+      "iteration": 237,
+      "message_count": 95,
+      "payload_bytes": 20339,
+      "payload_id": "sha256:48210a2b7d83fcc1",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:019d3d07e2460258",
+      "iteration": 238,
+      "message_count": 97,
+      "payload_bytes": 20339,
+      "payload_id": "sha256:48210a2b7d83fcc1",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:019d3d07e2460258",
+      "iteration": 239,
+      "message_count": 99,
+      "payload_bytes": 20339,
+      "payload_id": "sha256:48210a2b7d83fcc1",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:213f4be654e392c4",
+      "iteration": 240,
+      "message_count": 25,
+      "payload_bytes": 20223,
+      "payload_id": "sha256:213f4be654e392c4",
+      "transition": "NEW_COMPACTION"
+    },
+    {
+      "generation_id": "sha256:213f4be654e392c4",
+      "iteration": 241,
+      "message_count": 27,
+      "payload_bytes": 20264,
+      "payload_id": "sha256:d575480b4c6c4341",
+      "transition": "SAME_GENERATION_ENRICHED"
+    },
+    {
+      "generation_id": "sha256:213f4be654e392c4",
+      "iteration": 242,
+      "message_count": 29,
+      "payload_bytes": 20264,
+      "payload_id": "sha256:d575480b4c6c4341",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:213f4be654e392c4",
+      "iteration": 243,
+      "message_count": 31,
+      "payload_bytes": 20264,
+      "payload_id": "sha256:d575480b4c6c4341",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:213f4be654e392c4",
+      "iteration": 244,
+      "message_count": 33,
+      "payload_bytes": 20264,
+      "payload_id": "sha256:d575480b4c6c4341",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:213f4be654e392c4",
+      "iteration": 245,
+      "message_count": 35,
+      "payload_bytes": 20264,
+      "payload_id": "sha256:d575480b4c6c4341",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:213f4be654e392c4",
+      "iteration": 246,
+      "message_count": 37,
+      "payload_bytes": 20264,
+      "payload_id": "sha256:d575480b4c6c4341",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:213f4be654e392c4",
+      "iteration": 247,
+      "message_count": 39,
+      "payload_bytes": 20264,
+      "payload_id": "sha256:d575480b4c6c4341",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:213f4be654e392c4",
+      "iteration": 248,
+      "message_count": 41,
+      "payload_bytes": 20264,
+      "payload_id": "sha256:d575480b4c6c4341",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:213f4be654e392c4",
+      "iteration": 249,
+      "message_count": 43,
+      "payload_bytes": 20264,
+      "payload_id": "sha256:d575480b4c6c4341",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:213f4be654e392c4",
+      "iteration": 250,
+      "message_count": 45,
+      "payload_bytes": 20264,
+      "payload_id": "sha256:d575480b4c6c4341",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:213f4be654e392c4",
+      "iteration": 251,
+      "message_count": 47,
+      "payload_bytes": 20264,
+      "payload_id": "sha256:d575480b4c6c4341",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:213f4be654e392c4",
+      "iteration": 252,
+      "message_count": 49,
+      "payload_bytes": 20264,
+      "payload_id": "sha256:d575480b4c6c4341",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:213f4be654e392c4",
+      "iteration": 253,
+      "message_count": 51,
+      "payload_bytes": 20264,
+      "payload_id": "sha256:d575480b4c6c4341",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:213f4be654e392c4",
+      "iteration": 254,
+      "message_count": 53,
+      "payload_bytes": 20264,
+      "payload_id": "sha256:d575480b4c6c4341",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:213f4be654e392c4",
+      "iteration": 255,
+      "message_count": 55,
+      "payload_bytes": 20264,
+      "payload_id": "sha256:d575480b4c6c4341",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:213f4be654e392c4",
+      "iteration": 256,
+      "message_count": 57,
+      "payload_bytes": 20264,
+      "payload_id": "sha256:d575480b4c6c4341",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:213f4be654e392c4",
+      "iteration": 257,
+      "message_count": 59,
+      "payload_bytes": 20264,
+      "payload_id": "sha256:d575480b4c6c4341",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:213f4be654e392c4",
+      "iteration": 258,
+      "message_count": 61,
+      "payload_bytes": 20264,
+      "payload_id": "sha256:d575480b4c6c4341",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:213f4be654e392c4",
+      "iteration": 259,
+      "message_count": 63,
+      "payload_bytes": 20264,
+      "payload_id": "sha256:d575480b4c6c4341",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:213f4be654e392c4",
+      "iteration": 260,
+      "message_count": 65,
+      "payload_bytes": 20264,
+      "payload_id": "sha256:d575480b4c6c4341",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:213f4be654e392c4",
+      "iteration": 261,
+      "message_count": 67,
+      "payload_bytes": 20264,
+      "payload_id": "sha256:d575480b4c6c4341",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:213f4be654e392c4",
+      "iteration": 262,
+      "message_count": 69,
+      "payload_bytes": 20264,
+      "payload_id": "sha256:d575480b4c6c4341",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:213f4be654e392c4",
+      "iteration": 263,
+      "message_count": 71,
+      "payload_bytes": 20264,
+      "payload_id": "sha256:d575480b4c6c4341",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:213f4be654e392c4",
+      "iteration": 264,
+      "message_count": 73,
+      "payload_bytes": 20264,
+      "payload_id": "sha256:d575480b4c6c4341",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:213f4be654e392c4",
+      "iteration": 265,
+      "message_count": 75,
+      "payload_bytes": 20264,
+      "payload_id": "sha256:d575480b4c6c4341",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:213f4be654e392c4",
+      "iteration": 266,
+      "message_count": 77,
+      "payload_bytes": 20264,
+      "payload_id": "sha256:d575480b4c6c4341",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:213f4be654e392c4",
+      "iteration": 267,
+      "message_count": 79,
+      "payload_bytes": 20264,
+      "payload_id": "sha256:d575480b4c6c4341",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:213f4be654e392c4",
+      "iteration": 268,
+      "message_count": 81,
+      "payload_bytes": 20264,
+      "payload_id": "sha256:d575480b4c6c4341",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:213f4be654e392c4",
+      "iteration": 269,
+      "message_count": 83,
+      "payload_bytes": 20264,
+      "payload_id": "sha256:d575480b4c6c4341",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:213f4be654e392c4",
+      "iteration": 270,
+      "message_count": 85,
+      "payload_bytes": 20264,
+      "payload_id": "sha256:d575480b4c6c4341",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:213f4be654e392c4",
+      "iteration": 271,
+      "message_count": 87,
+      "payload_bytes": 20264,
+      "payload_id": "sha256:d575480b4c6c4341",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:213f4be654e392c4",
+      "iteration": 272,
+      "message_count": 89,
+      "payload_bytes": 20264,
+      "payload_id": "sha256:d575480b4c6c4341",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:213f4be654e392c4",
+      "iteration": 273,
+      "message_count": 91,
+      "payload_bytes": 20264,
+      "payload_id": "sha256:d575480b4c6c4341",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:213f4be654e392c4",
+      "iteration": 274,
+      "message_count": 93,
+      "payload_bytes": 20264,
+      "payload_id": "sha256:d575480b4c6c4341",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:213f4be654e392c4",
+      "iteration": 275,
+      "message_count": 95,
+      "payload_bytes": 20264,
+      "payload_id": "sha256:d575480b4c6c4341",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:213f4be654e392c4",
+      "iteration": 276,
+      "message_count": 97,
+      "payload_bytes": 20264,
+      "payload_id": "sha256:d575480b4c6c4341",
+      "transition": "SAME_GENERATION"
+    },
+    {
+      "generation_id": "sha256:213f4be654e392c4",
+      "iteration": 277,
+      "message_count": 99,
+      "payload_bytes": 20264,
+      "payload_id": "sha256:d575480b4c6c4341",
+      "transition": "SAME_GENERATION"
     }
   ]
 }
