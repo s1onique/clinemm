@@ -36767,3 +36767,135 @@ prefix invalidation, (2) how quickly the new prefix becomes cacheable, and (3) w
 checkpoint retention prevents recovery. The corrected wire seam makes this possible
 for the first time — stage C now actually captures the serialized body under its own
 opt-in.
+
+# ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION02 — HALT_CROSS_REQUEST_LINEAGE_CONTRACT — 2026-11-21
+
+EVIDENCE: `.factory/evidence/ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01/`
+ACT: `.factory/acts/ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION02.md`
+
+Subject HEAD (entry): `03d887fde` (branch `main`). Preserves `616c9db8a`, `19b610083`
+and `03d887fde` — none is rewritten. No push, no PR, no installed-extension
+replacement, no inference-service restart, no provider request issued.
+
+## The verdict this correction adopts
+
+`HALT_CROSS_REQUEST_LINEAGE_CONTRACT` for live forensic qualification. The review's
+central claim is **CONFIRMED by execution** and is corrected here.
+
+## The defect — the CORRECTION01 lineage rule was INVERTED
+
+`establishConsecutiveRequestLineage()` required the SAME `preparationRequestId`. But
+that id is minted **ONCE PER PREPARED REQUEST** (`createUID("req")`,
+`agent-runtime.ts:2801`), not once per conversation. The runtime documents the
+distinction at `agent-runtime.ts:930-949`:
+
+| Identity | Minted | Lifetime |
+|---|---|---|
+| `preparationRequestId` (`req_…`) | once per PREPARED REQUEST (`:2801`) | **UNCHANGED across provider retries** |
+| `providerAttemptId` / `modelRequestId` (`model_request_…`) | per PROVIDER ATTEMPT (`:3011`) | **RE-MINTED on every retry** |
+| `iteration` | per MODEL TURN | advances once per turn |
+
+So two **successive model turns** carry DIFFERENT preparation identities, and a
+**retry** KEEPS the same preparation identity while re-minting the attempt id. The
+CORRECTION01 gate had these two cases exactly backwards:
+
+| Case | CORRECTION01 verdict | Correct verdict |
+|---|---|---|
+| Two successive turns (different preparation, adjacent iteration) | **REJECTED** | **CONSECUTIVE** |
+| A retry (same preparation, different attempt) | **ACCEPTED** | **NOT a turn** |
+
+It rejected exactly the B->C and C->D comparisons the next experiment needs, and
+accepted the one case that must never be confused with a turn.
+
+Two compounding defects: the **wire stage recorded no preparation identity at all**,
+so it could not be grouped with the other stages of the same request; and the CLI
+sorted every capture together and examined **adjacent entries**, so the three stages
+of one request could interleave with another request's stages, and it compared **ONE
+record per side** — it could never express a comparison of two complete requests
+across all three stages.
+
+## The correction
+
+### The identity model — `establishRequestLineage()`
+
+| Relation | Condition | Consecutive? |
+|---|---|---|
+| **within-request** | same session + same iteration + same preparation; differs only by `source` | no — AGGREGATED |
+| **retry** | same session + same iteration + same preparation + DIFFERENT attempt | no — a retry is never a turn |
+| **consecutive turn** | same session + **EXACTLY adjacent** iterations + DISTINCT preparation and attempt | **YES** |
+
+Every required identity is mandatory; when one is absent the pair is
+`NOT_AUTHORITATIVE` with an explicit reason. **A timestamp is never substituted.**
+
+### The request bundle
+
+`groupCapturesIntoRequestBundles()` groups by the within-request identity; the
+**stage is the key INSIDE the bundle**, never part of the grouping key — that is
+what keeps the A/B/C stages of one request together when their file order
+interleaves them. `comparePrefixForensicsBundles()` compares two bundles
+stage-by-stage, so ONE comparison covers all three boundaries — the end-to-end stage
+transition the CORRECTION01 `V5-CORR` witness only approximated by calling the
+analyzer three times.
+
+### The production side
+
+Stage B and stage C now carry `preparationRequestId`, read from the request metadata
+under the established `MODEL_BEHAVIOR_WIRE_REASONING_REQUEST_ID_METADATA_KEY`. No
+new metadata key, no new transport field, no new protocol field, no new request.
+
+## The reopen condition — met
+
+`sdk/packages/shared/src/runtime/prefix-forensics-analyzer-cli.test.ts` drives the CLI
+as a **real process** over a **real directory** of capture records.
+
+| Witness | Control | Result |
+|---|---|---|
+| CLI-01 | two complete three-stage requests -> authoritative B->C | **PASS** |
+| CLI-02 | a third append-only continuation -> authoritative C->D | **PASS** |
+| CLI-03 | a RETRY (same preparation, different attempt) | **REFUSED** |
+| CLI-04 | a NON-ADJACENT iteration gap (29 -> 31) | **REFUSED** |
+| CLI-05 | a CROSS-SESSION pair | **REFUSED** |
+| CLI-06 | a bundle with a MISSING stage | reported incomplete, never as equal |
+
+**RED:** against the CORRECTION01 implementation CLI-01, CLI-02 and CLI-06 **FAIL**
+(the CLI produced **0 pairs** for two complete three-stage requests). The three
+negative controls passed only VACUOUSLY there and now genuinely exercise the
+refusal paths.
+
+`PF-WIRE-06` proves the production half: the wire stage carries the preparation
+identity, the attempt identity and the iteration.
+
+## Executable verification
+
+| Gate | Result |
+|---|---|
+| CLI suite (new, 6 tests) | **PASS** — and **3 FAIL** against the CORRECTION01 implementation |
+| Analyzer suite (20 tests) | **PASS** |
+| shared package sweep | **599 passed / 6 skipped**, 0 failed (was 593: **+6**) |
+| llms package sweep | 19 failed / **1168 passed** — the 19 failures are **identical at pristine HEAD** (was 1167: **+1**) |
+| agents package sweep | 43 failed / 560 passed — **identical at pristine HEAD** |
+| Typecheck (shared, llms, agents) | **EXIT 0** |
+| Biome lint | **EXIT 0** (5 infos; the same `noNonNullAssertion` convention as the pre-existing sibling suites) |
+| Provider semantic delta | **NONE** |
+| New inference run | **NONE** |
+
+`CORR-07` in the analyzer suite was **rewritten, not deleted**: its cases (successive
+turn / iteration gap / retry / same-request stages) are now asserted against the
+runtime-accurate model. The CORRECTION01 version asserted the inverted semantics.
+
+## What is NOT changed
+
+- The wire-capture and completeness repairs of CORRECTION01 are **retained**.
+- The causal separation is **retained**: `PREFIX_MUTATION_ISOLATED` stays CLOSED;
+  `STRATA_PLATEAU_CAUSE_UNPROVEN` stays **OPEN**.
+- The stale-read policy is **not** touched — the repair question remains a product
+  policy decision.
+- No push, no VSIX replacement, no inference-service restart, no provider request.
+
+## Decision
+
+The instrumentation now meets its identity contract and the CLI can produce the
+three-request comparison the successor experiment needs. Live forensic qualification
+may proceed once authorized, on the same model and engine configuration, with the
+source/build identity preserved and the ClineMM observations correlated to Strata's
+cache decisions by an independently verified identity.

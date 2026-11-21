@@ -1,16 +1,17 @@
-# ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION01 — ARTIFACT HASH MANIFEST
+# ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION02 — ARTIFACT HASH MANIFEST
 
 Generated: 2026-11-21
-Subject HEAD (entry): b0c5a0b232d4fb13291a754e1ac337e4e99b87fb
+Subject HEAD (entry): 19b610083
 Branch: main
 
 ## NON-SELF-REFERENTIAL CONTRACT
 
 This manifest does NOT list itself. A file cannot contain its own
-SHA-256: writing the digest changes the bytes, so the digest is
-always stale. The pre-correction manifest DID list itself
-(`18a43892…` declared, `4b6496c9…` actual) — a permanently
-unverifiable entry that made the whole manifest look unreliable.
+SHA-256: writing the digest changes the bytes, so the digest is always
+stale. The CORRECTION01 manifest DID list itself (declared 18a43892,
+actual 4b6496c9) - a permanently unverifiable entry that made the whole
+manifest look unreliable. The corrected manifest omits itself and
+documents the external-digest procedure.
 
 To verify this manifest's own integrity, hash the file from OUTSIDE:
 
@@ -26,39 +27,41 @@ fc2d26fa49fe3e76c620083b4b9895476f66d7a903c3fd63ea708c975e6a96cc  02-sanitized-r
 74ca504c827e97b2251481e7540699203a172cea2a5a28439ebe2cc871a4cd83  03-request-difference-matrix.json
 06f2d59865c262f716c382c885f3dea34ed9c9e5ef533cb52783f0fc036c7e8e  04-discriminator-report.md
 740c32829b0ef9cf57eccd955749c0fab539f26892a4632264cb24f0aee30b24  05-structural-versus-token-level-comparison.md
-f781043cefb726e66c6578790d834bcff6077380ae03bc890bf2fabb346e3293  06-test-receipts.txt
+8331bc11b7ee33c12ee8899674b4888ad4d8d8cc7e64cac9fe435d546a724b86  06-test-receipts.txt
 f9f93b986571dc0975723f66e35170e4f82476b8e7f144b18d024497be1037bf  07-privacy-audit.md
 360b749807ebba75e4b8f4535716e9109fce5880644625ff9a23969756afacc9  08-entry-and-identity-evidence.md
 1454c5076ff0638620350490bf4009faf0f401404f44f5419eb22bf95709d4ec  09-causal-classification.md
 405f9074f68d6f9f5c678885940097e904acdde4804fd30e0e10e29d1fb8ae7d  11-causal-attribution-separation.md
+c0b62a10d5a879c16c2cac655b08cdcacbca6b3ffd4fe954075fe39eda2aa8d1  12-correction02-lineage-contract.md
 ```
 
 ## Instrumented source (new files, committed)
 
 ```
 f274c9aec5c96a4cde88ba3577a747581eecbd6bcd873dc9ec14498f55d9c9fe  sdk/packages/shared/src/runtime/prefix-forensics.ts
-a702d9d15ef180f1172798577a87ac3c13a7be993205addf0a078921294dc7bd  sdk/packages/shared/src/runtime/prefix-forensics-analyzer.ts
-1d3adc8233b32351b593a89bd617f281ee9dcab8a3800043dfbc3b6b1cf9f79b  sdk/packages/shared/src/runtime/prefix-forensics-analyzer-cli.ts
-ae9fe5904668e1a2ab5cf9732b21c3c54d3956cd2656452b36c7ac6bd6c83b83  sdk/packages/shared/src/runtime/prefix-forensics-analyzer.test.ts
+6bdc719eac3e0fae93311f2344294907411acf695c82b1e6bc5472f9f43b7fbf  sdk/packages/shared/src/runtime/prefix-forensics-analyzer.ts
+f2105a316ee20cae306326b611785359a0765494079a5c63182faa6ef8ab4087  sdk/packages/shared/src/runtime/prefix-forensics-analyzer-cli.ts
+f3eb34d3d592609637dcf240c26015201e4629bc309029efa648b25e7d6c2720  sdk/packages/shared/src/runtime/prefix-forensics-analyzer.test.ts
+41105068c19d2cdbf735cd54ea2363a7fbce5bc605783939a33c7bd6f486d1ab  sdk/packages/shared/src/runtime/prefix-forensics-analyzer-cli.test.ts
 c58e448d1d077d8465f1d4039e6a1477cc81458682fcb8a85b1278cd099bd7b5  sdk/packages/llms/src/providers/prefix-forensics-capture.ts
 d906b174376eb88bee80465a9e976cc3bdbec29548cf8ffec15ca5831d27dd5e  sdk/packages/llms/src/providers/prefix-forensics-capture.test.ts
-3354d2b7765f88c773e5c1a5c16ee320d329ce2a1168180979b45dae31623256  sdk/packages/llms/src/providers/provider-request-capture.prefix-forensics-wire.test.ts
+44af822593f8e3247333233e5240452d5ab7ba8de8871d73e865ed2f6fcbad2c  sdk/packages/llms/src/providers/provider-request-capture.prefix-forensics-wire.test.ts
 ```
 
 ## Modified production files (committed)
 
 ```
-476cec760f905c5252a578863526306fb5dcbe364a6010c7966c4290f92b48f7  sdk/packages/shared/src/index.ts
+5d79f32f957e6c189c2525559345a620d300dd2fab6fb85a9d2193154d29b6b6  sdk/packages/shared/src/index.ts
 21976ea0a3d19147edad9f5c0c702d12978f0aca083228d4eab5afff3ca1c4e5  sdk/packages/llms/src/index.ts
-81f23f38201bfcddad54cae25249ede4217a506522b8aac6f20ec46d24f0ad2e  sdk/packages/llms/src/providers/ai-sdk.ts
-8b7850e4561244615ccfdb431a28f708bae088d16919c59979369109c6b94c8d  sdk/packages/llms/src/providers/provider-request-capture.ts
+7c7ba46bccc5dfb3437aa97e970bfc4b48a4cbfc52f0daccba1a3bcc289a9f74  sdk/packages/llms/src/providers/ai-sdk.ts
+bb3803b1997c01caeaec50ee101f819f412c5a7bd23433dd74edb1fa4896970e  sdk/packages/llms/src/providers/provider-request-capture.ts
 4a87cdbfd546e5fbe2fea025a8681f78dd5e5a91a10db47d9148f764c7bb74f8  sdk/packages/agents/src/agent-runtime.ts
 0b4da2607802052e0b8376373562505878da4f2755712b6fc0e1e7ddc46a470f  sdk/packages/llms/vitest.config.ts
 ```
 
 ## NOT committed (outside Git, by contract)
 
-- The preserved provider-request capture corpus (~/.vscodium-*/cline-data/provider-request-captures/) — 24,862 full-payload records, read only
-- The cohort HMAC key used for the sanitized records — never written to disk by the capture writer
-- The sanitized forensic records themselves (~/.cline*/prefix-forensics-<cohort>/) — outside Git
-- The raw Strata engine logs — outside Git
+- The preserved provider-request capture corpus (~/.vscodium-*/cline-data/provider-request-captures/) - 24,862 full-payload records, read only
+- The cohort HMAC key used for the sanitized records - never written to disk by the capture writer
+- The sanitized forensic records themselves (~/.cline*/prefix-forensics-<cohort>/) - outside Git
+- The raw Strata engine logs - outside Git

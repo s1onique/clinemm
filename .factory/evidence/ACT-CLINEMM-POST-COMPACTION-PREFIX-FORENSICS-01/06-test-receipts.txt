@@ -203,3 +203,68 @@ manifest omits itself and documents the external-digest procedure.
   grep -rn -oE "call_[0-9a-f]{10,}" .                        -> 0
   grep -rn -oE "sk-[A-Za-z0-9_-]{6,}" .                      -> 0
   grep -rni "bearer " .                                      -> 0
+
+================================================================================
+10. CORRECTION02 — the lineage contract (P0)
+================================================================================
+
+The CORRECTION01 lineage gate required the SAME preparationRequestId. That id is
+minted ONCE PER PREPARED REQUEST (createUID("req"), agent-runtime.ts:2801), so two
+SUCCESSIVE TURNS carry DIFFERENT preparation ids while a RETRY keeps the SAME one.
+The gate accepted the retry case and rejected the turn case - inverted.
+
+RED — the new CLI suite against the CORRECTION01 implementation:
+
+  RUN  v4.1.10 <local-checkout>/clinemm/sdk/packages/shared
+
+   ❯ src/runtime/prefix-forensics-analyzer-cli.test.ts (6 tests | 3 failed)
+       × CLI-01: two complete three-stage requests produce an authoritative B->C comparison
+       × CLI-02: a third append-only continuation produces an authoritative C->D comparison
+       ✓ CLI-03: a RETRY of the same preparation is NOT a consecutive turn
+       ✓ CLI-04: a NON-ADJACENT iteration gap is refused
+       ✓ CLI-05: a CROSS-SESSION pair is refused
+       × CLI-06: a bundle with a MISSING stage is reported incomplete, never as equal
+
+   Test Files  1 failed (1)
+        Tests  3 failed | 3 passed (6)
+
+The CLI produced 0 PAIRS for two complete three-stage requests. The three negative
+controls passed only VACUOUSLY there - no pairs existed to refuse.
+
+GREEN — against the corrected implementation:
+
+  RUN  v4.1.10 <local-checkout>/clinemm/sdk/packages/shared
+
+   ✓ src/runtime/prefix-forensics-analyzer-cli.test.ts (6 tests) 93ms
+   ✓ src/runtime/prefix-forensics-analyzer.test.ts (20 tests) 7ms
+
+   Test Files  12 passed (12)
+        Tests  145 passed | 1 skipped (146)
+
+  RUN  v4.1.10 <local-checkout>/clinemm/sdk/packages/llms
+
+   ✓ src/providers/provider-request-capture.prefix-forensics-wire.test.ts (6 tests) 7ms
+   ✓ src/providers/prefix-forensics-capture.test.ts (8 tests) 9ms
+   ✓ src/providers/provider-request-capture.wire-reasoning-off-fast-path.test.ts (7 tests) 13ms
+
+   Test Files  3 passed (3)
+        Tests  21 passed (21)
+
+CORRECTION02 conservation:
+
+  package | pristine HEAD                    | with the correction        | delta
+  --------|----------------------------------|----------------------------|-------------------
+  shared  | 593 passed / 0 failed            | 599 passed / 0 failed      | +6 NEW PASSING
+  llms    | 1167 passed / 19 failed          | 1168 passed / 19 failed    | +1 NEW PASSING
+  agents  | 560 passed / 43 failed           | 560 passed / 43 failed     | none
+
+  Typecheck (shared, llms, agents)  -> EXIT 0
+  Biome lint                       -> EXIT 0 (5 infos; the same noNonNullAssertion
+                                      convention as the pre-existing sibling suites)
+  Artifact hashes                  -> 25 verified / 0 mismatches / 0 self-referential
+  Provider semantic delta          -> NONE
+  New provider requests            -> NONE
+
+CORR-07 in the analyzer suite was REWRITTEN, not deleted: its cases (successive turn
+/ iteration gap / retry / same-request stages) are now asserted against the
+runtime-accurate model. The CORRECTION01 version asserted the inverted semantics.

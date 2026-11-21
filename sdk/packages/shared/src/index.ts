@@ -691,8 +691,11 @@ export {
 // request-difference analyzer over the sanitized capture records.
 export type {
 	PrefixForensicsChangeCategory,
+	PrefixForensicsLineageVerdict,
 	PrefixForensicsMessageChangeKind,
 	PrefixForensicsMessageDifference,
+	PrefixForensicsPairingRelation,
+	PrefixForensicsRequestBundle,
 	PrefixForensicsRequestDifference,
 	PrefixForensicsStageComparison,
 	PrefixForensicsStageName,
@@ -700,11 +703,17 @@ export type {
 	PrefixForensicsToolDifference,
 } from "./runtime/prefix-forensics-analyzer";
 export {
+	comparePrefixForensicsBundles,
 	comparePrefixForensicsRequests,
 	// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION01: the
 	// exact-lineage gate that every caller pairing captures by file order
 	// must apply.
 	establishConsecutiveRequestLineage,
+	// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION02: the
+	// runtime-accurate identity model, the request-bundle grouping and the
+	// bundle-level comparison.
+	establishRequestLineage,
+	groupCapturesIntoRequestBundles,
 	PREFIX_FORENSICS_STAGES,
 	UNAVAILABLE_FROM_TRACE,
 } from "./runtime/prefix-forensics-analyzer";

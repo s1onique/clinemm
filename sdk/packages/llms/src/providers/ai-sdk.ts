@@ -23,6 +23,11 @@ import {
 	formatMessagesForAiSdk,
 	GeneratedMediaSchema,
 	generatedMediaModalityFromMediaType,
+	// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION02: the
+	// metadata key that carries the PREPARATION identity to the provider
+	// seam, so the AI SDK stage can be grouped with the other stages of
+	// the SAME request.
+	MODEL_BEHAVIOR_WIRE_REASONING_REQUEST_ID_METADATA_KEY,
 	modelProducesImages,
 	modelSupportsToolCalling,
 	parseJsonStream,
@@ -2462,6 +2467,14 @@ function createAiSdkProvider(
 					...(useSystemOption ? { system: systemPrompt } : {}),
 					...(tools !== undefined ? { tools } : {}),
 					sessionId: request.metadata?.sessionId as string | undefined,
+					// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION02:
+					// the PREPARATION identity, so this stage can be grouped
+					// with the runtime-projection and wire stages of the SAME
+					// request. It travels in the request metadata under the
+					// established wire-reasoning correlation key.
+					preparationRequestId: request.metadata?.[
+						MODEL_BEHAVIOR_WIRE_REASONING_REQUEST_ID_METADATA_KEY
+					] as string | undefined,
 					providerAttemptId: request.metadata?.modelRequestId as
 						| string
 						| undefined,

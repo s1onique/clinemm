@@ -796,11 +796,27 @@ export function wrapFetchForProviderRequestCapture(
 				// the existing wire seam, immediately around the HTTP
 				// invocation. An unparseable body is recorded as
 				// UNAVAILABLE_FROM_TRACE rather than guessed at.
+				//
+				// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION02:
+				// the PREPARATION identity is carried here too. The wire
+				// stage is the only boundary that can observe the attempt
+				// identity of a RETRY, so without the preparation identity
+				// the stage cannot be grouped with the runtime-projection
+				// and AI-SDK stages of the SAME request — and a retry could
+				// not be told apart from a turn.
+				//
+				// The preparation id is the id the runtime minted ONCE per
+				// prepared request and carries UNCHANGED across retries; it
+				// travels in the request metadata under the established
+				// wire-reasoning correlation key.
 				recordPrefixForensics({
 					stage: "wire_request",
 					messages: extractWireMessages(body),
 					body: typeof body === "string" ? body : undefined,
 					sessionId: request.metadata?.sessionId as string | undefined,
+					preparationRequestId: request.metadata?.[
+						MODEL_BEHAVIOR_WIRE_REASONING_REQUEST_ID_METADATA_KEY
+					] as string | undefined,
 					providerAttemptId: request.metadata?.modelRequestId as
 						| string
 						| undefined,

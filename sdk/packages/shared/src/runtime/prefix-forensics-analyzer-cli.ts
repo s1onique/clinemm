@@ -22,8 +22,9 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { PrefixForensicsCaptureRecord } from "./prefix-forensics";
 import {
-	comparePrefixForensicsRequests,
-	establishConsecutiveRequestLineage,
+	comparePrefixForensicsBundles,
+	establishRequestLineage,
+	groupCapturesIntoRequestBundles,
 } from "./prefix-forensics-analyzer";
 
 interface LoadedCapture {
@@ -52,32 +53,57 @@ function loadCaptures(dir: string): LoadedCapture[] {
 	return captures;
 }
 
-/** The identity key a capture is joined on. */
-function identityKey(record: PrefixForensicsCaptureRecord): string {
+/**
+ * ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION02: the within-request
+ * grouping key of a capture record.
+ *
+ * It is the SAME key the analyzer groups bundles by, so a bundle's files can
+ * be named in the output.
+ */
+function bundleKey(record: PrefixForensicsCaptureRecord): string {
 	return [
-		record.cohortId,
+		record.cohortId ?? "-",
 		record.sessionId ?? "-",
-		record.source,
+		String(record.iteration ?? "-"),
 		record.preparationRequestId ?? "-",
 		record.providerAttemptId ?? "-",
-		String(record.iteration ?? "-"),
+	].join("|");
+}
+
+/** The within-request grouping key of a bundle. */
+function bundleKeyOf(bundle: {
+	sessionId?: string;
+	preparationRequestId?: string;
+	providerAttemptId?: string;
+	iteration?: number;
+	cohortId?: string;
+}): string {
+	return [
+		bundle.cohortId ?? "-",
+		bundle.sessionId ?? "-",
+		String(bundle.iteration ?? "-"),
+		bundle.preparationRequestId ?? "-",
+		bundle.providerAttemptId ?? "-",
 	].join("|");
 }
 
 /**
- * ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION01.
+ * ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION02: a REPRESENTATIVE
+ * record of a bundle, used only to carry the bundle's identity into the
+ * lineage gate.
  *
- * Is the (before → after) pair an EXACT consecutive request lineage?
- *
- * The rule lives in the shared analyzer so that it is UNIT-TESTABLE and so
- * that every caller applies the SAME gate. The rationale is documented on
- * `establishConsecutiveRequestLineage`.
+ * The gate reads the session, the iteration, the preparation identity and the
+ * attempt identity — all of which are the bundle's identity, identical across
+ * the bundle's stages. The representative is the bundle's first stage.
  */
-function establishConsecutiveLineage(
-	before: PrefixForensicsCaptureRecord,
-	after: PrefixForensicsCaptureRecord,
-): { consecutive: boolean; reason?: string } {
-	return establishConsecutiveRequestLineage(before, after);
+function representativeRecord(bundle: {
+	stages: ReadonlyMap<string, PrefixForensicsCaptureRecord>;
+}): PrefixForensicsCaptureRecord {
+	const first = bundle.stages.values().next();
+	if (first.done) {
+		throw new Error("a request bundle must carry at least one stage");
+	}
+	return first.value;
 }
 
 /** The main entry point. */
@@ -88,10 +114,6 @@ function main(argv: string[]): number {
 		return 2;
 	}
 	const captures = loadCaptures(dir);
-	const byIdentity = new Map<string, LoadedCapture>();
-	for (const capture of captures) {
-		byIdentity.set(identityKey(capture.record), capture);
-	}
 
 	const pairs: {
 		before: string;
@@ -101,67 +123,87 @@ function main(argv: string[]): number {
 		earliestDifferingStage?: string;
 		commonPrefixLength?: number;
 		firstDifference?: unknown;
+		unavailableStages?: string[];
+		allStagesEqual?: boolean;
 	}[] = [];
 
-	// The join is by EXPLICIT identity: a capture and the capture that
-	// shares its session AND source AND preparation lineage, at the next
-	// iteration. The iteration ordering comes from the captured identity
-	// itself — not from file order.
-	const ordered = [...captures].sort((a, b) => {
-		const iterationDelta =
-			(a.record.iteration ?? 0) - (b.record.iteration ?? 0);
+	// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION02: the unit of
+	// comparison is a REQUEST BUNDLE, not a capture record.
+	//
+	// The CORRECTION01 CLI sorted every capture together and examined
+	// adjacent entries. That was wrong twice over:
+	//
+	//   1. the three representation stages of ONE request could be
+	//      interleaved with another request's stages, so an "adjacent pair"
+	//      could be two stages of the SAME request; and
+	//   2. it compared ONE record per side, so it could never express a
+	//      comparison of two COMPLETE requests across all three stages.
+	//
+	// The bundles are grouped by the within-request identity and then
+	// ordered by their ITERATION — the identity itself, never a timestamp.
+	const bundles = groupCapturesIntoRequestBundles(
+		captures.map((capture) => capture.record),
+	);
+	const ordered = [...bundles].sort((a, b) => {
+		const iterationDelta = (a.iteration ?? 0) - (b.iteration ?? 0);
 		if (iterationDelta !== 0) {
 			return iterationDelta;
 		}
-		return a.record.capturedAt.localeCompare(b.record.capturedAt);
+		return (a.preparationRequestId ?? "").localeCompare(
+			b.preparationRequestId ?? "",
+		);
 	});
+	// The FILE each bundle's stages came from, so a pair can name the
+	// evidence that produced it.
+	const filesByBundleKey = new Map<string, string[]>();
+	for (const capture of captures) {
+		const key = bundleKey(capture.record);
+		const existing = filesByBundleKey.get(key);
+		if (existing) {
+			existing.push(capture.file);
+		} else {
+			filesByBundleKey.set(key, [capture.file]);
+		}
+	}
 
 	for (let index = 0; index + 1 < ordered.length; index += 1) {
 		const before = ordered[index];
 		const after = ordered[index + 1];
 		if (
-			before.record.cohortId !== after.record.cohortId ||
-			before.record.source !== after.record.source ||
-			before.record.sessionId !== after.record.sessionId
+			before.cohortId !== undefined &&
+			after.cohortId !== undefined &&
+			before.cohortId !== after.cohortId
 		) {
 			continue;
 		}
-		// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION01: the
-		// EXACT-LINEAGE gate.
-		//
-		// The pre-correction CLI paired captures by session + source +
-		// file ordering and then reported the pair's `authoritative` flag
-		// verbatim. The analyzer's own authoritative rule accepts a shared
-		// SESSION, so a same-session chronology was labelled authoritative
-		// WITHOUT establishing that the two captures are CONSECUTIVE
-		// requests of the same preparation lineage.
-		//
-		// A pair is now joined only when the identity carries an EXACT
-		// consecutive lineage: the same preparation identity with a
-		// strictly increasing iteration, or — when the preparation
-		// identity is absent — the same preparation identity with a
-		// strictly increasing attempt ordinal. Everything else is
-		// reported as `NOT_AUTHORITATIVE` with an explicit reason.
-		const lineage = establishConsecutiveLineage(before.record, after.record);
+		// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION02: the
+		// EXACT-LINEAGE gate, now modelled on the runtime's real identities:
+		// same session, PROVEN ADJACENT iterations, distinct preparations.
+		const lineage = establishRequestLineage(
+			representativeRecord(before),
+			representativeRecord(after),
+		);
+		const beforeFiles = filesByBundleKey.get(bundleKeyOf(before)) ?? [];
+		const afterFiles = filesByBundleKey.get(bundleKeyOf(after)) ?? [];
 		if (!lineage.consecutive) {
 			pairs.push({
-				before: before.file,
-				after: after.file,
+				before: beforeFiles.join(","),
+				after: afterFiles.join(","),
 				authoritative: false,
 				unavailableReason: lineage.reason,
 			});
 			continue;
 		}
-		const diff = comparePrefixForensicsRequests({
-			before: before.record,
-			after: after.record,
+		const diff = comparePrefixForensicsBundles({
+			before,
+			after,
 		});
 		const stage = diff.stages.find(
-			(candidate) => candidate.stage === before.record.source,
+			(candidate) => candidate.available && candidate.differences.length > 0,
 		);
 		pairs.push({
-			before: before.file,
-			after: after.file,
+			before: beforeFiles.join(","),
+			after: afterFiles.join(","),
 			authoritative: diff.authoritative,
 			...(diff.unavailableReason !== undefined
 				? { unavailableReason: diff.unavailableReason }
@@ -177,6 +219,10 @@ function main(argv: string[]): number {
 							: {}),
 					}
 				: {}),
+			...(diff.unavailableStages.length > 0
+				? { unavailableStages: [...diff.unavailableStages] }
+				: {}),
+			allStagesEqual: diff.allStagesEqual,
 		});
 	}
 

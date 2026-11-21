@@ -48,6 +48,7 @@ import {
 	_resetPrefixForensicsCohortForTests,
 	type GatewayStreamRequest,
 	isPrefixForensicsEnabled,
+	MODEL_BEHAVIOR_WIRE_REASONING_REQUEST_ID_METADATA_KEY,
 } from "@cline/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { _resetPrefixForensicsAttemptCountersForTests } from "./prefix-forensics-capture";
@@ -335,5 +336,59 @@ describe("ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION01 — the wire
 		// The delegate's OWN promise is returned — no promise assimilation.
 		expect(returned).toBe(delegatePromise);
 		expect(delegate).toHaveBeenCalledTimes(1);
+	});
+
+	it("PF-WIRE-06: the wire stage carries the PREPARATION identity, so it groups with the other stages", async () => {
+		// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION02.
+		//
+		// The wire stage is the only boundary that can observe the attempt
+		// identity of a RETRY, so without the preparation identity it
+		// cannot be grouped with the runtime-projection and AI-SDK stages
+		// of the SAME request — and a retry could not be told apart from a
+		// turn.
+		const dir = mkdtempSync(join(tmpdir(), "pf-wire-prep-"));
+		tempDirs.push(dir);
+		process.env.CLINEMM_PREFIX_FORENSICS = "1";
+		process.env.CLINEMM_PREFIX_FORENSICS_DIR = dir;
+		process.env.CLINEMM_PREFIX_FORENSICS_KEY = "a-fixed-test-key";
+
+		const delegate = vi.fn(() => Promise.resolve(new Response("ok")));
+		const request = {
+			...makeGatewayRequest(),
+			metadata: {
+				...(makeGatewayRequest().metadata as Record<string, unknown>),
+				// The runtime mints the preparation id ONCE per prepared
+				// request and carries it UNCHANGED across retries.
+				[MODEL_BEHAVIOR_WIRE_REASONING_REQUEST_ID_METADATA_KEY]: "prep-wire-1",
+			},
+		} as unknown as GatewayStreamRequest;
+		const wrapped = wrapFetchForProviderRequestCapture(
+			delegate as unknown as typeof fetch,
+			request,
+		);
+		expect(wrapped).toBeDefined();
+
+		await (wrapped as typeof fetch)("https://provider.test/v1/chat", {
+			method: "POST",
+			body: WIRE_BODY,
+		});
+
+		await waitFor(
+			() =>
+				readdirSync(dir).some((name) =>
+					name.endsWith(".prefix-forensics.json"),
+				),
+			"the wire forensic capture artifact",
+		);
+		const files = readdirSync(dir).filter((name) =>
+			name.endsWith(".prefix-forensics.json"),
+		);
+		const record = JSON.parse(
+			readFileSync(join(dir, files[0]!), "utf8"),
+		) as Record<string, unknown>;
+		expect(record.source).toBe("wire_request");
+		expect(record.preparationRequestId).toBe("prep-wire-1");
+		expect(record.providerAttemptId).toBe("attempt-wire-1");
+		expect(record.iteration).toBe(7);
 	});
 });

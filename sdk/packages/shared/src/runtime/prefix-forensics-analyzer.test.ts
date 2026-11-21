@@ -30,7 +30,7 @@ import {
 } from "./prefix-forensics";
 import {
 	comparePrefixForensicsRequests,
-	establishConsecutiveRequestLineage,
+	establishRequestLineage,
 	PREFIX_FORENSICS_STAGES,
 	UNAVAILABLE_FROM_TRACE,
 } from "./prefix-forensics-analyzer";
@@ -625,61 +625,82 @@ describe("ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01 — the analyzer", () 
 	});
 
 	it("CORR-07: a same-session chronology is NOT authoritative without an EXACT lineage", () => {
-		// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION01.
+		// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION01, as
+		// CORRECTED by CORRECTION02.
 		//
 		// The offline CLI pairs captures by session + source + file order.
 		// The analyzer's authority rule accepts a shared SESSION, so
 		// without an explicit gate a same-session chronology was labelled
 		// authoritative without establishing that the two captures are
-		// consecutive requests of the same preparation lineage.
+		// consecutive model turns.
 		//
-		// (a) The same preparation identity with a strictly increasing
-		//     iteration IS consecutive.
-		const before = record("runtime_projection", {
+		// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION02: the
+		// runtime's own identities are the authority. `preparationRequestId`
+		// is minted ONCE PER PREPARED REQUEST, so two SUCCESSIVE TURNS
+		// carry DIFFERENT preparation identities, and a RETRY keeps the
+		// SAME preparation identity while re-minting the attempt id. The
+		// CORRECTION01 witness had these two cases inverted.
+		//
+		// (a) Two SUCCESSIVE TURTS: same session, ADJACENT iterations,
+		//     DISTINCT preparations. This IS consecutive.
+		const turn29 = record("runtime_projection", {
 			messages: MESSAGES_A,
 			sessionId: "session-1",
-			preparationRequestId: "prep-1",
-			providerAttemptId: "attempt-1",
-			iteration: 1,
+			preparationRequestId: "prep-29",
+			providerAttemptId: "attempt-29",
+			iteration: 29,
 		});
-		const after = record("runtime_projection", {
+		const turn30 = record("runtime_projection", {
 			messages: MESSAGES_A,
 			sessionId: "session-1",
-			preparationRequestId: "prep-1",
-			providerAttemptId: "attempt-2",
-			iteration: 2,
+			preparationRequestId: "prep-30",
+			providerAttemptId: "attempt-30",
+			iteration: 30,
 		});
-		expect(establishConsecutiveRequestLineage(before, after).consecutive).toBe(
-			true,
+		expect(establishRequestLineage(turn29, turn30).consecutive).toBe(true);
+		expect(establishRequestLineage(turn29, turn30).relation).toBe(
+			"consecutive_turn",
 		);
 
-		// (b) DIFFERENT preparation identities in the SAME session are NOT
-		//     consecutive: they are two different requests.
-		const differentPreparation = record("runtime_projection", {
+		// (b) A NON-ADJACENT iteration gap is refused — the missing turn is
+		//     never bridged.
+		const turn31 = record("runtime_projection", {
 			messages: MESSAGES_A,
 			sessionId: "session-1",
-			preparationRequestId: "prep-9",
-			providerAttemptId: "attempt-9",
-			iteration: 9,
+			preparationRequestId: "prep-31",
+			providerAttemptId: "attempt-31",
+			iteration: 31,
 		});
-		const rejected = establishConsecutiveRequestLineage(
-			before,
-			differentPreparation,
-		);
-		expect(rejected.consecutive).toBe(false);
-		expect(rejected.reason).toContain("DIFFERENT preparation identities");
+		const gapped = establishRequestLineage(turn29, turn31);
+		expect(gapped.consecutive).toBe(false);
+		expect(gapped.reason).toContain("not adjacent");
 
-		// (c) A transport RETRY of the same preparation is consecutive.
+		// (c) A transport RETRY of the same preparation is NOT a turn: the
+		//     preparation identity is unchanged and the iteration does not
+		//     advance.
 		const retry = record("runtime_projection", {
 			messages: MESSAGES_A,
 			sessionId: "session-1",
-			preparationRequestId: "prep-1",
-			providerAttemptId: "attempt-2",
-			iteration: 1,
+			preparationRequestId: "prep-29",
+			providerAttemptId: "attempt-29-retry",
+			iteration: 29,
 		});
-		expect(establishConsecutiveRequestLineage(before, retry).consecutive).toBe(
-			true,
-		);
+		const retryVerdict = establishRequestLineage(turn29, retry);
+		expect(retryVerdict.consecutive).toBe(false);
+		expect(retryVerdict.relation).toBe("retry");
+
+		// (d) The two representation STAGES of ONE request are aggregated,
+		//     never compared as two turns.
+		const sameRequestOtherStage = record("ai_sdk_prompt", {
+			messages: MESSAGES_A,
+			sessionId: "session-1",
+			preparationRequestId: "prep-29",
+			providerAttemptId: "attempt-29",
+			iteration: 29,
+		});
+		const sameRequest = establishRequestLineage(turn29, sameRequestOtherStage);
+		expect(sameRequest.consecutive).toBe(false);
+		expect(sameRequest.relation).toBe("same_request");
 	});
 
 	it("exposes exactly the three representation boundaries, in causal order", () => {

@@ -530,74 +530,371 @@ function compareStage(
 }
 
 /**
- * ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION01: establish whether
- * two capture records are an EXACT consecutive request lineage.
+ * ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION02: the identity
+ * model for pairing capture records.
  *
- * ## Why this exists
+ * ## The runtime's own distinction (the authority for this model)
  *
- * `comparePrefixForensicsRequests` accepts a shared SESSION as a sufficient
- * authority condition. That rule is correct for a caller that already knows
- * the two records are consecutive requests. A caller that PAIRS records by
- * file order — the offline CLI — does not know that, and therefore labelled
- * a same-session chronology "authoritative" without ever establishing that
- * the two captures are consecutive requests of the same preparation lineage.
+ * `AgentRuntime` mints THREE different identities, and they have DIFFERENT
+ * lifetimes. The runtime documents this at
+ * `sdk/packages/agents/src/agent-runtime.ts:930-949`:
+ *
+ * | Identity | Minted | Lifetime |
+ * |---|---|---|
+ * | `preparationRequestId` (`req_…`) | once per PREPARED REQUEST (`createUID("req")`, `:2801`) | UNCHANGED across provider retries |
+ * | `providerAttemptId` / `modelRequestId` (`model_request_…`) | per PROVIDER ATTEMPT (`:3011`) | RE-MINTED on every retry |
+ * | `iteration` | per MODEL TURN | advances once per turn |
+ *
+ * So the CORRECTION01 rule — "consecutive means the same
+ * `preparationRequestId`" — was INVERTED. It accepted the RETRY case
+ * (same preparation, different attempt) and REJECTED the CONSECUTIVE-TURN
+ * case (different preparation, adjacent iteration), which is exactly the
+ * comparison the next experiment needs.
+ *
+ * ## The three identities this module distinguishes
+ *
+ * 1. **Within-request identity** — the A/B/C representation stages of ONE
+ *    request or attempt. They share a session, an iteration and a
+ *    preparation identity, and differ only by their `source`.
+ * 2. **Consecutive-turn identity** — the SAME session, PROVEN ADJACENT
+ *    iterations (`after.iteration === before.iteration + 1`), and DISTINCT
+ *    preparation identities (each turn is its own prepared request).
+ * 3. **Retry identity** — the SAME preparation identity with a DISTINCT
+ *    attempt ordinal, at the SAME iteration. It is a second transport
+ *    attempt of one prepared request, never another turn.
+ *
+ * Where a required identity is UNAVAILABLE, the pair is reported
+ * `NOT_AUTHORITATIVE` (or the stage `UNAVAILABLE_FROM_TRACE`) — a TIMESTAMP
+ * is never substituted.
+ */
+export type PrefixForensicsPairingRelation =
+	| "consecutive_turn"
+	| "retry"
+	| "same_request";
+
+/**
+ * ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION02: the outcome of
+ * pairing two capture records.
+ */
+export interface PrefixForensicsLineageVerdict {
+	/** Whether the two records may be compared as two consecutive requests. */
+	readonly consecutive: boolean;
+	/** The relation that was established, when one was. */
+	readonly relation?: PrefixForensicsPairingRelation;
+	/** Why the pair is not a consecutive request, when it is not. */
+	readonly reason?: string;
+}
+
+/**
+ * ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION02: establish the
+ * relation between two capture records.
  *
  * ## The rule
  *
- * A pair is CONSECUTIVE only when the identity carries an exact progression:
+ * A pair is a **consecutive turn** only when ALL of the following hold:
  *
- *   - the same preparation identity, with a strictly increasing ITERATION
- *     (the normal case: two consecutive model turns of one preparation), or
- *   - the same preparation identity, with a DISTINCT attempt ordinal (a
- *     transport retry of the same prepared request).
+ *   - both records carry a session id, and they are the SAME session;
+ *   - both records carry an iteration, and `after.iteration` is EXACTLY
+ *     `before.iteration + 1` (proven adjacency — a gap is refused, never
+ *     bridged);
+ *   - the preparation identities are DISTINCT (each turn is its own prepared
+ *     request), and so are the attempt identities.
  *
- * Anything else — a different preparation identity, an absent identity, a
- * non-increasing counter — is NOT consecutive, and the pair must be reported
- * as `NOT_AUTHORITATIVE` with an explicit reason.
+ * A pair is a **retry** when the preparation identity is the SAME and the
+ * attempt identity is DIFFERENT at the SAME iteration. A retry is never a
+ * consecutive turn.
+ *
+ * A pair is **the same request** when it shares a session, an iteration and
+ * a preparation identity and differs only by `source` — those are the
+ * representation stages of ONE request and are AGGREGATED, not compared.
+ */
+export function establishRequestLineage(
+	before: PrefixForensicsCaptureRecord,
+	after: PrefixForensicsCaptureRecord,
+): PrefixForensicsLineageVerdict {
+	const beforeSession = before.sessionId;
+	const afterSession = after.sessionId;
+	if (beforeSession === undefined || afterSession === undefined) {
+		return {
+			consecutive: false,
+			reason:
+				"the captures carry no session identity; consecutive request lineage cannot be established",
+		};
+	}
+	if (beforeSession !== afterSession) {
+		return {
+			consecutive: false,
+			reason:
+				"the captures belong to DIFFERENT sessions; they are not a consecutive pair",
+		};
+	}
+	const beforeIteration = before.iteration;
+	const afterIteration = after.iteration;
+	if (beforeIteration === undefined || afterIteration === undefined) {
+		return {
+			consecutive: false,
+			reason:
+				"the captures carry no iteration identity; consecutive request lineage cannot be established",
+		};
+	}
+	if (afterIteration === beforeIteration) {
+		// The SAME turn. This is either the stages of ONE request (which
+		// differ only by `source`) or a RETRY of it (same preparation,
+		// different attempt).
+		if (
+			before.preparationRequestId !== undefined &&
+			after.preparationRequestId !== undefined &&
+			before.preparationRequestId === after.preparationRequestId
+		) {
+			if (
+				before.providerAttemptId !== undefined &&
+				after.providerAttemptId !== undefined &&
+				before.providerAttemptId !== after.providerAttemptId
+			) {
+				return {
+					consecutive: false,
+					relation: "retry",
+					reason:
+						"the captures are two transport ATTEMPTS of the same prepared request (a retry), not two consecutive model turns",
+				};
+			}
+			return {
+				consecutive: false,
+				relation: "same_request",
+				reason:
+					"the captures are two representation stages of the SAME request",
+			};
+		}
+		return {
+			consecutive: false,
+			relation: "same_request",
+			reason:
+				"the captures share a session and an iteration but carry different preparation identities; they cannot be paired as consecutive turns",
+		};
+	}
+	if (afterIteration !== beforeIteration + 1) {
+		return {
+			consecutive: false,
+			reason: `the iterations are not adjacent (${beforeIteration} -> ${afterIteration}); a missing turn cannot be bridged`,
+		};
+	}
+	// Adjacent iterations. The preparation identities MUST differ: each model
+	// turn is its own prepared request, so two records carrying the SAME
+	// preparation id at adjacent iterations would be a capture inconsistency,
+	// not a turn pair.
+	if (
+		before.preparationRequestId !== undefined &&
+		after.preparationRequestId !== undefined &&
+		before.preparationRequestId === after.preparationRequestId
+	) {
+		return {
+			consecutive: false,
+			reason:
+				"the captures share a preparation identity but sit on adjacent iterations; each model turn must be its own prepared request",
+		};
+	}
+	if (
+		before.providerAttemptId !== undefined &&
+		after.providerAttemptId !== undefined &&
+		before.providerAttemptId === after.providerAttemptId
+	) {
+		return {
+			consecutive: false,
+			reason:
+				"the captures share a provider attempt identity but sit on adjacent iterations; each model turn must be its own provider attempt",
+		};
+	}
+	return { consecutive: true, relation: "consecutive_turn" };
+}
+
+/**
+ * ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION02: ONE request,
+ * observed at the representation stages that were captured.
+ *
+ * ## Why a bundle
+ *
+ * A request is observed at up to THREE representation boundaries (the final
+ * runtime projection, the AI SDK prompt, the serialized wire body). Those
+ * observations are the SAME request, not three requests. The CORRECTION01
+ * analyzer compared ONE record per side, so it could only ever compare two
+ * observations of the same stage — it could not express "the request as a
+ * whole changed at stage X".
+ *
+ * A bundle is therefore the unit of comparison: it carries the request's
+ * identity and the stage observation for each boundary.
+ */
+export interface PrefixForensicsRequestBundle {
+	readonly sessionId?: string;
+	readonly preparationRequestId?: string;
+	readonly providerAttemptId?: string;
+	readonly iteration?: number;
+	readonly cohortId?: string;
+	/** The stage observation for each boundary, keyed by the stage name. */
+	readonly stages: ReadonlyMap<
+		PrefixForensicsStageName,
+		PrefixForensicsCaptureRecord
+	>;
+}
+
+/**
+ * ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION02: group capture
+ * records into request bundles.
+ *
+ * ## The grouping rule
+ *
+ * Records are grouped by the identity that identifies ONE request:
+ * the cohort, the session, the iteration and the preparation identity.
+ * The stage is the KEY inside the bundle, never part of the grouping key —
+ * that is the correction: the A/B/C stages of one request must land in ONE
+ * bundle even when their file order interleaves them with another request's
+ * stages.
+ */
+export function groupCapturesIntoRequestBundles(
+	records: readonly PrefixForensicsCaptureRecord[],
+): PrefixForensicsRequestBundle[] {
+	const byKey = new Map<string, PrefixForensicsRequestBundle>();
+	for (const record of records) {
+		const key = [
+			record.cohortId ?? "-",
+			record.sessionId ?? "-",
+			String(record.iteration ?? "-"),
+			record.preparationRequestId ?? "-",
+			record.providerAttemptId ?? "-",
+		].join("|");
+		const existing = byKey.get(key);
+		if (existing) {
+			const stages = new Map(existing.stages);
+			stages.set(record.source as PrefixForensicsStageName, record);
+			byKey.set(key, { ...existing, stages });
+			continue;
+		}
+		byKey.set(key, {
+			...(record.sessionId !== undefined
+				? { sessionId: record.sessionId }
+				: {}),
+			...(record.preparationRequestId !== undefined
+				? { preparationRequestId: record.preparationRequestId }
+				: {}),
+			...(record.providerAttemptId !== undefined
+				? { providerAttemptId: record.providerAttemptId }
+				: {}),
+			...(record.iteration !== undefined
+				? { iteration: record.iteration }
+				: {}),
+			...(record.cohortId !== undefined ? { cohortId: record.cohortId } : {}),
+			stages: new Map([
+				[record.source as PrefixForensicsStageName, record] as const,
+			]),
+		});
+	}
+	return [...byKey.values()];
+}
+
+/**
+ * ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION02: compare TWO
+ * request BUNDLES across the three representation boundaries.
+ *
+ * The comparison is the bundle-level analogue of
+ * {@link comparePrefixForensicsRequests}: each stage is compared against
+ * the SAME stage in the other bundle, and the result reports which stages
+ * were available, which differed, and the earliest stage at which a
+ * difference appears.
+ */
+export function comparePrefixForensicsBundles(input: {
+	before: PrefixForensicsRequestBundle | undefined;
+	after: PrefixForensicsRequestBundle | undefined;
+}): PrefixForensicsRequestDifference {
+	const { before, after } = input;
+	if (!before || !after) {
+		return {
+			authoritative: false,
+			unavailableReason:
+				"one of the two requests is absent; no comparison is possible",
+			beforeIdentity: bundleIdentity(before),
+			afterIdentity: bundleIdentity(after),
+			stages: [],
+			allStagesEqual: false,
+			unavailableStages: [...PREFIX_FORENSICS_STAGES],
+		};
+	}
+	if (
+		before.cohortId !== undefined &&
+		after.cohortId !== undefined &&
+		before.cohortId !== after.cohortId
+	) {
+		return {
+			authoritative: false,
+			unavailableReason:
+				"the two requests belong to DIFFERENT cohorts; their keyed fingerprints are not comparable",
+			beforeIdentity: bundleIdentity(before),
+			afterIdentity: bundleIdentity(after),
+			stages: [],
+			allStagesEqual: false,
+			unavailableStages: [...PREFIX_FORENSICS_STAGES],
+		};
+	}
+	const stages = PREFIX_FORENSICS_STAGES.map((stage) =>
+		compareStage(stage, before.stages.get(stage), after.stages.get(stage)),
+	);
+	const earliestDifferingStage = stages.find(
+		(stage) => stage.available && stage.differs,
+	)?.stage;
+	const unavailableStages = stages
+		.filter((stage) => !stage.available)
+		.map((stage) => stage.stage);
+	const allStagesEqual =
+		unavailableStages.length === 0 && stages.every((stage) => !stage.differs);
+	return {
+		authoritative: true,
+		...(before.cohortId !== undefined
+			? { cohortId: before.cohortId }
+			: after.cohortId !== undefined
+				? { cohortId: after.cohortId }
+				: {}),
+		beforeIdentity: bundleIdentity(before),
+		afterIdentity: bundleIdentity(after),
+		stages,
+		...(earliestDifferingStage !== undefined ? { earliestDifferingStage } : {}),
+		allStagesEqual,
+		unavailableStages,
+	};
+}
+
+/** The correlation identity of a bundle. */
+function bundleIdentity(bundle: PrefixForensicsRequestBundle | undefined): {
+	readonly sessionId?: string;
+	readonly preparationRequestId?: string;
+	readonly providerAttemptId?: string;
+	readonly iteration?: number;
+} {
+	return {
+		...(bundle?.sessionId !== undefined ? { sessionId: bundle.sessionId } : {}),
+		...(bundle?.preparationRequestId !== undefined
+			? { preparationRequestId: bundle.preparationRequestId }
+			: {}),
+		...(bundle?.providerAttemptId !== undefined
+			? { providerAttemptId: bundle.providerAttemptId }
+			: {}),
+		...(bundle?.iteration !== undefined ? { iteration: bundle.iteration } : {}),
+	};
+}
+
+/**
+ * ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION01: establish whether
+ * two capture records are an EXACT consecutive request lineage.
+ *
+ * @deprecated Superseded by {@link establishRequestLineage}, which models the
+ * runtime's three identities correctly. Retained as a named alias so the
+ * CORRECTION01 contract keeps its exported surface.
  */
 export function establishConsecutiveRequestLineage(
 	before: PrefixForensicsCaptureRecord,
 	after: PrefixForensicsCaptureRecord,
 ): { consecutive: boolean; reason?: string } {
-	if (
-		before.preparationRequestId === undefined ||
-		after.preparationRequestId === undefined
-	) {
-		return {
-			consecutive: false,
-			reason:
-				"the captures carry no preparation identity; consecutive request lineage cannot be established",
-		};
-	}
-	if (before.preparationRequestId !== after.preparationRequestId) {
-		return {
-			consecutive: false,
-			reason:
-				"the captures belong to DIFFERENT preparation identities; they are two different requests, not a consecutive pair",
-		};
-	}
-	const beforeIteration = before.iteration;
-	const afterIteration = after.iteration;
-	if (
-		beforeIteration !== undefined &&
-		afterIteration !== undefined &&
-		afterIteration > beforeIteration
-	) {
-		return { consecutive: true };
-	}
-	const beforeAttempt = before.providerAttemptId;
-	const afterAttempt = after.providerAttemptId;
-	if (
-		beforeAttempt !== undefined &&
-		afterAttempt !== undefined &&
-		beforeAttempt !== afterAttempt
-	) {
-		return { consecutive: true };
-	}
+	const verdict = establishRequestLineage(before, after);
 	return {
-		consecutive: false,
-		reason:
-			"the captures share a preparation identity but carry no strictly increasing iteration or attempt ordinal; consecutive request lineage cannot be established",
+		consecutive: verdict.consecutive,
+		...(verdict.reason !== undefined ? { reason: verdict.reason } : {}),
 	};
 }
 
