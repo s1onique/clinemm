@@ -500,4 +500,65 @@ describe("ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION02 — the CLI 
 			rmSync(dir, { recursive: true, force: true });
 		}
 	});
+
+	it("CLI-09: a CONFLICT is PERMANENT — a later duplicate never resurrects the stage", () => {
+		// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION04.
+		//
+		// CLI-08 proved that a CONFLICTING duplicate excludes the stage, but
+		// only for the two-record sequence A → B. The CORRECTION03 grouping
+		// did not persist the exclusion, so a THIRD record that agreed with
+		// the FIRST re-populated the map: the sequence A → B → A left the
+		// stage PRESENT and pointing at A. A previously disqualified
+		// observation was resurrected into usable evidence.
+		//
+		// The witness drives the REAL CLI as a PROCESS over a REAL
+		// directory, with the records written in the resurrection order, so
+		// the file order cannot accidentally mask the defect.
+		const second = stagesOf({
+			preparationRequestId: "prep-30",
+			providerAttemptId: "attempt-30",
+			iteration: 30,
+			messages: MESSAGES_MUTATED,
+		});
+		// The wire stage as it was FIRST observed (body "body-30").
+		const originalWire = second[2]!;
+		// A CONFLICTING observation of the same boundary.
+		const conflictingWire = record({
+			stage: "wire_request",
+			messages: MESSAGES_MUTATED,
+			sessionId: "session-1",
+			preparationRequestId: "prep-30",
+			providerAttemptId: "attempt-30",
+			iteration: 30,
+			body: "a-completely-different-body",
+		});
+		const dir = writeCaptures([
+			...stagesOf({
+				preparationRequestId: "prep-29",
+				providerAttemptId: "attempt-29",
+				iteration: 29,
+			}),
+			// The full second turn, then the order that used to resurrect the
+			// stage: A, then B, then A again.
+			...second,
+			originalWire,
+			conflictingWire,
+			originalWire,
+		]);
+		try {
+			const result = runCli(dir);
+			expect(result.pairCount).toBe(1);
+			const pair = result.pairs[0];
+			expect(pair?.authoritative).toBe(true);
+			// The stage that was disqualified by the conflict stays
+			// EXCLUDED: the final record must NOT resurrect it.
+			expect(pair?.unavailableStages).toContain("wire_request");
+			expect(pair?.allStagesEqual).toBe(false);
+			// And the surviving stages are still compared, so the pair is
+			// not vacuously empty.
+			expect(pair?.differingCategories).toContain("messages");
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
 });

@@ -1,0 +1,138 @@
+
+===============================================================
+## 2. GREEN — the fix, at BOTH seams
+===============================================================
+
+$ cd sdk/packages/shared && bun x vitest run src/runtime/prefix-forensics-analyzer.test.ts src/runtime/prefix-forensics-analyzer-cli.test.ts
+
+
+ RUN  v4.1.10 <REPO_ROOT>/sdk/packages/shared
+
+ ✓ src/runtime/prefix-forensics-analyzer.test.ts (29 tests) 9ms
+ ✓ src/runtime/prefix-forensics-analyzer-cli.test.ts (9 tests) 961ms
+
+ Test Files  2 passed (2)
+      Tests  38 passed (38)
+   Start at  05:23:50
+   Duration  1.10s (transform 57ms, setup 0ms, import 86ms, tests 971ms, environment 0ms)
+
+
+===============================================================
+## 3. GATE — the full shared package suite
+===============================================================
+
+$ cd sdk/packages/shared && bun run test:unit
+
+ ✓ src/runtime/prefix-forensics-analyzer.test.ts (29 tests) 11ms
+ ✓ src/runtime/prefix-forensics-analyzer-cli.test.ts (9 tests) 1036ms
+ Test Files  47 passed | 1 skipped (48)
+      Tests  611 passed | 6 skipped (617)
+   Duration  1.30s (transform 3.49s, setup 0ms, import 4.83s, tests 2.00s, environment 3ms)
+
+===============================================================
+## 4. GATE — typecheck, lint and build
+===============================================================
+
+$ cd sdk/packages/shared && bun run typecheck
+
+[0m[2m[35m$[0m [2m[1mbun tsc --noEmit[0m
+typecheck exit: 0
+
+$ bun biome check --diagnostic-level=error <the three touched files>
+
+[0m[2m[35m$[0m [2m[1mbunx --bun @biomejs/biome check "--diagnostic-level=error" sdk/packages/shared/src/runtime/prefix-forensics-analyzer.ts sdk/packages/shared/src/runtime/prefix-forensics-analyzer.test.ts sdk/packages/shared/src/runtime/prefix-forensics-analyzer-cli.test.ts[0m
+Checked 3 files in 36ms. No fixes applied.
+
+$ bun run build:sdk   (shared + llms + agents + core + sdk, with declaration emit)
+
+[36m└─[0m [36mDone in 1.06 s[0m
+[36m└─[0m [36mDone in 1.58 s[0m
+[36m└─[0m [36mDone in 1.06 s[0m
+[36m└─[0m [36mDone in 1.58 s[0m
+[36m└─[0m [36mDone in 2.81 s[0m
+[36m└─[0m [36mDone in 1.06 s[0m
+[36m└─[0m [36mDone in 729 ms[0m
+[36m└─[0m [36mDone in 1.58 s[0m
+[36m└─[0m [36mDone in 2.81 s[0m
+[36m└─[0m [36mDone in 1.06 s[0m
+[36m└─[0m [36mDone in 3.83 s[0m
+[36m└─[0m [36mDone in 729 ms[0m
+[36m└─[0m [36mDone in 1.58 s[0m
+[36m└─[0m [36mDone in 2.81 s[0m
+[36m└─[0m [36mDone in 547 ms[0m
+[36m└─[0m [36mDone in 1.06 s[0m
+[36m└─[0m [36mDone in 3.83 s[0m
+[36m└─[0m [36mDone in 729 ms[0m
+[36m└─[0m [36mDone in 1.58 s[0m
+[36m└─[0m [36mDone in 2.81 s[0m
+
+===============================================================
+## 5. GATE — downstream CONSERVATION (no new failures)
+===============================================================
+
+The change is confined to @cline/shared. The downstream packages resolve
+@cline/shared through its compiled dist/, so the SDK was rebuilt before the
+comparison. The baseline was measured by stashing ONLY the three touched
+files and re-running the same commands at pristine HEAD (3b1d8bb72).
+
+### 5.1 WITH the CORRECTION04 change
+
+$ bun -F @cline/llms test
+
+[36m│[0m  Test Files  2 failed | 66 passed | 4 skipped (72)
+[36m│[0m       Tests  17 failed | 1170 passed | 4 skipped (1191)
+
+$ bun -F @cline/agents test
+
+[36m│[0m  Test Files  9 failed | 27 passed (36)
+[36m│[0m       Tests  43 failed | 560 passed (603)
+
+### 5.2 BASELINE at pristine HEAD (3b1d8bb72) — the same commands
+
+$ git stash push -- <the three touched files>   # then re-run
+
+  @cline/llms:   Test Files  2 failed | 66 passed | 4 skipped (72)
+                 Tests      17 failed | 1170 passed | 4 skipped (1191)
+  @cline/agents: Test Files  9 failed | 27 passed (36)
+                 Tests      43 failed | 560 passed (603)
+
+### 5.3 CONSERVATION DELTA
+
+| Package      | Baseline (fail/pass) | CORRECTION04 (fail/pass) | Delta |
+|--------------|-----------------------|---------------------------|-------|
+| @cline/llms   | 17 fail / 1170 pass   | 17 fail / 1170 pass       | NONE  |
+| @cline/agents | 43 fail / 560 pass    | 43 fail / 560 pass        | NONE  |
+| @cline/shared | 608 pass / 0 fail     | 611 pass / 0 fail         | +3    |
+
+The three additional shared passes are exactly the new witnesses:
+AUTH-08, AUTH-09 and CLI-09. No pre-existing failure changed.
+
+===============================================================
+## 6. THE FIVE REQUIRED WITNESSES — their observed outcomes
+===============================================================
+
+| Sequence | Required outcome | Observed | Witness |
+|----------|------------------|----------|---------|
+| A -> A   | INCLUDED         | INCLUDED | AUTH-08 |
+| A -> B   | EXCLUDED         | EXCLUDED | AUTH-08 |
+| A -> B -> A | EXCLUDED      | EXCLUDED | AUTH-08, CLI-09 |
+| A -> B -> B | EXCLUDED      | EXCLUDED | AUTH-08 |
+| B -> A -> B | EXCLUDED      | EXCLUDED | AUTH-08 |
+
+CLI-09 drives the REAL CLI as a PROCESS over a REAL directory of capture
+records, with the records written in the A -> B -> A order, so the file
+order cannot mask the defect.
+
+===============================================================
+## 7. WHAT THIS CORRECTION DOES NOT CLAIM
+===============================================================
+
+- The stale-read POLICY is unchanged.
+- No provider semantics changed.
+- No new inference run was performed.
+- No capture instrumentation was added.
+- The synthetic CLI fixtures remain SYNTHETIC: they establish the
+  conflict-exclusion contract, NOT capture-record hash verification
+  against a live capture pipeline.
+- `PREFIX_MUTATION_ISOLATED` stays CLOSED.
+- `STRATA_PLATEAU_CAUSE_UNPROVEN` stays OPEN.

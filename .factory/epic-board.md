@@ -37069,3 +37069,126 @@ infrastructure: correlate ONE rewrite with the next two or three Strata cache
 decisions, distinguishing the cost of the initial prefix invalidation, how quickly
 the new prefix becomes cacheable, and whether checkpoint retention prevents
 recovery.
+
+# ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION04 — HALT_DUPLICATE_CONFLICT_RESURRECTION — 2026-11-21
+
+EVIDENCE: `.factory/evidence/ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION04/`
+ACT: `.factory/acts/ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION04.md`
+
+Subject HEAD (entry): `3b1d8bb72` (branch `main`). Preserves `616c9db8a`,
+`19b610083`, `03d887fde`, `a49bd8e5d` and `3b1d8bb72` — none is rewritten. No
+push, no PR, no installed-extension replacement, no inference-service restart,
+no provider request issued.
+
+## The verdict this correction adopts
+
+`HALT_DUPLICATE_CONFLICT_RESURRECTION` for live forensic qualification — closed by
+this ACT. The review's central claim is **CONFIRMED by execution** and is
+corrected here.
+
+CORRECTION03 is **retained**: the mandatory-identity lineage gate, the
+within-request / consecutive-turn / retry distinction, the three-stage bundle
+aggregation, the bundle comparator's own authority validation, the CLI's
+four-category report and the non-vacuous negative controls are correct and are
+not touched by this correction.
+
+## The defect — a CONFLICTED stage was RESURRECTED
+
+`groupCapturesIntoRequestBundles()` excluded a conflicting duplicate with
+`stages.delete(stage)`, but the exclusion was **not persisted**. The stage's
+*absence* carried no memory of the conflict, so a later record for the same
+identity and stage re-populated the map:
+
+| Record | Content fingerprint | CORRECTION03 outcome | CORRECTION04 outcome |
+|---|---|---|---|
+| A | fingerprint A | stage accepted | stage accepted |
+| B | fingerprint B | stage excluded | stage excluded |
+| A | fingerprint A | **stage accepted again** | stage excluded |
+
+The sequence `A -> B -> A` left the stage **present** and pointing at A: a
+previously disqualified wire observation was **promoted back to usable evidence**.
+This contradicted CORRECTION03's own declared invariant that conflicting
+observations must be excluded rather than resolved by input order — the
+implementation resolved them by input order after all, it merely needed a third
+record to do so. The existing `AUTH-06` witness covered only `A -> B` and could
+not observe the resurrection.
+
+## The correction
+
+The conflict exclusion is now **persisted**, keyed by the **request bundle
+identity plus the stage**. Once two observations of one `(identity, stage)`
+disagree, that stage is excluded for the **whole analysis**, whatever records
+follow. A conflict in one request never disqualifies the same stage in a
+different request of the same session; identical duplicates are still collapsed.
+
+## Executable verification
+
+| Witness | Control | Result |
+|---|---|---|
+| AUTH-08 | `A -> A` | **INCLUDED** (identical duplicate collapsed) |
+| AUTH-08 | `A -> B` | **EXCLUDED** |
+| AUTH-08 | `A -> B -> A` | **EXCLUDED** (the resurrection) |
+| AUTH-08 | `A -> B -> B` | **EXCLUDED** |
+| AUTH-08 | `B -> A -> B` | **EXCLUDED** |
+| AUTH-09 | a conflict in one request | does NOT disqualify the same stage in another request |
+| CLI-09 | the same resurrection, through the **real CLI process** | **EXCLUDED**, stage reported unavailable |
+
+**RED** — the analyzer reverted to its `3b1d8bb72` content while keeping the new
+witnesses:
+
+```
+× CLI-09: a CONFLICT is PERMANENT — a later duplicate never resurrects the stage
+× AUTH-08: a CONFLICT is PERMANENT — a later identical record never resurrects the stage
+
+Tests  2 failed | 36 passed (38)
+```
+
+Both required seams fail: the real grouping function and the real CLI process.
+
+**GREEN** — `Tests  38 passed (38)`.
+
+## Conservation
+
+| Gate | Result |
+|---|---|
+| Analyzer + CLI suite (38 tests) | **PASS** — and **2 FAIL** against the CORRECTION03 implementation |
+| shared package sweep | **611 passed / 6 skipped**, 0 failed (was 608: **+3**) |
+| llms package sweep | 17 failed / 1170 passed — **identical at pristine HEAD** |
+| agents package sweep | 43 failed / 560 passed — **identical at pristine HEAD** |
+| Typecheck (shared) | **EXIT 0** |
+| Build (`bun run build:sdk`) | **EXIT 0** — bundle **and** declaration emit |
+| Biome lint (the three touched files) | **EXIT 0** (3 infos, no errors) |
+| Provider semantic delta | **NONE** |
+| New inference run | **NONE** |
+
+The llms and agents failures are **pre-existing**, each measured at pristine HEAD
+`3b1d8bb72` in the same session by stashing **only** the three touched files.
+
+## What is NOT changed
+
+- The CORRECTION03 lineage model, the three-stage bundle aggregation, the
+  comparator's own authority validation, the CLI's four-category report and the
+  non-vacuous negative controls are **retained** as delivered.
+- The wire-capture and completeness repairs of CORRECTION01 are **retained**.
+- The causal separation is **retained**: `PREFIX_MUTATION_ISOLATED` stays CLOSED;
+  `STRATA_PLATEAU_CAUSE_UNPROVEN` stays **OPEN**.
+- The stale-read policy is **not** touched.
+- The synthetic CLI fixtures remain **synthetic**: they establish the
+  conflict-exclusion contract, not capture-record hash verification against a
+  live capture pipeline.
+- No push, no VSIX replacement, no inference-service restart, no provider request.
+
+## Decision
+
+The last known blocker on the path to live forensic qualification is closed: a
+conflicted observation can no longer be resurrected by record order, at either
+the grouping-function or the CLI seam. **Live installed-runtime Strata
+qualification is authorized** on the same model and engine configuration, with
+the source/build identity preserved and the ClineMM observations correlated to
+Strata's cache decisions by an independently verified identity.
+
+The successor experiment consumes the existing diagnostics rather than building
+more infrastructure: correlate ONE rewrite with the next two or three Strata
+cache decisions, distinguishing the cost of the initial prefix invalidation, how
+quickly the rewritten prefix becomes cacheable, and whether checkpoint retention
+prevents recovery.

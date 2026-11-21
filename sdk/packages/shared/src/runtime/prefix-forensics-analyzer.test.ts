@@ -940,6 +940,98 @@ describe("ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01 — the analyzer", () 
 		expect(bundles[0]?.stages.has("runtime_projection")).toBe(true);
 	});
 
+	it("AUTH-08: a CONFLICT is PERMANENT — a later identical record never resurrects the stage", () => {
+		// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION04.
+		//
+		// CORRECTION03 excluded a conflicting duplicate with
+		// `stages.delete(stage)`, but the exclusion was NOT persisted: a
+		// THIRD record for the same identity and stage re-populated the map,
+		// so the sequence A → B → A left the stage PRESENT and pointing at A.
+		//
+		// Which of two conflicting observations is authoritative is not
+		// decidable from the capture, so once a conflict is seen the stage
+		// must stay EXCLUDED for the whole analysis, regardless of the
+		// records that follow it.
+		const identity = {
+			sessionId: "session-1",
+			preparationRequestId: "prep-29",
+			providerAttemptId: "attempt-29",
+			iteration: 29,
+		};
+		const a = record("runtime_projection", {
+			messages: MESSAGES_A,
+			...identity,
+		});
+		const b = record("runtime_projection", {
+			messages: MESSAGES_MUTATED,
+			...identity,
+		});
+
+		// A → A : an identical duplicate is COLLAPSED, the stage survives.
+		const identical = groupCapturesIntoRequestBundles([a, a]);
+		expect(identical).toHaveLength(1);
+		expect(identical[0]?.stages.has("runtime_projection")).toBe(true);
+
+		// A → B : a conflict EXCLUDES the stage.
+		const conflict = groupCapturesIntoRequestBundles([a, b]);
+		expect(conflict).toHaveLength(1);
+		expect(conflict[0]?.stages.has("runtime_projection")).toBe(false);
+
+		// A → B → A : the stage must NOT come back.
+		const resurrectAfterA = groupCapturesIntoRequestBundles([a, b, a]);
+		expect(resurrectAfterA).toHaveLength(1);
+		expect(resurrectAfterA[0]?.stages.has("runtime_projection")).toBe(false);
+
+		// A → B → B : the stage must NOT come back either.
+		const resurrectAfterB = groupCapturesIntoRequestBundles([a, b, b]);
+		expect(resurrectAfterB).toHaveLength(1);
+		expect(resurrectAfterB[0]?.stages.has("runtime_projection")).toBe(false);
+
+		// B → A → B : a conflict DETECTED ON THE SECOND record is equally
+		// permanent.
+		const resurrectLast = groupCapturesIntoRequestBundles([b, a, b]);
+		expect(resurrectLast).toHaveLength(1);
+		expect(resurrectLast[0]?.stages.has("runtime_projection")).toBe(false);
+	});
+
+	it("AUTH-09: the conflict exclusion is scoped to the CONFLICTED request bundle", () => {
+		// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION04: excluding
+		// a stage in ONE request bundle must not disqualify the SAME stage in
+		// a DIFFERENT request of the same session.
+		const conflicted = {
+			sessionId: "session-1",
+			preparationRequestId: "prep-29",
+			providerAttemptId: "attempt-29",
+			iteration: 29,
+		};
+		const other = {
+			sessionId: "session-1",
+			preparationRequestId: "prep-30",
+			providerAttemptId: "attempt-30",
+			iteration: 30,
+		};
+		const a29 = record("runtime_projection", {
+			messages: MESSAGES_A,
+			...conflicted,
+		});
+		const b29 = record("runtime_projection", {
+			messages: MESSAGES_MUTATED,
+			...conflicted,
+		});
+		const a30 = record("runtime_projection", {
+			messages: MESSAGES_A,
+			...other,
+		});
+
+		const bundles = groupCapturesIntoRequestBundles([a29, b29, a30]);
+		expect(bundles).toHaveLength(2);
+		const byIteration = new Map(
+			bundles.map((bundle) => [bundle.iteration, bundle]),
+		);
+		expect(byIteration.get(29)?.stages.has("runtime_projection")).toBe(false);
+		expect(byIteration.get(30)?.stages.has("runtime_projection")).toBe(true);
+	});
+
 	it("exposes exactly the three representation boundaries, in causal order", () => {
 		expect([...PREFIX_FORENSICS_STAGES]).toEqual([
 			"runtime_projection",

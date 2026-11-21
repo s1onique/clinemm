@@ -811,26 +811,44 @@ export function groupCapturesIntoRequestBundles(
 	records: readonly PrefixForensicsCaptureRecord[],
 ): PrefixForensicsRequestBundle[] {
 	const byKey = new Map<string, PrefixForensicsRequestBundle>();
-	// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION03: a second
-	// record for the same identity AND the same stage must not silently
-	// REPLACE the first.
+	// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION04: the set of
+	// STAGES THAT HAVE BEEN DISQUALIFIED BY A CONFLICT.
 	//
-	// The grouping used `stages.set(...)`, so two different observations of
-	// one boundary were resolved by file order. Which one is authoritative
-	// is not decidable from the capture, so a CONFLICTING duplicate is
-	// EXCLUDED from the bundle (the stage is reported unavailable); a
-	// byte-identical re-emission is a harmless duplicate and is collapsed.
+	// CORRECTION03 excluded a conflicting duplicate with
+	// `stages.delete(stage)`, but that exclusion was NOT persisted: a THIRD
+	// record for the same identity and stage re-populated the map, so the
+	// sequence A → B → A left the stage PRESENT and pointing at A. A
+	// previously disqualified observation was resurrected into usable
+	// evidence.
+	//
+	// Which of two conflicting observations is authoritative is not decidable
+	// from the capture, so once a conflict is seen the stage stays EXCLUDED
+	// for the whole analysis, regardless of the records that follow it. The
+	// key is the request bundle identity PLUS the stage, so a conflict in one
+	// request never disqualifies the same stage in another request.
+	const conflictedStages = new Set<string>();
 	for (const record of records) {
 		const key = bundleGroupingKey(record);
+		const stage = record.source as PrefixForensicsStageName;
+		const conflictKey = `${key}||${stage}`;
 		const existing = byKey.get(key);
 		if (existing) {
 			const stages = new Map(existing.stages);
-			const stage = record.source as PrefixForensicsStageName;
+			// A previously conflicted stage is PERMANENTLY excluded: it is
+			// never re-admitted, whatever arrives next.
+			if (conflictedStages.has(conflictKey)) {
+				stages.delete(stage);
+				byKey.set(key, { ...existing, stages });
+				continue;
+			}
 			const previous = stages.get(stage);
 			if (previous === undefined) {
 				stages.set(stage, record);
 			} else if (!sameObservation(previous, record)) {
+				// CONFLICT: two different observations of ONE boundary. The
+				// stage is excluded and the exclusion is persisted.
 				stages.delete(stage);
+				conflictedStages.add(conflictKey);
 			}
 			byKey.set(key, { ...existing, stages });
 			continue;
