@@ -690,6 +690,7 @@ export {
 // ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01: the offline
 // request-difference analyzer over the sanitized capture records.
 export type {
+	PrefixForensicsChangeCategory,
 	PrefixForensicsMessageChangeKind,
 	PrefixForensicsMessageDifference,
 	PrefixForensicsRequestDifference,
@@ -700,6 +701,10 @@ export type {
 } from "./runtime/prefix-forensics-analyzer";
 export {
 	comparePrefixForensicsRequests,
+	// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION01: the
+	// exact-lineage gate that every caller pairing captures by file order
+	// must apply.
+	establishConsecutiveRequestLineage,
 	PREFIX_FORENSICS_STAGES,
 	UNAVAILABLE_FROM_TRACE,
 } from "./runtime/prefix-forensics-analyzer";

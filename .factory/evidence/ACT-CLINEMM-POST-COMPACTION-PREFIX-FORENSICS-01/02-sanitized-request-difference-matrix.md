@@ -48,15 +48,28 @@ a historical message is rewritten between two consecutive requests.
 
 ### 2.1 The literal rewrite, verified at the source
 
-The raw (unsanitized) preserved capture for M1 shows the exact replacement:
+The raw (unsanitized) preserved capture for M1 shows the exact replacement.
+
+> **REDACTION (ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION01).**
+> The pre-correction version of this section reproduced a ~200-character
+> excerpt of a REAL file-read result: a project-relative file path, a live
+> `toolCallId`, and a fragment of the file's own text. The privacy audit
+> scanned only the 173 sanitized capture RECORDS; it did not cover this
+> human-readable report, so the committed excerpt was never assessed. It is
+> REDACTED here. The structural facts it evidenced are unchanged and are
+> carried by the sanitized matrix; only the verbatim content is removed.
+> The redaction does not weaken the finding: the replacement marker, the
+> byte counts, the message index, the role, the position and the tool-call
+> identity are all still asserted, and the tool-call id is now shown only as
+> a truncated digest.
 
 ```
 message index 11, role "tool", toolName "read_files",
-toolCallId "call_c399a204b2341dd413ffaace" (IDENTICAL on both sides)
+toolCallId "call_c399…b234" (IDENTICAL on both sides; truncated digest)
 
-BEFORE: {"type":"json","value":[{"query":".../LESSON-14.md:37-300",
-          "result":" 37 | > **Про Node.js.** Ученику Node.js **не нужен** …"}]}
-AFTER:  {"type":"json","value":[{"query":".../LESSON-14.md:37-300",
+BEFORE: {"type":"json","value":[{"query":"…/LESSON-14.md:37-300",
+          "result":"<REDACTED — real file content, 26,398 bytes>"}]}
+AFTER:  {"type":"json","value":[{"query":"…/LESSON-14.md:37-300",
           "result":"[outdated - see the latest file content]","success":true}]}
 ```
 

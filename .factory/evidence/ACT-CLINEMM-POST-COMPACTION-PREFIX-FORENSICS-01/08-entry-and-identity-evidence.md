@@ -6,7 +6,7 @@
 
 | Item | Value |
 |---|---|
-| Repository root | `/Volumes/UserData/Users/chististyakov/Projects/SPbNIX/clinemm` |
+| Repository root | `<local-checkout>/clinemm` |
 | Remote | `git@github.com:s1onique/clinemm.git` |
 | Branch | `main` |
 | HEAD (entry) | `b0c5a0b232d4fb13291a754e1ac337e4e99b87fb` |
@@ -23,8 +23,8 @@
 | Item | Value | Action |
 |---|---|---|
 | `git stash list` | **EMPTY** | no stash was popped or dropped |
-| `/private/tmp/clinemm-stash-recovery-20261117` | `8b76c9e3e` `recovery/protected-stash-20261117` | untouched |
-| `/private/tmp/worktree-bun.7ddCHQ` | `bbdccf8a2` (detached, prunable) | untouched |
+| `<tmp>/clinemm-stash-recovery-20261117` | `8b76c9e3e` `recovery/protected-stash-20261117` | untouched |
+| `<tmp>/worktree-bun.7ddCHQ` | `bbdccf8a2` (detached, prunable) | untouched |
 | `../clinemm-m31-action-first` | `38e726c45` `experiment/m31-action-first` | untouched |
 | `../clinemm-m31-bounded` | `0366ea506` (detached) | untouched |
 

@@ -1,159 +1,205 @@
-=== ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01 — EXECUTABLE TEST RECEIPTS ===
+ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION01 — TEST RECEIPTS
+Generated: 2026-11-21
 
-Toolchain: Bun (package manager + task runner), Node >= 22 (runtime).
-Host: darwin (macOS arm64).
+The pre-correction receipts (ACT-…-01) are retained in the git history at
+commit 616c9db8a. This file records the CORRECTION's receipts: the RED
+ablations that prove each new witness fails against the pre-correction
+implementation, and the GREEN runs that prove it passes after the fix.
 
-################ GATE 1 — analyzer witnesses ################
-$ cd sdk/packages/shared && bun x vitest run --config vitest.config.ts src/runtime/prefix-forensics-analyzer.test.ts
- RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/shared
+================================================================================
+1. RED ABLATION — the wire-seam defect (P0)
+================================================================================
 
- ✓ src/runtime/prefix-forensics-analyzer.test.ts (12 tests) 6ms
+The pre-correction implementation is restored (the three corrected source
+files reverted to their 616c9db8a content) and the NEW wire-seam suite is
+run. The suite fails: forensic-only activation never reaches the HTTP
+boundary.
 
- Test Files  1 passed (1)
-      Tests  12 passed (12)
-   Start at  17:51:28
-   Duration  83ms (transform 24ms, setup 0ms, import 31ms, tests 6ms, environment 0ms)
+  RUN  v4.1.10 <local-checkout>/clinemm/sdk/packages/llms
 
+   ❯ src/providers/provider-request-capture.prefix-forensics-wire.test.ts (5 tests | 3 failed)
+       × PF-WIRE-01: forensic-only activation reaches the REAL HTTP boundary 4ms
+       ✓ PF-WIRE-02: the default-OFF path is byte-identical (no wrap, no body read) 1ms
+       × PF-WIRE-03: an INVALID wire body never yields `complete: true` 572ms
+       × PF-WIRE-04: forensic-only activation does NOT enable the full provider capture 603ms
+       ✓ PF-WIRE-05: a forensic-only wrap still delegates BY REFERENCE 4ms
 
-################ GATE 2 — capture-writer witnesses ################
-$ cd sdk/packages/llms && bun x vitest run --config vitest.config.ts src/providers/prefix-forensics-capture.test.ts
- RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/llms
+   Test Files  1 failed (1)
+        Tests  3 failed | 2 passed (5)
 
- ✓ src/providers/prefix-forensics-capture.test.ts (8 tests) 12ms
+The primary failure (PF-WIRE-01):
 
- Test Files  1 passed (1)
-      Tests  8 passed (8)
-   Start at  17:51:28
-   Duration  453ms (transform 294ms, setup 0ms, import 394ms, tests 12ms, environment 0ms)
+  AssertionError: expected [Function Mock] not to be [Function Mock]
+   ❯ src/providers/provider-request-capture.prefix-forensics-wire.test.ts:165:23
+      163|   // otherwise the forensic capture can never observe the wire body.
+      164|   expect(wrapped).toBeDefined();
+      165|   expect(wrapped).not.toBe(delegate);
 
+Diagnosis: `wrapFetchForProviderRequestCapture` returned the UNWRAPPED
+fetch, because the forensic capture was not part of the WRAP decision. The
+ordinary capture callback's `if (!captureEnabled) return;` guard was the
+second barrier.
 
-################ GATE 3 — RED ABLATIONS (the witnesses CAN fail) ################
+================================================================================
+2. RED ABLATION — the analyzer evidence semantics (P1)
+================================================================================
 
---- ABLATION A: the analyzer stops detecting a tool REORDER ---
-    (removed the `sameOrder -> "order_changed"` branch in compareTools)
-$ cd sdk/packages/shared && bun x vitest run --config vitest.config.ts src/runtime/prefix-forensics-analyzer.test.ts
-  x V4: a tool REORDER is detected independently of a tool definition change
-  AssertionError: expected (unchanged) to be (order_changed)
-  => 1 failed | 11 passed   EXIT=1
+The pre-correction analyzer and fingerprint are restored and the corrected
+analyzer suite is run.
 
---- ABLATION B: the capture writer loses its DEFAULT-OFF guard ---
-    (removed the `if (!isPrefixForensicsEnabled()) return;` early return)
-$ cd sdk/packages/llms && bun x vitest run --config vitest.config.ts src/providers/prefix-forensics-capture.test.ts
-  x V1: the DISABLED path writes nothing and touches no filesystem
-  AssertionError: expected [ Array(1) ] to have a length of +0 but got 1
-  x V1: only the exact value 1 arms the capture
-  => 2 failed | 6 passed   EXIT=1
+  RUN  v4.1.10 <local-checkout>/clinemm/sdk/packages/shared
 
---- ABLATION C: the analyzer stops failing closed on a missing capture ---
-    (a missing capture now yields an empty, AUTHORITATIVE comparison)
-$ cd sdk/packages/shared && bun x vitest run --config vitest.config.ts src/runtime/prefix-forensics-analyzer.test.ts
-  x V9: a missing capture does NOT generate a fabricated comparison
-  AssertionError: expected true to be false
-  => 1 failed | 11 passed   EXIT=1
+   ❯ src/runtime/prefix-forensics-analyzer.test.ts (20 tests | 10 failed)
+       × V5: an adapter-introduced transformation is attributed to the adapter stage
+       × V5-CORR: a FULL three-stage pair attributes an adapter change to the adapter stage
+       × V7: a retry stays a separate attempt under the same preparation identity
+       × CORR-01: an UNAVAILABLE stage can NEVER imply full equality
+       × CORR-02: a TOOL-ONLY change is attributed to its stage
+       × CORR-03: a BODY-ONLY change is attributed to its stage
+       × CORR-04: a SYSTEM-ONLY change is attributed to its stage
+       × CORR-05: an INCOMPLETE representation is never compared as an empty request
+       × CORR-06: an EMPTY but PRESENT message list is a COMPLETE observation
+       × CORR-07: a same-session chronology is NOT authoritative without an EXACT lineage
 
-All three ablations were REVERTED; the sources above are the restored originals.
+   Test Files  1 failed (1)
+        Tests  10 failed | 10 passed (20)
 
-################ GATE 4 — regression sweep (no ACT-owned failures) ################
+CORR-01 fails because the pre-correction verdict was
+  stages.every((s) => !s.available || s.differences.length === 0)
+so an UNAVAILABLE stage counted as "equal".
+CORR-02/03/04 fail because the pre-correction attribution read only
+  stage.differences.length > 0 (the MESSAGE list).
+CORR-05 fails because the pre-correction fingerprint always returned
+  complete: true.
+CORR-07 fails because the exact-lineage gate did not exist.
 
---- shared: the whole runtime/ suite ---
-$ cd sdk/packages/shared && bun x vitest run --config vitest.config.ts src/runtime/
- RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/shared
+================================================================================
+3. GREEN — the corrected implementation
+================================================================================
 
- ✓ src/runtime/host-helper-socket.test.ts (6 tests) 2ms
- ✓ src/runtime/hub-daemon-env.test.ts (16 tests) 4ms
- ✓ src/runtime/bun-embedded-path.test.ts (14 tests) 3ms
- ✓ src/runtime/compaction-token-evidence.test.ts (5 tests) 9ms
- ✓ src/runtime/cline-environment.test.ts (19 tests) 4ms
- ✓ src/runtime/windows-exe-path.test.ts (3 tests | 1 skipped) 2ms
- ✓ src/runtime/build-env.test.ts (11 tests) 4ms
- ✓ src/runtime/loopback-proxy-bypass.test.ts (15 tests) 4ms
- ✓ src/runtime/model-wire-reasoning.test.ts (13 tests) 5ms
- ✓ src/runtime/model-behavior-trace.test.ts (18 tests) 9ms
- ✓ src/runtime/prefix-forensics-analyzer.test.ts (12 tests) 6ms
+  RUN  v4.1.10 <local-checkout>/clinemm/sdk/packages/llms
 
- Test Files  11 passed (11)
-      Tests  131 passed | 1 skipped (132)
-   Start at  17:51:38
-   Duration  137ms (transform 304ms, setup 0ms, import 511ms, tests 52ms, environment 1ms)
+   ✓ src/providers/provider-request-capture.prefix-forensics-wire.test.ts (5 tests) 8ms
+   ✓ src/providers/prefix-forensics-capture.test.ts (8 tests) 11ms
+   ✓ src/providers/provider-request-capture.wire-reasoning-off-fast-path.test.ts (7 tests) 12ms
 
+   Test Files  3 passed (3)
+        Tests  20 passed (20)
 
---- llms: the provider-capture + ai-sdk suites ---
-$ cd sdk/packages/llms && bun x vitest run --config vitest.config.ts src/providers/provider-request-capture.wire-reasoning-off-fast-path.test.ts src/providers/ai-sdk.test.ts
- RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/llms
+  RUN  v4.1.10 <local-checkout>/clinemm/sdk/packages/shared
 
- ✓ src/providers/provider-request-capture.wire-reasoning-off-fast-path.test.ts (7 tests) 13ms
- ✓ src/providers/ai-sdk.test.ts (41 tests) 6ms
+   ✓ src/runtime/prefix-forensics-analyzer.test.ts (20 tests) 7ms
 
- Test Files  2 passed (2)
-      Tests  48 passed (48)
-   Start at  17:51:38
-   Duration  1.19s (transform 1.18s, setup 0ms, import 1.55s, tests 19ms, environment 0ms)
+   Test Files  1 passed (1)
+        Tests  20 passed (20)
 
+================================================================================
+4. PACKAGE SWEEPS — conservation
+================================================================================
 
-################ GATE 5 — typecheck / build / lint ################
+sdk/packages/shared — full suite:
 
---- SDK build (all packages) ---
-$ bun run build:sdk
-  @cline/shared, @cline/core, @cline/agents, @cline/sdk, @cline/llms, @cline/ui -> all Done
+   Test Files  46 passed | 1 skipped (47)
+        Tests  593 passed | 6 skipped (599)
 
---- typecheck: the packages this ACT touched ---
-$ cd sdk/packages/shared && bun tsc --noEmit          -> EXIT=0 (clean)
-$ cd sdk/packages/llms   && bun tsc -p tsconfig.dev.json --noEmit -> EXIT=0 (clean)
-$ cd sdk/packages/agents && bun tsc --noEmit          -> EXIT=0 (clean)
+sdk/packages/llms — full suite:
 
---- typecheck: @cline/core (NOT touched by this ACT) ---
-$ cd sdk/packages/core && bun tsc --noEmit
-  70 pre-existing errors in:
-    src/runtime/observability/model-behavior-trace.test.ts
-    src/runtime/orchestration/session-runtime-orchestrator.tool-outcome-hook.tes02.test.ts
-    src/runtime/orchestration/session-runtime.model-behavior-trace.test.ts
-  PROVEN PRE-EXISTING:
-    - this ACT modified 0 files under sdk/packages/core/ (git diff --name-only HEAD -- sdk/packages/core/ => 0)
-    - the pristine HEAD copy (git archive HEAD sdk/packages/core) contains the identical
-      enableTools usages that fail to typecheck
-  => PRE-EXISTING AT HEAD, NOT ACT-OWNED
+   Test Files  4 failed | 64 passed | 4 skipped (72)
+        Tests  19 failed | 1167 passed | 4 skipped (1190)
 
-################ GATE 6 — PRE-EXISTING FAILURE BASELINE (pristine HEAD) ################
+sdk/packages/agents — full suite:
 
-The ACT changes were STASHED (git stash push -u) so the tree was pristine HEAD b0c5a0b23,
-and the same failing suites were re-run there:
+   Test Files  9 failed | 27 passed (36)
+        Tests  43 failed | 560 passed (603)
 
-$ cd sdk/packages/llms && bun x vitest run --config vitest.config.ts \
-    src/providers/ai-sdk-reasoning.test.ts \
-    src/providers/vendors/community.process-hygiene.test.ts \
-    src/providers/vendors/community.process-hygiene-failure.test.ts \
-    src/providers/vendors/openai-compatible.wire.test.ts
- FAIL  src/providers/ai-sdk-reasoning.test.ts [ src/providers/ai-sdk-reasoning.test.ts ]
- FAIL  src/providers/vendors/openai-compatible.wire.test.ts [ src/providers/vendors/openai-compatible.wire.test.ts ]
-⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
- FAIL  src/providers/vendors/community.process-hygiene.test.ts > SAP provider process hygiene > removes the SAP SDK's exit handlers and keeps host listeners registered mid-load
- FAIL  src/providers/vendors/community.process-hygiene-failure.test.ts > SAP provider process hygiene on a failed construction > removes the SAP SDK's exit handlers even when the first construction rejects
- Test Files  4 failed (4)
-      Tests  2 failed (2)
+=== The failures are PRE-EXISTING, not introduced by this correction ===
 
-  => The SAME 4 files fail at pristine HEAD. PRE-EXISTING, NOT ACT-OWNED.
+Each package was re-run at PRISTINE HEAD (19b610083, all correction changes
+stashed) and produced the IDENTICAL failure counts:
 
-  Failing files (unchanged by this ACT):
-    src/providers/ai-sdk-reasoning.test.ts                (model-catalog reasoning)
-    src/providers/vendors/community.process-hygiene.test.ts       (SAP SDK process listeners)
-    src/providers/vendors/community.process-hygiene-failure.test.ts
-    src/providers/vendors/openai-compatible.wire.test.ts
+  package | pristine HEAD                    | with the correction        | delta
+  --------|----------------------------------|----------------------------|-------------------
+  shared  | 0 failed                         | 0 failed                   | none
+  llms    | 4 failed files / 19 failed tests | 4 failed files / 19 failed | none
+          | 1162 passed                     | 1167 passed                | +5 NEW PASSING
+  agents  | 9 failed files / 43 failed tests | 9 failed files / 43 failed | none
+          | 560 passed                      | 560 passed                 | none
 
-  The ACT then RESTORED its changes with: git stash pop
+The 4 failing llms files are:
+  src/providers/ai-sdk-reasoning.test.ts
+  src/providers/vendors/community.process-hygiene-failure.test.ts
+  src/providers/vendors/community.process-hygiene.test.ts
+  src/providers/vendors/openai-compatible.wire.test.ts
 
-################ CLOSURE ################
+None of them is a file this correction touches. The +5 llms tests are the
+new wire-seam suite (PF-WIRE-01..05).
 
-Commit            : 616c9db8a
-Parent (entry)    : b0c5a0b232d4fb13291a754e1ac337e4e99b87fb
-Branch            : main (NOT pushed)
-Working tree      : CLEAN after commit
-Stashes           : EMPTY (none created, none popped, none dropped)
-Worktrees         : UNCHANGED (5, all pre-existing)
-Push / PR         : NONE
-Installed ext.    : NOT replaced
-Inference service : NOT restarted
+================================================================================
+5. TYPECHECK
+================================================================================
 
-Classification    : PREFIX_MUTATION_ISOLATED
-Token boundary    : TOKEN_BOUNDARY_UNAVAILABLE (Strata exposes no tokenizer route)
-Repair proposed   : NO (deliberate documented trade-off; successor claim recorded)
-Removal contract  : MET (root cause isolated)
+  cd sdk/packages/shared && bun tsc --noEmit   -> EXIT 0
+  cd sdk/packages/llms   && bun tsc --noEmit   -> EXIT 0
+
+================================================================================
+6. LINT
+================================================================================
+
+  bun node_modules/@biomejs/biome/bin/biome check <the 7 touched source files>
+
+  Checked 7 files in 15ms. No fixes applied.
+  Found 2 infos.
+  EXIT 0
+
+The 2 infos are `lint/style/noNonNullAssertion` on `files[0]!` in the new
+wire-seam test. This is the SAME convention as the pre-existing sibling
+suite `prefix-forensics-capture.test.ts` (3 such infos at pristine HEAD),
+so no new lint class is introduced.
+
+================================================================================
+7. PROVIDER SEMANTIC DELTA
+================================================================================
+
+NONE. The correction changes:
+
+  - the WRAP decision and the PER-REQUEST observation decision of
+    `wrapFetchForProviderRequestCapture`, adding the forensic switch as an
+    INDEPENDENT reason to observe. The DEFAULT-OFF path is byte-identical
+    (PF-WIRE-02 proves: base fetch returned UNCHANGED, no body read, no
+    clone, no artifact).
+  - the completeness flag of a forensic representation.
+  - the analyzer's evidence semantics.
+
+It changes NO provider request, NO retry behaviour, NO compaction
+behaviour, NO prompt content and NO inference-service configuration. No
+provider request was issued by this correction. No inference service was
+restarted. No installed extension was replaced.
+
+================================================================================
+8. EVIDENCE INTEGRITY
+================================================================================
+
+The artifact hash manifest was regenerated after the correction and verified
+by an independent recomputation of every declared digest:
+
+  VERIFIED=23 MISMATCH=0
+  self-referential entries: 0
+
+The pre-correction manifest declared its OWN sha256 as
+18a43892cf7ad34ff4850ff04afc44877897efbb201682fd84359b091855f6eb while its
+bytes actually hashed to
+4b6496c916078a9d66360c6fed06677f6da4f5ae8b6ae274fc01ff148dcb9adb
+— a permanently unverifiable self-referential entry. The corrected
+manifest omits itself and documents the external-digest procedure.
+
+================================================================================
+9. PRIVACY RE-SCAN OF THE COMMITTED EVIDENCE FILES
+================================================================================
+
+  cd .factory/evidence/ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01
+  grep -rn -E "(/Users/|/Volumes/|/home/|/private/tmp/)" .   -> 0 (excluding
+                                                              the pattern-description
+                                                              table in 07-privacy-audit.md)
+  grep -rn -oE "call_[0-9a-f]{10,}" .                        -> 0
+  grep -rn -oE "sk-[A-Za-z0-9_-]{6,}" .                      -> 0
+  grep -rni "bearer " .                                      -> 0

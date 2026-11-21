@@ -40,19 +40,34 @@
 
 ### 1.3 Why this is not `MULTIPLE_CAUSES`
 
+> **CORRECTION (ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION01).**
+> The original §1.3 read the in-place rewrite as the explanation of the
+> sticky, repeated 3,895-token plateau. That inference crossed two gaps:
+> (i) the analysed corpus is `minimax`/`MiniMax-M3` while the engine
+> investigation concerns `Qwen3.8-Flash-Next` on Strata — **no
+> authoritative cross-system join establishes the same serving path**; and
+> (ii) a one-time rewrite explains the A → B cache MISS but not the
+> continued misses that follow, which depend on checkpoint retention and
+> placement. Both gaps are set out in
+> `11-causal-attribution-separation.md`.
+>
+> **What is retained:** the classification `PREFIX_MUTATION_ISOLATED`, the
+> mechanism, its host-independence and D1's refutation — all of which are
+> direct observations on the corpus that was actually analysed.
+>
+> **What is withdrawn:** the claim that the rewrite is the cause of the
+> specific Strata plateau. `STRATA_PLATEAU_CAUSE_UNPROVEN` remains OPEN.
+
 `BRANCH_ALTERNATION_OBSERVED` describes 201 of the 225 non-append pairs — a
-new user turn starting a new task. Those are EXPECTED branch changes, and
-they are not the mechanism behind the reuse plateau: the deep-reuse → plateau
-transition the ACT names (17:05:07 → 17:06:03) has the shape of an
-IN-PLACE rewrite, not of a branch change, and the plateau is STICKY across
-the following requests — a branch change would be transient.
+new user turn starting a new task. Those are EXPECTED branch changes. A
+branch alternation is transient (a new task starts a new branch), whereas
+an in-place rewrite is permanent for the life of the transcript. The
+rewrite is therefore a BETTER fit than a branch alternation for the shape of
+the observation, and it is the observed mechanism — but "better fit" is not
+"established cause", and the difference matters for the repair decision.
 
 A branch alternation IS a genuine alternative mechanism for *some* deep-reuse
-→ no-reuse transitions, and it is present in the corpus. But the mechanism
-that explains the STICKY, REPEATED 3,895-token plateau across consecutive
-requests is the in-place rewrite: once the early history is rewritten, the
-blocking bytes stay rewritten, so the shallow reuse depth persists until the
-history is rebuilt.
+→ no-reuse transitions, and it is present in the corpus.
 
 ---
 
@@ -83,8 +98,10 @@ history is rebuilt.
 4. The system prompt and the ordered tool inventory are **byte-stable** across
    every analysed boundary — D1 is refuted.
 5. The mechanism is **host-independent**: 21 occurrences across 6 hosts.
-6. The client-side mutation is present. The server-side checkpoint limitation
-   is therefore **NOT** the explanation.
+6. The mechanism is a **plausible sufficient cause** of a prefix-cache
+   invalidation, and the client's structural mutation is present. What is
+   NOT established is that it — alone — produced the measured Strata
+   plateau: see §1.3 and `11-causal-attribution-separation.md`.
 
 ### 3.2 NOT established (explicitly withheld)
 
@@ -106,6 +123,14 @@ history is rebuilt.
    is NOT made.** The ACT establishes that it is present, that it is
    sufficient in principle, and that it is not the only mechanism that can
    produce a deep-reuse → no-reuse transition.
+7. **The mechanism's role in the SPECIFIC Strata 3,895-token plateau is NOT
+   established** (ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION01).
+   The analysed corpus is `minimax`/`MiniMax-M3`; the engine investigation
+   concerns `Qwen3.8-Flash-Next` on Strata. No authoritative cross-system
+   join establishes the same serving path, and a one-time rewrite explains
+   the initial cache MISS rather than the persistence of the plateau.
+   `STRATA_PLATEAU_CAUSE_UNPROVEN` remains OPEN. See
+   `11-causal-attribution-separation.md`.
 
 ---
 

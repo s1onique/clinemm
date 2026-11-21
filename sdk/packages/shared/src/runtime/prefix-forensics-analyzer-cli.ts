@@ -21,7 +21,10 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { PrefixForensicsCaptureRecord } from "./prefix-forensics";
-import { comparePrefixForensicsRequests } from "./prefix-forensics-analyzer";
+import {
+	comparePrefixForensicsRequests,
+	establishConsecutiveRequestLineage,
+} from "./prefix-forensics-analyzer";
 
 interface LoadedCapture {
 	readonly file: string;
@@ -59,6 +62,22 @@ function identityKey(record: PrefixForensicsCaptureRecord): string {
 		record.providerAttemptId ?? "-",
 		String(record.iteration ?? "-"),
 	].join("|");
+}
+
+/**
+ * ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION01.
+ *
+ * Is the (before → after) pair an EXACT consecutive request lineage?
+ *
+ * The rule lives in the shared analyzer so that it is UNIT-TESTABLE and so
+ * that every caller applies the SAME gate. The rationale is documented on
+ * `establishConsecutiveRequestLineage`.
+ */
+function establishConsecutiveLineage(
+	before: PrefixForensicsCaptureRecord,
+	after: PrefixForensicsCaptureRecord,
+): { consecutive: boolean; reason?: string } {
+	return establishConsecutiveRequestLineage(before, after);
 }
 
 /** The main entry point. */
@@ -105,6 +124,32 @@ function main(argv: string[]): number {
 			before.record.source !== after.record.source ||
 			before.record.sessionId !== after.record.sessionId
 		) {
+			continue;
+		}
+		// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION01: the
+		// EXACT-LINEAGE gate.
+		//
+		// The pre-correction CLI paired captures by session + source +
+		// file ordering and then reported the pair's `authoritative` flag
+		// verbatim. The analyzer's own authoritative rule accepts a shared
+		// SESSION, so a same-session chronology was labelled authoritative
+		// WITHOUT establishing that the two captures are CONSECUTIVE
+		// requests of the same preparation lineage.
+		//
+		// A pair is now joined only when the identity carries an EXACT
+		// consecutive lineage: the same preparation identity with a
+		// strictly increasing iteration, or — when the preparation
+		// identity is absent — the same preparation identity with a
+		// strictly increasing attempt ordinal. Everything else is
+		// reported as `NOT_AUTHORITATIVE` with an explicit reason.
+		const lineage = establishConsecutiveLineage(before.record, after.record);
+		if (!lineage.consecutive) {
+			pairs.push({
+				before: before.file,
+				after: after.file,
+				authoritative: false,
+				unavailableReason: lineage.reason,
+			});
 			continue;
 		}
 		const diff = comparePrefixForensicsRequests({

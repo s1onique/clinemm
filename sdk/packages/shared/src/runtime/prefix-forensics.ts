@@ -254,6 +254,20 @@ export function computeRepresentationFingerprint(
 ): PrefixForensicsRepresentation {
 	const messageFingerprints: PrefixForensicsMessageFingerprint[] = [];
 	let messageCount = 0;
+	// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION01: the
+	// COMPLETENESS contract.
+	//
+	// A representation whose message list could not be determined is NOT a
+	// complete zero-message representation — it is an INCOMPLETE observation.
+	// The pre-correction implementation always returned `complete: true`,
+	// so an unparseable wire body was recorded as a complete, empty request:
+	// a fabricated structural claim that an analyzer could then compare as
+	// "equal" against any other empty request.
+	//
+	// An EMPTY but PRESENT message array (`[]`) IS complete: a genuinely
+	// empty request is a real observation.
+	let messagesAvailable = true;
+	let incompleteReason: string | undefined;
 	if (Array.isArray(messages)) {
 		messageCount = messages.length;
 		for (const message of messages) {
@@ -276,6 +290,11 @@ export function computeRepresentationFingerprint(
 				parts: perPart,
 			});
 		}
+	} else {
+		messagesAvailable = false;
+		incompleteReason =
+			"the message list was absent or not an array; the representation " +
+			"could not be observed as a complete request";
 	}
 
 	let systemFingerprint: string | undefined;
@@ -345,7 +364,8 @@ export function computeRepresentationFingerprint(
 			: {}),
 		...(toolFingerprints !== undefined ? { toolFingerprints } : {}),
 		...(bodyFingerprint !== undefined ? { bodyFingerprint, bodyBytes } : {}),
-		complete: true,
+		complete: messagesAvailable,
+		...(incompleteReason !== undefined ? { incompleteReason } : {}),
 	};
 }
 

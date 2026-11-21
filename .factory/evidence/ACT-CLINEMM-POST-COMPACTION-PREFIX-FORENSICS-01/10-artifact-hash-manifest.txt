@@ -1,42 +1,57 @@
-# ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01 — ARTIFACT HASH MANIFEST
+# ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION01 — ARTIFACT HASH MANIFEST
 
-Generated: 2026-11-20
+Generated: 2026-11-21
 Subject HEAD (entry): b0c5a0b232d4fb13291a754e1ac337e4e99b87fb
 Branch: main
+
+## NON-SELF-REFERENTIAL CONTRACT
+
+This manifest does NOT list itself. A file cannot contain its own
+SHA-256: writing the digest changes the bytes, so the digest is
+always stale. The pre-correction manifest DID list itself
+(`18a43892…` declared, `4b6496c9…` actual) — a permanently
+unverifiable entry that made the whole manifest look unreliable.
+
+To verify this manifest's own integrity, hash the file from OUTSIDE:
+
+```bash
+shasum -a 256 .factory/evidence/ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01/10-artifact-hash-manifest.txt
+```
 
 ## Evidence artifacts (committed)
 
 ```
 db8d2804ec77aae1317908432f9fdcb2bbd3f34d3047ab81c77091fb26f57860  01-source-and-capture-seam-map.md
-c329a1a2c18401a80ae9f2b3cb91d95d7efc32f959da0b6baec9741e35805619  02-sanitized-request-difference-matrix.md
+fc2d26fa49fe3e76c620083b4b9895476f66d7a903c3fd63ea708c975e6a96cc  02-sanitized-request-difference-matrix.md
 74ca504c827e97b2251481e7540699203a172cea2a5a28439ebe2cc871a4cd83  03-request-difference-matrix.json
-a6f4d58d7cdd9443b62776cc3c4bdd11c88ff47756fbbed28ac51e987b622555  04-discriminator-report.md
+06f2d59865c262f716c382c885f3dea34ed9c9e5ef533cb52783f0fc036c7e8e  04-discriminator-report.md
 740c32829b0ef9cf57eccd955749c0fab539f26892a4632264cb24f0aee30b24  05-structural-versus-token-level-comparison.md
-bf75705b1423db2eb08decce02bfa532e41d5578a00662298fce8e6f6f010546  06-test-receipts.txt
-3804f4a7423562c9e29af50b0d6a569250cfa43edaebac1e841c9128042247c4  07-privacy-audit.md
-504c651734d10e4c3d58b4f6568e7a8a7a45a2584024d62cf0d9970704fa3797  08-entry-and-identity-evidence.md
-3af192c24f2b50add36ab0d93f2a99af011f193bd252bfa68ef7b4e70d8a273b  09-causal-classification.md
-18a43892cf7ad34ff4850ff04afc44877897efbb201682fd84359b091855f6eb  10-artifact-hash-manifest.txt
+f781043cefb726e66c6578790d834bcff6077380ae03bc890bf2fabb346e3293  06-test-receipts.txt
+f9f93b986571dc0975723f66e35170e4f82476b8e7f144b18d024497be1037bf  07-privacy-audit.md
+360b749807ebba75e4b8f4535716e9109fce5880644625ff9a23969756afacc9  08-entry-and-identity-evidence.md
+1454c5076ff0638620350490bf4009faf0f401404f44f5419eb22bf95709d4ec  09-causal-classification.md
+405f9074f68d6f9f5c678885940097e904acdde4804fd30e0e10e29d1fb8ae7d  11-causal-attribution-separation.md
 ```
 
 ## Instrumented source (new files, committed)
 
 ```
-ea7e87ecb94fd0fa3cd42a9af6dac48a225cfa71214b931e33938a0d7123fe49  sdk/packages/shared/src/runtime/prefix-forensics.ts
-2cd8f219e3c7c22b28572e814cb326e0b0b0ec3ff6b37cccdc9362a91c462a56  sdk/packages/shared/src/runtime/prefix-forensics-analyzer.ts
-a033511f3ec60ef8c8877d01ea85e0d13562a9da22a8aac1319a409e8fc1625e  sdk/packages/shared/src/runtime/prefix-forensics-analyzer-cli.ts
-18c21386b3474ae518f8fe77b2c66886cd1768a57c7968b2a073e2a24aa98e16  sdk/packages/shared/src/runtime/prefix-forensics-analyzer.test.ts
+f274c9aec5c96a4cde88ba3577a747581eecbd6bcd873dc9ec14498f55d9c9fe  sdk/packages/shared/src/runtime/prefix-forensics.ts
+a702d9d15ef180f1172798577a87ac3c13a7be993205addf0a078921294dc7bd  sdk/packages/shared/src/runtime/prefix-forensics-analyzer.ts
+1d3adc8233b32351b593a89bd617f281ee9dcab8a3800043dfbc3b6b1cf9f79b  sdk/packages/shared/src/runtime/prefix-forensics-analyzer-cli.ts
+ae9fe5904668e1a2ab5cf9732b21c3c54d3956cd2656452b36c7ac6bd6c83b83  sdk/packages/shared/src/runtime/prefix-forensics-analyzer.test.ts
 c58e448d1d077d8465f1d4039e6a1477cc81458682fcb8a85b1278cd099bd7b5  sdk/packages/llms/src/providers/prefix-forensics-capture.ts
 d906b174376eb88bee80465a9e976cc3bdbec29548cf8ffec15ca5831d27dd5e  sdk/packages/llms/src/providers/prefix-forensics-capture.test.ts
+3354d2b7765f88c773e5c1a5c16ee320d329ce2a1168180979b45dae31623256  sdk/packages/llms/src/providers/provider-request-capture.prefix-forensics-wire.test.ts
 ```
 
 ## Modified production files (committed)
 
 ```
-d996debcf28b54081e58f912901c919d926937b505f680483ae188be04c2c21f  sdk/packages/shared/src/index.ts
+476cec760f905c5252a578863526306fb5dcbe364a6010c7966c4290f92b48f7  sdk/packages/shared/src/index.ts
 21976ea0a3d19147edad9f5c0c702d12978f0aca083228d4eab5afff3ca1c4e5  sdk/packages/llms/src/index.ts
 81f23f38201bfcddad54cae25249ede4217a506522b8aac6f20ec46d24f0ad2e  sdk/packages/llms/src/providers/ai-sdk.ts
-3867544cf54fee92a2afc66644d5d0324e40f1435051cb33b4c1f3e14be02777  sdk/packages/llms/src/providers/provider-request-capture.ts
+8b7850e4561244615ccfdb431a28f708bae088d16919c59979369109c6b94c8d  sdk/packages/llms/src/providers/provider-request-capture.ts
 4a87cdbfd546e5fbe2fea025a8681f78dd5e5a91a10db47d9148f764c7bb74f8  sdk/packages/agents/src/agent-runtime.ts
 0b4da2607802052e0b8376373562505878da4f2755712b6fc0e1e7ddc46a470f  sdk/packages/llms/vitest.config.ts
 ```

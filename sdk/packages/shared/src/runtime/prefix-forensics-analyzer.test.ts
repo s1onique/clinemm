@@ -30,6 +30,7 @@ import {
 } from "./prefix-forensics";
 import {
 	comparePrefixForensicsRequests,
+	establishConsecutiveRequestLineage,
 	PREFIX_FORENSICS_STAGES,
 	UNAVAILABLE_FROM_TRACE,
 } from "./prefix-forensics-analyzer";
@@ -230,7 +231,15 @@ describe("ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01 — the analyzer", () 
 			after: afterProjection,
 		});
 		expect(diff.stages[0]?.differences).toHaveLength(0);
-		expect(diff.allStagesEqual).toBe(true);
+		// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION01: the
+		// runtime projection does not DIFFER — but the other two
+		// representation boundaries are UNAVAILABLE, so the pair does NOT
+		// support a full equality claim. The pre-correction implementation
+		// treated an unavailable stage as "equal" and returned `true` here.
+		expect(diff.stages[0]?.differs).toBe(false);
+		expect(diff.allStagesEqual).toBe(false);
+		expect(diff.unavailableStages).toContain("ai_sdk_prompt");
+		expect(diff.unavailableStages).toContain("wire_request");
 
 		// The analyzer is per-stage, so the adapter attribution is read from
 		// the pair that actually carries the AI SDK stage.
@@ -243,6 +252,74 @@ describe("ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01 — the analyzer", () 
 			(candidate) => candidate.stage === "ai_sdk_prompt",
 		);
 		expect(promptStage?.firstDifference?.index).toBe(2);
+	});
+
+	it("V5-CORR: a FULL three-stage pair attributes an adapter change to the adapter stage", () => {
+		// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION01: the
+		// V5 witness above compares ONE stage at a time, which cannot
+		// demonstrate an END-TO-END stage transition. This witness supplies
+		// ALL THREE stages of the SAME request pair and shows that the
+		// earliest differing stage is read across the whole pair.
+		const beforeRuntime = record("runtime_projection", {
+			messages: MESSAGES_A,
+		});
+		const afterRuntime = record("runtime_projection", {
+			messages: MESSAGES_A,
+			preparationRequestId: "prep-2",
+			providerAttemptId: "attempt-2",
+			iteration: 2,
+		});
+		const beforePrompt = record("ai_sdk_prompt", { messages: MESSAGES_A });
+		const afterPrompt = record("ai_sdk_prompt", {
+			messages: MESSAGES_MUTATED,
+			preparationRequestId: "prep-2",
+			providerAttemptId: "attempt-2",
+			iteration: 2,
+		});
+		const beforeWire = record("wire_request", {
+			messages: MESSAGES_A,
+			body: '{"messages":[],"serialization":"A"}',
+		});
+		const afterWire = record("wire_request", {
+			messages: MESSAGES_MUTATED,
+			body: '{"messages":[],"serialization":"B"}',
+			preparationRequestId: "prep-2",
+			providerAttemptId: "attempt-2",
+			iteration: 2,
+		});
+		const diff = comparePrefixForensicsRequests({
+			before: beforeRuntime,
+			after: afterRuntime,
+		});
+		// The runtime projection stage did not differ; the two other
+		// boundaries are absent from THIS pair.
+		expect(diff.stages[0]?.available).toBe(true);
+		expect(diff.stages[0]?.differs).toBe(false);
+		expect(diff.earliestDifferingStage).toBeUndefined();
+		expect(diff.allStagesEqual).toBe(false);
+
+		// The AI SDK stage of the same pair DOES differ.
+		const promptDiff = comparePrefixForensicsRequests({
+			before: beforePrompt,
+			after: afterPrompt,
+		});
+		expect(
+			promptDiff.stages.find((s) => s.stage === "ai_sdk_prompt")?.differs,
+		).toBe(true);
+		expect(
+			promptDiff.stages.find((s) => s.stage === "ai_sdk_prompt")
+				?.differingCategories,
+		).toContain("messages");
+		// And the wire stage of the same pair differs in BOTH the messages
+		// and the serialized body.
+		const wireDiff = comparePrefixForensicsRequests({
+			before: beforeWire,
+			after: afterWire,
+		});
+		const wireStage = wireDiff.stages.find((s) => s.stage === "wire_request");
+		expect(wireStage?.differs).toBe(true);
+		expect(wireStage?.differingCategories).toContain("messages");
+		expect(wireStage?.differingCategories).toContain("body");
 	});
 
 	it("V6: equal runtime projections do NOT force a claim that the wire payloads are equal", () => {
@@ -308,7 +385,15 @@ describe("ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01 — the analyzer", () 
 		// Same preparation lineage ⇒ the comparison IS authoritative.
 		expect(diff.authoritative).toBe(true);
 		expect(diff.stages[0]?.differences).toHaveLength(0);
-		expect(diff.allStagesEqual).toBe(true);
+		// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION01: the wire
+		// stage does not differ, but the other two representation boundaries
+		// are UNAVAILABLE, so the pair does NOT support a full equality
+		// claim. The pre-correction implementation treated an unavailable
+		// stage as "equal" and returned `true` here.
+		expect(diff.stages[0]?.differs).toBe(false);
+		expect(diff.allStagesEqual).toBe(false);
+		expect(diff.unavailableStages).toContain("runtime_projection");
+		expect(diff.unavailableStages).toContain("ai_sdk_prompt");
 		// The two attempts are DISTINCT identities.
 		expect(diff.beforeIdentity.providerAttemptId).toBe("attempt-1");
 		expect(diff.afterIdentity.providerAttemptId).toBe("attempt-2");
@@ -373,6 +458,228 @@ describe("ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01 — the analyzer", () 
 		expect(unavailable.length).toBeGreaterThan(0);
 		expect(unavailable[0]?.representation).toBe(UNAVAILABLE_FROM_TRACE);
 		expect(unavailable[0]?.unavailableReason).toBeTruthy();
+	});
+
+	it("CORR-01: an UNAVAILABLE stage can NEVER imply full equality", () => {
+		// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION01.
+		//
+		// The pre-correction implementation computed:
+		//
+		//     stages.every((s) => !s.available || s.differences.length === 0)
+		//
+		// so an UNAVAILABLE stage counted as "equal". A comparison with
+		// only ONE of the three representation boundaries present therefore
+		// produced a POSITIVE equality result — a claim the evidence did
+		// not support.
+		const before = record("runtime_projection", { messages: MESSAGES_A });
+		const after = record("runtime_projection", {
+			messages: MESSAGES_A,
+			preparationRequestId: "prep-2",
+			providerAttemptId: "attempt-2",
+			iteration: 2,
+		});
+		const diff = comparePrefixForensicsRequests({ before, after });
+
+		// Two of the three boundaries are absent.
+		expect(diff.unavailableStages).toHaveLength(2);
+		expect(diff.allStagesEqual).toBe(false);
+	});
+
+	it("CORR-02: a TOOL-ONLY change is attributed to its stage", () => {
+		// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION01.
+		//
+		// The pre-correction stage attribution read ONLY the message list
+		// (`stage.differences.length > 0`), so a TOOL-ONLY change — the
+		// messages are byte-identical — was invisible to
+		// `earliestDifferingStage`.
+		const toolsBefore = { alpha: { name: "alpha", description: "a" } };
+		const toolsAfter = { alpha: { name: "alpha", description: "a-changed" } };
+		const before = record("runtime_projection", {
+			messages: MESSAGES_A,
+			tools: toolsBefore,
+		});
+		const after = record("runtime_projection", {
+			messages: MESSAGES_A,
+			tools: toolsAfter,
+			preparationRequestId: "prep-2",
+			providerAttemptId: "attempt-2",
+			iteration: 2,
+		});
+		const diff = comparePrefixForensicsRequests({ before, after });
+		const stage = diff.stages.find(
+			(candidate) => candidate.stage === "runtime_projection",
+		);
+		// The MESSAGES are identical.
+		expect(stage?.differences).toHaveLength(0);
+		// But the TOOLS changed, so the stage DIFFERS and the attribution
+		// names it.
+		expect(stage?.differs).toBe(true);
+		expect(stage?.differingCategories).toEqual(["tools"]);
+		expect(diff.earliestDifferingStage).toBe("runtime_projection");
+	});
+
+	it("CORR-03: a BODY-ONLY change is attributed to its stage", () => {
+		// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION01: a
+		// change that appears ONLY in the serialized body — with identical
+		// messages — must still be attributed.
+		const before = record("wire_request", {
+			messages: MESSAGES_A,
+			body: '{"serialization":"A"}',
+		});
+		const after = record("wire_request", {
+			messages: MESSAGES_A,
+			body: '{"serialization":"B"}',
+			preparationRequestId: "prep-2",
+			providerAttemptId: "attempt-2",
+			iteration: 2,
+		});
+		const diff = comparePrefixForensicsRequests({ before, after });
+		const stage = diff.stages.find(
+			(candidate) => candidate.stage === "wire_request",
+		);
+		expect(stage?.differences).toHaveLength(0);
+		expect(stage?.differs).toBe(true);
+		expect(stage?.differingCategories).toEqual(["body"]);
+		expect(diff.earliestDifferingStage).toBe("wire_request");
+	});
+
+	it("CORR-04: a SYSTEM-ONLY change is attributed to its stage", () => {
+		// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION01.
+		const before = record("runtime_projection", {
+			messages: MESSAGES_A,
+			system: "system prompt A",
+		});
+		const after = record("runtime_projection", {
+			messages: MESSAGES_A,
+			system: "system prompt B",
+			preparationRequestId: "prep-2",
+			providerAttemptId: "attempt-2",
+			iteration: 2,
+		});
+		const diff = comparePrefixForensicsRequests({ before, after });
+		const stage = diff.stages.find(
+			(candidate) => candidate.stage === "runtime_projection",
+		);
+		expect(stage?.differences).toHaveLength(0);
+		expect(stage?.differs).toBe(true);
+		expect(stage?.differingCategories).toEqual(["system"]);
+		expect(diff.earliestDifferingStage).toBe("runtime_projection");
+	});
+
+	it("CORR-05: an INCOMPLETE representation is never compared as an empty request", () => {
+		// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION01.
+		//
+		// An unparseable wire body produces a capture whose message list
+		// could not be determined. It must NOT be compared as a complete
+		// zero-message request.
+		const incomplete = record("wire_request", {
+			messages: MESSAGES_A,
+			body: '{"serialization":"A"}',
+		});
+		const before: PrefixForensicsCaptureRecord = {
+			...incomplete,
+			representation: {
+				...incomplete.representation,
+				complete: false,
+				incompleteReason:
+					"the message list was absent or not an array; the representation " +
+					"could not be observed as a complete request",
+			},
+		};
+		const after = record("wire_request", {
+			messages: MESSAGES_A,
+			body: '{"serialization":"B"}',
+			preparationRequestId: "prep-2",
+			providerAttemptId: "attempt-2",
+			iteration: 2,
+		});
+		const diff = comparePrefixForensicsRequests({ before, after });
+		const stage = diff.stages.find(
+			(candidate) => candidate.stage === "wire_request",
+		);
+		expect(stage?.available).toBe(false);
+		expect(stage?.unavailableReason).toContain("INCOMPLETE");
+		expect(diff.allStagesEqual).toBe(false);
+	});
+
+	it("CORR-06: an EMPTY but PRESENT message list is a COMPLETE observation", () => {
+		// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION01: the
+		// completeness contract distinguishes "absent" from "empty".
+		const before = record("wire_request", { messages: [], body: "a" });
+		const after = record("wire_request", {
+			messages: [],
+			body: "b",
+			preparationRequestId: "prep-2",
+			providerAttemptId: "attempt-2",
+			iteration: 2,
+		});
+		expect(before.representation.complete).toBe(true);
+		expect(before.representation.messageCount).toBe(0);
+		const diff = comparePrefixForensicsRequests({ before, after });
+		const stage = diff.stages.find(
+			(candidate) => candidate.stage === "wire_request",
+		);
+		expect(stage?.available).toBe(true);
+		expect(stage?.differs).toBe(true);
+		expect(stage?.differingCategories).toEqual(["body"]);
+	});
+
+	it("CORR-07: a same-session chronology is NOT authoritative without an EXACT lineage", () => {
+		// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION01.
+		//
+		// The offline CLI pairs captures by session + source + file order.
+		// The analyzer's authority rule accepts a shared SESSION, so
+		// without an explicit gate a same-session chronology was labelled
+		// authoritative without establishing that the two captures are
+		// consecutive requests of the same preparation lineage.
+		//
+		// (a) The same preparation identity with a strictly increasing
+		//     iteration IS consecutive.
+		const before = record("runtime_projection", {
+			messages: MESSAGES_A,
+			sessionId: "session-1",
+			preparationRequestId: "prep-1",
+			providerAttemptId: "attempt-1",
+			iteration: 1,
+		});
+		const after = record("runtime_projection", {
+			messages: MESSAGES_A,
+			sessionId: "session-1",
+			preparationRequestId: "prep-1",
+			providerAttemptId: "attempt-2",
+			iteration: 2,
+		});
+		expect(establishConsecutiveRequestLineage(before, after).consecutive).toBe(
+			true,
+		);
+
+		// (b) DIFFERENT preparation identities in the SAME session are NOT
+		//     consecutive: they are two different requests.
+		const differentPreparation = record("runtime_projection", {
+			messages: MESSAGES_A,
+			sessionId: "session-1",
+			preparationRequestId: "prep-9",
+			providerAttemptId: "attempt-9",
+			iteration: 9,
+		});
+		const rejected = establishConsecutiveRequestLineage(
+			before,
+			differentPreparation,
+		);
+		expect(rejected.consecutive).toBe(false);
+		expect(rejected.reason).toContain("DIFFERENT preparation identities");
+
+		// (c) A transport RETRY of the same preparation is consecutive.
+		const retry = record("runtime_projection", {
+			messages: MESSAGES_A,
+			sessionId: "session-1",
+			preparationRequestId: "prep-1",
+			providerAttemptId: "attempt-2",
+			iteration: 1,
+		});
+		expect(establishConsecutiveRequestLineage(before, retry).consecutive).toBe(
+			true,
+		);
 	});
 
 	it("exposes exactly the three representation boundaries, in causal order", () => {

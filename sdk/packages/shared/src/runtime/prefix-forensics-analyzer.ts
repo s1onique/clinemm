@@ -131,7 +131,36 @@ export interface PrefixForensicsStageComparison {
 	readonly tools: PrefixForensicsToolDifference;
 	readonly system: PrefixForensicsSystemDifference;
 	readonly bodyFingerprintChanged?: boolean;
+	/**
+	 * ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION01: whether THIS
+	 * stage differs at all, across EVERY change category.
+	 *
+	 * The pre-correction implementation derived stage equality from the
+	 * MESSAGE list alone, so a stage whose tool inventory, system prompt or
+	 * serialized body had changed was reported as "equal". Every change
+	 * category is now included.
+	 */
+	readonly differs: boolean;
+	/**
+	 * ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION01: the change
+	 * categories that actually differ at this stage.
+	 *
+	 * Empty when the stage does not differ. This is what the stage
+	 * attribution reads, so a TOOL-ONLY or BODY-ONLY change is never
+	 * silently omitted from the attribution.
+	 */
+	readonly differingCategories: readonly PrefixForensicsChangeCategory[];
 }
+
+/**
+ * ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION01: the change
+ * categories a stage comparison can report.
+ */
+export type PrefixForensicsChangeCategory =
+	| "messages"
+	| "tools"
+	| "system"
+	| "body";
 
 /** The comparison of TWO requests. */
 export interface PrefixForensicsRequestDifference {
@@ -153,8 +182,26 @@ export interface PrefixForensicsRequestDifference {
 	readonly stages: readonly PrefixForensicsStageComparison[];
 	/** The EARLIEST stage at which a difference appears. */
 	readonly earliestDifferingStage?: PrefixForensicsStageName;
-	/** Whether the stages were all equal. */
+	/**
+	 * Whether the stages were all equal.
+	 *
+	 * ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION01: an
+	 * UNAVAILABLE stage can no longer imply equality. The pre-correction
+	 * implementation treated `!stage.available` as "equal", so a comparison
+	 * in which two of the three representation boundaries were missing
+	 * produced a POSITIVE equality result — a claim the evidence did not
+	 * support. Equality now requires EVERY stage to be available AND
+	 * undiffering.
+	 */
 	readonly allStagesEqual: boolean;
+	/**
+	 * ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION01: the stages
+	 * that could NOT be compared.
+	 *
+	 * A non-empty list means the equality claim is INCOMPLETE: the
+	 * comparison is fail-closed, not affirmative.
+	 */
+	readonly unavailableStages: readonly PrefixForensicsStageName[];
 }
 
 /**
@@ -379,6 +426,12 @@ function compareStage(
 		differences: [],
 		tools: { kind: "unchanged" },
 		system: { systemChanged: false },
+		// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION01: an
+		// unavailable stage does NOT differ — but it also does NOT support
+		// an equality claim. `differs: false` here is paired with
+		// `available: false`, and the equality verdict reads BOTH.
+		differs: false,
+		differingCategories: [],
 	});
 
 	if (!before) {
@@ -418,6 +471,35 @@ function compareStage(
 		left.bodyFingerprint !== right.bodyFingerprint ||
 		left.bodyBytes !== right.bodyBytes;
 
+	// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION01: the change
+	// categories. EVERY category is checked — the pre-correction
+	// implementation compared the MESSAGE list alone, so a TOOL-ONLY, a
+	// SYSTEM-ONLY or a BODY-ONLY change was invisible to the stage
+	// attribution.
+	const differingCategories: PrefixForensicsChangeCategory[] = [];
+	if (differences.length > 0) {
+		differingCategories.push("messages");
+	}
+	if (tools.kind !== "unchanged") {
+		differingCategories.push("tools");
+	}
+	if (systemChanged) {
+		differingCategories.push("system");
+	}
+	if (bodyFingerprintChanged) {
+		differingCategories.push("body");
+	}
+
+	// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION01: an
+	// INCOMPLETE representation (a wire body that could not be parsed) is
+	// not a comparable observation. It is reported as unavailable rather
+	// than compared as an empty request.
+	if (left.complete === false || right.complete === false) {
+		return unavailable(
+			"one of the two captures is an INCOMPLETE representation; it cannot be compared as a request",
+		);
+	}
+
 	return {
 		stage,
 		representation: left.representation,
@@ -442,6 +524,80 @@ function compareStage(
 		right.bodyFingerprint !== undefined
 			? { bodyFingerprintChanged }
 			: {}),
+		differs: differingCategories.length > 0,
+		differingCategories,
+	};
+}
+
+/**
+ * ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION01: establish whether
+ * two capture records are an EXACT consecutive request lineage.
+ *
+ * ## Why this exists
+ *
+ * `comparePrefixForensicsRequests` accepts a shared SESSION as a sufficient
+ * authority condition. That rule is correct for a caller that already knows
+ * the two records are consecutive requests. A caller that PAIRS records by
+ * file order — the offline CLI — does not know that, and therefore labelled
+ * a same-session chronology "authoritative" without ever establishing that
+ * the two captures are consecutive requests of the same preparation lineage.
+ *
+ * ## The rule
+ *
+ * A pair is CONSECUTIVE only when the identity carries an exact progression:
+ *
+ *   - the same preparation identity, with a strictly increasing ITERATION
+ *     (the normal case: two consecutive model turns of one preparation), or
+ *   - the same preparation identity, with a DISTINCT attempt ordinal (a
+ *     transport retry of the same prepared request).
+ *
+ * Anything else — a different preparation identity, an absent identity, a
+ * non-increasing counter — is NOT consecutive, and the pair must be reported
+ * as `NOT_AUTHORITATIVE` with an explicit reason.
+ */
+export function establishConsecutiveRequestLineage(
+	before: PrefixForensicsCaptureRecord,
+	after: PrefixForensicsCaptureRecord,
+): { consecutive: boolean; reason?: string } {
+	if (
+		before.preparationRequestId === undefined ||
+		after.preparationRequestId === undefined
+	) {
+		return {
+			consecutive: false,
+			reason:
+				"the captures carry no preparation identity; consecutive request lineage cannot be established",
+		};
+	}
+	if (before.preparationRequestId !== after.preparationRequestId) {
+		return {
+			consecutive: false,
+			reason:
+				"the captures belong to DIFFERENT preparation identities; they are two different requests, not a consecutive pair",
+		};
+	}
+	const beforeIteration = before.iteration;
+	const afterIteration = after.iteration;
+	if (
+		beforeIteration !== undefined &&
+		afterIteration !== undefined &&
+		afterIteration > beforeIteration
+	) {
+		return { consecutive: true };
+	}
+	const beforeAttempt = before.providerAttemptId;
+	const afterAttempt = after.providerAttemptId;
+	if (
+		beforeAttempt !== undefined &&
+		afterAttempt !== undefined &&
+		beforeAttempt !== afterAttempt
+	) {
+		return { consecutive: true };
+	}
+	return {
+		consecutive: false,
+		reason:
+			"the captures share a preparation identity but carry no strictly increasing iteration or attempt ordinal; consecutive request lineage cannot be established",
 	};
 }
 
@@ -488,6 +644,7 @@ export function comparePrefixForensicsRequests(input: {
 			afterIdentity: identity(after),
 			stages: [],
 			allStagesEqual: false,
+			unavailableStages: [...PREFIX_FORENSICS_STAGES],
 		};
 	}
 
@@ -500,6 +657,7 @@ export function comparePrefixForensicsRequests(input: {
 			afterIdentity: identity(after),
 			stages: [],
 			allStagesEqual: false,
+			unavailableStages: [...PREFIX_FORENSICS_STAGES],
 		};
 	}
 
@@ -520,12 +678,26 @@ export function comparePrefixForensicsRequests(input: {
 	const stages = PREFIX_FORENSICS_STAGES.map((stage) =>
 		compareStage(stage, before, after),
 	);
+	// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION01: the stage
+	// attribution now reads `differs`, which covers EVERY change category
+	// (messages, tools, system, body). The pre-correction implementation
+	// looked only at `differences.length > 0` — the MESSAGE list — so a
+	// tool-only, a system-only or a body-only change was omitted from the
+	// attribution entirely.
 	const earliestDifferingStage = stages.find(
-		(stage) => stage.available && stage.differences.length > 0,
+		(stage) => stage.available && stage.differs,
 	)?.stage;
-	const allStagesEqual = stages.every(
-		(stage) => !stage.available || stage.differences.length === 0,
-	);
+	// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION01: an
+	// UNAVAILABLE stage can no longer imply equality. The pre-correction
+	// implementation treated `!stage.available` as "equal", so a comparison
+	// with two of the three boundaries missing produced a POSITIVE
+	// equality result. Equality now requires EVERY stage to be available
+	// AND undiffering.
+	const unavailableStages = stages
+		.filter((stage) => !stage.available)
+		.map((stage) => stage.stage);
+	const allStagesEqual =
+		unavailableStages.length === 0 && stages.every((stage) => !stage.differs);
 
 	return {
 		authoritative: comparable,
@@ -541,5 +713,6 @@ export function comparePrefixForensicsRequests(input: {
 		stages,
 		...(earliestDifferingStage !== undefined ? { earliestDifferingStage } : {}),
 		allStagesEqual,
+		unavailableStages,
 	};
 }

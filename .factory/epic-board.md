@@ -36646,3 +36646,124 @@ DEFAULT OFF, and behaviour-preserving to remove; the removal procedure is in
 session, captures the WIRE stage, and joins the ClineMM records to the engine's cache
 diagnostics by a shared request identity — which would correlate the reuse depth
 with the common prefix and decide the repair question.
+
+# ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION01 — HALT_CAUSAL_ATTRIBUTION_UNPROVEN — 2026-11-21
+
+EVIDENCE: `.factory/evidence/ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01/`
+ACT: `.factory/acts/ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION01.md`
+
+Subject HEAD (entry): `19b610083` (branch `main`). Preserved commits `616c9db8a` and
+`19b610083` — neither is rewritten. No push, no PR, no installed-extension
+replacement, no inference-service restart, no provider request issued.
+
+## The verdict this correction adopts
+
+The correction review returned `HALT_CAUSAL_ATTRIBUTION_UNPROVEN`. That verdict is
+**adopted unchanged**. The structural discovery is preserved; the causal claim is
+withdrawn.
+
+| Claim | Status |
+|---|---|
+| `PREFIX_MUTATION_ISOLATED` — ClineMM deliberately rewrites historical `read_files` results IN PLACE, preserving message count, order, role, position and `toolCallId` | **RETAINED** — direct observation, 21 occurrences across 6 hosts |
+| Producer: `MessageBuilder.replaceOutdatedReadContent()` | **RETAINED** — source-level attribution |
+| D1 (system/tool-prefix instability) | **RETAINED — REFUTED** |
+| The rewrite is the cause of the P40/5060 Ti 3,895-token Strata plateau | **WITHDRAWN — not established** |
+| "The plateau is STICKY" as an explanation | **WITHDRAWN** — a plausible mechanism, not an observed engine behaviour |
+| "The server-side checkpoint limitation is therefore NOT the explanation" | **WITHDRAWN** — the client's mutation does not exclude a server-side contribution without a joined observation |
+| `STRATA_PLATEAU_CAUSE_UNPROVEN` | **STILL OPEN** |
+
+The two gaps are set out in `11-causal-attribution-separation.md`:
+
+1. **Different model and session.** The three detailed mutations come from a preserved
+   `course` session on provider `minimax`, model `MiniMax-M3`. The engine
+   investigation concerns **Qwen3.8-Flash-Next on Strata** (P40 Q2_0, RTX 5060 Ti).
+   **No authoritative cross-system join establishes the same serving path.**
+2. **One rewrite does not prove a persistent plateau.** A one-time rewrite explains
+   the A -> B cache MISS. Whether C and every later request continue to miss depends
+   on checkpoint retention and placement — and the traces contain occasional
+   deep-cache recoveries followed by fresh collapses, which a permanent-plateau
+   mechanism would not predict.
+
+## The two P0 code defects, corrected
+
+### P0 #1 — the wire forensic capture could never run on its own
+
+`recordPrefixForensics({stage: "wire_request"})` sat inside the provider-request
+capture callback behind two guards: the wrapper returned the **unwrapped** fetch when
+neither the full wire capture nor the observer was active, and the callback returned
+**early** when the ordinary wire capture was off. Setting only
+`CLINEMM_PREFIX_FORENSICS=1` therefore did **not** run the wire forensic capture — the
+ACT's independent opt-in contract was violated. The original eight capture-writer
+witnesses called `recordPrefixForensics()` **directly**, so they never exercised the
+real HTTP boundary.
+
+**Corrected:** the forensic switch is now a third, independent reason to wrap the
+gateway and to read the body — consulted at wrap time and at call time. The
+**default-off path is byte-identical** (base fetch unchanged, no body read, no clone,
+no artifact). Arming it does **not** enable the ordinary provider-request capture.
+
+### P0 #2 — an invalid wire body was recorded as a complete request
+
+`computeRepresentationFingerprint()` returned `complete: true` unconditionally, so an
+unparseable wire body was recorded as a **complete zero-message representation** — a
+fabricated structural claim an analyzer could compare as "equal" against any other
+empty request.
+
+**Corrected:** the completeness contract distinguishes **absent** (`complete: false`,
+with an `incompleteReason`) from **empty but present** (`complete: true`). The
+analyzer refuses to compare an incomplete representation.
+
+## The three P1 analyzer defects, corrected
+
+| Defect | Correction |
+|---|---|
+| `allStagesEqual` treated an **unavailable** stage as equal, so a comparison with one of three boundaries present produced a positive equality claim | Equality now requires **every** stage available **and** undiffering; `unavailableStages` makes the fail-closed state explicit |
+| `earliestDifferingStage` read only the **message** list, so a tool-only, system-only or body-only change was invisible to the attribution | Each stage now carries `differs` and `differingCategories` (`messages` / `tools` / `system` / `body`); the attribution reads `differs` |
+| The CLI paired captures by session + source + ordering and reported the analyzer's flag verbatim, labelling a same-session chronology authoritative | An explicit **exact-lineage gate** (`establishConsecutiveRequestLineage`, exported and unit-tested) requires the same preparation identity with a strictly increasing iteration, or a distinct attempt ordinal; everything else is `NOT_AUTHORITATIVE` with a reason |
+
+The V5 witness was per-stage and could not show an end-to-end stage transition;
+`V5-CORR` supplies all three stages of the same request pair.
+
+## Packaging
+
+| Item | Correction |
+|---|---|
+| The raw excerpt in `02-sanitized-request-difference-matrix.md` §2.1 | **REDACTED** — verbatim file content and the live `toolCallId` (now a truncated digest); the structural facts unchanged |
+| Absolute paths in `08-entry-and-identity-evidence.md`, `06-test-receipts.txt` | **REDACTED** — the operator's home directory does not belong in committed evidence |
+| Privacy audit scope | **EXTENDED** to every committed evidence file, not only the 173 sanitized records — a clean scan of the derivative did not establish the committed files were sanitized, and they were not |
+| Artifact hash manifest | **CORRECTED** — it listed its own SHA-256, permanently unverifiable (declared `18a43892…`, actual `4b6496c9…`). It now omits itself and documents the external-digest procedure |
+
+The invalid Leamas gate-summary binding is historical P2 residue and does not block
+this correction.
+
+## Executable verification
+
+| Gate | Result |
+|---|---|
+| Wire-seam suite (new, 5 tests) | **PASS** — and **3 FAIL** against the pre-correction implementation (the RED) |
+| Analyzer suite (20 tests) | **PASS** — and **10 FAIL** against the pre-correction implementation (the RED) |
+| shared package sweep | **593 passed / 6 skipped**, 0 failed |
+| llms package sweep | 19 failed / **1167 passed** — the 19 failures are **identical at pristine HEAD**; delta **+5 new passing** |
+| agents package sweep | 43 failed / 560 passed — **identical at pristine HEAD** |
+| Typecheck (shared, llms) | **EXIT 0** |
+| Biome lint | **EXIT 0** (2 infos; the same `noNonNullAssertion` convention as the pre-existing sibling suite) |
+| Artifact hashes | **23 verified / 0 mismatches / 0 self-referential entries** |
+| Committed-evidence privacy re-scan | **0** absolute paths, tool-call ids, API keys, bearer tokens, verbatim content excerpts |
+| Provider semantic delta | **NONE** |
+| New provider requests / inference runs | **NONE** |
+
+## Decision
+
+**`HALT_CAUSAL_ATTRIBUTION_UNPROVEN` is the verdict.** The capture implementation now
+meets its opt-in contract and the analyzer no longer over-claims its evidence, so the
+instrumentation is fit for the successor experiment. The plateau's precise cause is
+**not** qualified, and no repair is proposed: the finding remains a DELIBERATE,
+DOCUMENTED trade-off (freshness over prefix-cache preservation), and choosing which
+of two documented priorities gives way is a product policy decision.
+
+**Next experiment (the review's, adopted unchanged):** correlate ONE rewrite with the
+next two or three Strata cache decisions, distinguishing (1) the cost of the initial
+prefix invalidation, (2) how quickly the new prefix becomes cacheable, and (3) whether
+checkpoint retention prevents recovery. The corrected wire seam makes this possible
+for the first time — stage C now actually captures the serialized body under its own
+opt-in.

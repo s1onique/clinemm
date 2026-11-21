@@ -39,6 +39,17 @@ invalidate the cache from token 0. Here they are stable.
 
 ### Verdict: **CONFIRMED — the earliest differing component is a REPLACED TOOL RESULT.**
 
+> **CAUSAL ATTRIBUTION CAVEAT
+> (ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION01).**
+> The three detailed mutations analysed here come from a preserved `course`
+> session on **provider `minimax`, model `MiniMax-M3`**. The engine
+> investigation concerns **Qwen3.8-Flash-Next served by Strata** (P40 Q2_0
+> and RTX 5060 Ti). No authoritative cross-system join establishes that
+> these are the same serving path. The observations below establish the
+> MECHANISM and its sufficiency IN PRINCIPLE; they do **not** establish
+> that the mechanism accounts for the specific Strata 3,895-token plateau.
+> See `11-causal-attribution-separation.md`.
+
 | Quantity | Value |
 |---|---|
 | Consecutive pairs analysed | 172 |

@@ -14,6 +14,10 @@ import {
 	estimateTokens,
 	hasModelBehaviorWireReasoningObserver,
 	isModelBehaviorWireReasoningObserverActive,
+	// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION01: the
+	// forensic capture's own switch is a THIRD, INDEPENDENT reason to wrap
+	// the provider fetch and to read the request body.
+	isPrefixForensicsEnabled,
 	MODEL_BEHAVIOR_WIRE_REASONING_REQUEST_ID_METADATA_KEY,
 	notifyModelBehaviorWireReasoningObservers,
 } from "@cline/shared";
@@ -690,9 +694,20 @@ export function wrapFetchForProviderRequestCapture(
 	// capture) so an ALREADY-wrapped gateway keeps working across an ON/OFF
 	// toggle of the trace. The per-CALL decision — whether to read the body
 	// at all — is made inside the wrapper, against the LIVE observer state.
+	//
+	// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION01: the
+	// FORENSIC capture is a THIRD, INDEPENDENT reason to wrap. Without it,
+	// arming only `CLINEMM_PREFIX_FORENSICS=1` left the gateway UNWRAPPED
+	// and the wire-stage forensic capture could never observe anything —
+	// the ACT's independent opt-in contract was violated.
 	const captureEnabledAtWrap = isWireCaptureEnabled();
 	const observerRegisteredAtWrap = hasModelBehaviorWireReasoningObserver();
-	if (!captureEnabledAtWrap && !observerRegisteredAtWrap) {
+	const forensicsEnabledAtWrap = isPrefixForensicsEnabled();
+	if (
+		!captureEnabledAtWrap &&
+		!observerRegisteredAtWrap &&
+		!forensicsEnabledAtWrap
+	) {
 		return baseFetch;
 	}
 	const delegate = baseFetch ?? globalThis.fetch;
@@ -727,7 +742,12 @@ export function wrapFetchForProviderRequestCapture(
 		// The observer's liveness is read at CALL time so an ON/OFF toggle of
 		// the model-behavior recorder takes effect for the NEXT request.
 		const observerEnabled = isModelBehaviorWireReasoningObserverActive();
-		if (!captureEnabled && !observerEnabled) {
+		// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION01: the
+		// forensic capture's own switch is read at CALL time too. It is an
+		// INDEPENDENT reason to read the body: arming ONLY
+		// `CLINEMM_PREFIX_FORENSICS=1` must reach the wire boundary.
+		const forensicsEnabled = isPrefixForensicsEnabled();
+		if (!captureEnabled && !observerEnabled && !forensicsEnabled) {
 			// OFF fast path: delegate IMMEDIATELY. No body read, no clone,
 			// no parsing, no asynchronous diagnostic work — and the
 			// delegate's own promise is returned unchanged.
@@ -745,23 +765,32 @@ export function wrapFetchForProviderRequestCapture(
 				if (isModelBehaviorWireReasoningObserverActive()) {
 					notifyWireReasoningObservers(request, body, method);
 				}
-				if (!captureEnabled) {
+				// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION01:
+				// the forensic capture (stage C) is INDEPENDENT of the full
+				// provider-request capture. It used to sit BEHIND the
+				// `if (!captureEnabled) return;` guard, which meant the
+				// forensic capture could never run on its own. It now runs
+				// whenever the forensic switch is armed — and the ordinary
+				// capture runs only when IT is enabled.
+				if (captureEnabled) {
+					recordProviderRequestCapture({
+						stage: "wire_request",
+						request,
+						payload: {
+							url: input instanceof Request ? input.url : String(input),
+							method,
+							body,
+						},
+						// ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01 (R1):
+						// the reasoning-relevant view of the SERIALIZED body. This
+						// is the wire-level authority for the reasoning policy; the
+						// raw body is never retained.
+						wireReasoning: summarizeWireReasoning(body),
+					});
+				}
+				if (!forensicsEnabled) {
 					return;
 				}
-				recordProviderRequestCapture({
-					stage: "wire_request",
-					request,
-					payload: {
-						url: input instanceof Request ? input.url : String(input),
-						method,
-						body,
-					},
-					// ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01 (R1):
-					// the reasoning-relevant view of the SERIALIZED body. This
-					// is the wire-level authority for the reasoning policy; the
-					// raw body is never retained.
-					wireReasoning: summarizeWireReasoning(body),
-				});
 				// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01: the SERIALIZED
 				// provider request (stage C). This is the provider-bound body, at
 				// the existing wire seam, immediately around the HTTP
