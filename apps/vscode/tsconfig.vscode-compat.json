@@ -6,6 +6,7 @@
 			"DOM"
 		],
 		"noEmit": true,
+		"allowImportingTsExtensions": true,
 		"rootDir": "../..",
 		"types": [
 			"node",

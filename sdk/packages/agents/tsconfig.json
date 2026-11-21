@@ -2,6 +2,8 @@
 	"extends": "../tsconfig.base.json",
 	"compilerOptions": {
 		"outDir": "./dist",
+		"allowImportingTsExtensions": true,
+		"emitDeclarationOnly": true,
 		"rootDir": "./src"
 	},
 	"include": ["src/**/*"],

@@ -145,6 +145,13 @@ function runCli(dir: string): {
 		authoritative: boolean;
 		unavailableReason?: string;
 		earliestDifferingStage?: string;
+		/**
+		 * ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION03: every
+		 * change category the analyzer detected across the compared stages.
+		 */
+		differingCategories?: string[];
+		unavailableStages?: string[];
+		allStagesEqual?: boolean;
 		commonPrefixLength?: number;
 		firstDifference?: { index: number; kind: string };
 	}[];
@@ -297,6 +304,10 @@ describe("ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION02 — the CLI 
 		]);
 		try {
 			const result = runCli(dir);
+			// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION03: the
+			// exact pair count is asserted, so the negative control cannot
+			// pass VACUOUSLY by producing no pairs at all.
+			expect(result.pairs).toHaveLength(1);
 			for (const pair of result.pairs) {
 				expect(pair.authoritative).toBe(false);
 				expect(pair.unavailableReason).toBeTruthy();
@@ -324,6 +335,10 @@ describe("ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION02 — the CLI 
 		]);
 		try {
 			const result = runCli(dir);
+			// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION03: the
+			// exact pair count is asserted, so the negative control cannot
+			// pass VACUOUSLY by producing no pairs at all.
+			expect(result.pairs).toHaveLength(1);
 			for (const pair of result.pairs) {
 				expect(pair.authoritative).toBe(false);
 				expect(pair.unavailableReason).toBeTruthy();
@@ -350,6 +365,10 @@ describe("ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION02 — the CLI 
 		]);
 		try {
 			const result = runCli(dir);
+			// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION03: the
+			// exact pair count is asserted, so the negative control cannot
+			// pass VACUOUSLY by producing no pairs at all.
+			expect(result.pairs).toHaveLength(1);
 			for (const pair of result.pairs) {
 				expect(pair.authoritative).toBe(false);
 				expect(pair.unavailableReason).toBeTruthy();
@@ -388,6 +407,93 @@ describe("ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION02 — the CLI 
 			expect(pair?.authoritative).toBe(true);
 			// ...but the unavailable stage is reported, not treated as
 			// equal.
+			expect(pair?.unavailableStages).toContain("wire_request");
+			expect(pair?.allStagesEqual).toBe(false);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	it("CLI-07: the report names EVERY change category, not only the message one", () => {
+		// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION03.
+		//
+		// The CORRECTION02 CLI selected its first differing stage with
+		//
+		//     diff.stages.find((c) => c.available && c.differences.length > 0)
+		//
+		// which reads ONLY the MESSAGE list. A TOOL-ONLY, a SYSTEM-ONLY or
+		// a BODY-ONLY change was correctly detected by the analyzer and
+		// then OMITTED from the CLI's reported first difference — a
+		// regression of CORRECTION01's own fix.
+		//
+		// The witness here changes the WIRE BODY ONLY: the messages are
+		// byte-identical across both turns, so a message-only selection
+		// finds nothing at all and reports no stage.
+		const dir = writeCaptures([
+			...stagesOf({
+				preparationRequestId: "prep-29",
+				providerAttemptId: "attempt-29",
+				iteration: 29,
+			}),
+			...stagesOf({
+				preparationRequestId: "prep-30",
+				providerAttemptId: "attempt-30",
+				iteration: 30,
+				bodyPrefix: "other-body",
+			}),
+		]);
+		try {
+			const result = runCli(dir);
+			expect(result.pairCount).toBe(1);
+			const pair = result.pairs[0];
+			expect(pair?.authoritative).toBe(true);
+			// The BODY-ONLY change is now attributed...
+			expect(pair?.earliestDifferingStage).toBe("wire_request");
+			// ...and its category is named.
+			expect(pair?.differingCategories).toContain("body");
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	it("CLI-08: a CONFLICTING same-stage duplicate is EXCLUDED, not silently chosen", () => {
+		// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION03: the
+		// grouping used `stages.set(...)`, so two DIFFERENT observations
+		// of one boundary were resolved by file order. Which one is
+		// authoritative is not decidable from the capture, so the stage
+		// must be EXCLUDED and reported unavailable.
+		const second = stagesOf({
+			preparationRequestId: "prep-30",
+			providerAttemptId: "attempt-30",
+			iteration: 30,
+			messages: MESSAGES_MUTATED,
+		});
+		// A SECOND, DIFFERENT observation of the second turn's wire stage.
+		const conflicting = record({
+			stage: "wire_request",
+			messages: MESSAGES_MUTATED,
+			sessionId: "session-1",
+			preparationRequestId: "prep-30",
+			providerAttemptId: "attempt-30",
+			iteration: 30,
+			body: "a-completely-different-body",
+		});
+		const dir = writeCaptures([
+			...stagesOf({
+				preparationRequestId: "prep-29",
+				providerAttemptId: "attempt-29",
+				iteration: 29,
+			}),
+			...second,
+			conflicting,
+		]);
+		try {
+			const result = runCli(dir);
+			expect(result.pairCount).toBe(1);
+			const pair = result.pairs[0];
+			expect(pair?.authoritative).toBe(true);
+			// The conflicting wire stage is EXCLUDED, not arbitrarily
+			// resolved by file order.
 			expect(pair?.unavailableStages).toContain("wire_request");
 			expect(pair?.allStagesEqual).toBe(false);
 		} finally {

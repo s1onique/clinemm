@@ -36899,3 +36899,173 @@ three-request comparison the successor experiment needs. Live forensic qualifica
 may proceed once authorized, on the same model and engine configuration, with the
 source/build identity preserved and the ClineMM observations correlated to Strata's
 cache decisions by an independently verified identity.
+
+# ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION03 — HALT_INCOMPLETE_LINEAGE_ACCEPTED — 2026-11-21
+
+EVIDENCE: `.factory/evidence/ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION03/`
+ACT: `.factory/acts/ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION03.md`
+
+Subject HEAD (entry): `a49bd8e5d` (branch `main`). Preserves `616c9db8a`, `19b610083`,
+`03d887fde` and `a49bd8e5d` — none is rewritten. No push, no PR, no
+installed-extension replacement, no inference-service restart, no provider request
+issued.
+
+## The verdict this correction adopts
+
+`HALT_INCOMPLETE_LINEAGE_ACCEPTED` for live forensic qualification. The review's
+central claim is **CONFIRMED by execution** and is corrected here.
+
+CORRECTION02 is **RETAINED**: the inverted lineage model, the within-request /
+consecutive-turn / retry distinction and the three-stage bundle aggregation are
+correct and are not touched by this correction.
+
+## The defect — INCOMPLETE lineage was ACCEPTED
+
+`establishRequestLineage()` checked that the preparation and attempt identities
+DIFFER only when BOTH were present:
+
+```ts
+if (
+    before.preparationRequestId !== undefined &&
+    after.preparationRequestId !== undefined &&
+    before.preparationRequestId === after.preparationRequestId
+) {
+    return { consecutive: false };
+}
+```
+
+A record with **no** preparation identity therefore **SKIPPED** the check entirely
+and fell through to `return { consecutive: true, relation: "consecutive_turn" }`.
+That promoted **incomplete** capture evidence into a **positive** attribution, and
+contradicted CORRECTION02's own stated contract that *every required identity is
+mandatory*.
+
+Two further authority gaps and three P1s:
+
+| Priority | Finding | Action |
+|---|---|---|
+| P0 | Missing preparation/attempt/cohort identities could pass the lineage gate | Require every identity, non-empty, on BOTH sides |
+| P0 | `comparePrefixForensicsBundles()` could return `authoritative: true` without applying the lineage gate | The comparator applies the gate ITSELF |
+| P1 | Duplicate captures with the same identity and stage silently overwrote each other via `stages.set(...)` | Collapse identical; EXCLUDE conflicting |
+| P1 | The CLI selected its first differing stage with `differences.length > 0` — message-only | Use `diff.earliestDifferingStage`; report EVERY change category |
+| P1 | CLI-03/04/05 iterated over `result.pairs` and asserted inside the loop | Assert the EXACT expected pair count |
+
+## The correction
+
+### The mandatory-identity gate
+
+`establishRequestLineage()` now requires a **non-empty** cohort, session,
+iteration, preparation identity and attempt identity **on both sides**. A missing
+identity is `NOT_AUTHORITATIVE` with a reason **naming** that identity. A timestamp
+is **never** substituted.
+
+### The comparator is self-authorising
+
+`comparePrefixForensicsBundles()` now applies the lineage gate itself and returns
+`authoritative: false` with a reason when the two bundles are not proven
+consecutive turns. Callers may not be required to remember a second check.
+
+### Conflicting duplicates fail closed
+
+A **byte-identical re-emission** of a stage is a harmless duplicate and is
+collapsed. A **conflicting** duplicate is **EXCLUDED**: the stage is removed from
+the bundle and reported `UNAVAILABLE_FROM_TRACE`, so the comparison fails closed
+instead of asserting a boundary the capture cannot establish. The old code
+resolved the conflict by **file order**.
+
+### Every change category is reported
+
+The CLI selects its first differing stage by `diff.earliestDifferingStage` and
+carries **every** detected change category (`messages`, `tools`, `system`, `body`)
+in a new `differingCategories` field. A tool-only, system-only or body-only change
+was previously detected by the analyzer and then **omitted** from the CLI's report.
+
+### P1 found by execution, not by the review — the CLI was not runnable as a real Node process
+
+The CLI is invoked from source as
+`node --experimental-strip-types prefix-forensics-analyzer-cli.ts <dir>`. Its
+relative import was **extensionless** in a `"type": "module"` package, which is
+invalid per the ESM specification; Node 26 rejects it outright with
+`ERR_MODULE_NOT_FOUND`. This was **reproduced at pristine HEAD `a49bd8e5d`**, so
+the CORRECTION02 CLI suite could not surface it on this runtime.
+
+The CLI and the analyzer now use **explicit `.ts` extensions**, and
+`allowImportingTsExtensions` is enabled in the tsconfigs that consume the shared
+source (`shared`, `llms`, `agents`, `apps/vscode/tsconfig.vscode-compat.json`).
+The CLI is now genuinely runnable as a real Node process, which is what makes
+CLI-07 and CLI-08 real end-to-end witnesses.
+
+## Executable verification
+
+| Witness | Control | Result |
+|---|---|---|
+| AUTH-01 | a MISSING preparation identity | **REFUSED** |
+| AUTH-02 | a MISSING attempt identity | **REFUSED** |
+| AUTH-03 | a MISSING cohort | **REFUSED** |
+| AUTH-04 | the comparator applies the lineage gate ITSELF | **PASS** |
+| AUTH-05 | the comparator REFUSES two non-consecutive bundles | **REFUSED** |
+| AUTH-06 | a CONFLICTING same-stage duplicate | **EXCLUDED** |
+| AUTH-07 | an IDENTICAL same-stage duplicate | **COLLAPSED** |
+| CLI-01/02 | two complete three-stage requests, then a continuation | **PASS** (B->C, C->D) |
+| CLI-03 | a RETRY | **REFUSED**, exactly 1 pair |
+| CLI-04 | a NON-ADJACENT iteration gap | **REFUSED**, exactly 1 pair |
+| CLI-05 | a CROSS-SESSION pair | **REFUSED**, exactly 1 pair |
+| CLI-06 | a bundle with a MISSING stage | reported incomplete, never as equal |
+| CLI-07 | the report names EVERY change category | **PASS** (body-only change attributed) |
+| CLI-08 | a CONFLICTING same-stage duplicate | **EXCLUDED**, stage reported unavailable |
+
+**RED** — reverting only the two production files to `a49bd8e5d` while keeping the
+new witnesses:
+
+```
+× AUTH-01, AUTH-02, AUTH-03, AUTH-05, AUTH-06, CLI-01 … CLI-08
+Tests  13 failed | 22 passed (35)
+```
+
+**GREEN** — `Tests  35 passed (35)`.
+
+## Conservation
+
+| Gate | Result |
+|---|---|
+| Analyzer + CLI suite (35 tests) | **PASS** — and **13 FAIL** against the CORRECTION02 implementation |
+| shared package sweep | **608 passed / 6 skipped**, 0 failed (was 599: **+9**) |
+| llms package sweep | 17 failed / **1170 passed** — the 17 failures are **identical at pristine HEAD** (was 1168: **+2**) |
+| agents package sweep | 43 failed / 560 passed — **identical at pristine HEAD** |
+| apps/vscode vitest sweep | 63 failed files / 475 passed — **one FEWER** than pristine HEAD (64 / 474); no new failure |
+| Typecheck (shared, llms, agents) | **EXIT 0** |
+| Typecheck (apps/vscode `check-types`) | **EXIT 0** |
+| Build (shared: bundle + declaration emit) | **EXIT 0** |
+| Biome lint | **EXIT 0** (2 infos; the same pre-existing `noNonNullAssertion` convention) |
+| Provider semantic delta | **NONE** |
+| New inference run | **NONE** |
+
+The apps/vscode sweep moved from **64 failed files** to **63 failed files** because
+the explicit-`.ts`-extension fix unblocked one previously-unloadable suite. There
+is **no new failure** in any sweep.
+
+## What is NOT changed
+
+- The CORRECTION02 lineage model, the three-stage bundle aggregation and the wire
+  preparation identity are **retained** as delivered.
+- The wire-capture and completeness repairs of CORRECTION01 are **retained**.
+- The causal separation is **retained**: `PREFIX_MUTATION_ISOLATED` stays CLOSED;
+  `STRATA_PLATEAU_CAUSE_UNPROVEN` stays **OPEN**.
+- The stale-read policy is **not** touched — the repair question remains a product
+  policy decision.
+- No push, no VSIX replacement, no inference-service restart, no provider request.
+
+## Decision
+
+The bounded authority patch has passed its gates: the authority invariants hold,
+the negative controls are non-vacuous, and the CLI is genuinely runnable end to
+end. **Live installed-runtime Strata qualification is authorized** on the same
+model and engine configuration, with the source/build identity preserved and the
+ClineMM observations correlated to Strata's cache decisions by an independently
+verified identity.
+
+The successor experiment consumes the new diagnostics rather than building more
+infrastructure: correlate ONE rewrite with the next two or three Strata cache
+decisions, distinguishing the cost of the initial prefix invalidation, how quickly
+the new prefix becomes cacheable, and whether checkpoint retention prevents
+recovery.

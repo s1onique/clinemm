@@ -35,10 +35,12 @@
  * "equal".
  */
 
-import type {
-	PrefixForensicsCaptureRecord,
-	PrefixForensicsMessageFingerprint,
-} from "./prefix-forensics";
+import {
+	PREFIX_FORENSICS_FINGERPRINT_PRODUCER,
+	PREFIX_FORENSICS_SCHEMA_VERSION,
+	type PrefixForensicsCaptureRecord,
+	type PrefixForensicsMessageFingerprint,
+} from "./prefix-forensics.ts";
 
 /** The three representation boundaries, in causal order. */
 export const PREFIX_FORENSICS_STAGES = [
@@ -612,15 +614,35 @@ export function establishRequestLineage(
 	before: PrefixForensicsCaptureRecord,
 	after: PrefixForensicsCaptureRecord,
 ): PrefixForensicsLineageVerdict {
-	const beforeSession = before.sessionId;
-	const afterSession = after.sessionId;
-	if (beforeSession === undefined || afterSession === undefined) {
+	// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION03: EVERY
+	// identity is MANDATORY.
+	//
+	// The CORRECTION02 implementation checked that the preparation and
+	// attempt identities DIFFER only when BOTH were present, so a record
+	// with a MISSING identity SKIPPED the check entirely and fell through
+	// to `consecutive: true`. That promoted incomplete capture evidence
+	// into a positive attribution and contradicted this module's own
+	// stated contract.
+	//
+	// The identities are now REQUIRED UP FRONT: a record that does not
+	// carry the full identity set can never be part of an authoritative
+	// consecutive-turn pair, and the reason says which one is missing.
+	const beforeIdentities = missingIdentities(before);
+	const afterIdentities = missingIdentities(after);
+	if (beforeIdentities.length > 0 || afterIdentities.length > 0) {
+		const missing = [
+			...beforeIdentities.map((name) => `before: ${name}`),
+			...afterIdentities.map((name) => `after: ${name}`),
+		];
 		return {
 			consecutive: false,
 			reason:
-				"the captures carry no session identity; consecutive request lineage cannot be established",
+				`the captures carry an incomplete identity set (${missing.join(", ")}); ` +
+				"consecutive request lineage cannot be established",
 		};
 	}
+	const beforeSession = before.sessionId;
+	const afterSession = after.sessionId;
 	if (beforeSession !== afterSession) {
 		return {
 			consecutive: false,
@@ -708,6 +730,42 @@ export function establishRequestLineage(
 }
 
 /**
+ * ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION03: the identities a
+ * capture record MUST carry to take part in an authoritative consecutive-turn
+ * comparison.
+ *
+ * All five are required: the cohort (the keyed-fingerprint scope), the session
+ * (the conversation), the iteration (the turn ordinal), the preparation
+ * identity (the prepared request) and the attempt identity (the transport
+ * attempt).
+ */
+function missingIdentities(record: PrefixForensicsCaptureRecord): string[] {
+	const missing: string[] = [];
+	if (record.cohortId === undefined || record.cohortId.trim() === "") {
+		missing.push("cohort");
+	}
+	if (record.sessionId === undefined || record.sessionId.trim() === "") {
+		missing.push("session");
+	}
+	if (record.iteration === undefined) {
+		missing.push("iteration");
+	}
+	if (
+		record.preparationRequestId === undefined ||
+		record.preparationRequestId.trim() === ""
+	) {
+		missing.push("preparation");
+	}
+	if (
+		record.providerAttemptId === undefined ||
+		record.providerAttemptId.trim() === ""
+	) {
+		missing.push("attempt");
+	}
+	return missing;
+}
+
+/**
  * ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION02: ONE request,
  * observed at the representation stages that were captured.
  *
@@ -753,18 +811,27 @@ export function groupCapturesIntoRequestBundles(
 	records: readonly PrefixForensicsCaptureRecord[],
 ): PrefixForensicsRequestBundle[] {
 	const byKey = new Map<string, PrefixForensicsRequestBundle>();
+	// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION03: a second
+	// record for the same identity AND the same stage must not silently
+	// REPLACE the first.
+	//
+	// The grouping used `stages.set(...)`, so two different observations of
+	// one boundary were resolved by file order. Which one is authoritative
+	// is not decidable from the capture, so a CONFLICTING duplicate is
+	// EXCLUDED from the bundle (the stage is reported unavailable); a
+	// byte-identical re-emission is a harmless duplicate and is collapsed.
 	for (const record of records) {
-		const key = [
-			record.cohortId ?? "-",
-			record.sessionId ?? "-",
-			String(record.iteration ?? "-"),
-			record.preparationRequestId ?? "-",
-			record.providerAttemptId ?? "-",
-		].join("|");
+		const key = bundleGroupingKey(record);
 		const existing = byKey.get(key);
 		if (existing) {
 			const stages = new Map(existing.stages);
-			stages.set(record.source as PrefixForensicsStageName, record);
+			const stage = record.source as PrefixForensicsStageName;
+			const previous = stages.get(stage);
+			if (previous === undefined) {
+				stages.set(stage, record);
+			} else if (!sameObservation(previous, record)) {
+				stages.delete(stage);
+			}
 			byKey.set(key, { ...existing, stages });
 			continue;
 		}
@@ -791,7 +858,85 @@ export function groupCapturesIntoRequestBundles(
 }
 
 /**
- * ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION02: compare TWO
+ * ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION03: the within-request
+ * grouping key of a capture record.
+ */
+function bundleGroupingKey(record: PrefixForensicsCaptureRecord): string {
+	return [
+		record.cohortId ?? "-",
+		record.sessionId ?? "-",
+		String(record.iteration ?? "-"),
+		record.preparationRequestId ?? "-",
+		record.providerAttemptId ?? "-",
+	].join("|");
+}
+
+/**
+ * ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION03: are two records
+ * the SAME observation?
+ *
+ * The comparison is over the record's own content digest AND the whole
+ * structural representation. The `representation` identifier is only the
+ * STAGE NAME, so it alone cannot distinguish two observations of the same
+ * stage; the discriminating parts are the message fingerprint list and the
+ * system / tool / body fingerprints.
+ */
+function sameObservation(
+	left: PrefixForensicsCaptureRecord,
+	right: PrefixForensicsCaptureRecord,
+): boolean {
+	if (left.recordSha256 !== right.recordSha256) {
+		return false;
+	}
+	const leftRepresentation = left.representation;
+	const rightRepresentation = right.representation;
+	if (
+		leftRepresentation.representation !== rightRepresentation.representation ||
+		leftRepresentation.messageCount !== rightRepresentation.messageCount ||
+		leftRepresentation.systemFingerprint !==
+			rightRepresentation.systemFingerprint ||
+		leftRepresentation.bodyFingerprint !== rightRepresentation.bodyFingerprint
+	) {
+		return false;
+	}
+	const leftTools = leftRepresentation.toolFingerprints ?? [];
+	const rightTools = rightRepresentation.toolFingerprints ?? [];
+	if (leftTools.length !== rightTools.length) {
+		return false;
+	}
+	for (let index = 0; index < leftTools.length; index += 1) {
+		const leftTool = leftTools[index];
+		const rightTool = rightTools[index];
+		if (
+			leftTool === undefined ||
+			rightTool === undefined ||
+			leftTool.name !== rightTool.name ||
+			leftTool.fingerprint !== rightTool.fingerprint
+		) {
+			return false;
+		}
+	}
+	const leftMessages = leftRepresentation.messages ?? [];
+	const rightMessages = rightRepresentation.messages ?? [];
+	if (leftMessages.length !== rightMessages.length) {
+		return false;
+	}
+	for (let index = 0; index < leftMessages.length; index += 1) {
+		const leftMessage = leftMessages[index];
+		const rightMessage = rightMessages[index];
+		if (
+			leftMessage === undefined ||
+			rightMessage === undefined ||
+			leftMessage.fingerprint !== rightMessage.fingerprint
+		) {
+			return false;
+		}
+	}
+	return true;
+}
+
+/**
+ * ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION03: compare TWO
  * request BUNDLES across the three representation boundaries.
  *
  * The comparison is the bundle-level analogue of
@@ -826,6 +971,29 @@ export function comparePrefixForensicsBundles(input: {
 			authoritative: false,
 			unavailableReason:
 				"the two requests belong to DIFFERENT cohorts; their keyed fingerprints are not comparable",
+			beforeIdentity: bundleIdentity(before),
+			afterIdentity: bundleIdentity(after),
+			stages: [],
+			allStagesEqual: false,
+			unavailableStages: [...PREFIX_FORENSICS_STAGES],
+		};
+	}
+	// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION03: the
+	// authority validation is CENTRALIZED here.
+	//
+	// The comparator used to return `authoritative: true` after only the
+	// cohort check, so a caller that did not separately apply the lineage
+	// gate could publish an authoritative comparison of two arbitrary
+	// bundles. The comparator now applies the SAME lineage gate itself, so
+	// the authority verdict cannot be bypassed.
+	const lineage = establishRequestLineage(
+		bundleRepresentative(before),
+		bundleRepresentative(after),
+	);
+	if (!lineage.consecutive) {
+		return {
+			authoritative: false,
+			unavailableReason: lineage.reason,
 			beforeIdentity: bundleIdentity(before),
 			afterIdentity: bundleIdentity(after),
 			stages: [],
@@ -877,6 +1045,50 @@ function bundleIdentity(bundle: PrefixForensicsRequestBundle | undefined): {
 			: {}),
 		...(bundle?.iteration !== undefined ? { iteration: bundle.iteration } : {}),
 	};
+}
+
+/**
+ * ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION03: a REPRESENTATIVE
+ * record of a bundle, used to carry the bundle's identity into the lineage
+ * gate.
+ *
+ * The gate reads the cohort, the session, the iteration, the preparation
+ * identity and the attempt identity — all of which are the bundle's identity,
+ * identical across the bundle's stages. The representative is the bundle's
+ * first stage.
+ */
+function bundleRepresentative(
+	bundle: PrefixForensicsRequestBundle,
+): PrefixForensicsCaptureRecord {
+	const first = bundle.stages.values().next();
+	if (first.done) {
+		// A bundle with no stage carries no observation at all. The gate
+		// must still see it as incomplete rather than as a valid request.
+		return {
+			schemaVersion: PREFIX_FORENSICS_SCHEMA_VERSION,
+			producer: PREFIX_FORENSICS_FINGERPRINT_PRODUCER,
+			capturedAt: "",
+			// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION03: the
+			// cohort is REQUIRED on a record, so an unknown cohort is
+			// carried as the EMPTY STRING. The lineage gate reads an empty
+			// cohort as ABSENT (`record.cohortId.trim() === ""`), so this
+			// bundle can never be promoted to an authoritative turn — it
+			// is not silently treated as a present-but-equal cohort.
+			cohortId: bundle.cohortId ?? "",
+			source: "unknown",
+			representation: {
+				representation: "unknown",
+				representationVersion: PREFIX_FORENSICS_SCHEMA_VERSION,
+				producer: PREFIX_FORENSICS_FINGERPRINT_PRODUCER,
+				messageCount: 0,
+				messages: [],
+				complete: false,
+				incompleteReason: "the request bundle carries no stage observation",
+			},
+			recordSha256: "",
+		};
+	}
+	return first.value;
 }
 
 /**

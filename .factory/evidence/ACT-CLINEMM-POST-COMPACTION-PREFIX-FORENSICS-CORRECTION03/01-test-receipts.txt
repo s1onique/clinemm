@@ -1,0 +1,135 @@
+ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION03 — EVIDENCE RECEIPTS
+Generated: 2026-11-21T02:08:13Z
+Base commit: a49bd8e5d (CORRECTION02)
+Runtime: node v26.0.0, bun 1.4.4
+Host: Darwin arm64
+ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION03 — TEST RECEIPTS
+Generated: 2026-11-21T02:08:07Z
+Base commit: a49bd8e5d (CORRECTION02)
+Runtime: node v26.0.0, bun 1.4.4
+
+=== 1. FOCUSED SUITE (analyzer + CLI) — GREEN ===
+ ✓ src/runtime/prefix-forensics-analyzer.test.ts > ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01 — the analyzer > V2: an append-only continuation preserves every existing component fingerprint 3ms
+ ✓ src/runtime/prefix-forensics-analyzer.test.ts > ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01 — the analyzer > V3: an early message mutation is found at the correct message and part boundary 1ms
+ ✓ src/runtime/prefix-forensics-analyzer.test.ts > ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01 — the analyzer > V4: a tool REORDER is detected independently of a tool definition change 0ms
+ ✓ src/runtime/prefix-forensics-analyzer.test.ts > ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01 — the analyzer > V5: an adapter-introduced transformation is attributed to the adapter stage 0ms
+ ✓ src/runtime/prefix-forensics-analyzer.test.ts > ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01 — the analyzer > V5-CORR: a FULL three-stage pair attributes an adapter change to the adapter stage 1ms
+ ✓ src/runtime/prefix-forensics-analyzer.test.ts > ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01 — the analyzer > V6: equal runtime projections do NOT force a claim that the wire payloads are equal 0ms
+ ✓ src/runtime/prefix-forensics-analyzer.test.ts > ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01 — the analyzer > V7: a retry stays a separate attempt under the same preparation identity 0ms
+ ✓ src/runtime/prefix-forensics-analyzer.test.ts > ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01 — the analyzer > V9: a missing capture does NOT generate a fabricated comparison 0ms
+ ✓ src/runtime/prefix-forensics-analyzer.test.ts > ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01 — the analyzer > V10: the analyzer FAILS CLOSED when a cohort or a lineage is wrong 0ms
+ ✓ src/runtime/prefix-forensics-analyzer.test.ts > ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01 — the analyzer > reports UNAVAILABLE_FROM_TRACE for a stage whose capture is absent 0ms
+ ✓ src/runtime/prefix-forensics-analyzer.test.ts > ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01 — the analyzer > CORR-01: an UNAVAILABLE stage can NEVER imply full equality 0ms
+ ✓ src/runtime/prefix-forensics-analyzer.test.ts > ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01 — the analyzer > CORR-02: a TOOL-ONLY change is attributed to its stage 0ms
+ ✓ src/runtime/prefix-forensics-analyzer.test.ts > ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01 — the analyzer > CORR-03: a BODY-ONLY change is attributed to its stage 0ms
+ ✓ src/runtime/prefix-forensics-analyzer.test.ts > ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01 — the analyzer > CORR-04: a SYSTEM-ONLY change is attributed to its stage 0ms
+ ✓ src/runtime/prefix-forensics-analyzer.test.ts > ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01 — the analyzer > CORR-05: an INCOMPLETE representation is never compared as an empty request 0ms
+ ✓ src/runtime/prefix-forensics-analyzer.test.ts > ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01 — the analyzer > CORR-06: an EMPTY but PRESENT message list is a COMPLETE observation 0ms
+ ✓ src/runtime/prefix-forensics-analyzer.test.ts > ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01 — the analyzer > CORR-07: a same-session chronology is NOT authoritative without an EXACT lineage 0ms
+ ✓ src/runtime/prefix-forensics-analyzer.test.ts > ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01 — the analyzer > AUTH-01: a MISSING preparation identity can never be a consecutive turn 0ms
+ ✓ src/runtime/prefix-forensics-analyzer.test.ts > ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01 — the analyzer > AUTH-02: a MISSING attempt identity can never be a consecutive turn 0ms
+ ✓ src/runtime/prefix-forensics-analyzer.test.ts > ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01 — the analyzer > AUTH-03: a MISSING cohort can never be a consecutive turn 0ms
+ ✓ src/runtime/prefix-forensics-analyzer.test.ts > ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01 — the analyzer > AUTH-04: the bundle comparator applies the lineage gate ITSELF 0ms
+ ✓ src/runtime/prefix-forensics-analyzer.test.ts > ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01 — the analyzer > AUTH-05: the bundle comparator REFUSES two bundles that are not consecutive turns 0ms
+ ✓ src/runtime/prefix-forensics-analyzer.test.ts > ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01 — the analyzer > AUTH-06: a CONFLICTING same-stage duplicate is EXCLUDED, not silently overwritten 0ms
+ ✓ src/runtime/prefix-forensics-analyzer.test.ts > ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01 — the analyzer > AUTH-07: an IDENTICAL same-stage duplicate is collapsed, not excluded 0ms
+ ✓ src/runtime/prefix-forensics-analyzer.test.ts > ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01 — the analyzer > exposes exactly the three representation boundaries, in causal order 0ms
+ ✓ src/runtime/prefix-forensics-analyzer.test.ts > ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01 — the analyzer > uses a KEYED fingerprint: the same content under a different key differs 0ms
+ ✓ src/runtime/prefix-forensics-analyzer.test.ts > ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01 — the analyzer > V8: the sanitized record carries NO raw prompt, tool command or credential 0ms
+ ✓ src/runtime/prefix-forensics-analyzer-cli.test.ts > ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION02 — the CLI request pairing > CLI-01: two complete three-stage requests produce an authoritative B->C comparison 114ms
+ ✓ src/runtime/prefix-forensics-analyzer-cli.test.ts > ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION02 — the CLI request pairing > CLI-02: a third append-only continuation produces an authoritative C->D comparison 108ms
+ ✓ src/runtime/prefix-forensics-analyzer-cli.test.ts > ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION02 — the CLI request pairing > CLI-03: a RETRY of the same preparation is NOT a consecutive turn 108ms
+ ✓ src/runtime/prefix-forensics-analyzer-cli.test.ts > ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION02 — the CLI request pairing > CLI-04: a NON-ADJACENT iteration gap is refused 106ms
+ ✓ src/runtime/prefix-forensics-analyzer-cli.test.ts > ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION02 — the CLI request pairing > CLI-05: a CROSS-SESSION pair is refused 103ms
+ ✓ src/runtime/prefix-forensics-analyzer-cli.test.ts > ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION02 — the CLI request pairing > CLI-06: a bundle with a MISSING stage is reported incomplete, never as equal 110ms
+ ✓ src/runtime/prefix-forensics-analyzer-cli.test.ts > ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION02 — the CLI request pairing > CLI-07: the report names EVERY change category, not only the message one 99ms
+ ✓ src/runtime/prefix-forensics-analyzer-cli.test.ts > ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION02 — the CLI request pairing > CLI-08: a CONFLICTING same-stage duplicate is EXCLUDED, not silently chosen 104ms
+ Test Files  2 passed (2)
+      Tests  35 passed (35)
+
+=== 2. RED ABLATION — production files reverted to a49bd8e5d, witnesses kept ===
+(see section 3 for the verbatim reproduction command)
+
+=== 3. RED ABLATION — verbatim reproduction ===
+
+Reproduction: revert ONLY the two production files to a49bd8e5d, keep the new witnesses.
+
+  git show a49bd8e5d:sdk/packages/shared/src/runtime/prefix-forensics-analyzer.ts \
+    > sdk/packages/shared/src/runtime/prefix-forensics-analyzer.ts
+  git show a49bd8e5d:sdk/packages/shared/src/runtime/prefix-forensics-analyzer-cli.ts \
+    > sdk/packages/shared/src/runtime/prefix-forensics-analyzer-cli.ts
+  cd sdk/packages/shared && bun x vitest run src/runtime/prefix-forensics-analyzer.test.ts \
+    src/runtime/prefix-forensics-analyzer-cli.test.ts
+
+Result:
+
+     × AUTH-01: a MISSING preparation identity can never be a consecutive turn 4ms
+     × AUTH-02: a MISSING attempt identity can never be a consecutive turn 1ms
+     × AUTH-03: a MISSING cohort can never be a consecutive turn 0ms
+     × AUTH-05: the bundle comparator REFUSES two bundles that are not consecutive turns 0ms
+     × AUTH-06: a CONFLICTING same-stage duplicate is EXCLUDED, not silently overwritten 0ms
+     × CLI-01: two complete three-stage requests produce an authoritative B->C comparison 97ms
+     × CLI-02: a third append-only continuation produces an authoritative C->D comparison 96ms
+     × CLI-03: a RETRY of the same preparation is NOT a consecutive turn 95ms
+     × CLI-04: a NON-ADJACENT iteration gap is refused 98ms
+     × CLI-05: a CROSS-SESSION pair is refused 94ms
+     × CLI-06: a bundle with a MISSING stage is reported incomplete, never as equal 94ms
+     × CLI-07: the report names EVERY change category, not only the message one 91ms
+     × CLI-08: a CONFLICTING same-stage duplicate is EXCLUDED, not silently chosen 89ms
+⎯⎯⎯⎯⎯⎯ Failed Tests 13 ⎯⎯⎯⎯⎯⎯⎯
+ Test Files  2 failed (2)
+      Tests  13 failed | 22 passed (35)
+
+=== 4. THE CLI IS A REAL NODE PROCESS (end-to-end proof) ===
+
+Command:
+  node --experimental-strip-types sdk/packages/shared/src/runtime/prefix-forensics-analyzer-cli.ts <dir>
+
+Result: the CLI loads and emits its JSON report. See the CLI-07/CLI-08 witnesses above,
+which drive this exact process over a REAL directory of capture records.
+
+Node version: v26.0.0
+
+--- pristine HEAD a49bd8e5d: the SAME command FAILS ---
+
+  Error [ERR_MODULE_NOT_FOUND]: Cannot find module
+    '.../sdk/packages/shared/src/runtime/prefix-forensics-analyzer'
+    imported from .../sdk/packages/shared/src/runtime/prefix-forensics-analyzer-cli.ts
+
+  code: 'ERR_MODULE_NOT_FOUND'
+
+Cause: the CLI's relative import was extensionless in a 	ype\: \module\ package, which is
+invalid per the ESM specification. This is the P1 recorded as defect 1.6 of the ACT.
+
+  shared     typecheck: EXIT 0
+  llms       typecheck: EXIT 0
+  agents     typecheck: EXIT 0
+  shared     build:     EXIT 0  (bundle)
+  shared     decl-emit: EXIT 0  (bun tsc --emitDeclarationOnly -p tsconfig.build.json)
+  vscode     check-types: EXIT 0
+  biome check <7 touched files>:  EXIT 0  (2 pre-existing infos)
+
+=== 7. CONSERVATION — downstream sweeps (all measured at pristine HEAD a49bd8e5d) ===
+
+  llms    bun run test  ->  Test Files  2 failed | 66 passed | 4 skipped (72)
+                    ->      Tests  17 failed | 1170 passed | 4 skipped (1191)
+            PRISTINE    ->      Tests  17 failed | 1170 passed | 4 skipped (1191)   IDENTICAL
+
+  agents  bun run test  ->  Test Files  9 failed | 27 passed | 6 skipped (36)
+                    ->      Tests  43 failed | 560 passed | 6 skipped (603)
+            PRISTINE    ->      Tests  43 failed | 560 passed | 6 skipped (603)   IDENTICAL
+
+  vscode  bun run test:vitest ->  Test Files  63 failed | 475 passed | 6 skipped (544)
+            PRISTINE              ->  Test Files  64 failed | 474 passed | 6 skipped (544)
+
+  The apps/vscode sweep moved from 64 failed files to 63 failed files: the
+  explicit-.ts-extension fix unblocked one previously-unloadable suite.
+  There is NO new failure in any sweep.
+
+=== 8. PROVIDER SEMANTIC DELTA ===
+
+  NONE. This correction touches only:
+    sdk/packages/shared/src/runtime/prefix-forensics-analyzer.ts
+    sdk/packages/shared/src/runtime/prefix-forensics-analyzer-cli.ts
+    the two matching test files; echo     the tsconfig allowImportingTsExtensions flags.
+  No provider request, no retry/compaction behaviour, no prompt, no inference run.

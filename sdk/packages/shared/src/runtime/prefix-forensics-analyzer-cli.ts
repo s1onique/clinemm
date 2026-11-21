@@ -20,12 +20,12 @@
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { PrefixForensicsCaptureRecord } from "./prefix-forensics";
+import type { PrefixForensicsCaptureRecord } from "./prefix-forensics.ts";
 import {
 	comparePrefixForensicsBundles,
 	establishRequestLineage,
 	groupCapturesIntoRequestBundles,
-} from "./prefix-forensics-analyzer";
+} from "./prefix-forensics-analyzer.ts";
 
 interface LoadedCapture {
 	readonly file: string;
@@ -121,6 +121,16 @@ function main(argv: string[]): number {
 		authoritative: boolean;
 		unavailableReason?: string;
 		earliestDifferingStage?: string;
+		/**
+		 * ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION03: EVERY
+		 * change category detected across the compared stages — messages,
+		 * tools, system and body.
+		 *
+		 * The CORRECTION02 report exposed only the MESSAGE difference, so a
+		 * tool-only, system-only or body-only change was invisible to a
+		 * reader of the report even though the analyzer had detected it.
+		 */
+		differingCategories?: string[];
 		commonPrefixLength?: number;
 		firstDifference?: unknown;
 		unavailableStages?: string[];
@@ -198,9 +208,23 @@ function main(argv: string[]): number {
 			before,
 			after,
 		});
-		const stage = diff.stages.find(
-			(candidate) => candidate.available && candidate.differences.length > 0,
-		);
+		// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION03: the
+		// stage is selected by `differs`, NOT by `differences.length > 0`.
+		//
+		// The CORRECTION02 CLI read only the MESSAGE list, so a TOOL-ONLY,
+		// a SYSTEM-ONLY or a BODY-ONLY change was correctly detected by
+		// the analyzer and then OMITTED from the CLI's reported first
+		// difference. `differs` covers every change category.
+		const stage = diff.earliestDifferingStage
+			? diff.stages.find(
+					(candidate) =>
+						candidate.stage === diff.earliestDifferingStage &&
+						candidate.available,
+				)
+			: undefined;
+		const differingCategories = diff.stages
+			.filter((candidate) => candidate.available && candidate.differs)
+			.flatMap((candidate) => [...candidate.differingCategories]);
 		pairs.push({
 			before: beforeFiles.join(","),
 			after: afterFiles.join(","),
@@ -210,6 +234,9 @@ function main(argv: string[]): number {
 				: {}),
 			...(diff.earliestDifferingStage !== undefined
 				? { earliestDifferingStage: diff.earliestDifferingStage }
+				: {}),
+			...(differingCategories.length > 0
+				? { differingCategories: [...new Set(differingCategories)] }
 				: {}),
 			...(stage !== undefined
 				? {

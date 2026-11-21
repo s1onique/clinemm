@@ -25,12 +25,15 @@
 import { describe, expect, it } from "vitest";
 import type { PrefixForensicsCaptureRecord } from "./prefix-forensics";
 import {
+	computeCaptureRecordSha256,
 	computeRepresentationFingerprint,
 	keyedFingerprintHex,
 } from "./prefix-forensics";
 import {
+	comparePrefixForensicsBundles,
 	comparePrefixForensicsRequests,
 	establishRequestLineage,
+	groupCapturesIntoRequestBundles,
 	PREFIX_FORENSICS_STAGES,
 	UNAVAILABLE_FROM_TRACE,
 } from "./prefix-forensics-analyzer";
@@ -76,7 +79,11 @@ function record(
 	};
 	return {
 		...withoutDigest,
-		recordSha256: "0".repeat(64),
+		// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION03: the
+		// record carries its REAL content digest, so two records that
+		// observed DIFFERENT content are distinguishable. A constant digest
+		// made every record look identical to the duplicate detector.
+		recordSha256: computeCaptureRecordSha256(withoutDigest),
 	};
 }
 
@@ -119,6 +126,25 @@ const MESSAGES_MUTATED = [
 		],
 	},
 ];
+
+/**
+ * ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION03: remove the named
+ * identities from a record.
+ *
+ * The `record()` helper DEFAULTS every identity, so a witness that needs a
+ * record WITHOUT an identity must remove it explicitly — otherwise the
+ * witness would pass vacuously.
+ */
+function stripIdentities(
+	record: PrefixForensicsCaptureRecord,
+	names: readonly (keyof PrefixForensicsCaptureRecord)[],
+): PrefixForensicsCaptureRecord {
+	const copy: Record<string, unknown> = { ...record };
+	for (const name of names) {
+		delete copy[name];
+	}
+	return copy as PrefixForensicsCaptureRecord;
+}
 
 describe("ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01 — the analyzer", () => {
 	it("V2: an append-only continuation preserves every existing component fingerprint", () => {
@@ -701,6 +727,217 @@ describe("ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01 — the analyzer", () 
 		const sameRequest = establishRequestLineage(turn29, sameRequestOtherStage);
 		expect(sameRequest.consecutive).toBe(false);
 		expect(sameRequest.relation).toBe("same_request");
+	});
+
+	it("AUTH-01: a MISSING preparation identity can never be a consecutive turn", () => {
+		// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION03.
+		//
+		// The CORRECTION02 gate checked that the preparation identities
+		// DIFFER only when BOTH were present:
+		//
+		//     before.preparationRequestId !== undefined &&
+		//     after.preparationRequestId !== undefined &&
+		//     before.preparationRequestId === after.preparationRequestId
+		//
+		// so a record with NO preparation identity SKIPPED the check
+		// entirely and fell through to `consecutive: true`. That promoted
+		// incomplete capture evidence into a positive attribution, and it
+		// contradicted CORRECTION02's own stated contract that "every
+		// required identity is mandatory".
+		//
+		// NOTE: the record helper DEFAULTS every identity, so the record
+		// must be built with the identity explicitly REMOVED — otherwise
+		// the witness would pass vacuously.
+		const withPrep = record("runtime_projection", {
+			messages: MESSAGES_A,
+			sessionId: "session-1",
+			preparationRequestId: "prep-29",
+			providerAttemptId: "attempt-29",
+			iteration: 29,
+		});
+		const withoutPrep = stripIdentities(
+			record("runtime_projection", {
+				messages: MESSAGES_A,
+				sessionId: "session-1",
+				preparationRequestId: "prep-30",
+				providerAttemptId: "attempt-30",
+				iteration: 30,
+			}),
+			["preparationRequestId"],
+		);
+		const verdict = establishRequestLineage(withPrep, withoutPrep);
+		expect(verdict.consecutive).toBe(false);
+		expect(verdict.reason).toBeTruthy();
+		expect(verdict.reason).toContain("preparation");
+	});
+
+	it("AUTH-02: a MISSING attempt identity can never be a consecutive turn", () => {
+		// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION03: the
+		// attempt identity follows the same rule as the preparation one.
+		const withAttempt = record("runtime_projection", {
+			messages: MESSAGES_A,
+			sessionId: "session-1",
+			preparationRequestId: "prep-29",
+			providerAttemptId: "attempt-29",
+			iteration: 29,
+		});
+		const withoutAttempt = stripIdentities(
+			record("runtime_projection", {
+				messages: MESSAGES_A,
+				sessionId: "session-1",
+				preparationRequestId: "prep-30",
+				providerAttemptId: "attempt-30",
+				iteration: 30,
+			}),
+			["providerAttemptId"],
+		);
+		const verdict = establishRequestLineage(withAttempt, withoutAttempt);
+		expect(verdict.consecutive).toBe(false);
+		expect(verdict.reason).toBeTruthy();
+		expect(verdict.reason).toContain("attempt");
+	});
+
+	it("AUTH-03: a MISSING cohort can never be a consecutive turn", () => {
+		// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION03: the
+		// cohort is the KEYED-FINGERPRINT scope. Two records whose cohort is
+		// unknown cannot be established as comparable at all.
+		const before = record("runtime_projection", {
+			messages: MESSAGES_A,
+			sessionId: "session-1",
+			preparationRequestId: "prep-29",
+			providerAttemptId: "attempt-29",
+			iteration: 29,
+		});
+		const after = stripIdentities(
+			record("runtime_projection", {
+				messages: MESSAGES_A,
+				sessionId: "session-1",
+				preparationRequestId: "prep-30",
+				providerAttemptId: "attempt-30",
+				iteration: 30,
+			}),
+			["cohortId"],
+		);
+		const verdict = establishRequestLineage(before, after);
+		expect(verdict.consecutive).toBe(false);
+		expect(verdict.reason).toContain("cohort");
+	});
+
+	it("AUTH-04: the bundle comparator applies the lineage gate ITSELF", () => {
+		// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION03.
+		//
+		// `comparePrefixForensicsBundles()` returned `authoritative: true`
+		// after only a COHORT compatibility check, so any caller that did
+		// not separately apply the lineage gate could publish an
+		// authoritative comparison of two arbitrary bundles. The authority
+		// validation is now CENTRALIZED in the comparator.
+		const bundles = groupCapturesIntoRequestBundles([
+			record("runtime_projection", {
+				messages: MESSAGES_A,
+				sessionId: "session-1",
+				preparationRequestId: "prep-29",
+				providerAttemptId: "attempt-29",
+				iteration: 29,
+			}),
+			record("runtime_projection", {
+				messages: MESSAGES_A,
+				sessionId: "session-1",
+				preparationRequestId: "prep-30",
+				providerAttemptId: "attempt-30",
+				iteration: 30,
+			}),
+		]);
+		expect(bundles).toHaveLength(2);
+		const diff = comparePrefixForensicsBundles({
+			before: bundles[0],
+			after: bundles[1],
+		});
+		// The two bundles ARE consecutive turns...
+		expect(diff.authoritative).toBe(true);
+	});
+
+	it("AUTH-05: the bundle comparator REFUSES two bundles that are not consecutive turns", () => {
+		// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION03: the
+		// comparator must apply the lineage gate ITSELF, so a caller cannot
+		// bypass it.
+		const bundles = groupCapturesIntoRequestBundles([
+			record("runtime_projection", {
+				messages: MESSAGES_A,
+				sessionId: "session-1",
+				preparationRequestId: "prep-29",
+				providerAttemptId: "attempt-29",
+				iteration: 29,
+			}),
+			record("runtime_projection", {
+				messages: MESSAGES_A,
+				sessionId: "session-1",
+				preparationRequestId: "prep-31",
+				providerAttemptId: "attempt-31",
+				iteration: 31,
+			}),
+		]);
+		expect(bundles).toHaveLength(2);
+		const diff = comparePrefixForensicsBundles({
+			before: bundles[0],
+			after: bundles[1],
+		});
+		// A NON-ADJACENT iteration gap is not an authoritative comparison.
+		expect(diff.authoritative).toBe(false);
+		expect(diff.unavailableReason).toBeTruthy();
+		expect(diff.unavailableReason).toContain("adjacent");
+	});
+
+	it("AUTH-06: a CONFLICTING same-stage duplicate is EXCLUDED, not silently overwritten", () => {
+		// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION03.
+		//
+		// The grouping used `stages.set(...)`, so a second record for the
+		// same identity AND the same stage silently REPLACED the first.
+		// Two different observations of one boundary are a conflict, not a
+		// duplicate: the bundle must exclude the stage rather than pick
+		// one arbitrarily.
+		const first = record("runtime_projection", {
+			messages: MESSAGES_A,
+			sessionId: "session-1",
+			preparationRequestId: "prep-29",
+			providerAttemptId: "attempt-29",
+			iteration: 29,
+		});
+		// The SAME identity and stage, but a DIFFERENT observation.
+		const conflicting = record("runtime_projection", {
+			messages: MESSAGES_MUTATED,
+			sessionId: "session-1",
+			preparationRequestId: "prep-29",
+			providerAttemptId: "attempt-29",
+			iteration: 29,
+		});
+		const bundles = groupCapturesIntoRequestBundles([first, conflicting]);
+		expect(bundles).toHaveLength(1);
+		// The conflicting stage is EXCLUDED — it is not silently the
+		// second record.
+		expect(bundles[0]?.stages.has("runtime_projection")).toBe(false);
+	});
+
+	it("AUTH-07: an IDENTICAL same-stage duplicate is collapsed, not excluded", () => {
+		// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION03: a
+		// byte-identical re-emission of the same observation is a harmless
+		// duplicate and must not empty the bundle.
+		const first = record("runtime_projection", {
+			messages: MESSAGES_A,
+			sessionId: "session-1",
+			preparationRequestId: "prep-29",
+			providerAttemptId: "attempt-29",
+			iteration: 29,
+		});
+		const identical = record("runtime_projection", {
+			messages: MESSAGES_A,
+			sessionId: "session-1",
+			preparationRequestId: "prep-29",
+			providerAttemptId: "attempt-29",
+			iteration: 29,
+		});
+		const bundles = groupCapturesIntoRequestBundles([first, identical]);
+		expect(bundles).toHaveLength(1);
+		expect(bundles[0]?.stages.has("runtime_projection")).toBe(true);
 	});
 
 	it("exposes exactly the three representation boundaries, in causal order", () => {
