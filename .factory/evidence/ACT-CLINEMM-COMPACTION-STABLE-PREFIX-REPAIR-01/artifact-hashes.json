@@ -1,13 +1,13 @@
 {
   "act": "ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01",
   "algorithm": "sha256",
-  "note": "Non-self-referential: artifact-hashes.json does not hash itself. Regenerated after CORRECTION01. The head identities below are the ACT's complete chain; `finalHead` is the ACT's TERMINAL commit, and the commit that carries this regenerated manifest is one commit later (it changes no production module and no test). Every SHA is recorded after its commit, never predicted.",
+  "note": "Non-self-referential: artifact-hashes.json does not hash itself. Regenerated after ALL CORRECTION01 content edits, so every hash matches the committed artifact bytes. `finalHead` is the ACT's terminal PRODUCTION commit; the documentation commits that carry this manifest follow it and change no production module and no test. Every SHA is recorded after its commit, never predicted.",
   "entryHead": "9117f13ae7d643373c56eeedc30da661fc790b08",
   "subjectHead": "9f57bc84d98f3439a0d70e4bf74300efef6564cd",
   "artifactHead": "155eb4b400d1bed95cdca03c8ea22db9e690beba",
   "reviewHandoffHead": "b5558f973fa11b1576d0746c4c98e92e7f398b4c",
   "correctionHead": "a9bf4fc8be637a17d11b9fbb0338e4774cd98b56",
-  "finalHead": "d893b4bd96b6ac7d04ca44aa1d9cb14795fd1315",
+  "finalHead": "a9bf4fc8be637a17d11b9fbb0338e4774cd98b56",
   "correction": "ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01-CORRECTION01",
   "artifactCount": 14,
   "artifacts": [
@@ -18,13 +18,13 @@
     },
     {
       "path": ".factory/evidence/ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01/correction01-receipt.txt",
-      "bytes": 10225,
-      "sha256": "08bf73f41c59c5952899e25b3b1fe389500174e6a2c952c40ebd6665409238af"
+      "bytes": 10394,
+      "sha256": "72058914c177e3bea4f0cafe439394332886bd008fae2bc4a1ae08131f00a460"
     },
     {
       "path": ".factory/evidence/ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01/identity.json",
-      "bytes": 5479,
-      "sha256": "5c8acf87d8a8c13687ab59d70262c73d4306ebc4336108690a36b8f058f657e7"
+      "bytes": 5824,
+      "sha256": "3531f5f26ad014783da59e73a2a07bbbb9ad491cab7031f9042095e71914f275"
     },
     {
       "path": ".factory/evidence/ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01/provider-prefix-comparison.json",

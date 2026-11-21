@@ -215,11 +215,14 @@ THE TERMINAL COMMIT IDENTITY
   reviewHandoffHead    b5558f973fa11b1576d0746c4c98e92e7f398b4c
                        the evidence package as the review saw it
   correctionHead       a9bf4fc8be637a17d11b9fbb0338e4774cd98b56
-                       the CORRECTION01 commit (the production fix)
-  finalHead            d893b4bd96b6ac7d04ca44aa1d9cb14795fd1315
-                       the ACT's TERMINAL commit: it regenerates the artifact
-                       hash manifest over all 14 artifacts and binds this
-                       identity. It changes no production module and no test.
+                       the CORRECTION01 commit (the production fix) — the same
+                       commit as finalHead
+  finalHead            a9bf4fc8be637a17d11b9fbb0338e4774cd98b56
+                       the ACT's terminal PRODUCTION commit: the CORRECTION01
+                       boundary-contract fix. The documentation commits that
+                       carry the artifact package and the regenerated hash
+                       manifest follow it; each changes no production module
+                       and no test.
 
   Working tree after the terminal commit: CLEAN.
   Every SHA is recorded after its commit, never predicted.

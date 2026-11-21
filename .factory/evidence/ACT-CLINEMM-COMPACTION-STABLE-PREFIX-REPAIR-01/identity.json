@@ -19,9 +19,10 @@
     "reviewHandoffHeadNote": "The evidence package as the REVIEW saw it.",
     "correctionHead": "a9bf4fc8be637a17d11b9fbb0338e4774cd98b56",
     "correctionHeadNote": "The CORRECTION01 commit: the boundary-contract production fix.",
-    "finalHead": "d893b4bd96b6ac7d04ca44aa1d9cb14795fd1315",
-    "finalHeadNote": "The ACT's TERMINAL commit. It regenerates the artifact hash manifest over all 14 artifacts and binds this identity. It changes no production module and no test. The commit that carries the regenerated manifest is one commit later and is likewise documentation-only.",
-    "everyShaRecordedAfterItsCommit": true
+    "finalHead": "a9bf4fc8be637a17d11b9fbb0338e4774cd98b56",
+    "finalHeadNote": "The ACT's terminal PRODUCTION commit: the CORRECTION01 boundary-contract fix (a9bf4fc8b). The documentation commits that carry the artifact package and the hash manifest are separate, change no production module and no test, and are listed as artifactHead / reviewHandoffHead in this file and in artifact-hashes.json. Every SHA is recorded after its commit, never predicted.",
+    "everyShaRecordedAfterItsCommit": true,
+    "manifestCarrierNote": "The commit that carries the regenerated artifact-hashes.json is one commit after finalHead. It is documentation-only."
   },
   "ancestry": {
     "predecessorAct": "ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01",

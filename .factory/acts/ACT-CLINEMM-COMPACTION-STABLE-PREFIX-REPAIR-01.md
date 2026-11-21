@@ -215,8 +215,13 @@ subjectHead        9f57bc84d98f3439a0d70e4bf74300efef6564cd  the IMPLEMENTATION 
 artifactHead       155eb4b400d1bed95cdca03c8ea22db9e690beba  the commit that produced the original artifact package
 reviewHandoffHead  b5558f973fa11b1576d0746c4c98e92e7f398b4c  the evidence package as the REVIEW saw it
 correctionHead     a9bf4fc8be637a17d11b9fbb0338e4774cd98b56  the CORRECTION01 commit (the boundary-contract production fix)
-finalHead          d893b4bd96b6ac7d04ca44aa1d9cb14795fd1315  the ACT's TERMINAL commit (manifest regeneration only)
+finalHead          a9bf4fc8be637a17d11b9fbb0338e4774cd98b56  the ACT's terminal PRODUCTION commit (the CORRECTION01 fix)
 ```
+
+`finalHead` names the terminal commit that carries the ACT's PRODUCTION
+behaviour. The documentation commits that carry the artifact package and the
+regenerated hash manifest follow it; each is documentation-only and changes
+no production module and no test.
 
 The working tree after the terminal commit is CLEAN. Every SHA is recorded
 after its commit, never predicted.
