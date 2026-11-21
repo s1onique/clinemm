@@ -760,7 +760,7 @@ describe("ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01 — conservation", () => {
 		];
 		const ledger = extractVerifiedToolOutcomes(canonical);
 		const rendered = renderedEvidenceSection(ledger);
-		
+
 		expect(
 			rendered.split("<!-- cline-evidence:begin -->").length - 1,
 		).toBe(1);

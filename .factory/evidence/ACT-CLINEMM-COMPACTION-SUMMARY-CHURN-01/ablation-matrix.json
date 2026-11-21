@@ -19,19 +19,19 @@
       "outcomes": {
         "h0": {
           "summaryBytes": 14797,
-          "summaryFingerprint": "4219eacf1e2f7f8c06c9b63d2b801890336dcc724acd4180bf57793ce06f5371",
+          "summaryFingerprint": "d76618df143a8d501e8bb8273cd3d0a70a3ac724d4ce9601d3c9240c47a2846f",
           "contractPresent": true,
           "evidencePresent": true
         },
         "h1": {
           "summaryBytes": 14797,
-          "summaryFingerprint": "4219eacf1e2f7f8c06c9b63d2b801890336dcc724acd4180bf57793ce06f5371",
+          "summaryFingerprint": "d76618df143a8d501e8bb8273cd3d0a70a3ac724d4ce9601d3c9240c47a2846f",
           "contractPresent": true,
           "evidencePresent": true
         },
         "h2": {
           "summaryBytes": 14797,
-          "summaryFingerprint": "4219eacf1e2f7f8c06c9b63d2b801890336dcc724acd4180bf57793ce06f5371",
+          "summaryFingerprint": "d76618df143a8d501e8bb8273cd3d0a70a3ac724d4ce9601d3c9240c47a2846f",
           "contractPresent": true,
           "evidencePresent": true
         }
@@ -47,7 +47,7 @@
           "contractChanged": false,
           "evidenceChanged": false,
           "proseChanged": false,
-          "commonPrefixBytes": 14699,
+          "commonPrefixCodeUnits": 14699,
           "providerVisibleChanged": false
         },
         {
@@ -60,14 +60,14 @@
           "contractChanged": false,
           "evidenceChanged": false,
           "proseChanged": false,
-          "commonPrefixBytes": 14699,
+          "commonPrefixCodeUnits": 14699,
           "providerVisibleChanged": false
         }
       ],
       "summaryRewrittenOnEachContinuation": false,
       "firstChangedMessageOrPart": "none",
-      "providerVisibleCommonPrefixH0H1": 14699,
-      "providerVisibleCommonPrefixH1H2": 14699
+      "providerVisibleCommonPrefixCodeUnitsH0H1": 14699,
+      "providerVisibleCommonPrefixCodeUnitsH1H2": 14699
     },
     {
       "variant": "B",
@@ -79,19 +79,19 @@
       "outcomes": {
         "h0": {
           "summaryBytes": 14838,
-          "summaryFingerprint": "ccb5aef68fe8536d11f31193d2f1646ced3d3e22468215a4ab9eabb7c9060106",
+          "summaryFingerprint": "6894f0071bbc9eb77b5679bdcda50e3cc6c11b2489b70b693630da77271e9041",
           "contractPresent": true,
           "evidencePresent": true
         },
         "h1": {
           "summaryBytes": 14838,
-          "summaryFingerprint": "ccb5aef68fe8536d11f31193d2f1646ced3d3e22468215a4ab9eabb7c9060106",
+          "summaryFingerprint": "6894f0071bbc9eb77b5679bdcda50e3cc6c11b2489b70b693630da77271e9041",
           "contractPresent": true,
           "evidencePresent": true
         },
         "h2": {
           "summaryBytes": 14838,
-          "summaryFingerprint": "ccb5aef68fe8536d11f31193d2f1646ced3d3e22468215a4ab9eabb7c9060106",
+          "summaryFingerprint": "6894f0071bbc9eb77b5679bdcda50e3cc6c11b2489b70b693630da77271e9041",
           "contractPresent": true,
           "evidencePresent": true
         }
@@ -107,7 +107,7 @@
           "contractChanged": false,
           "evidenceChanged": false,
           "proseChanged": false,
-          "commonPrefixBytes": 14740,
+          "commonPrefixCodeUnits": 14740,
           "providerVisibleChanged": false
         },
         {
@@ -120,14 +120,14 @@
           "contractChanged": false,
           "evidenceChanged": false,
           "proseChanged": false,
-          "commonPrefixBytes": 14740,
+          "commonPrefixCodeUnits": 14740,
           "providerVisibleChanged": false
         }
       ],
       "summaryRewrittenOnEachContinuation": false,
       "firstChangedMessageOrPart": "none",
-      "providerVisibleCommonPrefixH0H1": 14740,
-      "providerVisibleCommonPrefixH1H2": 14740
+      "providerVisibleCommonPrefixCodeUnitsH0H1": 14740,
+      "providerVisibleCommonPrefixCodeUnitsH1H2": 14740
     },
     {
       "variant": "C",
@@ -139,19 +139,19 @@
       "outcomes": {
         "h0": {
           "summaryBytes": 14797,
-          "summaryFingerprint": "4219eacf1e2f7f8c06c9b63d2b801890336dcc724acd4180bf57793ce06f5371",
+          "summaryFingerprint": "d76618df143a8d501e8bb8273cd3d0a70a3ac724d4ce9601d3c9240c47a2846f",
           "contractPresent": true,
           "evidencePresent": true
         },
         "h1": {
           "summaryBytes": 14809,
-          "summaryFingerprint": "009e28f245106d0ea028055c88caba3049b42e940b48034064395525da0d6360",
+          "summaryFingerprint": "b11d1c850f13a678569455acd97e42778e3ddc398a15a18cbdb3da598df4359a",
           "contractPresent": true,
           "evidencePresent": true
         },
         "h2": {
           "summaryBytes": 14812,
-          "summaryFingerprint": "50c5996480a1a2d32fe594fc88684df184814883eee69b12aa68fa3f596526e3",
+          "summaryFingerprint": "40dc234a7ee2dde897b1643ba16fe6ddaf31af5122223d48e137b2a0e817466c",
           "contractPresent": true,
           "evidencePresent": true
         }
@@ -167,7 +167,7 @@
           "contractChanged": false,
           "evidenceChanged": true,
           "proseChanged": false,
-          "commonPrefixBytes": 13979,
+          "commonPrefixCodeUnits": 13979,
           "providerVisibleChanged": true
         },
         {
@@ -180,14 +180,14 @@
           "contractChanged": false,
           "evidenceChanged": true,
           "proseChanged": false,
-          "commonPrefixBytes": 13979,
+          "commonPrefixCodeUnits": 13979,
           "providerVisibleChanged": true
         }
       ],
       "summaryRewrittenOnEachContinuation": true,
       "firstChangedMessageOrPart": "compaction_summary text part",
-      "providerVisibleCommonPrefixH0H1": 13979,
-      "providerVisibleCommonPrefixH1H2": 13979
+      "providerVisibleCommonPrefixCodeUnitsH0H1": 13979,
+      "providerVisibleCommonPrefixCodeUnitsH1H2": 13979
     },
     {
       "variant": "D",
@@ -199,19 +199,19 @@
       "outcomes": {
         "h0": {
           "summaryBytes": 14838,
-          "summaryFingerprint": "d367e842de8ad4278691be2047f62acb045db8bf3051520fa018b417d9f40071",
+          "summaryFingerprint": "ef19cbfb82b8e3c96c964b8db8256c9c5529361a8ab2efb780828de62d676f3e",
           "contractPresent": true,
           "evidencePresent": true
         },
         "h1": {
           "summaryBytes": 14850,
-          "summaryFingerprint": "5ec1d21dcaffd0e8a2a6eab71cb4fc71bd5da6a7998149ad7211265ee94d8e30",
+          "summaryFingerprint": "96b13f2919b4bcc5572884f72fe6aec3c95b6d66c8e3e56a323be78f55b957f2",
           "contractPresent": true,
           "evidencePresent": true
         },
         "h2": {
           "summaryBytes": 14853,
-          "summaryFingerprint": "b4c1e9ec8070652891ace7154543436ad1abb4d3e23fb3dce8ba50e10b2f4d45",
+          "summaryFingerprint": "de44b41bb71498be55ed222b699b319ea6d3c951ad4e23b766ab569f1c10247e",
           "contractPresent": true,
           "evidencePresent": true
         }
@@ -227,7 +227,7 @@
           "contractChanged": false,
           "evidenceChanged": true,
           "proseChanged": false,
-          "commonPrefixBytes": 14020,
+          "commonPrefixCodeUnits": 14020,
           "providerVisibleChanged": true
         },
         {
@@ -240,14 +240,14 @@
           "contractChanged": false,
           "evidenceChanged": true,
           "proseChanged": false,
-          "commonPrefixBytes": 14020,
+          "commonPrefixCodeUnits": 14020,
           "providerVisibleChanged": true
         }
       ],
       "summaryRewrittenOnEachContinuation": true,
       "firstChangedMessageOrPart": "compaction_summary text part",
-      "providerVisibleCommonPrefixH0H1": 14020,
-      "providerVisibleCommonPrefixH1H2": 14020
+      "providerVisibleCommonPrefixCodeUnitsH0H1": 14020,
+      "providerVisibleCommonPrefixCodeUnitsH1H2": 14020
     }
   ]
 }

@@ -2,7 +2,7 @@
   "schema": "cline.compaction-summary-churn.identity.v1",
   "act": "ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01",
   "repository": {
-    "path": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm",
+    "path": "<redacted:absolute-local-path>",
     "remote": "git@github.com:s1onique/clinemm.git",
     "branch": "main",
     "entryHead": "60432babb98729f1c6b7116c79f5709750472718",
@@ -17,7 +17,8 @@
       "<private>/clinemm-m31-action-first [experiment/m31-action-first]",
       "<private>/clinemm-m31-bounded (detached HEAD)"
     ],
-    "worktreesNote": "Absolute paths redacted; the protected stash worktree was NOT touched."
+    "worktreesNote": "Absolute paths redacted; the protected stash worktree was NOT touched.",
+    "pathNote": "The absolute local checkout path was redacted after review (P1). The repository identity is carried by the remote URL and the entry/subject HEADs."
   },
   "liveSession": {
     "sessionId": "1795229584545_t33f9",
@@ -68,8 +69,14 @@
   "engineJoinLabel": "TEMPORAL_ONE_TO_ONE_SUPPORTED",
   "productionDeploymentAuthorized": false,
   "subjectHead": "6c4bcf6166f2dc35d171c8df1423e3bbd0ce14c5",
-  "subjectHeadNote": "Recorded AFTER the local evidence commit. The SHA was NOT predicted.",
+  "subjectHeadNote": "The SHA was recorded AFTER the local evidence commit. It was NOT predicted.",
   "committed": true,
   "pushed": false,
-  "pr": false
+  "pr": false,
+  "subjectHeadMeaning": "The commit that PRODUCED the evidence artifacts (the forensic evidence commit).",
+  "finalHead": "9e9e2955c1ced7e656ac8835dff4fdf59f5ba33d",
+  "finalHeadMeaning": "The commit that recorded subjectHead into identity.json and regenerated the artifact hash manifest. It is a documentation-only follow-up; it adds no evidence and changes no verdict.",
+  "finalHeadNote": "Recorded after the review-driven correction commit; see correctionHead below.",
+  "correctionHead": "PENDING",
+  "historyNote": "History was NOT rewritten. The forensic evidence commit (subjectHead) and the documentation follow-up (finalHead) are both retained and their distinct meanings are stated here."
 }

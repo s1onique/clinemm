@@ -20,7 +20,7 @@ import type { MessageWithMetadata } from "@cline/shared";
 import {
 	buildProviderRequest,
 	classifyChange,
-	commonPrefixLength,
+	commonPrefixCodeUnits,
 	extractVerifiedToolOutcomes,
 	fingerprintSummary,
 	loadLiveArtifacts,
@@ -99,6 +99,7 @@ function buildLiveTransitionMatrix(captures: LiveCapture[]): unknown {
 					after.toolFingerprints.join(","),
 				fromSummaryFingerprint: before.summaryFingerprint,
 				toSummaryFingerprint: after.summaryFingerprint,
+				carrierIdentification: after.carrierIdentification,
 			});
 		}
 		perStage[stage] = transitions;
@@ -190,7 +191,7 @@ function transitionRow(
 		proseChanged:
 			before.fingerprints.proseFingerprint !==
 			after.fingerprints.proseFingerprint,
-		commonPrefixBytes: commonPrefixLength(
+		commonPrefixCodeUnits: commonPrefixCodeUnits(
 			before.providerSummaryText,
 			after.providerSummaryText,
 		),
@@ -330,11 +331,11 @@ async function buildAblationMatrix(): Promise<unknown> {
 				o1.fingerprints.summaryFingerprint
 					? "compaction_summary text part"
 					: "none",
-			providerVisibleCommonPrefixH0H1: commonPrefixLength(
+			providerVisibleCommonPrefixCodeUnitsH0H1: commonPrefixCodeUnits(
 				o0.providerSummaryText,
 				o1.providerSummaryText,
 			),
-			providerVisibleCommonPrefixH1H2: commonPrefixLength(
+			providerVisibleCommonPrefixCodeUnitsH1H2: commonPrefixCodeUnits(
 				o1.providerSummaryText,
 				o2.providerSummaryText,
 			),

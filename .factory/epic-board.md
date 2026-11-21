@@ -23696,7 +23696,7 @@ The exact structural change in the bundled scheduler class:
 
 ```
 - 0170: for(let[o,i]of r){... if(s.isRunning){for(let[u,c]of r)...
-+ ba46: let a=0;o=async()=>{for(;a<r.length;a++){let[i,s]=r[a]... 
++ ba46: let a=0;o=async()=>{for(;a<r.length;a++){let[i,s]=r[a]...
 +       if(u.isRunning){for(let[c,d]of r.slice(a))...
 ```
 
@@ -37431,3 +37431,49 @@ authorized implementation; the successor design is deliberately NOT frozen.**
 **Not done (not authorized).** No production repair; no production module
 modified; no installed VSIX replacement; no Strata changes or service
 restarts; no new inference runs; no push; no PR; no compaction-policy change.
+
+**REVIEW CORRECTIONS (Runtime Engineering / Causal Forensics review).** The review returned
+`PASS_WITH_NONBLOCKING_RESIDUE` with three bounded findings. All were verified against the
+committed artifacts and corrected. **The verdict is UNCHANGED and no forensic rerun of the causal
+mechanism was needed.**
+
+- **P1 — committed private path (CORRECTED).** `identity.json.repository.path` carried the
+  absolute local checkout path; it is now `<redacted:absolute-local-path>`, with the repository
+  identity carried by the remote URL and the entry/subject HEADs.
+- **P1 — live carrier identification was a heuristic (CORRECTED, and the correction was
+  MATERIAL).** `loadLiveCaptures()` selected the LARGEST text part. The carrier is now identified
+  STRUCTURALLY — the compaction summary is the FIRST user message of the projected transcript,
+  produced by `buildSummaryMessage()` as a single text part. The size heuristic is retained only
+  as a reported fallback, and each record now carries a `carrierIdentification` field.
+
+  Verified against all 135 live records: the structural and heuristic identification DISAGREE on
+  **11** records, and in every one the heuristic had selected a **48,350-byte tool-result** text
+  part instead of the **10,114-byte** summary. **All 11 are at iterations 15-25 — every one
+  PRE-compaction**, where no compaction summary existed yet. There are **ZERO** disagreements at
+  iteration >= 26. The churn analysis covers iterations 26-39, so **the causal conclusion is
+  unaffected**; the correction makes the attribution structural rather than lucky. The carrier
+  identification is now `structural` for **132 of 132** analysed transitions.
+- **P2 — measurement labelling (CORRECTED).** `commonPrefixLength()` counted UTF-16 CODE UNITS
+  while the receipts said "bytes". It is now `commonPrefixCodeUnits()`, and the doc comment states
+  the measure is STRUCTURAL — neither a tokenizer offset nor a byte count.
+- **P2 — trailing whitespace (NOT A DEFECT; false positive).** A BSD-grep bracket-expansion
+  artifact (`[ \t]` matches space, backslash and the literal `t`) produced a false report. A
+  correct Python check over every file this ACT touched reports **0 trailing-whitespace lines**
+  and **0 CRLF files**.
+- **P2 — non-authoritative gate-summary binding (CORRECTED).** `test-receipts.txt` is rebuilt
+  with **R1-R7** labelled receipts and a **gate -> executable artifact binding table**; the ACT's
+  gate table points at the same artifacts.
+- **subjectHead vs finalHead (CLARIFIED, NOT REWRITTEN).** `identity.json` now states both
+  commits and their distinct meanings: `subjectHead` = the commit that PRODUCED the evidence
+  artifacts; `finalHead` = the documentation-only follow-up that recorded `subjectHead` and
+  regenerated the hash manifest. History was NOT rewritten.
+
+**Decision unchanged.** `EVIDENCE_RESTORATION_CAUSAL`. The successor
+`ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01` is authorized as one bounded repair cycle, with
+the reviewer's discriminator: verify first whether post-compaction tool outcomes are ALREADY
+sufficiently represented in the provider-visible canonical tail (cross-boundary tool-call/result
+pairing, historical sidecars, re-compaction, stale-read rewriting are the conservation cases).
+Do NOT assume that slicing the evidence ledger at `source_message_count` handles all of them.
+Use the existing RED witness without weakening its stability assertion. Keep the installed-runtime
+performance qualification on the P40 as a SEPARATELY authorized step. No more forensic
+infrastructure, no Strata modification, and no additional review cycle unless a new P0 appears.

@@ -374,6 +374,79 @@ complete, and the successor's design is a separate decision.
 
 ---
 
+## 12a. Review corrections (Runtime Engineering / Causal Forensics review)
+
+The review returned `PASS_WITH_NONBLOCKING_RESIDUE` and three bounded
+findings. All three were verified against the committed artifacts and
+corrected. **No forensic rerun of the causal mechanism was needed: the
+verdict is unchanged.**
+
+### P1 — Committed private path — CORRECTED
+
+`identity.json.repository.path` carried the absolute local checkout path.
+It is now `<redacted:absolute-local-path>`, with the repository identity
+carried by the remote URL and the entry/subject HEADs instead.
+
+### P1 — Live carrier identification was a heuristic — CORRECTED
+
+`loadLiveCaptures()` selected the LARGEST text part. The reviewer was
+right: a heuristic cannot establish the carrier's identity.
+
+The carrier is now identified STRUCTURALLY: the compaction summary is the
+FIRST user message of the projected transcript, produced by
+`buildSummaryMessage()` as a single text part. The size heuristic is
+retained only as a FALLBACK, and each record now carries a
+`carrierIdentification` field (`structural` | `size-heuristic` | `none`).
+
+**The correction is material and was verified against all 135 live
+records:** the structural and the heuristic identification DISAGREE on 11
+records. In every one of them the heuristic had selected a 48,350-byte
+tool-result text part instead of the 10,114-byte summary.
+
+**All 11 disagreements are at iterations 15-25 — every one of them
+PRE-compaction**, where no compaction summary existed yet. There are
+**ZERO** disagreements at iteration >= 26. The churn analysis covers
+iterations 26-39, so **the causal conclusion is unaffected**; the
+correction makes the attribution structural rather than lucky.
+
+After the correction, the carrier identification is `structural` for
+**132 of 132** analysed transitions across all three stages.
+
+### P2 — Measurement labelling: code units, not bytes — CORRECTED
+
+`commonPrefixLength()` counted JavaScript UTF-16 CODE UNITS while the
+receipts labelled the result "bytes". It is now
+`commonPrefixCodeUnits()`, the field is
+`commonPrefixCodeUnits`, and the doc comment states that the measure is
+STRUCTURAL — neither a tokenizer offset nor a byte count.
+
+### P2 — Trailing whitespace — NOT A DEFECT (false positive)
+
+A BSD-grep bracket-expansion artifact (`[ \t]` matches space, backslash
+and the literal `t`) produced a false report. A correct Python check over
+every file this ACT touched reports **0 trailing-whitespace lines** and
+**0 CRLF files**. No change was needed.
+
+### P2 — Non-authoritative gate-summary binding — CORRECTED
+
+The receipts did not bind gate numbers to executable artifacts, and the
+focused-suite section had been lost. `test-receipts.txt` is now rebuilt
+with **R1-R7** labelled receipts (R1 = the 20 verbose witness results,
+R2 = the RED witness, R3 = the pre-existing 62-test suite, R4 = the full
+package baseline comparison, R5 = typecheck, R6 = lint, R7 = the
+**gate -> executable artifact binding table**), and the ACT's §10 gate
+table now points at the same artifacts.
+
+### subjectHead vs finalHead — CLARIFIED, NOT REWRITTEN
+
+`identity.json` now states both commits and their distinct meanings:
+`subjectHead` = the commit that PRODUCED the evidence artifacts;
+`finalHead` = the documentation-only follow-up that recorded
+`subjectHead` and regenerated the hash manifest. History was NOT
+rewritten.
+
+---
+
 ## 13. Not authorized / not done
 
 - No production repair. No production module was modified.

@@ -1,9 +1,85 @@
+ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01 — TEST RECEIPTS
 
-=== FULL PACKAGE SUITE — PRISTINE BASELINE vs AFTER ===
+Every receipt below is the CONSOLE OUTPUT of the stated command.
+Every GATE row below names the EXECUTABLE artifact that satisfies it.
+
+================================================================================
+R1 — THE PASSING WITNESS SUITE (G2, G3, G4, G5, G6, G7, G8)
+================================================================================
+
+command: cd sdk/packages/core && vitest run --config vitest.config.ts \
+           src/extensions/context/compaction.summary-churn01.test.ts --reporter=verbose
+
+ ✓ src/extensions/context/compaction.summary-churn01.test.ts > ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01 — the churn reproduces > rewrites the provider-visible summary when an append-only canonical continuation adds a verified outcome 5ms
+ ✓ src/extensions/context/compaction.summary-churn01.test.ts > ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01 — the churn reproduces > keeps the summary byte-stable when the canonical history is UNCHANGED 0ms
+ ✓ src/extensions/context/compaction.summary-churn01.test.ts > ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01 — the churn reproduces > changes the summary content while keeping the SAME byte length when the replacement is length-neutral 0ms
+ ✓ src/extensions/context/compaction.summary-churn01.test.ts > ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01 — the churn reproduces > rejects a corrupted sidecar identity instead of projecting it 0ms
+ ✓ src/extensions/context/compaction.summary-churn01.test.ts > ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01 — the causal ablation > only the variants that enable EVIDENCE restoration reproduce the churn 1ms
+ ✓ src/extensions/context/compaction.summary-churn01.test.ts > ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01 — the causal ablation > contract restoration ALONE never changes the summary across an append-only continuation 0ms
+ ✓ src/extensions/context/compaction.summary-churn01.test.ts > ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01 — the causal ablation > re-enabling evidence restoration RESTORES the mutation under equivalent inputs 0ms
+ ✓ src/extensions/context/compaction.summary-churn01.test.ts > ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01 — conservation > does not promote a FAILED outcome into the carried section 0ms
+ ✓ src/extensions/context/compaction.summary-churn01.test.ts > ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01 — conservation > does not promote a call with NO result 0ms
+ ✓ src/extensions/context/compaction.summary-churn01.test.ts > ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01 — conservation > does not duplicate a carried outcome across repeated preparations 0ms
+ ✓ src/extensions/context/compaction.summary-churn01.test.ts > ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01 — conservation > keeps the rolling 12-outcome selection and drops the OLDEST outcome 0ms
+ ✓ src/extensions/context/compaction.summary-churn01.test.ts > ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01 — conservation > preserves the verified command-count semantics 0ms
+ ✓ src/extensions/context/compaction.summary-churn01.test.ts > ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01 — conservation > preserves the task objective and the completion obligation across the carry-forward 0ms
+ ✓ src/extensions/context/compaction.summary-churn01.test.ts > ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01 — conservation > leaves the canonical transcript byte-identical after the projection 0ms
+ ✓ src/extensions/context/compaction.summary-churn01.test.ts > ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01 — conservation > leaves the persisted sidecar unmodified by a projection-only analysis 0ms
+ ✓ src/extensions/context/compaction.summary-churn01.test.ts > ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01 — conservation > includes the appended canonical tail exactly once 0ms
+ ✓ src/extensions/context/compaction.summary-churn01.test.ts > ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01 — conservation > does not let a carried excerpt spoof the section delimiter 0ms
+ ✓ src/extensions/context/compaction.summary-churn01.test.ts > ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01 — conservation > escapes a delimiter that reaches a carried subject 0ms
+ ✓ src/extensions/context/compaction.summary-churn01.test.ts > ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01 — one-sided section movement > moves the contract section alone when the canonical contract changes but no new outcome is verified 0ms
+ ✓ src/extensions/context/compaction.summary-churn01.test.ts > ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01 — one-sided section movement > moves the evidence section alone when a new outcome is verified but the contract is unchanged 0ms
+ Test Files  1 passed (1)
+      Tests  20 passed (20)
+
+================================================================================
+R2 — THE RED WITNESS (isolated; a FAILURE here is the EXPECTED outcome)
+================================================================================
+
+command: cd sdk/packages/core && vitest run --config vitest.red.summary-churn01.config.ts
+
+  ## Verified tool outcomes (canonical record)
+  <!-- cline-evidence:begin -->
+  - run_commands (call_red_h0): succeeded — echo
++ - run_commands (call_red_h1): succeeded — echo
+  <!-- cline-evidence:end -->
+
+ ❯ src/extensions/context/compaction.summary-churn01.red.test.ts:173:17
+    171|   //
+    172|   // This assertion FAILS against the current production behaviour.
+    173|   expect(after).toBe(before);
+       |                 ^
+    174|  });
+    175| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed (1)
+   Start at  06:47:50
+   Duration  536ms (transform 316ms, setup 0ms, import 420ms, tests 9ms, environment 0ms)
+
+
+================================================================================
+R3 — THE PRE-EXISTING EVIDENCE-CONTINUITY SUITE (unchanged by this ACT)
+================================================================================
+
+command: cd sdk/packages/core && vitest run --config vitest.config.ts \
+           src/extensions/context/evidence-continuity.test.ts
+
+ ✓ src/extensions/context/evidence-continuity.test.ts (62 tests) 16ms
+ Test Files  1 passed (1)
+      Tests  62 passed (62)
+
+================================================================================
+R4 — FULL PACKAGE SUITE: PRISTINE BASELINE vs AFTER
+================================================================================
 
 command: cd sdk/packages/core && vitest run --config vitest.config.ts
 
-PRISTINE BASELINE (entry HEAD 60432babb, this ACT's test files moved aside):
+PRISTINE BASELINE (entry HEAD 60432babb; this ACT's two test files moved aside):
   total tests : 5751
   passed      : 5476
   failed      : 113
@@ -27,11 +103,50 @@ NOTE: the RED witness is EXCLUDED from the default suite via
       sdk/packages/core/vitest.config.ts, so it does not appear above.
       It is runnable on demand with: bun run test:red:summary-churn01
 
-=== TYPECHECK ===
+================================================================================
+R5 — TYPECHECK
+================================================================================
+
 command: cd sdk/packages/core && tsc -p tsconfig.dev.json --noEmit
   pre-existing errors (pristine) : 44
   errors contributed by this ACT  : 0
 
-=== LINT ===
-command: bunx biome lint <the four files this ACT touches>
+================================================================================
+R6 — LINT
+================================================================================
+
+command: bunx biome lint <the files this ACT touches>
   diagnostics : 0
+
+================================================================================
+R7 — GATE -> EXECUTABLE ARTIFACT BINDING
+================================================================================
+
+This table is the AUTHORITATIVE gate summary. Each row names the
+executable artifact that satisfies the gate. A gate with no artifact
+named here is NOT claimed as satisfied.
+
+| Gate | Executable artifact | Receipt |
+|---|---|---|
+| G1 | `identity.json + source-map.md` | R1/§1 (identities) + identity.json |
+| G2 | `compaction.summary-churn01.test.ts :: "rewrites the provider-visible summary when an append-only canonical continuation adds a verified outcome"` | R1 |
+| G3 | `compaction.summary-churn01.test.ts :: "contract restoration ALONE never changes the summary across an append-only continuation"` | R1 |
+| G4 | `compaction.summary-churn01.test.ts :: "only the variants that enable EVIDENCE restoration reproduce the churn" (variant C)` | R1 |
+| G5 | `compaction.summary-churn01.test.ts :: "only the variants that enable EVIDENCE restoration reproduce the churn" (variant D)` | R1 |
+| G6 | `compaction.summary-churn01.test.ts :: "re-enabling evidence restoration RESTORES the mutation under equivalent inputs"` | R1 |
+| G7 | `compaction.summary-churn01.test.ts :: the 12 "conservation" cases` | R1 |
+| G8 | `compaction.summary-churn01.test.ts :: "leaves the persisted sidecar unmodified...", "rejects a corrupted sidecar identity...", "includes the appended canonical tail exactly once"` | R1 |
+| G9 | `live-transition-matrix.json (all three stages) + production-reproduction.json changeClass` | R1/R4 |
+| G10 | `artifact-hashes.json + gitleaks pre-commit hook result` | (committed manifest) |
+
+The G2-G8 witnesses are driven by the REAL production functions
+(projectSessionCompactionState, applyTaskContractToCompactedMessages,
+applyVerifiedEvidenceToCompactedMessages, MessageBuilder.buildForApi).
+
+The OFFLINE artifacts (production-reproduction.json, ablation-matrix.json)
+are produced by the disposable probe:
+  command: bun .factory/evidence/ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01/tool/probe.ts
+  env: ACT_CHURN_FINGERPRINT_KEY, ACT_CHURN_SIDECAR, ACT_CHURN_CANONICAL,
+       ACT_CHURN_CAPTURES
+The fingerprint key is NEVER committed and has NO default; the probe
+fails loudly when it is absent.

@@ -346,7 +346,19 @@ export function providerSummaryText(
  * The byte length of the longest common prefix of two strings — the
  * structural common-prefix measure the ACT requires.
  */
-export function commonPrefixLength(left: string, right: string): number {
+/**
+ * The byte length of the longest common prefix of two strings.
+ *
+ * The result is counted in UTF-16 CODE UNITS, which is JavaScript's native
+ * string index. For the ASCII-dominant content of a compaction summary this
+ * coincides with the byte count, but it is NOT a byte count in general: a
+ * non-ASCII character occupies two code units and one to three UTF-8 bytes.
+ *
+ * The name therefore says "code units" rather than "bytes". The ACT's
+ * "provider-visible structural common prefix" is a STRUCTURAL measure; it
+ * is not a tokenizer offset and it is not a byte count.
+ */
+export function commonPrefixCodeUnits(left: string, right: string): number {
 	const limit = Math.min(left.length, right.length);
 	let index = 0;
 	while (index < limit && left[index] === right[index]) {
@@ -397,6 +409,78 @@ export interface LiveCapture {
 	readonly summaryFingerprint: string | undefined;
 	readonly systemFingerprint: string | undefined;
 	readonly toolFingerprints: readonly string[];
+	/**
+	 * HOW the summary carrier was identified for this record.
+	 *
+	 * - `structural` — the carrier was identified by the compaction
+	 *   summary's own producer, not by a size heuristic.
+	 * - `size-heuristic` — the capture carried no structural marker and the
+	 *   carrier was inferred from being the largest text part.
+	 * - `none` — no carrier could be identified.
+	 */
+	readonly carrierIdentification: "structural" | "size-heuristic" | "none";
+}
+
+/**
+ * The provider-visible compaction summary is produced by
+ * `buildSummaryMessage()`, which renders `Context summary:\n\n<summary>` as a
+ * SINGLE text part on a `user` message.
+ *
+ * The forensics capture records the part's fingerprint and byte count but
+ * NOT its content, so the carrier cannot be identified by reading the
+ * marker. It CAN, however, be identified STRUCTURALLY: the summary is
+ * ALWAYS the FIRST user message of a compacted request, and the production
+ * projector places it at index 0 of the projected transcript.
+ *
+ * The first attempt used a size heuristic (the largest text part). That is
+ * a HEURISTIC, and a heuristic cannot establish the carrier's identity.
+ * The structural rule below is the authority; the heuristic is retained
+ * ONLY as a fallback and is REPORTED as such, so a reader can tell which
+ * identification was used for any given record.
+ */
+function identifySummaryCarrier(
+	messages: {
+		role: string;
+		bytes: number;
+		fingerprint: string;
+		parts: { type: string; bytes: number; fingerprint: string }[];
+	}[],
+): {
+	carrier: { bytes: number; fingerprint: string } | undefined;
+	identification: "structural" | "size-heuristic" | "none";
+} {
+	// STRUCTURAL: the compaction summary is the FIRST user message of the
+	// projected transcript. It is the only user message whose FIRST part is
+	// a text part carrying the whole summary.
+	const firstUser = messages.find((message) => message.role === "user");
+	if (firstUser) {
+		const textPart = firstUser.parts.find((part) => part.type === "text");
+		if (textPart) {
+			return {
+				carrier: {
+					bytes: textPart.bytes,
+					fingerprint: textPart.fingerprint,
+				},
+				identification: "structural",
+			};
+		}
+	}
+	// FALLBACK (reported): the largest text part.
+	let carrier: { bytes: number; fingerprint: string } | undefined;
+	for (const message of messages) {
+		for (const part of message.parts) {
+			if (
+				part.type === "text" &&
+				(carrier === undefined || part.bytes > carrier.bytes)
+			) {
+				carrier = { bytes: part.bytes, fingerprint: part.fingerprint };
+			}
+		}
+	}
+	return {
+		carrier,
+		identification: carrier === undefined ? "none" : "size-heuristic",
+	};
 }
 
 export function loadLiveCaptures(dir: string): LiveCapture[] {
@@ -423,18 +507,7 @@ export function loadLiveCaptures(dir: string): LiveCapture[] {
 			};
 		};
 		const rep = record.representation;
-		// The summary carrier is the message with the LARGEST text part.
-		let carrier: { bytes: number; fingerprint: string } | undefined;
-		for (const message of rep.messages) {
-			for (const part of message.parts) {
-				if (
-					part.type === "text" &&
-					(carrier === undefined || part.bytes > carrier.bytes)
-				) {
-					carrier = { bytes: part.bytes, fingerprint: part.fingerprint };
-				}
-			}
-		}
+		const { carrier, identification } = identifySummaryCarrier(rep.messages);
 		out.push({
 			iteration: record.iteration ?? -1,
 			stage: record.source,
@@ -442,6 +515,7 @@ export function loadLiveCaptures(dir: string): LiveCapture[] {
 			messageCount: rep.messageCount,
 			summaryBytes: carrier?.bytes,
 			summaryFingerprint: carrier?.fingerprint,
+			carrierIdentification: identification,
 			systemFingerprint: rep.systemFingerprint,
 			toolFingerprints: (rep.toolFingerprints ?? []).map(
 				(tool) => tool.fingerprint,

@@ -41,35 +41,35 @@
     "h0": {
       "projectedCount": 14,
       "summaryBytes": 14838,
-      "summaryFingerprint": "d367e842de8ad4278691be2047f62acb045db8bf3051520fa018b417d9f40071",
+      "summaryFingerprint": "ef19cbfb82b8e3c96c964b8db8256c9c5529361a8ab2efb780828de62d676f3e",
       "contractPresent": true,
-      "contractFingerprint": "8953d409ad8aaf119d7b03a533c2a0f20a2e746b24c42143e7828612ad6b18d3",
+      "contractFingerprint": "7f2ec56dc105e6b8a00ef7fdf0b0e5a9babc404fee1219dfd05d67ade3954e78",
       "evidencePresent": true,
-      "evidenceFingerprint": "c6f740fe3d22375b2f6210525d38280534811911179eae3a1786f2ac0505a3a3",
+      "evidenceFingerprint": "c553400e39bd650fef6ae689fd8c6260758bcb6243e47f673ee91fafdb0bf423",
       "proseBytes": 3468,
-      "proseFingerprint": "e1af04bc304588b4a6b903f8cc1ad309fc0f686f833327955b2e451cc095b585"
+      "proseFingerprint": "bd71c16b96afe43cf0dd0af0d8dfb532369101043180925a59cbfdad8319b8c6"
     },
     "h1": {
       "projectedCount": 66,
       "summaryBytes": 14850,
-      "summaryFingerprint": "5ec1d21dcaffd0e8a2a6eab71cb4fc71bd5da6a7998149ad7211265ee94d8e30",
+      "summaryFingerprint": "96b13f2919b4bcc5572884f72fe6aec3c95b6d66c8e3e56a323be78f55b957f2",
       "contractPresent": true,
-      "contractFingerprint": "8953d409ad8aaf119d7b03a533c2a0f20a2e746b24c42143e7828612ad6b18d3",
+      "contractFingerprint": "7f2ec56dc105e6b8a00ef7fdf0b0e5a9babc404fee1219dfd05d67ade3954e78",
       "evidencePresent": true,
-      "evidenceFingerprint": "69c242d6f789ca0434b58d92edb1aa14793b075383a4a618492361f1ff71266b",
+      "evidenceFingerprint": "b36b73faec53db67277aee620a71a829525297c986c0ae47a81d9488d37a2c32",
       "proseBytes": 3468,
-      "proseFingerprint": "e1af04bc304588b4a6b903f8cc1ad309fc0f686f833327955b2e451cc095b585"
+      "proseFingerprint": "bd71c16b96afe43cf0dd0af0d8dfb532369101043180925a59cbfdad8319b8c6"
     },
     "h2": {
       "projectedCount": 68,
       "summaryBytes": 14853,
-      "summaryFingerprint": "b4c1e9ec8070652891ace7154543436ad1abb4d3e23fb3dce8ba50e10b2f4d45",
+      "summaryFingerprint": "de44b41bb71498be55ed222b699b319ea6d3c951ad4e23b766ab569f1c10247e",
       "contractPresent": true,
-      "contractFingerprint": "8953d409ad8aaf119d7b03a533c2a0f20a2e746b24c42143e7828612ad6b18d3",
+      "contractFingerprint": "7f2ec56dc105e6b8a00ef7fdf0b0e5a9babc404fee1219dfd05d67ade3954e78",
       "evidencePresent": true,
-      "evidenceFingerprint": "23eb0297c5c91b329e086ee5e994427886d03f4f5002d5fec96030d1cd5a4d58",
+      "evidenceFingerprint": "40c68d57b7609d7a057aa01f1eb2a34849f2f7db47127a5d59a937d23edc4e3d",
       "proseBytes": 3468,
-      "proseFingerprint": "e1af04bc304588b4a6b903f8cc1ad309fc0f686f833327955b2e451cc095b585"
+      "proseFingerprint": "bd71c16b96afe43cf0dd0af0d8dfb532369101043180925a59cbfdad8319b8c6"
     }
   },
   "transitions": [
@@ -83,7 +83,7 @@
       "contractChanged": false,
       "evidenceChanged": true,
       "proseChanged": false,
-      "commonPrefixBytes": 14020,
+      "commonPrefixCodeUnits": 14020,
       "providerVisibleChanged": true
     },
     {
@@ -96,7 +96,7 @@
       "contractChanged": false,
       "evidenceChanged": true,
       "proseChanged": false,
-      "commonPrefixBytes": 14020,
+      "commonPrefixCodeUnits": 14020,
       "providerVisibleChanged": true
     }
   ]
