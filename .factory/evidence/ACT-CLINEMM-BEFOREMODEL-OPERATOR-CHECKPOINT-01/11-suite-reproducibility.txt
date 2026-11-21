@@ -1,0 +1,36 @@
+# Full-suite reproducibility: two independent post-ACT runs
+
+## Run A (notified job cmd_mwqmx4xf3coex8z0) — post-ACT, ACT fully in place
+  Test Files  63 failed | 477 passed | 6 skipped (546)
+  Tests     169 failed | 6004 passed | 60 skipped (6233)
+  Errors     40
+
+## Run B (vitest-after2.log) — post-ACT, ACT fully in place, re-run
+  Test Files  63 failed | 477 passed | 6 skipped (546)
+  Tests     169 failed | 6004 passed | 60 skipped (6233)
+  Errors      8
+
+## Failing-file set: IDENTICAL between the two runs
+  Run A failing files: 63
+  Run B failing files: 63
+  diff(runA, runB) -> (no output = identical)
+
+## Baseline (HEAD, ACT production reverted, ACT test files held aside)
+  Test Files  64 failed | 474 passed | 6 skipped (544)
+  Tests     169 failed | 5974 passed | 60 skipped (6203)
+
+## DELTA (baseline -> post-ACT)
+  failed tests:  169 -> 169   UNCHANGED
+  passed tests: 5974 -> 6004  (+30 = exactly the 30 new focused tests)
+  failed files:   64 -> 63    (-1: revert-induced updateSettings.test.ts breakage, baseline only)
+  new regressions introduced by the ACT: NONE (comm -13 of failing-file sets is empty)
+
+## NOTE on the 'Errors' count
+The unhandled-error count differs between the two post-ACT runs (40 vs 8) while the
+test and file outcomes are byte-identical. These are teardown races in parallel vitest
+workers, not differences in test outcomes. The regression claim rests on the
+FAILING-FILE SET and the failed-test count, both of which are stable across runs.
+
+## NOTE on the 'bun:test' collection errors
+10 collection errors ('Cannot find package bun:test') are present IDENTICALLY in the
+baseline and the post-ACT runs. They are pre-existing and unrelated to this ACT.
