@@ -398,6 +398,25 @@ message Settings {
   optional string clinemm_temporary_external_path_authorities = 191;
   optional bool cloud_sessions_enabled = 192;
   optional string open_telemetry_traces_exporter = 193;
+  // ACT-CLINEMM-BEFOREMODEL-OPERATOR-CHECKPOINT-01: the operator-
+  // configurable, request-local `beforeModel` completion checkpoint.
+  //
+  //   - before_model_checkpoint_enabled  -> OFF by default. When false the
+  //     feature is ineffective and the provider request is conserved
+  //     byte-for-byte.
+  //   - before_model_checkpoint_text     -> the exact operator prompt text
+  //     appended to the provider-bound request. Empty by default. The text
+  //     is PRESERVED when the toggle is disabled.
+  //   - before_model_checkpoint_interval -> fire after every N completed
+  //     tool-using assistant turns. Default 4.
+  //
+  // The effective configuration is resolved and FROZEN when a new SDK
+  // session is built; edits during an active task apply to the NEXT new
+  // task. These values are NOT persisted inside model profiles or task
+  // transcripts.
+  optional bool before_model_checkpoint_enabled = 194;
+  optional string before_model_checkpoint_text = 195;
+  optional int32 before_model_checkpoint_interval = 196;
 }
 
 message State {
@@ -574,6 +593,12 @@ message UpdateSettingsRequest {
   // See the matching field on the `Settings` message.
   optional string clinemm_temporary_external_path_authorities = 50;
   optional bool cloud_sessions_enabled = 51;
+  // ACT-CLINEMM-BEFOREMODEL-OPERATOR-CHECKPOINT-01: the operator-
+  // configurable, request-local `beforeModel` completion checkpoint.
+  // See the matching fields on the `Settings` message.
+  optional bool before_model_checkpoint_enabled = 52;
+  optional string before_model_checkpoint_text = 53;
+  optional int32 before_model_checkpoint_interval = 54;
 }
 
 message UpdateTerminalConnectionTimeoutRequest {

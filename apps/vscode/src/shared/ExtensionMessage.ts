@@ -559,6 +559,12 @@ export interface ExtensionState {
 	lastDismissedCliBannerVersion: number
 	dismissedBanners?: Array<{ bannerId: string; dismissedAt: number }>
 	hooksEnabled?: boolean
+	// ACT-CLINEMM-BEFOREMODEL-OPERATOR-CHECKPOINT-01: the operator-
+	// configurable, request-local `beforeModel` completion checkpoint.
+	// Defaults mirror the persisted state-key defaults (OFF / empty / 4).
+	beforeModelCheckpointEnabled?: boolean
+	beforeModelCheckpointText?: string
+	beforeModelCheckpointInterval?: number
 	remoteConfigSettings?: Partial<RemoteConfigFields>
 	remoteConfigRevision?: number
 	globalSkillsToggles?: Record<string, boolean>

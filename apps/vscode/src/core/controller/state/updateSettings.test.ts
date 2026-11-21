@@ -27,6 +27,7 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { UpdateSettingsRequest } from "@shared/proto/cline/state"
+import { resolveEffectiveBeforeModelCheckpoint } from "@shared/storage/beforeModelCheckpoint"
 import { ClineFileStorage } from "@shared/storage/ClineFileStorage"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { Controller } from ".."
@@ -247,5 +248,127 @@ describe("updateSettings — user context ceiling wire/persistence", () => {
 		await updateSettings(controller, UpdateSettingsRequest.create({ clearUserContextCeiling: true }))
 
 		expect(storage.get("userContextCeiling")).toBeUndefined()
+	})
+})
+
+describe("updateSettings — before model operator checkpoint wire/persistence", () => {
+	let tempDir: string
+	let filePath: string
+
+	beforeEach(() => {
+		tempDir = makeTempDir()
+		filePath = path.join(tempDir, "globalState.json")
+	})
+
+	afterEach(() => {
+		if (tempDir && fs.existsSync(tempDir)) {
+			fs.rmSync(tempDir, { recursive: true, force: true })
+		}
+	})
+
+	it("persists the enabled toggle, the prompt text and the interval on disk", async () => {
+		const { controller, storage } = makeControllerWithBackingStore(filePath)
+
+		await updateSettings(
+			controller,
+			UpdateSettingsRequest.create({
+				beforeModelCheckpointEnabled: true,
+				beforeModelCheckpointText: "CHECKPOINT BODY",
+				beforeModelCheckpointInterval: 4,
+			}),
+		)
+
+		expect(storage.get("beforeModelCheckpointEnabled")).toBe(true)
+		expect(storage.get("beforeModelCheckpointText")).toBe("CHECKPOINT BODY")
+		expect(storage.get("beforeModelCheckpointInterval")).toBe(4)
+
+		// Reload witness: a fresh store pointed at the same file reads the
+		// persisted values back.
+		const reloaded = new ClineFileStorage(filePath)
+		expect(reloaded.get("beforeModelCheckpointEnabled")).toBe(true)
+		expect(reloaded.get("beforeModelCheckpointText")).toBe("CHECKPOINT BODY")
+		expect(reloaded.get("beforeModelCheckpointInterval")).toBe(4)
+	})
+
+	it("preserves the saved prompt text and interval when the toggle is turned off", async () => {
+		const { controller, storage } = makeControllerWithBackingStore(filePath)
+
+		await updateSettings(
+			controller,
+			UpdateSettingsRequest.create({
+				beforeModelCheckpointEnabled: true,
+				beforeModelCheckpointText: "KEEP ME",
+				beforeModelCheckpointInterval: 6,
+			}),
+		)
+		expect(storage.get("beforeModelCheckpointText")).toBe("KEEP ME")
+
+		// Disabling must NOT delete the saved text or the interval.
+		await updateSettings(controller, UpdateSettingsRequest.create({ beforeModelCheckpointEnabled: false }))
+
+		expect(storage.get("beforeModelCheckpointEnabled")).toBe(false)
+		expect(storage.get("beforeModelCheckpointText")).toBe("KEEP ME")
+		expect(storage.get("beforeModelCheckpointInterval")).toBe(6)
+	})
+
+	it("rejects an over-length prompt text and leaves disk untouched", async () => {
+		const { controller, storage } = makeControllerWithBackingStore(filePath)
+		await storage.update("beforeModelCheckpointText", "ORIGINAL")
+
+		await expect(
+			updateSettings(controller, UpdateSettingsRequest.create({ beforeModelCheckpointText: "x".repeat(4097) })),
+		).rejects.toThrow(/Invalid before model checkpoint text/)
+
+		expect(storage.get("beforeModelCheckpointText")).toBe("ORIGINAL")
+	})
+
+	it("rejects a non-positive or non-integer interval and leaves disk untouched", async () => {
+		const { controller, storage } = makeControllerWithBackingStore(filePath)
+		await storage.update("beforeModelCheckpointInterval", 4)
+
+		for (const bad of [0, -1, 2.5]) {
+			await expect(
+				updateSettings(controller, UpdateSettingsRequest.create({ beforeModelCheckpointInterval: bad })),
+			).rejects.toThrow(/Invalid before model checkpoint interval/)
+		}
+
+		expect(storage.get("beforeModelCheckpointInterval")).toBe(4)
+	})
+
+	it("does not touch the persisted configuration when the request carries none of the fields", async () => {
+		const { controller, storage } = makeControllerWithBackingStore(filePath)
+		await storage.update("beforeModelCheckpointText", "KEEP")
+		await storage.update("beforeModelCheckpointInterval", 9)
+		await storage.update("beforeModelCheckpointEnabled", true)
+
+		await updateSettings(controller, UpdateSettingsRequest.create({}))
+
+		expect(storage.get("beforeModelCheckpointText")).toBe("KEEP")
+		expect(storage.get("beforeModelCheckpointInterval")).toBe(9)
+		expect(storage.get("beforeModelCheckpointEnabled")).toBe(true)
+	})
+
+	it("migrates an older settings file to the disabled default", async () => {
+		const { controller, storage } = makeControllerWithBackingStore(filePath)
+
+		// A legacy file that predates the feature carries NONE of the keys.
+		await storage.update("hooksEnabled", true)
+
+		await updateSettings(controller, UpdateSettingsRequest.create({}))
+
+		// The absent keys stay absent on disk; the CONSUMER resolves them
+		// to the disabled default (see `resolveEffectiveBeforeModelCheckpoint`).
+		expect(storage.get("beforeModelCheckpointEnabled")).toBeUndefined()
+		expect(storage.get("beforeModelCheckpointText")).toBeUndefined()
+		expect(storage.get("beforeModelCheckpointInterval")).toBeUndefined()
+
+		expect(
+			resolveEffectiveBeforeModelCheckpoint({
+				hooksEnabled: true,
+				enabled: storage.get("beforeModelCheckpointEnabled") as boolean | undefined,
+				text: storage.get("beforeModelCheckpointText") as string | undefined,
+				interval: storage.get("beforeModelCheckpointInterval") as number | undefined,
+			}),
+		).toBeUndefined()
 	})
 })

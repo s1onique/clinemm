@@ -1,0 +1,111 @@
+# Finding: scripts/generate-state-proto.mjs is not safely idempotent
+
+## Reproduction against the PRISTINE HEAD proto (no ACT fields)
+
+```
+$ git checkout HEAD~1 -- apps/vscode/proto/cline/state.proto
+$ node scripts/generate-state-proto.mjs
+  Found 46 secret keys
+  Found 177 settings fields
+    Found 46 existing Secrets fields
+    Found 173 existing Settings fields
+  Updated proto/cline/state.proto
+```
+
+### The generator DROPS hand-maintained content and emits a MALFORMED Settings block
+
+Diff (pristine HEAD proto  ->  generator output):
+
+```
+351,359d350
+<   // ACT-CLINEMM-USER-CONTEXT-CEILING01-CORRECTION01: restoring the unrelated
+<   // `auto_approve_all_toggled = 174` field that was deleted by the same
+<   // commit that introduced the user-context ceiling. The deletion was
+<   // out of scope for the ceiling feature; the legacy migration at
+<   // `src/hosts/vscode/vscode-to-file-migration.ts:289` still reads
+<   // `autoApproveAllToggled` from VSCode globalState, so the proto field
+<   // is kept to preserve the wire-shape contract for any client that may
+<   // have persisted it.
+<   optional bool auto_approve_all_toggled = 174;
+371,387d361
+<   // ACT-CLINEMM-USER-CONTEXT-CEILING01-CORRECTION01: explicit Auto/reset
+<   // signal. Mirrors the sibling on `UpdateSettingsRequest`. When true, the
+<   // persistence handler deletes the persisted user-context ceiling key.
+<   // See the matching comment on `UpdateSettingsRequest.clear_user_context_ceiling`
+<   // for the proto3 presence rationale and the mutually-exclusive invariant
+<   // (a request may carry `user_context_ceiling` OR
+<   // `clear_user_context_ceiling`, never both — carrying both is a
+<   // typed-error rejection at the persistence seam).
+<   optional bool clear_user_context_ceiling = 188;
+<   // ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01:
+<   // Persisted Settings values that bind to the two capability
+<   // selectors in apps/vscode/src/sdk/sandbox-policy.ts:
+<   //   - clinemm_safe_yolo_allow_network   -> SandboxNetwork 'allow' | 'deny'
+<   //   - clinemm_safe_yolo_allow_ssh_agent  -> SshAuthenticationAuthority 'agent' | undefined
+<   // Defaults are absent / undefined, which the resolver interprets as
+<   // "no opt-in" -> deny (network), deny (ssh-agent) — exactly the
+<   // pre-ACT runtime behaviour. Persisted true -> allow / agent.
+390,392c364,370
+<   // ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01:
+<   // User-enabled, expiring exception to R0 workspace path authority.
+<   // Wire format: serialized JSON array of { path, expiresAt }.
+---
+>   optional bool before_model_checkpoint_enabled = 191;
+>   optional string before_model_checkpoint_text = 192;
+>   optional int32 before_model_checkpoint_interval = 193;
+>   optional string clinemm_temporary_external_path_authorities = 194;
+>   optional bool cloud_sessions_enabled = 195;
+>   optional string open_telemetry_traces_exporter = 196;
+> }.
+```
+
+The generator output ends the Settings message with a stray `}.` terminator
+followed by a DUPLICATED trailing field set that is not inside any message:
+
+```
+  optional OpenRouterModelInfo act_mode_cline_pass_model_info = 186;
+  optional int32 user_context_ceiling = 187;
+  optional bool clinemm_safe_yolo_allow_network = 189;
+  optional bool clinemm_safe_yolo_allow_ssh_agent = 190;
+  optional bool before_model_checkpoint_enabled = 191;
+  optional string before_model_checkpoint_text = 192;
+  optional int32 before_model_checkpoint_interval = 193;
+  optional string clinemm_temporary_external_path_authorities = 194;
+  optional bool cloud_sessions_enabled = 195;
+  optional string open_telemetry_traces_exporter = 196;
+}.
+  // The host validator REJECTS at persistence time any entry whose
+  // expiresAt exceeds now + 24h, with a typed error surfaced to
+  // the user / CLI operator. Defaults to [] (the pre-ACT contract;
+  // MIGRATION_OR_DEFAULT_AUTHORITY_DELTA = 0 for the absent-key
+  // category).
+  optional string clinemm_temporary_external_path_authorities = 191;
+  optional bool cloud_sessions_enabled = 192;
+  optional string open_telemetry_traces_exporter = 193;
+}
+
+```
+
+### protoc REJECTS the generator output:
+
+```
+cline/state.proto:370:2: Expected top-level statement (e.g. \"message\").
+cline/state.proto:377:3: Expected top-level statement (e.g. \"message\").
+cline/state.proto:378:3: Expected top-level statement (e.g. \"message\").
+cline/state.proto:379:1: Unmatched \"}\".
+```
+
+### Impact
+
+The generator also deletes hand-maintained fields and comments, e.g.
+`auto_approve_all_toggled = 174`, which the legacy migration at
+`src/hosts/vscode/vscode-to-file-migration.ts:289` still reads.
+
+## Resolution used by this ACT
+
+The proto fields were hand-added to the PRISTINE HEAD proto so the
+hand-maintained content survives and the file stays well-formed, then the
+TypeScript bindings were regenerated from that well-formed proto with
+`bun run protos` (exit 0).
+
+The committed proto diff vs pristine HEAD is PURELY ADDITIVE (25 added, 0 removed, 0 modified).

@@ -21,6 +21,11 @@ const mockExtensionState = vi.hoisted(() => ({
 		worktreesEnabled: { user: true, featureFlag: true },
 		remoteConfigSettings: {},
 		backgroundEditEnabled: false,
+		// ACT-CLINEMM-BEFOREMODEL-OPERATOR-CHECKPOINT-01: the operator
+		// checkpoint defaults to OFF, with empty text and an interval of 4.
+		beforeModelCheckpointEnabled: false,
+		beforeModelCheckpointText: "",
+		beforeModelCheckpointInterval: 4,
 	},
 }))
 
@@ -216,5 +221,94 @@ describe("FeatureSettingsSection", () => {
 		fireEvent.click(screen.getByRole("switch", { name: "Cloud" }))
 
 		expect(mockUpdateSetting).toHaveBeenCalledWith("cloudSessionsEnabled", true)
+	})
+
+	// ACT-CLINEMM-BEFOREMODEL-OPERATOR-CHECKPOINT-01: the operator
+	// checkpoint controls live under Features -> Advanced, beneath Hooks.
+	describe("Before Model Hook", () => {
+		beforeEach(() => {
+			mockExtensionState.value = {
+				...mockExtensionState.value,
+				beforeModelCheckpointEnabled: false,
+				beforeModelCheckpointText: "",
+				beforeModelCheckpointInterval: 4,
+			}
+		})
+
+		it("renders the controls under Features -> Advanced", () => {
+			const { container } = render(<FeatureSettingsSection renderSectionHeader={() => null} />)
+			const advanced = container.querySelector("#advanced-features")
+			expect(advanced).toBeTruthy()
+			expect(advanced?.querySelector("#before-model-checkpoint-settings")).toBeTruthy()
+			expect(screen.getByText("Before Model Hook")).toBeTruthy()
+			expect(screen.getByText("Every N completed tool-using turns")).toBeTruthy()
+			// The controls live BELOW the Hooks feature in the same section.
+			const hooksElement = advanced?.querySelector("#hooks-setting-control")
+			const checkpointElement = advanced?.querySelector("#before-model-checkpoint-settings")
+			expect(hooksElement).toBeTruthy()
+			expect(checkpointElement).toBeTruthy()
+			// biome-ignore lint/style/noNonNullAssertion: asserted above
+			expect(
+				(hooksElement as HTMLElement).compareDocumentPosition(checkpointElement as HTMLElement) &
+					Node.DOCUMENT_POSITION_FOLLOWING,
+			).toBeTruthy()
+		})
+
+		it("defaults the toggle OFF", () => {
+			render(<FeatureSettingsSection renderSectionHeader={() => null} />)
+			const toggle = screen.getByRole("switch", { name: "Before Model Hook" })
+			expect(toggle.getAttribute("aria-checked")).toBe("false")
+			expect(toggle.getAttribute("data-state")).toBe("unchecked")
+		})
+
+		it("shows the persisted prompt text and interval", () => {
+			mockExtensionState.value = {
+				...mockExtensionState.value,
+				beforeModelCheckpointEnabled: true,
+				beforeModelCheckpointText: "SAVED CHECKPOINT",
+				beforeModelCheckpointInterval: 7,
+			}
+			const { container } = render(<FeatureSettingsSection renderSectionHeader={() => null} />)
+			const textarea = container.querySelector("#before-model-checkpoint-text") as HTMLTextAreaElement | null
+			expect(textarea?.value).toBe("SAVED CHECKPOINT")
+			const interval = container.querySelector("#before-model-checkpoint-interval") as HTMLInputElement | null
+			expect(interval?.value).toBe("7")
+		})
+
+		it("persists the prompt text and interval through the Save action", async () => {
+			const user = userEvent.setup()
+			const { container } = render(<FeatureSettingsSection renderSectionHeader={() => null} />)
+			const textarea = container.querySelector("#before-model-checkpoint-text") as HTMLTextAreaElement | null
+			expect(textarea).toBeTruthy()
+			await user.type(textarea as Element, "CHECKPOINT BODY")
+			const interval = container.querySelector("#before-model-checkpoint-interval") as HTMLInputElement | null
+			expect(interval).toBeTruthy()
+			await user.clear(interval as Element)
+			await user.type(interval as Element, "4")
+			const save = container.querySelector("#before-model-checkpoint-save-setting-control") as HTMLElement | null
+			expect(save).toBeTruthy()
+			await user.click(save as Element)
+			expect(mockUpdateSetting).toHaveBeenCalledWith("beforeModelCheckpointText", "CHECKPOINT BODY")
+			expect(mockUpdateSetting).toHaveBeenCalledWith("beforeModelCheckpointInterval", 4)
+		})
+
+		it("rejects an invalid interval without persisting it", async () => {
+			const user = userEvent.setup()
+			const { container } = render(<FeatureSettingsSection renderSectionHeader={() => null} />)
+			const interval = container.querySelector("#before-model-checkpoint-interval") as HTMLInputElement | null
+			expect(interval).toBeTruthy()
+			await user.clear(interval as Element)
+			await user.type(interval as Element, "0")
+			const save = container.querySelector("#before-model-checkpoint-save-setting-control") as HTMLElement | null
+			await user.click(save as Element)
+			expect(mockUpdateSetting).not.toHaveBeenCalledWith("beforeModelCheckpointInterval", 0)
+			expect(container.querySelector("#before-model-checkpoint-error")).toBeTruthy()
+		})
+
+		it("toggles the feature through the RPC update path", () => {
+			render(<FeatureSettingsSection renderSectionHeader={() => null} />)
+			fireEvent.click(screen.getByRole("switch", { name: "Before Model Hook" }))
+			expect(mockUpdateSetting).toHaveBeenCalledWith("beforeModelCheckpointEnabled", true)
+		})
 	})
 })

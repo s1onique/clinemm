@@ -2,6 +2,12 @@ import { setCompactionStrategyGlobally, setModelToolEnabledGlobally } from "@cli
 import { Empty } from "@shared/proto/cline/common"
 import { PlanActMode, McpDisplayMode as ProtoMcpDisplayMode, UpdateSettingsRequest } from "@shared/proto/cline/state"
 import { convertProtoToApiProvider } from "@shared/proto-conversions/models/api-configuration-conversion"
+import {
+	BEFORE_MODEL_CHECKPOINT_MAX_INTERVAL,
+	BEFORE_MODEL_CHECKPOINT_MAX_TEXT_LENGTH,
+	normalizeBeforeModelCheckpointInterval,
+	normalizeBeforeModelCheckpointText,
+} from "@shared/storage/beforeModelCheckpoint"
 import { OpenaiReasoningEffort } from "@shared/storage/types"
 import { TelemetrySetting } from "@shared/TelemetrySetting"
 import { ClineEnv } from "@/config"
@@ -351,6 +357,45 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 				)
 			}
 			controller.stateManager.setGlobalState("clinemmTemporaryExternalPathAuthorities", [...result.valid])
+		}
+
+		// ACT-CLINEMM-BEFOREMODEL-OPERATOR-CHECKPOINT-01: persist the
+		// operator-configurable, request-local `beforeModel` completion
+		// checkpoint.
+		//
+		// The three fields are INDEPENDENT:
+		//   - beforeModelCheckpointEnabled  -> the toggle. Persisting `false`
+		//     NEVER deletes the saved prompt text or interval (disabling
+		//     makes the feature ineffective, it does not destroy the
+		//     operator's saved text).
+		//   - beforeModelCheckpointText     -> the exact prompt text. An
+		//     over-length value is REJECTED (typed error) — never
+		//     truncated.
+		//   - beforeModelCheckpointInterval -> a positive integer. A
+		//     non-positive / non-integer value is REJECTED (typed error).
+		//
+		// Every rejection happens BEFORE any write, so an invalid request
+		// leaves the persisted settings untouched (no partial mutation).
+		if (request.beforeModelCheckpointEnabled !== undefined) {
+			controller.stateManager.setGlobalState("beforeModelCheckpointEnabled", !!request.beforeModelCheckpointEnabled)
+		}
+		if (request.beforeModelCheckpointText !== undefined) {
+			const text = normalizeBeforeModelCheckpointText(request.beforeModelCheckpointText)
+			if (text === undefined) {
+				throw new Error(
+					`Invalid before model checkpoint text: expected a string of at most ${BEFORE_MODEL_CHECKPOINT_MAX_TEXT_LENGTH} characters`,
+				)
+			}
+			controller.stateManager.setGlobalState("beforeModelCheckpointText", text)
+		}
+		if (request.beforeModelCheckpointInterval !== undefined) {
+			const interval = normalizeBeforeModelCheckpointInterval(request.beforeModelCheckpointInterval)
+			if (interval === undefined) {
+				throw new Error(
+					`Invalid before model checkpoint interval: expected a positive integer of at most ${BEFORE_MODEL_CHECKPOINT_MAX_INTERVAL}`,
+				)
+			}
+			controller.stateManager.setGlobalState("beforeModelCheckpointInterval", interval)
 		}
 
 		// Post updated state to webview

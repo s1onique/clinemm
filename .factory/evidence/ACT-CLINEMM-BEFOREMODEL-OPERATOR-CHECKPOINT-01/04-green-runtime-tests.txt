@@ -1,0 +1,4 @@
+ ✓ src/sdk/__tests__/before-model-operator-checkpoint.bmoc01.test.ts (13 tests) 6ms
+ ✓ src/sdk/__tests__/before-model-operator-checkpoint.runtime.bmoc01.test.ts (3 tests) 20ms
+ Test Files  2 passed (2)
+      Tests  16 passed (16)

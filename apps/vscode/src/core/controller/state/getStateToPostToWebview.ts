@@ -336,6 +336,12 @@ export async function getStateToPostToWebview(controller: {
 			featureFlag: featureFlagsService.getWorktreesEnabled(),
 		},
 		hooksEnabled: getHooksEnabledSafe(stateManager.getGlobalSettingsKey("hooksEnabled")),
+		// ACT-CLINEMM-BEFOREMODEL-OPERATOR-CHECKPOINT-01: project the
+		// operator-configurable `beforeModel` completion checkpoint so the
+		// Advanced settings surface can render the persisted values.
+		beforeModelCheckpointEnabled: stateManager.getGlobalSettingsKey("beforeModelCheckpointEnabled") ?? false,
+		beforeModelCheckpointText: stateManager.getGlobalSettingsKey("beforeModelCheckpointText") ?? "",
+		beforeModelCheckpointInterval: stateManager.getGlobalSettingsKey("beforeModelCheckpointInterval") ?? 4,
 		lastDismissedInfoBannerVersion,
 		lastDismissedModelBannerVersion,
 		remoteConfigSettings: stateManager.getRemoteConfigSettings?.(),

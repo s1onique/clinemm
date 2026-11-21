@@ -1,0 +1,16 @@
+     ✓ R1: with the feature disabled the provider request is unchanged 2ms
+     ✓ R2: interval 4 produces no checkpoint before the fourth completed tool-using turn 0ms
+     × R3: after the fourth completed tool-using turn the exact configured text appears in the next request 2ms
+     ✓ R4: multiple tools in one assistant turn count as a single turn 0ms
+     × R5: the eligible checkpoint appears exactly once in a prepared request 1ms
+     × R6: a provider retry that reuses the prepared projection does not duplicate the checkpoint 0ms
+     ✓ R7: zero-tool-call turns do not advance the counter 0ms
+     × R8: a fresh session resets the counter 0ms
+     × R9/R10: the MYC prime and the operator checkpoint compose without losing either message 1ms
+     × R11: the tool schema, options/metadata and the original messages are preserved 0ms
+     ✓ R12: a malformed or over-length persisted setting cannot modify a provider request 0ms
+     ✓ R13: the existing Hooks setting off makes the checkpoint ineffective without deleting the saved text 0ms
+     × R14: an active session keeps its frozen configuration when the settings change mid-task 0ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 7 ⎯⎯⎯⎯⎯⎯⎯
+ Test Files  1 failed (1)
+      Tests  7 failed | 6 passed (13)

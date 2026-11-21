@@ -1,0 +1,6 @@
+     × RT1: the REAL runtime delivers the checkpoint exactly once, in the request after the fourth completed tool-using turn 15ms
+     ✓ RT2: with the feature disabled the REAL runtime's provider requests are unchanged 3ms
+     ✓ RT3: the REAL runtime's final request-budget guard still rejects an over-budget request 1ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+ Test Files  1 failed (1)
+      Tests  1 failed | 2 passed (3)

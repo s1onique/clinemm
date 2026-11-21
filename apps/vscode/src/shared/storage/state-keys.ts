@@ -299,6 +299,23 @@ const USER_SETTINGS_FIELDS = {
 	defaultTerminalProfile: { default: "default" as string },
 	hooksEnabled: { default: true as boolean },
 	useAutoCondense: { default: true as boolean },
+	// ACT-CLINEMM-BEFOREMODEL-OPERATOR-CHECKPOINT-01: the operator-
+	// configurable, request-local `beforeModel` completion checkpoint.
+	//
+	//   - beforeModelCheckpointEnabled  -> OFF by default (no model-visible
+	//     or execution-semantic change when disabled).
+	//   - beforeModelCheckpointText     -> the exact operator prompt text.
+	//     Empty by default. The text is PRESERVED when the toggle is
+	//     disabled (disabling never deletes the saved text).
+	//   - beforeModelCheckpointInterval -> fire after every N completed
+	//     tool-using assistant turns. Default 4.
+	//
+	// The effective configuration is resolved (and FROZEN) when a new SDK
+	// session is built — see `resolveEffectiveBeforeModelCheckpoint` in
+	// `src/shared/storage/beforeModelCheckpoint.ts`.
+	beforeModelCheckpointEnabled: { default: false as boolean },
+	beforeModelCheckpointText: { default: "" as string },
+	beforeModelCheckpointInterval: { default: 4 as number },
 	// ACT-CLINEMM-USER-CONTEXT-CEILING01: user-controlled effective context/
 	// input ceiling. Undefined = Auto (canonical model/provider effective
 	// input capacity). Persisted as a positive integer token count; the

@@ -1,0 +1,8 @@
+token-stream EQUAL: [33mfalse[39m ( [33m4829[39m vs [33m4837[39m )
+div at [33m4828[39m
+HEAD:n result } catch (error) { Logger.warn("[HooksAdapter] beforeModel prime injection failed:", error) return undefined } },
+NOW :n result } catch (error) { Logger.warn("[HooksAdapter] beforeModel prime injection failed:", error) return undefined } } return {
+HEAD sha256: 099ea60dc065115b424e2ade290e4a1c79e15c28043d73ba37f28c7a3f59943d
+NOW  sha256: d7fb0c3972eb87a527d1345120eaadbdc9fd25546de97a09ef9e5581accd85a3
+(node:84156) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)

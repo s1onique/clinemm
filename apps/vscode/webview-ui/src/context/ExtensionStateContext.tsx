@@ -480,6 +480,13 @@ export const ExtensionStateContextProvider: React.FC<{
 		// CORRECTION01: one-shot pre-arm intent. Default inactive.
 		sessionAutoApprovalArmed: "none",
 		hooksEnabled: false,
+		// ACT-CLINEMM-BEFOREMODEL-OPERATOR-CHECKPOINT-01: the operator-
+		// configurable `beforeModel` completion checkpoint. The defaults
+		// mirror the persisted state-key defaults: OFF, empty text, and an
+		// interval of 4 completed tool-using turns.
+		beforeModelCheckpointEnabled: false,
+		beforeModelCheckpointText: "",
+		beforeModelCheckpointInterval: 4,
 	})
 	const [expandTaskHeader, setExpandTaskHeader] = useState(true)
 	const [didHydrateState, setDidHydrateState] = useState(false)

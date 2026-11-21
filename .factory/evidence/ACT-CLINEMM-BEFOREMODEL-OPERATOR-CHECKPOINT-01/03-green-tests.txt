@@ -1,0 +1,5 @@
+ ✓ src/sdk/__tests__/before-model-operator-checkpoint.bmoc01.test.ts (13 tests) 6ms
+ ✓ src/core/controller/state/updateSettings.test.ts (14 tests) 15ms
+ ✓ src/sdk/__tests__/before-model-operator-checkpoint.runtime.bmoc01.test.ts (3 tests) 17ms
+ Test Files  3 passed (3)
+      Tests  30 passed (30)

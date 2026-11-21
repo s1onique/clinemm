@@ -1,6 +1,11 @@
 import { UpdateSettingsRequest } from "@shared/proto/cline/state"
+import {
+	BEFORE_MODEL_CHECKPOINT_MAX_TEXT_LENGTH,
+	normalizeBeforeModelCheckpointInterval,
+} from "@shared/storage/beforeModelCheckpoint"
 import { VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
 import { memo, type ReactNode, useEffect, useState } from "react"
+import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
@@ -158,6 +163,9 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 		showFeatureTips,
 		cloudSessionsAvailable,
 		cloudSessionsEnabled,
+		beforeModelCheckpointEnabled,
+		beforeModelCheckpointText,
+		beforeModelCheckpointInterval,
 	} = useExtensionState()
 
 	// ACT-CLINEMM-USER-CONTEXT-CEILING01: local input state for the ceiling
@@ -200,6 +208,64 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 	const handleCeilingChange = (event: Event) => {
 		const target = event.target as HTMLInputElement
 		setCeilingInput(target.value)
+	}
+
+	// ACT-CLINEMM-BEFOREMODEL-OPERATOR-CHECKPOINT-01: local input state for
+	// the operator checkpoint. The values are only persisted when the
+	// operator presses "Save" — an explicit apply action — so a half-typed
+	// prompt is never written to disk.
+	const [checkpointTextInput, setCheckpointTextInput] = useState<string>(beforeModelCheckpointText ?? "")
+	const [checkpointIntervalInput, setCheckpointIntervalInput] = useState<string>(
+		beforeModelCheckpointInterval !== undefined ? String(beforeModelCheckpointInterval) : "4",
+	)
+	const [checkpointError, setCheckpointError] = useState<string | null>(null)
+	const [checkpointSaved, setCheckpointSaved] = useState(false)
+
+	// Re-sync the inputs when the persisted state changes (first mount,
+	// a reload, or an explicit revert elsewhere). The saved prompt text is
+	// PRESERVED when the toggle is disabled — disabling never destroys it.
+	useEffect(() => {
+		setCheckpointTextInput(beforeModelCheckpointText ?? "")
+		setCheckpointIntervalInput(beforeModelCheckpointInterval !== undefined ? String(beforeModelCheckpointInterval) : "4")
+		setCheckpointError(null)
+		setCheckpointSaved(false)
+	}, [beforeModelCheckpointText, beforeModelCheckpointInterval])
+
+	const handleCheckpointToggle = (checked: boolean) => {
+		setCheckpointSaved(false)
+		updateSetting("beforeModelCheckpointEnabled", checked)
+	}
+
+	const handleCheckpointTextChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+		setCheckpointTextInput(event.target.value)
+		setCheckpointSaved(false)
+	}
+
+	const handleCheckpointIntervalChange = (event: Event) => {
+		const target = event.target as HTMLInputElement
+		setCheckpointIntervalInput(target.value)
+		setCheckpointSaved(false)
+	}
+
+	const handleCheckpointSave = () => {
+		const text = checkpointTextInput
+		if (text.length > BEFORE_MODEL_CHECKPOINT_MAX_TEXT_LENGTH) {
+			setCheckpointError(
+				`The checkpoint text must be at most ${BEFORE_MODEL_CHECKPOINT_MAX_TEXT_LENGTH} characters (currently ${text.length}).`,
+			)
+			return
+		}
+		const trimmedInterval = checkpointIntervalInput.trim()
+		const parsedInterval = Number(trimmedInterval)
+		const normalizedInterval = normalizeBeforeModelCheckpointInterval(parsedInterval)
+		if (trimmedInterval === "" || normalizedInterval === undefined) {
+			setCheckpointError("Enter a positive whole number of completed tool-using turns.")
+			return
+		}
+		setCheckpointError(null)
+		updateSetting("beforeModelCheckpointText", text)
+		updateSetting("beforeModelCheckpointInterval", normalizedInterval)
+		setCheckpointSaved(true)
 	}
 
 	// State lookup for mapped features
@@ -335,6 +401,80 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 									onChange={(checked) => updateSetting(feature.settingKey, checked)}
 								/>
 							))}
+
+							{/* ACT-CLINEMM-BEFOREMODEL-OPERATOR-CHECKPOINT-01: the
+							    operator checkpoint. It is SUBORDINATE to the Hooks
+							    feature above: switching Hooks off makes this feature
+							    ineffective without deleting the saved prompt text. */}
+							<div
+								className="space-y-3 rounded-xs border border-editor-widget-border/50 px-3 py-3"
+								id="before-model-checkpoint-settings">
+								<div className="flex items-center justify-between w-full">
+									<Label
+										className="text-sm font-medium text-foreground"
+										htmlFor={featureSettingControlId("before-model-checkpoint")}>
+										Before Model Hook
+									</Label>
+									<Switch
+										checked={beforeModelCheckpointEnabled ?? false}
+										className="shrink-0"
+										id={featureSettingControlId("before-model-checkpoint")}
+										onCheckedChange={handleCheckpointToggle}
+										size="lg"
+									/>
+								</div>
+								<p className="text-xs text-muted-foreground">
+									Injects a fixed prompt into the model request after every N completed tool-using turns.
+									Applies to new tasks only — an active task keeps the configuration it started with. Requires
+									the Hooks feature above.
+								</p>
+								<div className="space-y-2">
+									<Label
+										className="text-sm font-medium text-foreground"
+										htmlFor="before-model-checkpoint-interval">
+										Every N completed tool-using turns
+									</Label>
+									<VSCodeTextField
+										className="w-full"
+										id="before-model-checkpoint-interval"
+										onChange={(event) => handleCheckpointIntervalChange(event as Event)}
+										placeholder="4"
+										value={checkpointIntervalInput}
+									/>
+								</div>
+								<div className="space-y-2">
+									<Label className="text-sm font-medium text-foreground" htmlFor="before-model-checkpoint-text">
+										Checkpoint prompt
+									</Label>
+									<textarea
+										className="w-full min-h-24 rounded-xs border border-editor-widget-border bg-editor-background px-2 py-1 text-sm text-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-vscode-focusBorder"
+										id="before-model-checkpoint-text"
+										maxLength={BEFORE_MODEL_CHECKPOINT_MAX_TEXT_LENGTH}
+										onChange={handleCheckpointTextChange}
+										placeholder="Summarise the work so far before continuing."
+										value={checkpointTextInput}
+									/>
+								</div>
+								<div className="flex items-center gap-3">
+									<Button
+										id={featureSettingControlId("before-model-checkpoint-save")}
+										onClick={handleCheckpointSave}
+										size="sm"
+										variant="secondary">
+										Save
+									</Button>
+									{checkpointSaved && !checkpointError && (
+										<span className="text-xs text-description">Saved.</span>
+									)}
+								</div>
+								{checkpointError && (
+									<div
+										className="text-(--vscode-errorForeground) text-xs mt-1"
+										id="before-model-checkpoint-error">
+										{checkpointError}
+									</div>
+								)}
+							</div>
 
 							{/* MCP Display Mode */}
 							<div className="space-y-2">
