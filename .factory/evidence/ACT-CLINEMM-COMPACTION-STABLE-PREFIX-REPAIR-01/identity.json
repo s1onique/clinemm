@@ -12,7 +12,8 @@
     "entryHead": "9117f13ae7d643373c56eeedc30da661fc790b08",
     "entryHeadMatchesExpectedPredecessorFinalHead": true,
     "subjectHead": "9f57bc84d98f3439a0d70e4bf74300efef6564cd",
-    "finalHead": "<recorded-after-the-evidence-commit>"
+    "finalHead": "297e577f5fdfc3c29fc9eb95f9d63c82b605bfed",
+    "finalHeadNote": "The evidence-only commit that produced the artifact package and the epic-board entry. It changes no production module and no test."
   },
   "ancestry": {
     "predecessorAct": "ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01",
