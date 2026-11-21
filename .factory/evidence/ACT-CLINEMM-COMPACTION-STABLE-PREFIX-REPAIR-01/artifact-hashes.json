@@ -49,8 +49,8 @@
     },
     {
       "path": "evidence/ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01/test-receipts.txt",
-      "bytes": 5941,
-      "sha256": "4b0316edb1014c621e39ee87590491f54ea6e49c027e25a102b0bbe56d6a8aa9"
+      "bytes": 6747,
+      "sha256": "99f90e49c22e0c0e9971decd14c105470b87009dba6bd83ef2ec4f35c5400070"
     },
     {
       "path": "evidence/ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01/tool/prefix-comparison.ts",

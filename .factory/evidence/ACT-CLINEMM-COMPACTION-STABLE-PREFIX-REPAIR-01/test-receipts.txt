@@ -57,11 +57,29 @@ $ bun x vitest run --config vitest.config.ts
     Tests       139 failed | 5491 passed | 159 skipped (5789)
     EXIT 1
 
-  DELTA: +18 tests, +18 passes, +1 test file. The FAILURE SET IS
-  BYTE-IDENTICAL (168 unique failing-file entries in both runs; the
-  extracted failing-file sets diff to EMPTY).
+  DELTA: +18 tests, +18 passes, +1 test file.
+
+  The FAILING TEST FILE SET is IDENTICAL in all three runs - the pristine
+  baseline, the post-repair run and the FINAL_HEAD run: 28 failing files
+  each, and the three extracted sets diff to EMPTY.
+
+    baseline: 28 files
+    after:    28 files
+    final:    28 files
+
+  NO compaction, evidence-continuity, task-contract, session-compaction,
+  stable-prefix or summary-churn file fails in ANY of the three runs.
 
   NO ACT-OWNED REGRESSION.
+
+  RUN-TO-RUN NOISE (observed and attributed, NOT an ACT regression):
+    - One stack-trace line inside the already-failing
+      src/hub/server/replay-wire.test.ts moved between runs. The FILE fails
+      in all three runs; only the reported error location differed.
+    - The FINAL_HEAD run additionally reported "Errors 1 error": an
+      unhandled ENOENT in src/extensions/tools/executors/file-read.test.ts
+      for a sandbox temp file. It is a tmp-file race in an unrelated
+      executor suite, not a compaction seam.
 
   The 139 pre-existing failures are environment/toolchain drift in the
   hub/transport/process suites; they are unrelated to the compaction
