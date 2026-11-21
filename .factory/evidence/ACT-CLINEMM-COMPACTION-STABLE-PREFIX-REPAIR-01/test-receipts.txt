@@ -208,3 +208,84 @@ $ bun x vitest run --config vitest.red.summary-churn01.config.ts
        shrink" argument is mathematically false and is withdrawn.
 
 ======================================================================
+
+
+======================================================================
+ CORRECTION02 — 2026-11-21
+======================================================================
+
+  All commands run from `sdk/packages/core` unless noted.
+
+  $ bun x vitest run --config vitest.red.summary-churn01.config.ts
+    Test Files  1 passed (1)
+    Tests       1 passed (1)
+    EXIT 0
+    The ORIGINAL RED witness, UNMODIFIED. Still GREEN after CORRECTION02.
+
+  $ bun x vitest run --config vitest.config.ts       src/extensions/context/evidence-continuity.test.ts       src/extensions/context/compaction.summary-churn01.test.ts       src/extensions/context/compaction.stable-prefix-repair01.test.ts       src/extensions/context/task-contract-conservation.test.ts       src/extensions/context/task-contract-conservation.historical.test.ts       src/extensions/context/task-contract-budget-authority.test.ts       src/session/models/session-compaction.test.ts       src/extensions/context/compaction.roundc-fidelity-recon02.test.ts
+    Test Files  8 passed (8)
+    Tests       182 passed | 1 skipped (183)
+    EXIT 0
+    (was 175 passed | 1 skipped after CORRECTION01; +7 CORRECTION02 controls)
+
+  $ bun x vitest run --config vitest.config.ts        # full @cline/core suite
+    Test Files  28 failed | 336 passed | 3 skipped (367)
+    Tests       139 failed | 5499 passed | 159 skipped (5797)
+    EXIT 1
+    PRISTINE BASELINE (same command, at the ACT's entry):
+    Test Files  28 failed | 336 passed | 3 skipped (367)
+    Tests       139 failed | 5473 passed | 159 skipped (5771)
+    EXIT 1
+    The failing TEST FILE SET is IDENTICAL in all three runs (entry,
+    CORRECTION01, CORRECTION02) — 28 files each, and the extracted, sorted
+    sets diff to EMPTY.
+    No compaction, evidence-continuity, task-contract, session-compaction,
+    stable-prefix or summary-churn file fails in ANY run.
+    NO ACT-OWNED REGRESSION.
+
+  $ bun tsc -p tsconfig.dev.json --noEmit
+    44 diagnostics before and after; 0 contributed by the files this
+    correction touched.
+    (Pristine baseline: 44 pre-existing diagnostics.)
+
+  $ bunx biome check --write <the 3 modified files>
+  $ bunx biome check <the 3 modified files>
+    Checked 3 files. No fixes applied.  CLEAN.
+
+  $ bun .factory/evidence/ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01/tool/probe-index-mismatch.ts
+    raw history length: 4
+    CANONICAL source_message_count: 3
+    tool_result RAW index: 3
+    tool_result CANONICAL index: 2
+    DISCRIMINATOR (result raw index >= canonical count): true
+    --- PHASE A (new compaction) ---
+    carriedOutcomeCount: 0
+    RESULT PRESENT: NO -- EVIDENCE LOST
+    --- PHASE B (persisted-sidecar restoration) ---
+    persisted source_message_count: 3
+    carriedOutcomeCount: 0
+    RESULT PRESENT: NO -- EVIDENCE LOST
+    -> The reviewer's P0 REPRODUCES against the real seams (BEFORE the fix).
+
+  $ bun .factory/evidence/ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01/tool/probe-fallback-underestimate.ts
+    CASE 1 — outcome inside the inferred prefix
+      TRUE boundary: 5 | INFERRED boundary: 3
+      carriedOutcomeCount: 1
+      SECTION carries call_x: true
+    CASE 2 — outcome BETWEEN the inferred and the true boundary
+      TRUE boundary: 5 | INFERRED boundary: 3
+      carriedOutcomeCount: 0
+      SECTION carries call_y: false
+      SECTION: "## Goal\nG"
+      OMISSION POSSIBLE: true
+      -> The reviewer's P1 REPRODUCES: the fallback can OMIT a boundary
+         outcome, so "never correctness" was false and is withdrawn.
+
+  RED -> GREEN PROOF (the fix reverted, then restored):
+    fix reverted:  Tests  3 failed | 23 passed (26)
+    fix applied:   Tests  26 passed (26)
+    probe with the fix reverted:  RESULT PRESENT: NO -- EVIDENCE LOST
+    probe with the fix applied:   RESULT PRESENT: YES
+    -> The new witnesses are TRUE discriminators of the P0.
+
+======================================================================

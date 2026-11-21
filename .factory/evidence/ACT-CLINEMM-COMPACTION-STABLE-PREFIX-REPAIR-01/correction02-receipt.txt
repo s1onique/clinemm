@@ -1,0 +1,222 @@
+======================================================================
+ ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01-CORRECTION02
+ RECEIPT
+======================================================================
+
+Review verdict: HALT_CANONICAL_BOUNDARY_INDEX_MISMATCH (one new P0)
+Scope: the one P0, plus the two P1 documentation corrections and the P2
+terminology correction. The original RED witness is preserved UNMODIFIED.
+
+----------------------------------------------------------------------
+P0 — THE CANONICAL COUNT WAS APPLIED TO AN UNFILTERED ARRAY
+----------------------------------------------------------------------
+
+REVIEWER'S CLAIM: "CORRECTION01 introduces countCanonicalSourceMessages() to
+count messages excluding metadata.displayOnly === true. However,
+applyVerifiedEvidenceToCompactedMessages() still extracts the boundary ledger
+using canonicalMessages.slice(0, boundaryCount). The two operations use
+different indexing domains."
+
+CONFIRMED. The source at CORRECTION01 read, verbatim:
+
+  evidence-continuity.ts
+    const boundaryCount = Math.max(0, Math.min(
+      options.sourceMessageCount ?? inferCompactionSourceBoundary(...),
+      canonicalMessages.length,        // <- RAW length
+    ));
+    const ledger = extractVerifiedToolOutcomes(
+      canonicalMessages.slice(0, boundaryCount),   // <- RAW slice
+    );
+
+`boundaryCount` is a CANONICAL count — `createSessionCompactionState()` and
+`projectSessionCompactionState()` both filter the display-only messages
+FIRST and only then count or slice — but the evidence path sliced the RAW
+list. Every display-only message preceding the boundary consumed one slot of
+the slice, so the prefix ended EARLY.
+
+REPRODUCED against the REAL seams
+(tool/probe-index-mismatch.ts), with the reviewer's counterexample:
+
+  RAW:      0 USER task | 1 DISPLAY(displayOnly) | 2 ASSISTANT tool_use | 3 USER tool_result
+  CANONICAL:0 USER task |                       | 1 ASSISTANT tool_use | 2 USER tool_result
+
+  raw history length: 4
+  CANONICAL source_message_count: 3
+  tool_result RAW index: 3
+  tool_result CANONICAL index: 2
+  DISCRIMINATOR (result raw index >= canonical count): true
+
+  --- PHASE A (new compaction) ---
+  carriedOutcomeCount: 0
+  RESULT PRESENT: NO -- EVIDENCE LOST
+
+  --- PHASE B (persisted-sidecar restoration) ---
+  persisted source_message_count: 3
+  carriedOutcomeCount: 0
+  RESULT PRESENT: NO -- EVIDENCE LOST
+
+WHY IT IS A CORRECTNESS FAILURE, NOT A COMPACTNESS ONE. The dropped outcome
+is BEFORE the canonical tail — the tail begins at the boundary — so nothing
+else restores it. The provider-visible request loses a verified result while
+the prefix still looks stable. This is precisely the failure mode the
+evidence-continuity guarantee exists to prevent.
+
+THE DISCRIMINATOR THE PREVIOUS WITNESS MISSED. The review is right that
+CORRECTION01's display-only witness did not detect this: its final
+`assistantTurn("continuing")` came AFTER the tool result, leaving the result
+inside the incorrectly sliced prefix. The new witness places the successful
+`tool_result` AFTER raw index `source_message_count - 1` (raw index 3 vs
+count 3) while keeping it INSIDE the canonical source boundary (canonical
+index 2 of 3). That is the discriminator, and it is asserted explicitly by
+the test "the counterexample IS the discriminator: the result is past the RAW
+boundary but inside the CANONICAL one".
+
+THE FIX. `canonicalSourceMessages()` is now EXPORTED from
+`session/models/session-compaction.ts` — the SAME filter
+`createSessionCompactionState()` and `projectSessionCompactionState()` apply
+— and the evidence path applies it BEFORE selecting the prefix:
+
+  const canonical = canonicalSourceMessages(canonicalMessages);
+  const boundaryCount = Math.max(0, Math.min(
+    options.sourceMessageCount ?? inferCompactionSourceBoundary(compactedMessages, canonical),
+    canonical.length,
+  ));
+  const ledger = extractVerifiedToolOutcomes(canonical.slice(0, boundaryCount));
+
+The count and the slice now operate over the IDENTICAL ordered collection.
+The INFERENCE fallback is corrected the same way: it now measures and
+slices over the canonical collection too.
+
+PROVEN TO BE A TRUE DISCRIMINATOR. With the fix reverted, exactly the three
+P0 tests fail; with the fix applied, all pass:
+
+  fix reverted:  Tests  3 failed | 23 passed (26)
+  fix applied:   Tests  26 passed (26)
+
+  probe with the fix reverted:  RESULT PRESENT: NO -- EVIDENCE LOST (both phases)
+  probe with the fix applied:   RESULT PRESENT: YES (both phases)
+
+----------------------------------------------------------------------
+P1 — THE FALLBACK'S "NEVER CORRECTNESS" CLAIM IS NOT PROVEN
+----------------------------------------------------------------------
+
+REVIEWER'S CLAIM: "The fallback's claim that an underestimated boundary
+costs compactness but never correctness is not proven. It may omit boundary
+evidence."
+
+CONFIRMED, and the omission is MEASURED
+(tool/probe-fallback-underestimate.ts).
+
+  CASE 1 — outcome inside the inferred prefix
+    TRUE boundary: 5 | INFERRED boundary: 3
+    carriedOutcomeCount: 1
+    SECTION carries call_x: true
+
+  CASE 2 — outcome BETWEEN the inferred and the true boundary
+    TRUE boundary: 5 | INFERRED boundary: 3
+    carriedOutcomeCount: 0
+    SECTION carries call_y: false
+    SECTION: "## Goal\nG"
+    OMISSION POSSIBLE: true
+
+The canonical history is `A, B, tool_use(call_y), tool_result(call_y), E`
+and the sidecar retains the trailing `E`. The inferred boundary is 3 while
+the true boundary is 5, so `call_y` — inside the true boundary, outside the
+inferred one — is carried by NEITHER the section NOR the canonical tail.
+
+CORRECTION APPLIED. The contract is narrowed from "costs compactness, never
+correctness" to:
+
+  the inference is a SAFE DIRECTION FOR FABRICATION — it never invents an
+  outcome — but it is NOT SAFE FOR OMISSION. It is an APPROXIMATION whose
+  result is NOT AUTHORITATIVE for evidence conservation. A caller that needs
+  the evidence-conservation guarantee MUST pass the authoritative boundary
+  explicitly.
+
+The production path is unaffected: all three production call sites pass an
+explicit boundary, so the production path never depends on the inference.
+The source doc, the `sourceMessageCount` option doc, the CORRECTION01
+receipt and the evidence package all now state the narrowed contract.
+
+A regression test pins the corrected contract: "an under-estimated boundary
+can OMIT a boundary outcome (the 'never correctness' claim is FALSE)", with
+its companion "the AUTHORITATIVE boundary does not omit that outcome".
+
+----------------------------------------------------------------------
+P1 — THE BUDGET-GUARD ORDERING CLAIM WAS WRONG
+----------------------------------------------------------------------
+
+REVIEWER'S CLAIM: "The report says the final budget guard runs before
+sidecar writes. The compaction path calls saveState before returning to the
+final dispatch guard."
+
+CONFIRMED. The compaction path calls `saveState` INTERNALLY:
+
+  compaction.ts:1618   await input.saveState?.(nextState, context.messages);   // Phase A
+  compaction.ts:1715   await input.saveState?.(nextState, context.messages);   // re-compaction
+
+and only THEN returns to the dispatch path, where the final guard runs. The
+earlier claim that the guard runs "before any compaction sidecar write" was
+wrong about the ORDER.
+
+CORRECTION APPLIED. The two guarantees are now stated SEPARATELY, in
+`repair-contract.md`, `source-map.md`, `conservation-results.md` and
+`qualification-report.md`:
+
+  | Guarantee       | Enforced by | When it applies |
+  |-----------------|-------------|-----------------|
+  | PERSISTENCE     | the compaction-side budget projection | BEFORE the sidecar |
+  |                 | (`applyTaskContractToCompactedMessages`, | is written, inside |
+  |                 | isolated accounting projection via     | the compaction path |
+  |                 | `prepareBudgetAccountingMessages`)     |                   |
+  | DISPATCH        | the final provider-request guard       | before any provider|
+  |                 | (`agent-runtime.ts`,                    | request leaves the|
+  |                 | `assertProviderRequestWithinBudget()`), | process           |
+  |                 | provider-visible projection of the     |                   |
+  |                 | FINAL messages, after every beforeModel|                   |
+  |                 | mutation                              |                   |
+
+Both fail closed. The dispatch guard is the last line of defence: an
+over-budget request raises `TaskContractBudgetError` before any provider
+call. The persistence guard ensures an over-budget compaction does not WRITE
+a sidecar in the first place. Neither guard is changed by the repair.
+
+----------------------------------------------------------------------
+P2 — THE ROLLING-12 SUBSET TERMINOLOGY
+----------------------------------------------------------------------
+
+CORRECTED during terminal cleanup. The CORRECTION01 receipt still asserted
+that the inference "costs compactness, never correctness" — that half of the
+claim is now superseded and marked as such. Every surviving use of "subset"
+in the package refers to the BOUNDARY's own outcomes (the safe-for-
+fabrication property), never to the whole-history ledger, whose rolling-12
+window invalidates that relation — as established in CORRECTION01.
+
+----------------------------------------------------------------------
+GATES
+----------------------------------------------------------------------
+
+  The original RED witness, UNMODIFIED, still PASSES:
+    $ bun x vitest run --config vitest.red.summary-churn01.config.ts
+    Test Files  1 passed (1)
+    Tests       1 passed (1)
+
+  Focused production-seam suites: 182 passed, 1 skipped, 0 failed
+  (was 175 passed, 1 skipped after CORRECTION01; +7 CORRECTION02 controls).
+
+  Full @cline/core package suite:
+    pristine baseline: 139 failed | 5473 passed | 159 skipped (5771)
+    after CORRECTION01: 139 failed | 5494 passed | 159 skipped (5792)
+    after CORRECTION02: 139 failed | 5499 passed | 159 skipped (5797)
+    The failing TEST FILE SET is IDENTICAL in all three runs — 28 files
+    each, and the extracted sets diff to EMPTY.
+    No compaction, evidence-continuity, task-contract, session-compaction,
+    stable-prefix or summary-churn file fails in ANY run.
+    NO ACT-OWNED REGRESSION.
+
+  Typecheck: 44 diagnostics before and after; 0 contributed by the files
+  this correction touched.
+
+  Biome clean on every modified file. git diff --check clean.
+
+======================================================================

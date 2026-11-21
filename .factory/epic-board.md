@@ -37501,6 +37501,12 @@ CORRECTION: ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01-CORRECTION01
   p2_final_artifact_identity: CONFIRMED -> head identities made explicit
 CORRECTION_HEAD: a9bf4fc8be637a17d11b9fbb0338e4774cd98b56
 FINAL_HEAD: a9bf4fc8be637a17d11b9fbb0338e4774cd98b56
+CORRECTION02: ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01-CORRECTION02
+  review_verdict: HALT_CANONICAL_BOUNDARY_INDEX_MISMATCH
+  p0_canonical_count_on_unfiltered_array: CONFIRMED, REPRODUCED -> fixed
+  p1_fallback_never_correctness_claim: CONFIRMED -> withdrawn, contract narrowed
+  p1_budget_guard_ordering_claim: CONFIRMED wrong -> persistence vs dispatch separated
+  p2_rolling12_subset_terminology: CONFIRMED -> corrected
 ```
 
 ## What was repaired
@@ -37520,6 +37526,12 @@ boundary does not move when the transcript grows, so the summary is byte-identic
   persisted boundary agree by construction. (CORRECTION01: this was the RAW
   `context.messages.length`, which DIVERGED from the persisted count whenever a
   display-only message was present. Fixed.)
+- **The boundary is an INDEX into the CANONICAL collection.** (CORRECTION02) The ledger prefix is
+  selected over `canonicalSourceMessages(messages)` — the SAME collection the boundary was COUNTED
+  over. Slicing the RAW list with a CANONICAL count ended the prefix early and silently DROPPED
+  verified outcomes that were genuinely inside the boundary: measured `carriedOutcomeCount: 0`,
+  `EVIDENCE LOST`, in both Phase A and Phase B. Fixed by applying the canonical filter BEFORE the
+  slice, so the count and the slice operate over the identical ordered collection.
 - **Phase B — a SUBSEQUENT CONTINUATION.** The persisted summary is a historical snapshot and is not
   rebuilt. The pipeline passes the persisted sidecar's `source_message_count`, which is authoritative.
 
