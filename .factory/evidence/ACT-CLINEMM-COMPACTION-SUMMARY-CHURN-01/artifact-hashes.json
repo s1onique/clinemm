@@ -10,17 +10,15 @@
     "against this repository."
   ],
   "productionSourceDiff": {
-    "filesChangedUnderProductionSource": [
-      "sdk/packages/core/src/extensions/context/compaction.summary-churn01.test.ts"
-    ],
-    "stat": ".../core/src/extensions/context/compaction.summary-churn01.test.ts      | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)",
+    "filesChangedUnderProductionSource": [],
+    "stat": "",
     "interpretation": "The ONLY changes under sdk/packages/core/src are the two NEW test files. No production module was modified."
   },
   "artifacts": [
     {
       "name": ".factory/evidence/ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01/identity.json",
-      "sha256": "bf2eaed942b9a840a1a904c4204d7ff91b02158a7d3c92c50d2f625412427d70",
-      "bytes": 3739
+      "sha256": "4159a20857ba4b33c317e3cef540e7286bb06931427a0082f8827023819b51c4",
+      "bytes": 3958
     },
     {
       "name": ".factory/evidence/ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01/source-map.md",

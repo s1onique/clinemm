@@ -74,9 +74,10 @@
   "pushed": false,
   "pr": false,
   "subjectHeadMeaning": "The commit that PRODUCED the evidence artifacts (the forensic evidence commit).",
-  "finalHead": "9e9e2955c1ced7e656ac8835dff4fdf59f5ba33d",
-  "finalHeadMeaning": "The commit that recorded subjectHead into identity.json and regenerated the artifact hash manifest. It is a documentation-only follow-up; it adds no evidence and changes no verdict.",
-  "finalHeadNote": "Recorded after the review-driven correction commit; see correctionHead below.",
-  "correctionHead": "PENDING",
-  "historyNote": "History was NOT rewritten. The forensic evidence commit (subjectHead) and the documentation follow-up (finalHead) are both retained and their distinct meanings are stated here."
+  "finalHead": "a2cea5b5fd8b88aceabd87927e8ca5818cdc49c2",
+  "finalHeadMeaning": "The correction commit. History was NOT rewritten: subjectHead remains the evidence-producing commit, finalHead the review-correction commit.",
+  "finalHeadNote": "Recorded after the review-correction commit; the SHA was NOT predicted.",
+  "correctionHead": "a2cea5b5fd8b88aceabd87927e8ca5818cdc49c2",
+  "historyNote": "History was NOT rewritten. The forensic evidence commit (subjectHead) and the documentation follow-up (finalHead) are both retained and their distinct meanings are stated here.",
+  "correctionHeadMeaning": "The commit that applied the review corrections (private path redaction, structural carrier identification, code-unit labelling, gate->artifact binding). It changes no verdict and no evidence conclusion."
 }
