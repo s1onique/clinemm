@@ -375,4 +375,5 @@ experiment was **not** started inside this ACT, as instructed.
 | `09-full-suite-comparison.txt` | baseline vs. after: 169 → 169 failed, 5974 → 6004 passed, zero regressions |
 | `10-state-proto-generator-defect.txt` | the state-proto generator defect (pre-existing) |
 | `11-suite-reproducibility.txt` | two independent post-ACT runs agree exactly (identical failing-file set) |
+| `12-sdk-workspace-test-gap.txt` | disposition of the SDK workspace test failure (pre-existing, unrelated) |
 | `verify-prime-equivalence.mjs` | the re-runnable prime-equivalence checker |
