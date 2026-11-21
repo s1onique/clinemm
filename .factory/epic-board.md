@@ -38032,3 +38032,173 @@ separate and was **not** merged into this continuation.
 
 `.factory/evidence/ACT-CLINEMM-ROUND-C-NONCONVERGENCE-RECON-CORRECTION02.md`
 `.factory/evidence/ACT-CLINEMM-ROUND-C-NONCONVERGENCE-RECON-01/`
+
+---
+
+# ACT-CLINEMM-BEFOREMODEL-OPERATOR-CHECKPOINT-01 — PASS_STRUCTURAL_ONLY — 2026-11-21
+
+**Type:** Implementation
+**Source HEAD:** `bb54f0fa55279557aba298d71e3370c7fa6ed814`
+**Predecessor HEAD:** `0b6b3ba51`
+
+## What was implemented
+
+A persistent, operator-configurable, request-local `beforeModel` completion checkpoint,
+composed into the **existing** `beforeModel` hook in
+`apps/vscode/src/sdk/hooks-adapter.ts`. No new hook framework, no change to the public SDK
+hook API, and the injection was not moved to `PostToolUse`.
+
+* **Counting** — the runtime's `turn-finished` event with `toolCallCount > 0`. A turn with three
+  tool calls counts as ONE completed tool-using turn; a zero-tool-call turn does not advance the
+  counter. Provider attempts and UI updates are not counted.
+* **Milestones** — for interval 4: turns 1-3 produce nothing; the checkpoint lands in the
+  request after the 4th completed tool-using turn, then after 8, 12, 16.
+* **Injection** — ONE synthetic user-role text message appended to the provider-bound
+  `request.messages` through the typed `beforeModel` return contract. Original messages and their
+  ordering are preserved; the system prompt, tool definitions, model options and metadata are
+  untouched; the persistent conversation history is never mutated; the message never lands inside a
+  tool-call/tool-result pair; `submit_and_exit` availability is untouched; completion is never
+  forced; further tool calls are never blocked; the runtime's final request-budget guard remains
+  authoritative.
+* **Per-session state** — owned by the hook INSTANCE (created inside `buildAgentHooks`). There is
+  no module-global counter and nothing is touched from a React functional updater. A fresh
+  session resets the counter.
+* **Freeze** — the effective configuration is resolved and captured when the hook bag is built,
+  which happens once per SDK session. Edits during an active task apply to the NEXT new task.
+* **Composition** — the pre-existing MYC prime is computed first and the checkpoint is appended
+  to whichever message list the prime produced. The prime's body was extracted verbatim; the
+  token-stream comparison against the pre-ACT body matches for 4828 of 4829 characters (the only
+  difference is the closure's own `return {`).
+* **Retry / overflow recovery** — idempotent under a provider retry of an already-prepared
+  request, and NOT silently discarded by the overflow-recovery re-preparation. Three independent
+  guards: a milestone watermark, a same-iteration re-preparation allowance, and a deterministic
+  per-(session,milestone) message id used as an exact presence check.
+* **Disabled** — the provider request is conserved byte-for-byte.
+
+## Settings contract
+
+| Key | Type | Default | Bound |
+|---|---|---|---|
+| `beforeModelCheckpointEnabled` | boolean | `false` | — |
+| `beforeModelCheckpointText` | string | `""` | 4096 chars, **rejected** — never truncated |
+| `beforeModelCheckpointInterval` | number | `4` | positive integer, max 1000, **rejected** — never coerced |
+
+Effective only when the parent Hooks feature is enabled, the toggle is enabled, the text is
+non-empty and the interval is valid; otherwise the feature is ineffective. A malformed or
+over-length persisted value fails closed. Invalid values are rejected with a typed error BEFORE
+any write, so a rejected request leaves the persisted settings uncorrupted. Disabling the toggle
+never deletes the saved text. The values are not persisted inside model profiles or task
+transcripts.
+
+Proto: `Settings` fields 194/195/196 and `UpdateSettingsRequest` fields 52/53/54. The diff
+against the pristine HEAD proto is **purely additive** (25 lines added, 0 removed, 0 modified),
+so every pre-existing field number is preserved. The generated bindings were rebuilt with the
+repository's own tooling and the six wire tags were verified in the encoder and decoder.
+
+## Executable evidence
+
+| Stage | Result |
+|---|---|
+| RED (focused, against pre-ACT production code) | **7 failed / 6 passed of 13** — reproducible |
+| RED (runtime, against pre-ACT production code) | **1 failed / 2 passed of 3** — reproducible |
+| GREEN (focused) | **30/30 pass** (13 + 3 + 14) |
+| GREEN (webview) | **19/19 pass** |
+| Extension typecheck | **0 diagnostics** |
+| Webview typecheck | **0 diagnostics** |
+| `bun run build:webview` | **success** (8937 modules transformed) |
+| `bun esbuild.mjs --production` | **success** |
+
+**Full-suite comparison against a HEAD baseline** (the ACT's production files reverted, the
+baseline captured, then the ACT restored):
+
+| | Baseline (HEAD) | After (ACT) | Delta |
+|---|---|---|---|
+| failed tests | 169 | **169** | unchanged |
+| passed tests | 5974 | **6004** | **+30** = exactly the new tests |
+| failed files | 64 | 63 | −1 (the revert-induced `updateSettings.test.ts` breakage) |
+
+**Zero new regressions.** All 63 common failures are pre-existing and unrelated (MCP bootstrap,
+command job manager, seatbelt, provider instance identity, …); none touch a file this ACT
+changed.
+
+The RED-passing assertions are the **conservation** assertions (disabled → unchanged request; no
+checkpoint before the 4th turn; multiple tools = one turn; zero-tool turns do not advance;
+malformed settings cannot modify a request; Hooks-off disables injection). They pass before the
+feature exists precisely because they assert that nothing happens.
+
+## Installed qualification
+
+| Level | State |
+|---|---|
+| `SOURCE_TESTED` | **ACHIEVED** |
+| `BUILT` | **ACHIEVED** |
+| `INSTALLED` | **ACHIEVED** |
+| `LIVE_PROVIDER_OBSERVED` | **NOT ACHIEVED** |
+
+| Item | Value |
+|---|---|
+| VSIX | `dist/clinemm-4.1.26-bb54f0fa5.vsix` |
+| VSIX byte count | `65609737` |
+| VSIX SHA-256 | `566571bedeb748caaaa385b8ae33de0d96a47b61892111bf19f5d9e2903e9e1f` |
+| Installed extension version | `4.1.26` (`s1onique.clinemm-4.1.26`) |
+| Bundle SHA-256 (built == VSIX-embedded == installed) | `ae823a5243b07310c7594faff6bb9d936848121146a8528a9e1fd891d5b27993` |
+
+The three bundle digests are **equal**, binding the source HEAD to the installed runtime.
+
+## Decision
+
+**PASS_STRUCTURAL_ONLY** — full `PASS` is **not** claimed.
+
+Full `PASS` additionally requires that a **live provider request** contains the expected
+checkpoint, and that a fresh installed window round-trips the UI (paste → interval 4 → enable →
+save → reopen → persisted). Neither was performed: no live provider request was captured.
+
+Neither HALT applies. `HALT_RED_NOT_REPRODUCED` does not apply — the RED was reproduced against
+the pre-ACT code. `HALT_WRONG_PRODUCTION_SEAM` does not apply — the mechanism demonstrably
+reaches the real runtime through the real `SdkSessionConfigBuilder → buildAgentHooks →
+beforeModel` composition, and the installed bundle contains that code.
+
+The live capture was not completed. The repository's own prior-ACT harness script
+(`apps/vscode/src/dev/debug-harness/live-installed-vsix-qualification.tcrr01.mjs`) documents that
+the GUI **SIGSEGVs on this substrate** under the Seatbelt profile, so a GUI-driven live run is
+not available here; the established alternative is to drive the packaged bundle from the installed
+VSIX directly. That alternative was not completed inside this ACT.
+
+Two environment boundaries were hit and worked around without touching the product code: the
+agent process is **not permitted to write** to `~/.vscodium-roz` (macOS TCC / host sandbox), so
+the VSIX was installed into a repo-local extensions directory using the same installer and the
+same bytes; and the GUI cannot start, as described above.
+
+## Outstanding Factory item (NOT fixed in this ACT)
+
+`apps/vscode/scripts/generate-state-proto.mjs` is **not a safe idempotent rewriter** of
+`state.proto`. Run against the pristine HEAD proto it (a) drops hand-maintained fields and
+comments — including `auto_approve_all_toggled = 174`, which the legacy migration at
+`src/hosts/vscode/vscode-to-file-migration.ts:289` still reads — and (b) emits a malformed
+`Settings` block (a stray `}.` terminator plus a duplicated trailing field set) that `protoc`
+**rejects**:
+
+```
+cline/state.proto:370:2: Expected top-level statement (e.g. "message").
+cline/state.proto:377:3: Expected top-level statement (e.g. "message").
+cline/state.proto:378:3: Expected top-level statement (e.g. "message").
+cline/state.proto:379:1: Unmatched "}".
+```
+
+This is a **pre-existing** defect, not introduced by this ACT. It was hit directly: the
+repository's pre-commit hook runs the generator, and running it over this ACT's hand-edited proto
+produced the malformed file. The defect was caught by the proto build before it could ship, and
+the committed proto is the well-formed, purely-additive version.
+
+It is recorded rather than repaired here, because repairing it would change the wire shape of
+unrelated `Settings` fields — out of this ACT's scope. **It needs a dedicated ACT.**
+
+## Successor
+
+`ACT-CLINEMM-ROUND-C-CONVERGENCE-EXPERIMENT-01` remains the successor. The convergence A/B
+experiment was **not** started inside this ACT, as instructed.
+
+## Evidence
+
+`.factory/ACT-CLINEMM-BEFOREMODEL-OPERATOR-CHECKPOINT-01.md`
+`.factory/evidence/ACT-CLINEMM-BEFOREMODEL-OPERATOR-CHECKPOINT-01/`

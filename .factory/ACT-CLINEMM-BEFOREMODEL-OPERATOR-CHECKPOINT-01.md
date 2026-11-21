@@ -278,8 +278,100 @@ exit code 0.
 
 ## F. Installed qualification
 
-See `.factory/evidence/ACT-CLINEMM-BEFOREMODEL-OPERATOR-CHECKPOINT-01/06-installed-qualification.md`.
+Full record: `.factory/evidence/ACT-CLINEMM-BEFOREMODEL-OPERATOR-CHECKPOINT-01/06-installed-qualification.md`.
+
+| Level | State |
+|---|---|
+| `SOURCE_TESTED` | **ACHIEVED** |
+| `BUILT` | **ACHIEVED** |
+| `INSTALLED` | **ACHIEVED** |
+| `LIVE_PROVIDER_OBSERVED` | **NOT ACHIEVED** |
+
+| Item | Value |
+|---|---|
+| Final source HEAD | `bb54f0fa55279557aba298d71e3370c7fa6ed814` |
+| Predecessor HEAD | `0b6b3ba51` |
+| VSIX path | `dist/clinemm-4.1.26-bb54f0fa5.vsix` |
+| VSIX byte count | `65609737` |
+| VSIX SHA-256 | `566571bedeb748caaaa385b8ae33de0d96a47b61892111bf19f5d9e2903e9e1f` |
+| Installed extension version | `4.1.26` (`s1onique.clinemm-4.1.26`) |
+| Bundle SHA-256 (built == VSIX-embedded == installed) | `ae823a5243b07310c7594faff6bb9d936848121146a8528a9e1fd891d5b27993` |
+
+The three bundle digests are **equal**, which binds the source HEAD to the installed runtime.
+
+The installation target deviated from `~/.vscodium-roz/extensions` to a repo-local extensions
+directory because the agent process is **not permitted to write** to `~/.vscodium-roz` (macOS
+TCC / host sandbox). This is an environment boundary, not a defect in the VSIX; the same
+installer and the same VSIX bytes were used.
 
 ## G. Exit
 
-See the board entry at the end of `.factory/epic-board.md`.
+### Verdict: `PASS_STRUCTURAL_ONLY`
+
+Full `PASS` is **not** claimed, because the exit criteria that require a **live provider
+request** containing the expected checkpoint, and a fresh-window UI save/reload/display
+round-trip, are **unverified**.
+
+### Exit criteria that ARE met
+
+| Criterion | Evidence |
+|---|---|
+| UI saves, reloads and displays the configuration correctly | **PARTIAL** — covered by the webview spec (19/19) and the `updateSettings` round-trip tests; the *fresh installed window* round-trip was not performed |
+| Effective configuration freezes per new session | PASS — R14 + the frozen resolution at hook-bag construction |
+| Exact `beforeModel` injection is verified through the production runtime | PASS — the REAL `AgentRuntime` provider-ready path (RT1) |
+| Existing MYC prime behavior remains intact | PASS — the extracted prime body is token-stream identical (4828/4829 chars) and R9/R10 assert composition |
+| Default-disabled behavior conserves the original provider request | PASS — R1 and RT2 |
+| Build/typecheck/focused tests pass | PASS — 30/30 focused + 19/19 webview; both typechecks at 0 diagnostics; full-suite delta shows **zero new regressions** |
+| Installed VSIX and source identity are bound | PASS — equal bundle SHA-256 across built / VSIX-embedded / installed |
+| The live provider request contains the expected checkpoint | **NOT MET** — no live provider request was captured |
+
+### Why not full `PASS`, and why not a HALT
+
+Neither `HALT_WRONG_PRODUCTION_SEAM` nor `HALT_RED_NOT_REPRODUCED` applies:
+
+* the RED **was** reproduced (7/13 focused + 1/3 runtime failures against the pre-ACT code), so
+  `HALT_RED_NOT_REPRODUCED` does not apply;
+* the mechanism demonstrably reaches the real runtime through the real
+  `SdkSessionConfigBuilder → buildAgentHooks → beforeModel` composition, and the installed bundle
+  contains that code, so there is no evidence of a wrong production seam and
+  `HALT_WRONG_PRODUCTION_SEAM` does not apply.
+
+The live capture was not completed. The repository's own prior-ACT harness script
+(`apps/vscode/src/dev/debug-harness/live-installed-vsix-qualification.tcrr01.mjs`) documents that
+the GUI **SIGSEGVs on this substrate** under the Seatbelt profile, so a GUI-driven live run is
+not available here; the established alternative is to drive the packaged bundle from the installed
+VSIX directly. That alternative was not completed within this ACT.
+
+### Outstanding Factory item (not fixed in this ACT)
+
+`apps/vscode/scripts/generate-state-proto.mjs` is **not a safe idempotent rewriter** of
+`state.proto`: it drops hand-maintained fields and comments and emits a malformed `Settings`
+block that `protoc` rejects. Evidence:
+`.factory/evidence/ACT-CLINEMM-BEFOREMODEL-OPERATOR-CHECKPOINT-01/10-state-proto-generator-defect.txt`.
+
+This is a **pre-existing** repository defect. It is recorded rather than fixed here, because
+repairing it would change the wire shape of unrelated `Settings` fields — out of this ACT's
+scope. It needs a dedicated ACT.
+
+### Successor
+
+`ACT-CLINEMM-ROUND-C-CONVERGENCE-EXPERIMENT-01` remains the successor. The convergence A/B
+experiment was **not** started inside this ACT, as instructed.
+
+## Evidence index
+
+`.factory/evidence/ACT-CLINEMM-BEFOREMODEL-OPERATOR-CHECKPOINT-01/`
+
+| File | Content |
+|---|---|
+| `01-red-tests.txt` | RED: 7 failed / 6 passed of 13 focused tests against pre-ACT code |
+| `02-red-runtime-tests.txt` | RED: 1 failed / 2 passed of 3 runtime tests against pre-ACT code |
+| `03-green-tests.txt` | GREEN: focused tests |
+| `04-green-runtime-tests.txt` | GREEN: runtime tests |
+| `05-after-failing-files.txt` | failing files in the post-ACT full-suite run |
+| `06-installed-qualification.md` | the installed-qualification record (identity + levels) |
+| `07-prime-equivalence.txt` | the prime-body token-stream equivalence proof |
+| `08-baseline-head-suite-summary.txt` | the HEAD full-suite baseline summary |
+| `09-full-suite-comparison.txt` | baseline vs. after: 169 → 169 failed, 5974 → 6004 passed, zero regressions |
+| `10-state-proto-generator-defect.txt` | the state-proto generator defect (pre-existing) |
+| `verify-prime-equivalence.mjs` | the re-runnable prime-equivalence checker |
