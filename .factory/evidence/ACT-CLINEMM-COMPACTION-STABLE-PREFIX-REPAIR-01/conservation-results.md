@@ -104,7 +104,7 @@ ablation established this, and it was re-verified here).
 | Tool outcomes crossing old/new boundaries remain attributable | the boundary-scoped derivation uses the canonical PREFIX, so an outcome is attributed to the boundary it belonged to; the ledger's join is by `tool_use_id`, never by position | PASS |
 | No accidental re-compaction loop | the repair does not change WHEN a compaction happens; it changes only what the carried section is derived from. The unchanged `compaction.trigger-accounting-representation.test.ts` and `compaction.working-context-ratio.test.ts` pass | PASS |
 | New sidecar binds to the correct canonical source | `expect(saved.source_message_count).toBe(canonical.length)` — and the Phase-A evidence call passes the SAME boundary, so the persisted section and the persisted boundary agree by construction | PASS |
-| Fresh compaction respects effective request budget | the budget authority is unchanged and fail-closed; the repair can only REDUCE the measured request | PASS |
+| Fresh compaction respects effective request budget | the FINAL budget guard at the provider-dispatch seam (`agent-runtime.ts`, `assertProviderRequestWithinBudget()`) is unchanged and fails closed before dispatch. The repair adds no model-visible content and no message. (CORRECTION01: the earlier "can only REDUCE" argument was withdrawn — the rolling-12 window means a boundary-scoped ledger is NOT always a subset.) | PASS |
 
 ## C6 — Stale-read behaviour
 

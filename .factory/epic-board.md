@@ -37490,9 +37490,15 @@ ENTRY_HEAD: 9117f13ae7d643373c56eeedc30da661fc790b08
 SUBJECT_HEAD: 9f57bc84d98f3439a0d70e4bf74300efef6564cd
 BRANCH: main
 PRODUCTION_CODE_CHANGES: 2 files
-NEW_TEST_FILES: 1 (18 tests)
+NEW_TEST_FILES: 1 (21 tests)
 EXISTING_TEST_MODIFICATIONS: 1 file (3 assertions INVERTED; 0 skips, 0 deletions, 0 weakenings)
 EVIDENCE: .factory/evidence/ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01/
+CORRECTION: ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01-CORRECTION01
+  review_verdict: PASS_WITH_BOUNDED_P1_CORRECTION
+  p1_retained_tail_counterexample: CONFIRMED -> contract corrected
+  p1_display_only_boundary_divergence: CONFIRMED -> production defect fixed
+  p2_budget_rationale: CONFIRMED false -> withdrawn, replaced by the final dispatch-seam guard
+  p2_final_artifact_identity: CONFIRMED -> head identities made explicit
 ```
 
 ## What was repaired
@@ -37506,7 +37512,12 @@ The carried section is now derived from the canonical history **AS IT WAS AT THE
 boundary does not move when the transcript grows, so the summary is byte-identical across every continuation.
 
 - **Phase A — a NEW compaction.** A freshly produced summary is a lossy projection and must carry the
-  verified outcomes that existed at ITS OWN boundary. The pipeline passes `context.messages.length`.
+  verified outcomes that existed at ITS OWN boundary. The pipeline passes
+  `countCanonicalSourceMessages(context.messages)` — the SAME filter
+  `createSessionCompactionState()` applies, so the persisted section and the
+  persisted boundary agree by construction. (CORRECTION01: this was the RAW
+  `context.messages.length`, which DIVERGED from the persisted count whenever a
+  display-only message was present. Fixed.)
 - **Phase B — a SUBSEQUENT CONTINUATION.** The persisted summary is a historical snapshot and is not
   rebuilt. The pipeline passes the persisted sidecar's `source_message_count`, which is authoritative.
 

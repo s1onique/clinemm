@@ -23,8 +23,14 @@ SIDECAR_RESUME_CONSERVED:     YES — source_prefix_hash, source_message_count a
                                on read; invalid sidecar still rejected
 RECOMPACTION_CONSERVED:       YES — Phase A derives the section from the new boundary;
                                the new sidecar binds to the correct canonical source
-BUDGET_SAFETY:                YES — the budget authority is unchanged and fail-closed;
-                               the repair can only REDUCE the measured request
+BUDGET_SAFETY:                YES — the FINAL budget guard at the provider-dispatch
+                               seam (`agent-runtime.ts`,
+                               `assertProviderRequestWithinBudget()`) is unchanged and
+                               fails closed before dispatch. The repair adds no
+                               model-visible content and no message.
+                               (CORRECTION01: the earlier "can only REDUCE" argument
+                               was WITHDRAWN — the rolling-12 window means a
+                               boundary-scoped ledger is NOT always a subset.)
 PROVIDER_SEMANTIC_DELTA:      The provider-visible request gains NO message and NO
                                field. It LOSES the redundant re-derivation of the
                                post-boundary verified outcomes from the early summary.
@@ -46,7 +52,7 @@ LIVE_STRATA_CACHE_EFFECT:     NOT_EXECUTED
 | The producer is the verified-evidence restoration | **ESTABLISHED** | inherited from the predecessor (`EVIDENCE_RESTORATION_CAUSAL`), and re-isolated here |
 | The canonical tail already represents every post-boundary verified outcome | **ESTABLISHED** (offline, real seams) | `tail-sufficiency-matrix.json`: 12 scenarios (A–L), 12/12 `postBoundarySufficient: true` |
 | The repair stabilises the summary without suppressing evidence | **ESTABLISHED** (offline, real seams) | the RED witness GREEN + the new suite's 18 tests, including the negative control |
-| The repair is fail-closed on budget | **ESTABLISHED** | the unchanged budget-authority suite passes; the measured request can only shrink |
+| The repair is fail-closed on budget | **ESTABLISHED** | the unchanged budget-authority suite passes, and the final dispatch-seam guard is unchanged and fail-closed. CORRECTION01: the "the measured request can only shrink" argument was WITHDRAWN as mathematically false (the rolling-12 window means a boundary-scoped ledger can render LARGER); the authority is the final guard, not a shrinkage property |
 | A provider retained a checkpoint at the new boundary | **NOT ESTABLISHED** | requires a live provider; out of scope for this ACT |
 
 ---

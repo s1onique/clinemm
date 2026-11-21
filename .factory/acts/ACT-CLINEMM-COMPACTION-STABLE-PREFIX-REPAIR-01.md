@@ -9,12 +9,19 @@ BRANCH: main (no ACT branch created)
 PRODUCTION_CODE_CHANGES: 2 files
 EXISTING_TEST_MODIFICATIONS: 1 file (3 assertions INVERTED; 0 skips, 0 deletions,
                              0 weakenings; the file still has 20 tests)
-NEW_TEST_FILES: 1 (18 tests)
+NEW_TEST_FILES: 1 (21 tests)
+CORRECTION01: ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01-CORRECTION01
+  review verdict: PASS_WITH_BOUNDED_P1_CORRECTION
+  P1-A retained-tail counterexample: CONFIRMED, contract corrected
+  P1-B display-only boundary divergence: CONFIRMED, production defect fixed
+  P2-A budget rationale: CONFIRMED mathematically false, withdrawn and replaced
+  P2-B final artifact identity: CONFIRMED, head identities made explicit
 EVIDENCE: .factory/evidence/ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01/
   identity.json
   source-map.md
   tail-sufficiency-matrix.json
   red-green-receipt.txt
+  correction01-receipt.txt
   repair-contract.md
   conservation-results.md
   provider-prefix-comparison.json
@@ -146,6 +153,59 @@ persistence format.
 | G10 | Stale-read behaviour conserved | **PASS** — `message-builder.ts` unchanged |
 | G11 | Focused existing tests, typechecks and lint | **PASS** — 172 passed / 1 skipped focused; the full package suite's failure set is byte-identical to the pristine baseline (0 contributed); 44 typecheck diagnostics before and after (0 contributed); Biome clean |
 | G12 | Exact-head artifacts and privacy verification | **PASS** — see `identity.json` |
+
+### CORRECTION01 — the bounded review correction
+
+The review returned `PASS_WITH_BOUNDED_P1_CORRECTION`. All three findings were
+**CONFIRMED** and corrected in one focused cycle; the original RED witness is
+preserved UNMODIFIED.
+
+**P1-A — the retained-tail counterexample.** CONFIRMED. A re-compaction's
+sidecar is `[summary, ...messages.slice(cutIndex)]` over the compactor's
+input, so it legitimately retains canonical messages from before its own
+boundary, and the suffix measurement reports an EARLIER boundary (3 vs 5).
+The production path never used the inference, so the central invariant was
+never at risk; but the source's claim that the inference is "EXACT for every
+real production shape" was **unsupported and is withdrawn**. The contract is
+now stated honestly: the inference UNDER-estimates the boundary, and that
+direction is **conservative** — the section can only be a subset of the
+boundary's outcomes, so it costs compactness, never correctness.
+
+**P1-B — the display-only boundary divergence.** CONFIRMED, and this one DID
+reach production. The Phase-A sites passed `context.messages.length` (the RAW
+length) while the persisted sidecar records the CANONICAL count, so with a
+display-only message present the persisted section and the persisted boundary
+described DIFFERENT boundaries. Fixed by exporting
+`countCanonicalSourceMessages()` from `session/models/session-compaction.ts`
+— the SAME filter `createSessionCompactionState()` applies — and using it at
+both Phase-A sites, so the two cannot diverge by construction.
+
+**P2-A — the budget argument.** CONFIRMED mathematically false and
+**WITHDRAWN**. The ledger retains the most RECENT 12 outcomes, so a
+boundary-scoped ledger can retain older — and, when they render longer,
+LARGER — entries: measured 632 bytes (whole) vs 656 bytes (scoped). The
+rationale is replaced with the ACTUAL authority: the FINAL budget guard at
+the provider-dispatch seam (`agent-runtime.ts`,
+`assertProviderRequestWithinBudget()`), which measures the provider-visible
+projection of the FINAL messages after every `beforeModel` mutation and
+FAILS CLOSED with `TaskContractBudgetError` before any provider dispatch.
+The repair does not change that guard. Six documentation occurrences of the
+false claim were corrected.
+
+**P2-B — the final artifact identity.** CONFIRMED and corrected. The head
+identities are now explicit: `entryHead`, `subjectHead` (the implementation
+commit), `artifactHead` (the commit that produced the original artifact
+package) and `finalHead`.
+
+**Production behaviour changed by CORRECTION01:** only the Phase-A boundary
+value, and only when a display-only message is present in the canonical
+history.
+
+**CORRECTION01 gates:** the original RED witness still passes; focused
+suites 175 passed / 1 skipped (+3 controls); the full package suite's
+failing test-file set is IDENTICAL to the pristine baseline (139 failures
+in both, 28 files each, sets diff to empty); typecheck 44 before and after,
+0 contributed; Biome clean.
 
 ---
 

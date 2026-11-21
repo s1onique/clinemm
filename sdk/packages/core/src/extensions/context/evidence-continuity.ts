@@ -1346,9 +1346,9 @@ export interface EvidenceApplicationResult {
 }
 
 /**
- * ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01
+ * ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01-CORRECTION01
  *
- * The SOURCE BOUNDARY of a compacted projection.
+ * The SOURCE BOUNDARY of a compacted projection — INFERRED.
  *
  * A compaction projection is:
  *
@@ -1358,21 +1358,48 @@ export interface EvidenceApplicationResult {
  * a true SUFFIX of the canonical history — and `boundary` is the sidecar's
  * `source_message_count`.
  *
- * The boundary can therefore be recovered from the projection itself by
- * measuring the longest common suffix between the projected message list and
- * the canonical history. The measurement is EXACT for every real production
- * shape:
+ * The boundary can therefore be APPROXIMATED by measuring the longest common
+ * suffix between the projected message list and the canonical history.
  *
- *   - The sidecar's own messages are the compaction summary (not a canonical
- *     message) and, after a re-compaction, canonical messages from an OLDER
- *     boundary. Those sit BEFORE the tail in the canonical history, so
- *     extending the suffix match backwards reaches a message that does not
- *     match the canonical message at the corresponding position, and the
- *     match stops exactly at the boundary.
+ * WHAT THIS MEASUREMENT IS **NOT**
+ * -------------------------------
  *
- * The recovery is a FALLBACK. A caller that KNOWS the boundary (the
- * compaction pipeline does: it holds the persisted sidecar) passes it
- * explicitly, and the explicit value is always authoritative.
+ * It is NOT exact, and it does NOT claim to be. The correction is explicit
+ * about the counterexample:
+ *
+ *     Canonical:      A B C D E
+ *     Sidecar:        [summary, D, E]     <- a RE-COMPACTION sidecar retains
+ *     Projected:      [summary, D, E]        canonical messages from before
+ *     Longest suffix: D E                    its own boundary
+ *     Inferred:       3
+ *     Actual:         5
+ *
+ * A re-compaction's sidecar is `[summary, ...messages.slice(cutIndex)]` over
+ * the COMPACTOR'S INPUT, so it legitimately retains canonical messages that
+ * precede its own boundary. Those messages also match the canonical suffix,
+ * so the suffix measurement reports an EARLIER boundary than the true one.
+ *
+ * THE MEASUREMENT IS CONSERVATIVE
+ * ------------------------------
+ *
+ * An UNDER-estimated boundary is the safe direction for this measurement:
+ * it scopes the ledger to a SHORTER prefix of the canonical history, so the
+ * carried section can only ever be a SUBSET of the boundary's own outcomes.
+ * The section therefore never claims an outcome the boundary did not
+ * contain. (It can be smaller than the boundary's section — which costs
+ * compactness, never correctness.)
+ *
+ * THE AUTHORITATIVE VALUE
+ * -----------------------
+ *
+ * This measurement is a FALLBACK for callers that do NOT hold the sidecar.
+ * The compaction pipeline ALWAYS holds the sidecar and passes the
+ * authoritative `source_message_count` explicitly, so the production path
+ * never depends on this measurement.
+ *
+ * It exists so that a DIRECT helper call — which has no sidecar — still
+ * produces a stable, evidence-preserving result rather than re-deriving the
+ * section from the growing transcript on every call.
  */
 export function inferCompactionSourceBoundary(
 	compactedMessages: readonly MessageWithMetadata[],
@@ -1470,9 +1497,15 @@ export function applyVerifiedEvidenceToCompactedMessages(
 		 * prefix — the persisted sidecar's `source_message_count`.
 		 *
 		 * When omitted, the boundary is INFERRED from the projection itself
-		 * (see {@link inferCompactionSourceBoundary}). The inferred value is
-		 * exact for every real production shape, and the compaction pipeline
-		 * always supplies the authoritative value explicitly.
+		 * (see {@link inferCompactionSourceBoundary}). That inference is an
+		 * APPROXIMATION: it can report an EARLIER boundary than the true one
+		 * when the sidecar retained canonical messages from before its own
+		 * boundary (the re-compaction shape). It is CONSERVATIVE — the
+		 * section can only be a subset of the boundary's outcomes, never a
+		 * superset — so it costs compactness, never correctness.
+		 *
+		 * The compaction pipeline always supplies the authoritative value
+		 * explicitly, so the production path never depends on the inference.
 		 */
 		sourceMessageCount?: number;
 	} = {},

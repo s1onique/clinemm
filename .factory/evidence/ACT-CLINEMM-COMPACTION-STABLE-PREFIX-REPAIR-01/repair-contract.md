@@ -158,7 +158,7 @@ tail) and the tail holds the post-boundary set (invisible to the section).
 |---|---|
 | A persisted summary is a historical snapshot, not an authority replacing canonical history. | The section is derived from the CANONICAL prefix, never from a previous summary. |
 | New verified facts must not silently disappear. | The post-boundary outcomes are in the provider-visible tail with their success signal; the negative control proves their removal breaks the evidence-continuity assertion. |
-| Previously verified facts must not become fabricated or contradictory. | The boundary-scoped ledger is a SUBSET of the whole-history ledger. Nothing is invented; the ambiguous/failed outcomes are still rejected by the same fail-closed classifier. |
+| Previously verified facts must not become fabricated or contradictory. | The boundary-scoped ledger is derived from a PREFIX of the canonical history, so it can only contain outcomes the canonical record actually supports; nothing is invented, and the ambiguous/failed outcomes are still rejected by the same fail-closed classifier. (It is NOT a subset of the whole-history ledger — see the budget argument in §3.7 — but every entry it does contain is canonical.) |
 | An existing summary must not be mutated merely because a new successful tool result was appended later. | **This IS the repair.** |
 | Existing task-contract semantics must remain intact. | `applyTaskContractToCompactedMessages()` is UNCHANGED. A genuine contract change still updates the summary. |
 | If an active task contract genuinely changes, its correctness takes priority over prefix stability. | Verified: scenario C's summary still changes, and the change is contract-only. |
@@ -176,7 +176,7 @@ tail) and the tail holds the post-boundary set (invisible to the section).
 | 4. No change to tool-call authorization. | **Met.** |
 | 5. No change to provider retry semantics. | **Met.** |
 | 6. No change to model selection or reasoning settings. | **Met.** |
-| 7. No silent failure when required evidence cannot fit the request budget. | **Met.** The budget authority is unchanged and still fail-closed; the repair can only REDUCE the measured request. |
+| 7. No silent failure when required evidence cannot fit the request budget. | **Met.** The final budget guard at the provider-dispatch seam is unchanged and still fail-closed. See §3.7 for the corrected budget argument. |
 | 8. No diagnostic side effects in state-mutating paths. | **Met.** |
 | 9. No permanent forensic scaffolding. | **Met.** The two tools under `.factory/evidence/.../tool/` are disposable and outside every build. |
 | 10. No speculative refactoring. | **Met.** One behavioural change, one new private helper, one new exported inference helper. |
@@ -187,12 +187,47 @@ Any newly exposed evidence must participate in the same effective
 provider-input budget checks as other model-visible content.
 
 **No newly exposed evidence exists.** The repair REMOVES content from the
-summary (the post-boundary outcomes) and adds nothing. The measured
-provider-visible request is therefore a SUBSET of the pre-repair request, so
-it cannot exceed a limit the pre-repair request satisfied. The existing
-isolated budget-projection mechanism (`prepareBudgetAccountingMessages`) is
-used unchanged, and the long-lived stateful production `MessageBuilder` is
-still not used for an accounting-only build.
+summary (the post-boundary outcomes) and adds nothing.
+
+**CORRECTION01 — THE SHRINKAGE ARGUMENT WAS WRONG AND IS WITHDRAWN.** An
+earlier version of this document argued that the boundary-scoped ledger is a
+SUBSET of the whole-history ledger, and therefore that the measured request
+can only shrink. **That is not generally true.** The ledger retains the most
+RECENT `MAX_CARRIED_OUTCOMES` (12) outcomes, so a boundary-scoped ledger can
+retain OLDER — and, when the outcomes render longer, LARGER — entries than
+the whole-history ledger does.
+
+Measured counterexample (`tool/probe-budget.ts`): with 12 verbose outcomes
+BEFORE the boundary and 12 short outcomes AFTER it, the whole-history ledger
+renders 632 bytes and the boundary-scoped ledger renders 656 bytes. The
+repaired summary is therefore **LONGER** in that case.
+
+**THE ACTUAL AUTHORITY IS THE FINAL BUDGET GUARD.** The request budget is
+enforced at the provider-dispatch seam, in `agent-runtime.ts`, by
+`assertProviderRequestWithinBudget()`:
+
+```ts
+if (typeof this.requestBudgetCeilingTokens === "number") {
+    assertProviderRequestWithinBudget({
+        systemPrompt: request.systemPrompt ?? "",
+        messages: toProviderVisibleMessages(request.messages),
+        tools: request.tools,
+        maxRequestTokens: this.requestBudgetCeilingTokens,
+    });
+}
+```
+
+That guard runs AFTER every `beforeModel` mutation, measures the
+PROVIDER-VISIBLE projection of the FINAL messages, and FAILS CLOSED with
+`TaskContractBudgetError` before any provider dispatch and before any
+compaction sidecar write. The repair does not change it, does not relax it,
+and does not introduce any path around it. An over-budget request therefore
+still cannot leave the process.
+
+The compaction-side guard (`applyTaskContractToCompactedMessages()`) also
+remains unchanged, with its isolated accounting projection
+(`prepareBudgetAccountingMessages`); the long-lived stateful production
+`MessageBuilder` is still not used for an accounting-only build.
 
 A lower estimated token count is NOT permission to drop required evidence:
 the evidence was not dropped — it is carried by the canonical tail, which the

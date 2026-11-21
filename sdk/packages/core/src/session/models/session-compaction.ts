@@ -43,6 +43,27 @@ function canonicalSourceMessages(
 	return messages.filter((message) => message.metadata?.displayOnly !== true);
 }
 
+/**
+ * ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01-CORRECTION01
+ *
+ * The number of CANONICAL source messages in a message list.
+ *
+ * This is the EXACT boundary a persisted sidecar records as
+ * `source_message_count`, because `createSessionCompactionState()` derives it
+ * from the same `canonicalSourceMessages()` filter.
+ *
+ * It is exported so a caller that must describe "the boundary a sidecar over
+ * THESE messages would have" cannot compute a DIFFERENT number. The
+ * display-only messages are excluded from the canonical history, so a caller
+ * that used the raw list length would disagree with the persisted boundary
+ * whenever a display-only message is present.
+ */
+export function countCanonicalSourceMessages(
+	messages: readonly MessageWithMetadata[],
+): number {
+	return canonicalSourceMessages(messages).length;
+}
+
 function cloneMessages(
 	messages: readonly MessageWithMetadata[],
 ): MessageWithMetadata[] {

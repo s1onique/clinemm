@@ -111,9 +111,15 @@ representation through the ISOLATED accounting projection
 persisted or any provider request is dispatched.
 
 **The repair adds no new model-visible content and no new message, so the
-budget authority is unchanged.** The carried section is now SMALLER or equal
-(a boundary-scoped ledger is a subset of the whole-history ledger), so the
-measured request can only shrink.
+budget authority is unchanged.** The carried section is now SMALLER in the
+common case, but NOT always: the ledger retains the most RECENT 12 outcomes,
+so a boundary-scoped ledger can retain older — and, when they render longer,
+larger — entries than the whole-history ledger. The ACTUAL budget authority
+is the FINAL guard at the provider-dispatch seam
+(`agent-runtime.ts`, `assertProviderRequestWithinBudget()`), which measures
+the provider-visible projection of the FINAL messages after every
+`beforeModel` mutation and FAILS CLOSED with `TaskContractBudgetError`
+before any provider dispatch. The repair does not change it.
 
 ### 2.7 Where a new compaction replaces the previous sidecar
 

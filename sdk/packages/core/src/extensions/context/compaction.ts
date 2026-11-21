@@ -19,6 +19,7 @@ import {
 	type TelemetryCompactionStrategy,
 } from "../../services/telemetry/core-events";
 import {
+	countCanonicalSourceMessages,
 	createSessionCompactionState,
 	projectSessionCompactionState,
 	type SessionCompactionState,
@@ -1589,13 +1590,23 @@ export function createCompactionStateAwarePrepareTurn(input: {
 				// of the canonical history, and its boundary is the whole
 				// canonical history at this moment. The section is therefore
 				// derived from the FULL canonical history, which is the
-				// explicit boundary the new sidecar will be persisted with
-				// (`createSessionCompactionState` uses `context.messages` as its
-				// source).
+				// explicit boundary the new sidecar will be persisted with.
+				//
+				// ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01-CORRECTION01:
+				// the boundary is the CANONICAL source-message count, NOT the raw
+				// list length. `createSessionCompactionState()` persists
+				// `source_message_count` over the CANONICAL messages (the
+				// display-only ones are excluded), so a raw `context.messages.length`
+				// would disagree with the persisted boundary whenever a
+				// display-only message is present, and the persisted section would
+				// then describe a DIFFERENT boundary than the one recorded
+				// alongside it.
 				const evidenced = applyVerifiedEvidenceToCompactedMessages(
 					contracted.messages,
 					context.messages,
-					{ sourceMessageCount: context.messages.length },
+					{
+						sourceMessageCount: countCanonicalSourceMessages(context.messages),
+					},
 				);
 				const contractedMessages = evidenced.messages;
 				const nextState = createSessionCompactionState({
@@ -1683,10 +1694,16 @@ export function createCompactionStateAwarePrepareTurn(input: {
 			// history at this moment, so the section is derived from the FULL
 			// canonical history — the explicit boundary the new sidecar will be
 			// persisted with.
+			//
+			// ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01-CORRECTION01: the
+			// boundary is the CANONICAL source-message count, not the raw list
+			// length — see the re-compaction site above.
 			const evidenced = applyVerifiedEvidenceToCompactedMessages(
 				contracted.messages,
 				context.messages,
-				{ sourceMessageCount: context.messages.length },
+				{
+					sourceMessageCount: countCanonicalSourceMessages(context.messages),
+				},
 			);
 			const contractedMessages = evidenced.messages;
 			const nextState = createSessionCompactionState({

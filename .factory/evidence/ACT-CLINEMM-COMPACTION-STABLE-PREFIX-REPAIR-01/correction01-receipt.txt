@@ -1,0 +1,203 @@
+======================================================================
+ ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01-CORRECTION01
+ RECEIPT
+======================================================================
+
+Review verdict: PASS_WITH_BOUNDED_P1_CORRECTION
+Scope: the two boundary-equivalence cases in ONE focused correction, the
+budget rationale, and the final-HEAD documentation. The original RED witness
+is preserved UNMODIFIED.
+
+----------------------------------------------------------------------
+P1-A — THE RETAINED-TAIL COUNTEREXAMPLE
+----------------------------------------------------------------------
+
+REVIEWER'S CLAIM: "inferCompactionSourceBoundary() finds the longest matching
+suffix between a projected transcript and canonical history. But a normal
+compaction sidecar can retain canonical messages FROM BEFORE its source
+boundary. Those retained messages can also match the suffix, making the
+inferred boundary earlier than source_message_count."
+
+The source explicitly claims this inference is exact for every real
+production shape. That claim is not justified."
+
+CONFIRMED. Reproduced against the REAL production seam
+(tool/probe-boundary.ts):
+
+  source_message_count (authoritative): 5
+  projected length: 3
+  INFERRED boundary: 3
+  AUTHORITATIVE boundary: 5
+  MATCH: false
+
+The production shape is real: a compaction result is
+`[summary, ...messages.slice(cutIndex)]` over the COMPACTOR'S INPUT
+(agentic-compaction.ts:227-232). For a re-compaction the compactor's input
+is the previous projection, so the new sidecar legitimately retains canonical
+messages that PRECEDE its own boundary.
+
+SCOPE OF THE DEFECT: the production compaction pipeline passes an EXPLICIT
+boundary at all three call sites, so the inference never runs in production.
+It is a fallback for DIRECT helper calls only (the predecessor's RED witness
+and the churn-witness suite call the helper without options).
+
+CORRECTION APPLIED:
+
+  1. The unsupported claim "The measurement is EXACT for every real
+     production shape" is WITHDRAWN. The doc comment now states the
+     counterexample verbatim and describes the measurement as an
+     APPROXIMATION.
+
+  2. The CORRECT contract is stated: the inference UNDER-estimates the
+     boundary, and that direction is CONSERVATIVE — the carried section can
+     only ever be a SUBSET of the boundary's own outcomes, so it costs
+     compactness, never correctness.
+
+  3. A focused regression test pins the counterexample:
+       "reproduces the RETAINED-TAIL counterexample: the inferred boundary
+        can be EARLIER than the true one"
+       expect(inferred).toBe(3);
+       expect(inferred).not.toBe(state.source_message_count);
+       expect(inferred).toBeLessThan(state.source_message_count);
+
+  4. A companion test pins that the PRODUCTION path is unaffected:
+       "the AUTHORITATIVE boundary is used by the production path, so the
+        retained tail does not change the section"
+       expect(text).toContain("call_rt_a");
+
+----------------------------------------------------------------------
+P1-B — THE DISPLAY-ONLY BOUNDARY DIVERGENCE
+----------------------------------------------------------------------
+
+REVIEWER'S CLAIM: "createSessionCompactionState() excludes
+metadata.displayOnly === true messages when determining the persisted source
+count, whereas Phase A reportedly passes context.messages.length. Those
+counts are equivalent only if such messages have already been excluded."
+
+CONFIRMED. Reproduced (tool/probe-boundary.ts):
+
+  context.messages.length (Phase A passed this): 3
+  persisted source_message_count: 2
+  DIVERGES: true
+
+THIS ONE DID REACH PRODUCTION. The Phase-A call sites passed
+`context.messages.length`, which is the RAW list length, while the persisted
+sidecar records the CANONICAL count. With a display-only message present,
+the persisted section and the persisted boundary therefore described
+DIFFERENT boundaries.
+
+CORRECTION APPLIED:
+
+  1. `countCanonicalSourceMessages()` is exported from
+     `session/models/session-compaction.ts`. It applies the SAME
+     `canonicalSourceMessages()` filter that `createSessionCompactionState()`
+     applies, so the two CANNOT diverge by construction.
+
+  2. Both Phase-A call sites now pass
+     `countCanonicalSourceMessages(context.messages)`.
+
+  3. A focused regression test pins the self-consistency:
+       "the Phase-A boundary equals the PERSISTED source_message_count even
+        with a display-only message"
+       expect(canonical.length).toBe(5);
+       expect(countCanonicalSourceMessages(canonical)).toBe(4);
+       expect(saved.source_message_count).toBe(4);
+       expect(text).toContain("call_do");
+
+PRODUCTION BEHAVIOUR CHANGED BY CORRECTION01: only the Phase-A boundary
+value, and only when a display-only message is present in the canonical
+history. The retained-tail shape never reached the production path.
+
+----------------------------------------------------------------------
+P2-A — THE BUDGET ARGUMENT
+----------------------------------------------------------------------
+
+REVIEWER'S CLAIM: "The report claims the boundary-scoped ledger is a subset
+of the whole-history ledger and therefore can only shrink the request. That
+is not generally true because the ledger retains the most recent 12
+outcomes. [...] Correct the rationale to rely on the actual final budget
+guard, not a false subset property."
+
+CONFIRMED. Measured (tool/probe-budget.ts): with 12 verbose outcomes BEFORE
+the boundary and 12 short outcomes AFTER it,
+
+  whole-history ledger outcomes: 12, rendered bytes: 632
+  boundary-scoped ledger outcomes: 12, rendered bytes: 656
+  BOUNDARY-SCOPED IS A SUBSET: false
+
+  scoped ids: pre_0 ... pre_11
+  whole ids:  post_0 ... post_11
+
+The earlier "can only shrink" argument was MATHEMATICALLY FALSE and is
+WITHDRAWN.
+
+CORRECTION APPLIED: the rationale now relies on the ACTUAL authority — the
+FINAL budget guard at the provider-dispatch seam, in `agent-runtime.ts`:
+
+  if (typeof this.requestBudgetCeilingTokens === "number") {
+      assertProviderRequestWithinBudget({
+          systemPrompt: request.systemPrompt ?? "",
+          messages: toProviderVisibleMessages(request.messages),
+          tools: request.tools,
+          maxRequestTokens: this.requestBudgetCeilingTokens,
+      });
+  }
+
+That guard runs AFTER every `beforeModel` mutation, measures the
+PROVIDER-VISIBLE projection of the FINAL messages, and FAILS CLOSED with
+`TaskContractBudgetError` before any provider dispatch and before any
+compaction sidecar write. The repair does not change it, does not relax it,
+and does not introduce any path around it.
+
+Six documentation occurrences of the false claim were corrected:
+`repair-contract.md` (§3.7 rewritten in full, plus two rule rows),
+`source-map.md`, `conservation-results.md`, `qualification-report.md`
+(two places).
+
+----------------------------------------------------------------------
+P2-B — THE FINAL ARTIFACT IDENTITY
+----------------------------------------------------------------------
+
+REVIEWER'S CLAIM: "The digest reports actual final HEAD b5558f973..., but
+identity.json and artifact-hashes.json record 155eb4b400... as finalHead."
+
+CORRECTED. The head identities are now EXPLICIT and unambiguous:
+
+  entryHead    9117f13ae7d643373c56eeedc30da661fc790b08
+               the predecessor's final HEAD; the ACT's entry
+  subjectHead  9f57bc84d98f3439a0d70e4bf74300efef6564cd
+               the IMPLEMENTATION commit (the production repair)
+  artifactHead 155eb4b400d1bed95cdca03c8ea22db9e690beba
+               the commit that produced the ORIGINAL artifact package that
+               the artifact hash manifest hashes
+  finalHead    the ACT's terminal commit, recorded after the commit
+
+Every SHA is recorded after its commit, never predicted.
+
+----------------------------------------------------------------------
+GATES
+----------------------------------------------------------------------
+
+  The original RED witness, UNMODIFIED, still PASSES:
+    $ bun x vitest run --config vitest.red.summary-churn01.config.ts
+    Test Files  1 passed (1)
+    Tests       1 passed (1)
+
+  Focused production-seam suites: 175 passed, 1 skipped, 0 failed
+  (was 172 passed, 1 skipped; +3 correction controls).
+
+  Full @cline/core package suite:
+    pristine baseline: 139 failed | 5473 passed | 159 skipped (5771)
+    after CORRECTION01: 139 failed | 5494 passed | 159 skipped (5792)
+    The failing TEST FILE SET is IDENTICAL in both runs — 28 files each,
+    and the two extracted sets diff to EMPTY.
+    No compaction, evidence-continuity, task-contract, session-compaction,
+    stable-prefix or summary-churn file fails in ANY run.
+    NO ACT-OWNED REGRESSION.
+
+  Typecheck: 44 diagnostics before and after; 0 contributed by the files
+  this correction touched.
+
+  Biome clean on every modified file. git diff --check clean.
+
+======================================================================

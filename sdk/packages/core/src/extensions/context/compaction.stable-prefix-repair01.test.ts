@@ -56,7 +56,9 @@
 import type { MessageWithMetadata } from "@cline/shared";
 import { describe, expect, it, vi } from "vitest";
 import {
+	countCanonicalSourceMessages,
 	createSessionCompactionState,
+	projectSessionCompactionState,
 	type SessionCompactionState,
 } from "../../session/models/session-compaction";
 import { MessageBuilder } from "../../session/services/message-builder";
@@ -64,7 +66,10 @@ import {
 	type ContextPipelinePrepareTurn,
 	createCompactionStateAwarePrepareTurn,
 } from "./compaction";
-import { EVIDENCE_SECTION_HEADING } from "./evidence-continuity";
+import {
+	EVIDENCE_SECTION_HEADING,
+	inferCompactionSourceBoundary,
+} from "./evidence-continuity";
 
 const MODEL = {
 	id: "mock-model",
@@ -625,5 +630,109 @@ describe("ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01 — conservation", () =
 		// The NEW summary carries the evidence for the NEW boundary.
 		const text = projectedSummaryText(saved.messages);
 		expect(text).toContain("call_rc");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// CORRECTION01 — the boundary contract
+// ---------------------------------------------------------------------------
+
+describe("ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01-CORRECTION01 — the boundary contract", () => {
+	it("reproduces the RETAINED-TAIL counterexample: the inferred boundary can be EARLIER than the true one", () => {
+		// Canonical: A B C D E. The sidecar retains canonical messages D and E
+		// from BEFORE its own boundary — the production RE-COMPACTION shape,
+		// because a compaction result is `[summary, ...messages.slice(cut)]`
+		// over the COMPACTOR'S INPUT.
+		const canonical: MessageWithMetadata[] = [
+			assistantTurn("A"),
+			assistantTurn("B"),
+			assistantTurn("C"),
+			assistantTurn("D"),
+			assistantTurn("E"),
+		];
+		const state = createSessionCompactionState({
+			sourceMessages: canonical,
+			compactedMessages: [
+				compactionSummaryMessage(SUMMARY_PROSE),
+				canonical[3],
+				canonical[4],
+			],
+			conversationId: "conv-retained",
+			systemPrompt: SYSTEM_PROMPT,
+			updatedAt: new Date(0).toISOString(),
+		});
+		expect(state.source_message_count).toBe(5);
+		const projected = projectSessionCompactionState(state, canonical);
+		expect(projected).toBeDefined();
+		if (!projected) {
+			throw new Error("expected a successful projection");
+		}
+		// The INFERENCE under-estimates the boundary.
+		const inferred = inferCompactionSourceBoundary(projected, canonical);
+		expect(inferred).toBe(3);
+		expect(inferred).not.toBe(state.source_message_count);
+		// ...and it is CONSERVATIVE: it scopes the ledger to a SHORTER
+		// prefix, so the section can only ever be a SUBSET of the true
+		// boundary's outcomes, never a superset.
+		expect(inferred).toBeLessThan(state.source_message_count);
+	});
+
+	it("the AUTHORITATIVE boundary is used by the production path, so the retained tail does not change the section", async () => {
+		const canonical: MessageWithMetadata[] = [
+			userTurn("Adjudicate the ten findings."),
+			...successfulPair("call_rt_a", "echo alpha"),
+			assistantTurn("continuing"),
+		];
+		const state = createSessionCompactionState({
+			sourceMessages: canonical,
+			compactedMessages: [
+				compactionSummaryMessage(SUMMARY_PROSE),
+				canonical[2],
+			],
+			conversationId: "conv-retained-prod",
+			systemPrompt: SYSTEM_PROMPT,
+			updatedAt: new Date(0).toISOString(),
+		});
+		const h1: MessageWithMetadata[] = [
+			...canonical,
+			...successfulPair("call_rt_b", "echo bravo"),
+		];
+		const run = await runWrapper({ canonical: h1, existingState: state });
+		const text = projectedSummaryText(run.prepared?.messages ?? []);
+		// The boundary-verified outcome IS carried, because the production
+		// path passed the persisted `source_message_count` — not the
+		// under-estimated inference.
+		expect(text).toContain("call_rt_a");
+	});
+
+	it("the Phase-A boundary equals the PERSISTED source_message_count even with a display-only message", async () => {
+		const canonical: MessageWithMetadata[] = [
+			userTurn("Adjudicate the ten findings."),
+			{
+				role: "user",
+				content: [{ type: "text", text: "display-only notice" }],
+				metadata: { displayOnly: true, displayRole: "error" },
+			},
+			...successfulPair("call_do", "echo alpha"),
+			assistantTurn("continuing"),
+		];
+		// The RAW length differs from the CANONICAL count, because
+		// `createSessionCompactionState()` excludes display-only messages.
+		expect(canonical.length).toBe(5);
+		expect(countCanonicalSourceMessages(canonical)).toBe(4);
+
+		const run = await runWrapper({
+			canonical,
+			compactResult: { messages: [compactionSummaryMessage(SUMMARY_PROSE)] },
+		});
+		expect(run.savedStates.length).toBe(1);
+		const saved = run.savedStates[0];
+		// The persisted boundary is the CANONICAL count.
+		expect(saved.source_message_count).toBe(4);
+		// The persisted section was derived from the SAME boundary, so the
+		// persisted sidecar is self-consistent: the outcome that lived in the
+		// canonical prefix is carried.
+		const text = projectedSummaryText(saved.messages);
+		expect(text).toContain("call_do");
 	});
 });

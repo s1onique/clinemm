@@ -12,8 +12,10 @@
     "entryHead": "9117f13ae7d643373c56eeedc30da661fc790b08",
     "entryHeadMatchesExpectedPredecessorFinalHead": true,
     "subjectHead": "9f57bc84d98f3439a0d70e4bf74300efef6564cd",
-    "finalHead": "155eb4b400d1bed95cdca03c8ea22db9e690beba",
-    "finalHeadNote": "The documentation-only commit that recorded the FINAL_HEAD and regenerated the artifact hash manifest. It changes no production module and no test. The SHA was recorded after that commit, never predicted. This is the SAME self-reference convention the predecessor ACT used for its finalHead."
+    "finalHead": "b5558f973fa11b1576d0746c4c98e92e7f398b4c",
+    "finalHeadNote": "The commit that carried the ACT's evidence package at the review handoff. It is a documentation-only commit: it changes no production module and no test. CORRECTION01 was applied on top of it and is recorded in correction01-receipt.txt; the CORRECTION01 terminal commit is named in that receipt and in the artifact hash manifest's finalHead field. Every SHA is recorded after its commit, never predicted.",
+    "artifactHead": "155eb4b400d1bed95cdca03c8ea22db9e690beba",
+    "artifactHeadNote": "The commit that produced the ORIGINAL artifact package (the eleven artifacts the manifest hashes). The artifact hash manifest covers that package. CORRECTION01's evidence updates are recorded in correction01-receipt.txt and are hashed by the regenerated manifest."
   },
   "ancestry": {
     "predecessorAct": "ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01",
@@ -62,5 +64,12 @@
     "hmacKeysCommitted": false,
     "absoluteLocalPathsCommitted": false,
     "fingerprintKeyRequired": "ACT_CHURN_FINGERPRINT_KEY (never committed; the committed artifacts carry only structural, non-reversible measurements)"
+  },
+  "correction01": {
+    "reviewVerdict": "PASS_WITH_BOUNDED_P1_CORRECTION",
+    "p1BoundaryContract": "CONFIRMED AND CORRECTED. The retained-tail counterexample reproduces (inferred boundary 3 vs authoritative 5), and the display-only divergence reproduces (Phase A passed 3 vs persisted 2). The production Phase-A boundary now uses countCanonicalSourceMessages(context.messages), which is the SAME filter createSessionCompactionState() applies, so the persisted section and the persisted boundary agree by construction. The inference's unsupported 'exact for every real production shape' claim is WITHDRAWN and replaced with the honest, CONSERVATIVE contract: the inference can UNDER-estimate the boundary, so the section can only be a subset of the boundary's outcomes.",
+    "p2BudgetRationale": "CONFIRMED AND CORRECTED. The 'boundary-scoped ledger is a subset of the whole-history ledger, so the request can only shrink' argument was MATHEMATICALLY FALSE: the ledger retains the most RECENT 12 outcomes, so a boundary-scoped ledger can retain older and, when they render longer, LARGER entries. Measured: 632 bytes (whole) vs 656 bytes (scoped). The argument is WITHDRAWN and replaced with the actual authority - the FINAL budget guard at the provider-dispatch seam (agent-runtime.ts, assertProviderRequestWithinBudget()), which measures the provider-visible projection of the FINAL messages after every beforeModel mutation and FAILS CLOSED with TaskContractBudgetError before any provider dispatch. The repair does not change that guard.",
+    "p2FinalArtifactIdentity": "CORRECTED. The head identities are now explicit: subjectHead (the implementation commit), artifactHead (the commit that produced the original artifact package) and finalHead (the ACT's terminal commit).",
+    "productionBehaviourChanged": "Only the Phase-A boundary value, and only when a display-only message is present in the canonical history. The retained-tail shape never reached the production path: all three production call sites pass an explicit boundary, so the inference is a fallback for direct helper calls only."
   }
 }

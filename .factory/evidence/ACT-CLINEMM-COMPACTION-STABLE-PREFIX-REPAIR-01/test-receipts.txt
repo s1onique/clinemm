@@ -146,3 +146,65 @@ $ bun x vitest run --config vitest.red.summary-churn01.config.ts
   Binding: the witness file is byte-identical at ENTRY_HEAD and SUBJECT_HEAD.
 
   PASS 1 test, 0 failed.
+
+
+======================================================================
+ CORRECTION01 — 2026-11-21
+======================================================================
+
+  All commands run from `sdk/packages/core` unless noted.
+
+  $ bun x vitest run --config vitest.red.summary-churn01.config.ts
+    Test Files  1 passed (1)
+    Tests       1 passed (1)
+    EXIT 0
+    The ORIGINAL RED witness, UNMODIFIED. Still GREEN after CORRECTION01.
+
+  $ bun x vitest run --config vitest.config.ts       src/extensions/context/evidence-continuity.test.ts       src/extensions/context/compaction.summary-churn01.test.ts       src/extensions/context/compaction.stable-prefix-repair01.test.ts       src/extensions/context/task-contract-conservation.test.ts       src/extensions/context/task-contract-conservation.historical.test.ts       src/extensions/context/task-contract-budget-authority.test.ts       src/session/models/session-compaction.test.ts       src/extensions/context/compaction.roundc-fidelity-recon02.test.ts
+    Test Files  8 passed (8)
+    Tests       175 passed | 1 skipped (176)
+    EXIT 0
+    (was 172 passed | 1 skipped before CORRECTION01; +3 correction controls)
+
+  $ bun x vitest run --config vitest.config.ts        # full @cline/core suite
+    Test Files  28 failed | 336 passed | 3 skipped (367)
+    Tests       139 failed | 5494 passed | 159 skipped (5792)
+    EXIT 1
+    PRISTINE BASELINE (same command, at the ACT's entry):
+    Test Files  28 failed | 336 passed | 3 skipped (367)
+    Tests       139 failed | 5473 passed | 159 skipped (5771)
+    EXIT 1
+    The failing TEST FILE SET is IDENTICAL: 28 files in both runs, and the
+    two extracted, sorted sets diff to EMPTY.
+    No compaction, evidence-continuity, task-contract, session-compaction,
+    stable-prefix or summary-churn file fails in ANY run.
+    NO ACT-OWNED REGRESSION.
+
+  $ bun tsc -p tsconfig.dev.json --noEmit
+    44 diagnostics before and after; 0 contributed by the files this
+    correction touched.
+    (Pristine baseline: 44 pre-existing diagnostics.)
+
+  $ bunx biome check --write <the 4 modified files>
+  $ bunx biome check <the 4 modified files>
+    Checked 4 files. No fixes applied.  CLEAN.
+
+  $ bun .factory/evidence/ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01/tool/probe-boundary.ts
+    source_message_count (authoritative): 5
+    projected length: 3
+    INFERRED boundary: 3
+    AUTHORITATIVE boundary: 5
+    MATCH: false
+    context.messages.length (Phase A passes this): 3
+    persisted source_message_count: 2
+    DIVERGES: true
+    -> Both reviewer P1 counterexamples REPRODUCE against the real seam.
+
+  $ bun .factory/evidence/ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01/tool/probe-budget.ts
+    whole-history ledger outcomes: 12, rendered bytes: 632
+    boundary-scoped ledger outcomes: 12, rendered bytes: 656
+    BOUNDARY-SCOPED IS A SUBSET: false
+    -> The reviewer P2 budget counterexample REPRODUCES; the "can only
+       shrink" argument is mathematically false and is withdrawn.
+
+======================================================================
