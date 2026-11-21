@@ -37947,26 +37947,43 @@ Membership is now tested **before** insertion. The regenerated timeline reports
 stable verdict coverage. The measurement only tested whether each subject's
 **first** assertion was revised, which cannot establish that no **later** point
 had stable coverage. The metric is renamed **`first_assertion_stability`**, the
-unsupported conclusion is withdrawn, and the answerable companion metric
-`last_verdict_change_turn = 638` is reported instead. Independent factual
-sufficiency remains **`UNPROVEN`**.
+unsupported conclusion is withdrawn, and the answerable companion metric is
+reported instead. Independent factual sufficiency remains **`UNPROVEN`**.
+
+**P1 residue — change-turn metric name and value repaired.** A further review
+found the metric was **named** `last_verdict_change_turn` but **computed**
+`max(index for index, _ in assertions)` — the last verdict-*assertion* turn, not
+the last turn a verdict *changed*. The change turn is now computed by comparing
+successive verdict-class sets per subject, and both quantities are published
+under distinct names:
+
+| Metric | Value | Meaning |
+|---|---|---|
+| `last_verdict_change_turn` | **634** | last turn a subject's verdict-class set **differed** from its previous assertion |
+| `last_verdict_assertion_turn` | **638** | last turn any subject produced a verdict assertion of any kind, including a repetition |
+
+The previously published **638** is **withdrawn** as a change turn: turn 634 is
+R4's class set changing to `SUFFICIENT`, while turns 636 and 638 are R1
+re-asserting `CONFIRMED` — an unchanged class set, i.e. repetitions. Per
+subject, R1 and R8 report `change = null`; R2 and R7 show gaps of 79 and 93
+turns between their last change and their last assertion.
 
 ## Focused assertions
 
-`tools/assert-corrections.py` — **24/24 passed, exit 0**: 21 positive
-assertions (A1–A11 compaction identity, B1–B5 fingerprint ordering, C1–C5
-verdict stability) plus **3 negative controls** (N1–N3) that reconstruct each
+`tools/assert-corrections.py` — **30/30 passed, exit 0**: 26 positive
+assertions (A1–A11 compaction identity, B1–B5 fingerprint ordering, C1–C10
+verdict stability) plus **4 negative controls** (N1–N4) that reconstruct each
 pre-correction defect in isolation and prove the suite can fail.
 
 ## Verification
 
 | Check | Result |
 |---|---|
-| Focused assertions | **24/24 passed, exit 0** |
+| Focused assertions | **30/30 passed, exit 0** |
 | Deterministic reproduction | **byte-identical** for `compaction-probe.json`, `timeline.jsonl`, `novelty-probe.json`, `readiness-probe.json` |
 | Production diff (`git diff HEAD -- sdk/ apps/ src/`) | **empty** |
 | Credential scan | **clean** |
-| Artifact hashes | regenerated, 19 published artifacts |
+| Artifact hashes | regenerated, 21 published artifacts |
 
 ## P2 cleanup
 

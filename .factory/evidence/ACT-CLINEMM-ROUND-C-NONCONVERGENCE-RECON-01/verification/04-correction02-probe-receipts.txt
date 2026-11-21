@@ -78,10 +78,19 @@ cost_after_readiness={"output_tokens_after_readiness": 71194, "tool_calls_after_
 readiness_semantics: first_recorded_verdict_coverage=271; independent_factual_sufficiency=UNPROVEN
 subjects_refined_after_first_assertion=[2, 3, 4, 5, 6, 7, 9, 10] (8/10)
 all_first_assertions_stable=False (turn_all_first_assertions_stable=None)
-last_verdict_change_turn=638 (the last turn at which any subject produced a verdict assertion)
+last_verdict_change_turn=634 (the last turn at which a subject's verdict-class set DIFFERED from its previous assertion)
+last_verdict_assertion_turn=638 (the last turn at which any subject produced a verdict assertion of any kind, including a repetition)
 NOTE: a null first-assertion-stability turn does NOT establish that no later stable turn exists.
 EXIT=0
 ```
+
+P1-residue note: `last_verdict_change_turn` is computed by comparing
+successive verdict-class sets per subject. Turn 634 is R4's class set changing
+to `SUFFICIENT`; turns 636 and 638 are R1 re-asserting `CONFIRMED` (an
+unchanged class set), and are therefore repetitions rather than changes.
+Per-subject: R1 and R8 report `change = null` (their only assertion was their
+first); R2 and R7 show gaps of 79 and 93 turns between their last change and
+their last assertion.
 
 ## 5. assert-corrections.py (focused assertions, incl. negative controls)
 
@@ -108,11 +117,17 @@ $ python3 tools/assert-corrections.py --act-dir . --out assertions.json
   [PASS] C3 last_verdict_change_turn is reported and is a real turn
   [PASS] C4 first-assertion refinement count is 8/10
   [PASS] C5 independent factual sufficiency remains UNPROVEN
+  [PASS] C6 last_verdict_assertion_turn is published separately and is a real turn
+  [PASS] C7 the change turn is not the assertion turn (they are distinct quantities on this run)
+  [PASS] C8 each metric carries its own explicit meaning
+  [PASS] C9 a subject that never changed reports change=null while still reporting its assertion turn (R1, R8)
+  [PASS] C10 every subject's change turn is <= its assertion turn
   [PASS] N1 negative control: pre-fix ordering yields no CONTENT_DISTINCT (so B1 would fail)
   [PASS] N2 negative control: pre-fix strip leaves base != enriched (so A1 would fail)
   [PASS] N3 negative control: pre-fix counting yields 16 events, not 8 (so A8 would fail)
+  [PASS] N4 negative control: pre-fix, the change metric equalled the assertion turn (so C7 would fail)
 
-24/24 assertions passed
+30/30 assertions passed
 EXIT=0
 ```
 

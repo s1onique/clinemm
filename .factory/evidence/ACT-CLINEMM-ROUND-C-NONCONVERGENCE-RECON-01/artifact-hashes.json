@@ -152,14 +152,14 @@
   ],
   "published_artifacts": [
     {
-      "bytes": 11560,
+      "bytes": 11954,
       "path": "./artifact-hashes.json",
-      "sha256": "17e1cd352a37f89bef9ac96285d4c6f992e6bec0ab28c66fa896efab49302a82"
+      "sha256": "5cdeb5aa04ebfb66c78ad80c7ff82fd7d524c1cef1cca2df8e8635429c8fba02"
     },
     {
-      "bytes": 5014,
+      "bytes": 6141,
       "path": "./assertions.json",
-      "sha256": "e75df3c967d4d2ecf97f8cec3ddb971dc3ec80066a42364c4be495a65afe5371"
+      "sha256": "ca952354761cbf11dbfe40e7c09da7e9b4815321e81228f307f441b3772716a1"
     },
     {
       "bytes": 25183,
@@ -177,19 +177,19 @@
       "sha256": "a4898527b937b3b128ecf0f915d611db3fb241524c9539b72a322e6904b5f0fb"
     },
     {
-      "bytes": 19956,
+      "bytes": 21603,
       "path": "./qualification-report.md",
-      "sha256": "09a962cdab41be5a672566ceebb5c071570ef656a5d5f923bb23bf89595f35a0"
+      "sha256": "dc39c72654d4b0ca11daa86565f26c968eda0a98d887efd01ec2d5229dc8c942"
     },
     {
-      "bytes": 18665,
+      "bytes": 19498,
       "path": "./readiness-analysis.md",
-      "sha256": "dc5eb9b4fb606779d31fc6ff176b71f91e1f13dcdd5c5912ca259ccdde028182"
+      "sha256": "0425e71addf91059bc211762d5a307edcf13267cebd666c005022ae98a596b91"
     },
     {
-      "bytes": 64511,
+      "bytes": 65620,
       "path": "./readiness-probe.json",
-      "sha256": "dfc43ac12923445263b1584acde67d56dca752aa066af0244f1dcd6a27d624fc"
+      "sha256": "4ef2371f5ecc047f05c52f7893a21457b64bebcff5329d2ca50ea9d225a4e8d6"
     },
     {
       "bytes": 12859,
@@ -207,9 +207,9 @@
       "sha256": "24ea1b7981bfe1f096549d46e190c233d12152f8980e4796a6098fea1c8d6466"
     },
     {
-      "bytes": 13338,
+      "bytes": 16312,
       "path": "./tools/assert-corrections.py",
-      "sha256": "b1fcca88e49380f49ce417eb361f7bee98c7da4c8518e130fcb823cae5d71ff0"
+      "sha256": "ed4278066f65dce9e2a76db1829be485fc43e3959fa42145abe2005fe5f9771c"
     },
     {
       "bytes": 7001,
@@ -232,9 +232,9 @@
       "sha256": "9a7fefb681e2466f4f7c92ab7ca1f978f13800b9b9b81dce7646123f7d994f6f"
     },
     {
-      "bytes": 13773,
+      "bytes": 16856,
       "path": "./tools/readiness-probe.py",
-      "sha256": "38b7721c0b5f8e3585a03e2180c6a2428593e402bd29e8a596d3fcfaaca34a7e"
+      "sha256": "a43b8f842fccb3fcaf3fb641e7d8a141b67e597dd47cd21e6675306ec0b1833b"
     },
     {
       "bytes": 495,
@@ -249,23 +249,23 @@
     {
       "bytes": 488,
       "path": "./verification/03-correction02-production-seam-definitions-test.txt",
-      "sha256": "006e4fb8b3722eea2700f3200d8ecbc3c44a752fdbf5d839efa831cd5540e2d6"
+      "sha256": "978f25593311d331cd6a4b2c8c377ef81da240931ae1befa514bd123aa2370ea"
     },
     {
-      "bytes": 6179,
+      "bytes": 7327,
       "path": "./verification/04-correction02-probe-receipts.txt",
-      "sha256": "182ff1a0a654cfeabf93b74c0875aed087d1a54235b593ef259b015a711f02bf"
+      "sha256": "029969656c0dafaddb68905d5f22ba5e5fe187bd4871bf5ecbcc6612d7acc8af"
     }
   ],
   "sanitization": "Private evidence sources are referenced by absolute path and sha256 only. No raw transcript text, command text, file content or credential is copied into any published artifact.",
   "source_identity": {
     "branch": "main",
-    "entry_head": "a8231e4160eea0333a95a293433ae1cd964786e5",
-    "entry_head_date": "2026-11-21T16:46:35+03:00",
-    "entry_head_subject": "docs(clinemm): correct Round C recon evidence strength (CORRECTION01)",
+    "entry_head": "6691df7cd15a91093df8a7cc2a125c12941fc6c0",
+    "entry_head_date": "2026-11-21T16:57:56+03:00",
+    "entry_head_subject": "ACT-CLINEMM-ROUND-C-NONCONVERGENCE-RECON-CORRECTION02: correct probe semantics",
     "installed_extension_dir": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/extensions/s1onique.clinemm-4.1.26-6883c7c52",
     "installed_extension_version": "s1onique.clinemm-4.1.26-6883c7c52",
     "repo_root": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm",
-    "working_tree_porcelain_lines": 20
+    "working_tree_porcelain_lines": 11
   }
 }

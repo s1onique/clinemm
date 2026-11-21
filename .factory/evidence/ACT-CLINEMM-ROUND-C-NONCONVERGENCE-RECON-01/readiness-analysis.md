@@ -316,9 +316,24 @@ Consequently:
   first assertion was later revised*, and **nothing more**. The artifact
   carries an explicit note that a null value does **not** establish that no
   later stable turn exists.
-* The companion metric `last_verdict_change_turn` = **638** — the last turn
-  at which any subject produced a verdict assertion — is reported instead,
-  because it *is* answerable from the trace.
+* The companion metric `last_verdict_change_turn` = **634** is reported
+  instead, because it *is* answerable from the trace. It is computed by
+  comparing successive verdict-class sets per subject, so it counts only
+  turns where a verdict actually **changed**.
+
+**CORRECTION02 P1 residue — the metric name was repaired and the value
+changed.** The metric was NAMED `last_verdict_change_turn` but COMPUTED the
+last verdict-*assertion* turn. Both quantities are now published under
+distinct names:
+
+| Metric | Value | Meaning |
+|---|---|---|
+| `last_verdict_change_turn` | **634** | last turn a subject's verdict-class set **differed** from its previous assertion |
+| `last_verdict_assertion_turn` | **638** | last turn any subject produced a verdict assertion of any kind, including a repetition |
+
+Turn 634 is R4's class set changing to `SUFFICIENT`; turns 636 and 638 are R1
+re-asserting `CONFIRMED` — an unchanged class set, therefore repetitions, not
+changes. The previously published **638** is withdrawn as a change turn.
 * **Independent readiness is `UNPROVEN`.**
 * The parent's "readiness established" phrasing is **withdrawn**.
 

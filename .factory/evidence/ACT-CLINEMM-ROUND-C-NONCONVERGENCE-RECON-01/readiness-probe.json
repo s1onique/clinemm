@@ -11,7 +11,8 @@
     "note": "A null value means at least one first assertion was later revised; it does NOT mean no later stable turn exists.",
     "turn_all_first_assertions_stable": null
   },
-  "last_verdict_change_turn": 638,
+  "last_verdict_assertion_turn": 638,
+  "last_verdict_change_turn": 634,
   "operator_input_index": 650,
   "per_subject_first_verdict": {
     "R1": {
@@ -2984,6 +2985,35 @@
     9,
     10
   ],
+  "verdict_change_semantics": {
+    "last_verdict_assertion_turn_measures": "the last turn at which any subject produced a verdict assertion of ANY kind, including a repetition of an unchanged class set.",
+    "last_verdict_change_turn_measures": "the last turn at which a subject's asserted verdict-class set DIFFERED from its previous assertion (a substantive verdict change), computed by comparing successive verdict-class sets per subject.",
+    "per_subject_last_verdict_assertion_turn": {
+      "R1": 638,
+      "R10": 450,
+      "R2": 479,
+      "R3": 507,
+      "R4": 634,
+      "R5": 485,
+      "R6": 489,
+      "R7": 529,
+      "R8": 543,
+      "R9": 463
+    },
+    "per_subject_last_verdict_change_turn": {
+      "R1": null,
+      "R10": 450,
+      "R2": 400,
+      "R3": 507,
+      "R4": 634,
+      "R5": 485,
+      "R6": 489,
+      "R7": 436,
+      "R8": null,
+      "R9": 463
+    },
+    "relationship": "last_verdict_change_turn <= last_verdict_assertion_turn. A gap means the final assertion(s) repeated an unchanged verdict rather than changing it."
+  },
   "verdict_stability": {
     "R1": {
       "all_classes": [

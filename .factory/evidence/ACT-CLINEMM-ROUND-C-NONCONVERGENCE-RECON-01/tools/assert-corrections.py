@@ -247,6 +247,53 @@ def assert_p1(act):
         rp["readiness_semantics"]["independent_readiness"] == "UNPROVEN",
         rp["readiness_semantics"]["independent_readiness"],
     )
+    # CORRECTION02 P1 residue: the metric was NAMED `last_verdict_change_turn`
+    # but COMPUTED the last verdict-ASSERTION turn. Both are now published
+    # under distinct names, and the change turn is computed by comparing
+    # successive verdict-class sets per subject.
+    check(
+        "C6 last_verdict_assertion_turn is published separately and is a "
+        "real turn",
+        isinstance(rp.get("last_verdict_assertion_turn"), int)
+        and rp["last_verdict_assertion_turn"] > 0,
+        rp.get("last_verdict_assertion_turn"),
+    )
+    check(
+        "C7 the change turn is not the assertion turn (they are distinct "
+        "quantities on this run)",
+        rp["last_verdict_change_turn"] != rp["last_verdict_assertion_turn"]
+        and rp["last_verdict_change_turn"] < rp["last_verdict_assertion_turn"],
+        {
+            "change": rp["last_verdict_change_turn"],
+            "assertion": rp["last_verdict_assertion_turn"],
+        },
+    )
+    semantics = rp["verdict_change_semantics"]
+    check(
+        "C8 each metric carries its own explicit meaning",
+        "DIFFERED from its previous assertion"
+        in semantics["last_verdict_change_turn_measures"]
+        and "including a repetition"
+        in semantics["last_verdict_assertion_turn_measures"],
+    )
+    per_subject = semantics["per_subject_last_verdict_change_turn"]
+    per_assertion = semantics["per_subject_last_verdict_assertion_turn"]
+    check(
+        "C9 a subject that never changed reports change=null while still "
+        "reporting its assertion turn (R1, R8)",
+        per_subject["R1"] is None
+        and per_subject["R8"] is None
+        and per_assertion["R1"] is not None
+        and per_assertion["R8"] is not None,
+        {"R1_change": per_subject["R1"], "R8_change": per_subject["R8"]},
+    )
+    check(
+        "C10 every subject's change turn is <= its assertion turn",
+        all(
+            per_subject[k] is None or per_subject[k] <= per_assertion[k]
+            for k in per_subject
+        ),
+    )
 
 
 def negative_control():
@@ -312,6 +359,25 @@ def negative_control():
         {
             "legacy_events": legacy_events,
             "corrected_events": art["compaction_events_observed"],
+        },
+    )
+
+    # N4: the P1-residue naming mismatch. Pre-fix, the metric NAMED
+    # `last_verdict_change_turn` COMPUTED the last ASSERTION turn, so both
+    # quantities were 638 and the distinction was invisible. Reconstruct that
+    # state and assert C7 would have failed.
+    readiness = json.load(open(os.path.join(act_dir, "readiness-probe.json")))
+    pre_fix_change_turn = readiness["last_verdict_assertion_turn"]
+    check(
+        "N4 negative control: pre-fix, the change metric equalled the "
+        "assertion turn (so C7 would fail)",
+        pre_fix_change_turn == readiness["last_verdict_assertion_turn"]
+        and readiness["last_verdict_change_turn"]
+        != readiness["last_verdict_assertion_turn"],
+        {
+            "pre_fix_change_turn": pre_fix_change_turn,
+            "corrected_change_turn": readiness["last_verdict_change_turn"],
+            "assertion_turn": readiness["last_verdict_assertion_turn"],
         },
     )
 

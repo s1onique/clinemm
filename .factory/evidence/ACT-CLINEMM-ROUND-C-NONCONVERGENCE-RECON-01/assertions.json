@@ -139,7 +139,7 @@
     },
     {
       "assertion": "C3 last_verdict_change_turn is reported and is a real turn",
-      "detail": 638,
+      "detail": 634,
       "ok": true
     },
     {
@@ -159,6 +159,37 @@
     {
       "assertion": "C5 independent factual sufficiency remains UNPROVEN",
       "detail": "UNPROVEN",
+      "ok": true
+    },
+    {
+      "assertion": "C6 last_verdict_assertion_turn is published separately and is a real turn",
+      "detail": 638,
+      "ok": true
+    },
+    {
+      "assertion": "C7 the change turn is not the assertion turn (they are distinct quantities on this run)",
+      "detail": {
+        "assertion": 638,
+        "change": 634
+      },
+      "ok": true
+    },
+    {
+      "assertion": "C8 each metric carries its own explicit meaning",
+      "detail": null,
+      "ok": true
+    },
+    {
+      "assertion": "C9 a subject that never changed reports change=null while still reporting its assertion turn (R1, R8)",
+      "detail": {
+        "R1_change": null,
+        "R8_change": null
+      },
+      "ok": true
+    },
+    {
+      "assertion": "C10 every subject's change turn is <= its assertion turn",
+      "detail": null,
       "ok": true
     },
     {
@@ -182,11 +213,20 @@
         "legacy_events": 16
       },
       "ok": true
+    },
+    {
+      "assertion": "N4 negative control: pre-fix, the change metric equalled the assertion turn (so C7 would fail)",
+      "detail": {
+        "assertion_turn": 638,
+        "corrected_change_turn": 634,
+        "pre_fix_change_turn": 638
+      },
+      "ok": true
     }
   ],
   "failed": 0,
   "failures": [],
-  "passed": 24,
+  "passed": 30,
   "probe_id": "CORRECTION02_FOCUSED_ASSERTIONS_V1",
-  "total": 24
+  "total": 30
 }

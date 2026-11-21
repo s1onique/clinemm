@@ -146,7 +146,8 @@ cost_after_readiness={"output_tokens_after_readiness": 71194, "tool_calls_after_
 readiness_semantics: first_recorded_verdict_coverage=271; independent_factual_sufficiency=UNPROVEN
 subjects_refined_after_first_assertion=[2, 3, 4, 5, 6, 7, 9, 10] (8/10)
 all_first_assertions_stable=False (turn_all_first_assertions_stable=None)
-last_verdict_change_turn=638 (the last turn at which any subject produced a verdict assertion)
+last_verdict_change_turn=634 (the last turn at which a subject's verdict-class set DIFFERED from its previous assertion)
+last_verdict_assertion_turn=638 (the last turn at which any subject produced a verdict assertion of any kind, including a repetition)
 NOTE: a null first-assertion-stability turn does NOT establish that no later stable turn exists.
 ```
 Exit code: **0**
@@ -154,18 +155,60 @@ Exit code: **0**
 The metric now states only what it measures. **Independent factual sufficiency
 remains `UNPROVEN`.**
 
+### 2.4 P1 residue — the change-turn metric name and value
+
+A further non-blocking review residue was raised after the first CORRECTION02
+commit: the metric was **named** `last_verdict_change_turn` but **computed**
+`max(index for index, _ in assertions)` — the last turn at which any subject
+produced a verdict **assertion**. That is an assertion timestamp, not the last
+turn a verdict **changed**.
+
+**Correction.** The change turn is now computed by comparing successive
+verdict-class sets per subject, and **both** quantities are published under
+distinct names:
+
+| Metric | Value | Meaning |
+|---|---|---|
+| `last_verdict_change_turn` | **634** | last turn at which a subject's verdict-class set **differed** from its previous assertion |
+| `last_verdict_assertion_turn` | **638** | last turn at which any subject produced a verdict assertion of **any** kind, including a repetition |
+
+**The previously published `638` is withdrawn as a change turn.** Turn 634 is
+R4's class set changing to `SUFFICIENT` — the last substantive change. Turns
+636 and 638 are R1 re-asserting `CONFIRMED`, an identical class set, and are
+therefore repetitions rather than changes.
+
+Per-subject, `R1` and `R8` report `change = null` (their only assertion was
+their first, so their verdict never changed) while still reporting their
+assertion turns (638 and 543). `R2` and `R7` show gaps of 79 and 93 turns
+between their last change and their last assertion. Every subject's change
+turn is `<=` its assertion turn.
+
+Independent verification of the tail (rebuilding the assertion history from
+the session messages independently of the probe):
+
+```
+=== assertions at/after turn 600 ===
+  turn 636  R1   classes=('CONFIRMED',)
+  turn 638  R1   classes=('CONFIRMED',)
+  turn 630  R4   classes=('CONDITIONAL', 'CONFIRMED', 'NARROWED')
+  turn 634  R4   classes=('SUFFICIENT',)
+last 3 actual CHANGES: [(507, 3, ...), (630, 4, ...), (634, 4, ('SUFFICIENT',))]
+max change turn       : 634
+max assertion turn    : 638
+```
+
 ---
 
 ## 3. Focused assertions
 
 `tools/assert-corrections.py` is the executable receipt for this correction. It
-asserts **21 positive properties** of the corrected probes and regenerated
-artifacts, plus **3 negative controls** that prove the suite can actually fail.
+asserts **26 positive properties** of the corrected probes and regenerated
+artifacts, plus **4 negative controls** that prove the suite can actually fail.
 
 ```
 $ python3 tools/assert-corrections.py --act-dir . --out assertions.json
 ...
-24/24 assertions passed
+30/30 assertions passed
 ```
 Exit code: **0**
 
@@ -173,8 +216,8 @@ Exit code: **0**
 |---|---|---|
 | **A — compaction generation identity** | A1–A11 | enriched projection strips to the same generation; a genuinely different summary does not; the transition classifier emits `FIRST_SUMMARY` / `NEW_COMPACTION` / `SAME_GENERATION_ENRICHED`; the historical run yields 8 generations / 8 events / 8 transformations at the exact expected iterations; retention 257/257 |
 | **B — result fingerprint ordering** | B1–B5 | a synthetic 3-result probe yields `CONTENT_DISTINCT, NONEMPTY, EMPTY`; membership is tested before insertion; the regenerated timeline emits `CONTENT_DISTINCT`; the legacy `information_gain` key is absent; the timeline count equals the independent novelty probe's count |
-| **C — verdict-stability metric** | C1–C5 | the metric is named for what it measures; a null value is *not* accompanied by a claim that no later stable turn exists; `last_verdict_change_turn` is reported and is a real turn; 8/10 first assertions refined; independent sufficiency remains `UNPROVEN` |
-| **N — negative controls** | N1–N3 | the pre-fix ordering yields no `CONTENT_DISTINCT`; the pre-fix strip leaves base ≠ enriched; the pre-fix counting yields 16 events, not 8 |
+| **C — verdict-stability metric** | C1–C10 | the metric is named for what it measures; a null value is *not* accompanied by a claim that no later stable turn exists; `last_verdict_change_turn` is reported and is a real turn; 8/10 first assertions refined; independent sufficiency remains `UNPROVEN`; the change turn and the assertion turn are published separately and are **distinct** values; each carries its own explicit meaning; a subject that never changed reports `change = null`; every change turn is `<=` its assertion turn |
+| **N — negative controls** | N1–N4 | the pre-fix ordering yields no `CONTENT_DISTINCT`; the pre-fix strip leaves base ≠ enriched; the pre-fix counting yields 16 events, not 8; the pre-fix change metric equalled the assertion turn |
 
 The negative controls matter: a suite that only passes is not evidence that it can
 fail. N1–N3 reconstruct each pre-correction defect in isolation and assert that the
@@ -269,11 +312,12 @@ This correction is complete:
   the regenerated timeline reports **342** `CONTENT_DISTINCT`, matching the
   independently-implemented novelty probe.
 * P1 corrected — the metric is `first_assertion_stability`, the unsupported
-  "no later stable turn" conclusion is withdrawn, and `last_verdict_change_turn = 638`
-  is reported.
+  "no later stable turn" conclusion is withdrawn, and the change/assertion turn
+  distinction is repaired (`last_verdict_change_turn = 634`,
+  `last_verdict_assertion_turn = 638`).
 * Artifacts regenerated, hashes refreshed, deterministic reproduction verified
   byte-identical.
-* Focused assertions: **24/24 passed, exit 0**, including 3 negative controls.
+* Focused assertions: **30/30 passed, exit 0**, including 4 negative controls.
 * **No production change.**
 
 ### Successor

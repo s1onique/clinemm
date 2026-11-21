@@ -72,8 +72,35 @@ subsequently revised". That did not follow: the metric measured only whether
 each subject's **first** assertion was revised, which cannot establish that
 no **later** point had stable coverage. The metric is now
 `first_assertion_stability`; the unsupported conclusion is withdrawn; and the
-answerable companion metric `last_verdict_change_turn` = **638** is reported
-instead.
+answerable companion metric `last_verdict_change_turn` = **634** is reported
+instead — computed by comparing successive verdict-class sets per subject.
+
+**CORRECTION02 P1 residue — the metric name was repaired and the value
+changed.** The metric was NAMED `last_verdict_change_turn` but COMPUTED
+`max(index for index, _ in assertions)` — the last turn at which any subject
+produced a verdict *assertion*. That is an assertion timestamp, not the last
+turn a verdict *changed*: a subject may re-assert an unchanged class set on a
+later turn, which is a repetition, not a change.
+
+The change turn is now computed by comparing successive verdict-class sets
+per subject, and both quantities are published under distinct names:
+
+| Metric | Value | Meaning |
+|---|---|---|
+| `last_verdict_change_turn` | **634** | last turn at which a subject's verdict-class set **differed** from its previous assertion |
+| `last_verdict_assertion_turn` | **638** | last turn at which any subject produced a verdict assertion of **any** kind, including a repetition |
+
+The difference is material: turn **634** is R4's class set changing to
+`SUFFICIENT` — the last substantive change. Turns **636** and **638** are R1
+re-asserting `CONFIRMED`, an identical class set, so they are repetitions.
+The previously published **638** was therefore an assertion timestamp
+mislabeled as a change turn, and is withdrawn.
+
+Per-subject, `R1` and `R8` report `change = null` (their only assertion was
+their first, so their verdict never changed) while still reporting their
+assertion turns (638 and 543) — and `R2` and `R7` show gaps of 79 and 93
+turns between their last change and their last assertion. Every subject's
+change turn is `<=` its assertion turn.
 
 ### F4 — The post-readiness work added new source content (CORRECTED)
 

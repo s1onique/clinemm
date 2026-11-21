@@ -212,16 +212,43 @@ def main() -> int:
     first_assertion_stable_turn = (
         max(stable_coverage_turns) if all_first_assertions_stable else None
     )
-    # A genuinely different question, which IS answerable from the trace:
-    # the earliest turn after which NO subject produced a NEW verdict
-    # assertion (i.e. the verdict set stopped changing).
+    # CORRECTION02 P1 residue: the metric was NAMED `last_verdict_change_turn`
+    # but COMPUTED `max(index for index, _ in assertions)` -- the last turn at
+    # which any subject produced a verdict ASSERTION. That is an assertion
+    # timestamp, NOT necessarily the last turn on which a verdict CHANGED: a
+    # subject may re-assert the SAME class set on a later turn, which is a
+    # repetition rather than a change.
+    #
+    # The metric is now computed by comparing successive verdict-class sets
+    # per subject, exactly as the review specified. A CHANGE is recorded only
+    # when a subject's asserted class set differs from its previous assertion.
+    #
+    # Both quantities are published, with distinct names and distinct
+    # meanings, so neither can be read as the other.
     last_verdict_change_turn = None
+    last_verdict_assertion_turn = None
+    per_subject_last_change: dict[int, int] = {}
+    per_subject_last_assertion: dict[int, int] = {}
     for subject in SUBJECTS:
         assertions = subject_assertions.get(subject, [])
-        if assertions:
+        if not assertions:
+            continue
+        per_subject_last_assertion[subject] = assertions[-1][0]
+        last_verdict_assertion_turn = max(
+            last_verdict_assertion_turn or 0,
+            assertions[-1][0],
+        )
+        previous_classes = assertions[0][1]
+        subject_last_change = None
+        for index, classes in assertions[1:]:
+            if classes != previous_classes:
+                subject_last_change = index
+                previous_classes = classes
+        if subject_last_change is not None:
+            per_subject_last_change[subject] = subject_last_change
             last_verdict_change_turn = max(
                 last_verdict_change_turn or 0,
-                max(index for index, _ in assertions),
+                subject_last_change,
             )
 
     cost_after: dict[str, Any] = {}
@@ -288,7 +315,36 @@ def main() -> int:
                 "revised; it does NOT mean no later stable turn exists."
             ),
         },
+        # CORRECTION02 P1 residue: the verdict CHANGE turn is computed by
+        # comparing successive verdict-class sets per subject. It is
+        # DISTINCT from the last verdict-ASSERTION turn, which is published
+        # separately so neither can be misread as the other.
         "last_verdict_change_turn": last_verdict_change_turn,
+        "last_verdict_assertion_turn": last_verdict_assertion_turn,
+        "verdict_change_semantics": {
+            "last_verdict_change_turn_measures": (
+                "the last turn at which a subject's asserted verdict-class "
+                "set DIFFERED from its previous assertion (a substantive "
+                "verdict change), computed by comparing successive "
+                "verdict-class sets per subject."
+            ),
+            "last_verdict_assertion_turn_measures": (
+                "the last turn at which any subject produced a verdict "
+                "assertion of ANY kind, including a repetition of an "
+                "unchanged class set."
+            ),
+            "relationship": (
+                "last_verdict_change_turn <= last_verdict_assertion_turn. "
+                "A gap means the final assertion(s) repeated an unchanged "
+                "verdict rather than changing it."
+            ),
+            "per_subject_last_verdict_change_turn": {
+                f"R{s}": per_subject_last_change.get(s) for s in SUBJECTS
+            },
+            "per_subject_last_verdict_assertion_turn": {
+                f"R{s}": per_subject_last_assertion.get(s) for s in SUBJECTS
+            },
+        },
     }
 
     with open(args.out, "w", encoding="utf-8") as handle:
@@ -325,7 +381,14 @@ def main() -> int:
     print(
         "last_verdict_change_turn="
         f"{last_verdict_change_turn} "
-        "(the last turn at which any subject produced a verdict assertion)"
+        "(the last turn at which a subject's verdict-class set DIFFERED "
+        "from its previous assertion)"
+    )
+    print(
+        "last_verdict_assertion_turn="
+        f"{last_verdict_assertion_turn} "
+        "(the last turn at which any subject produced a verdict assertion "
+        "of any kind, including a repetition)"
     )
     print(
         "NOTE: a null first-assertion-stability turn does NOT establish that "
