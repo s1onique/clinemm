@@ -207,6 +207,20 @@ failing test-file set is IDENTICAL to the pristine baseline (139 failures
 in both, 28 files each, sets diff to empty); typecheck 44 before and after,
 0 contributed; Biome clean.
 
+**CORRECTION01 head chain:**
+
+```text
+entryHead          9117f13ae7d643373c56eeedc30da661fc790b08  the predecessor's final HEAD; the ACT's entry
+subjectHead        9f57bc84d98f3439a0d70e4bf74300efef6564cd  the IMPLEMENTATION commit (the production repair)
+artifactHead       155eb4b400d1bed95cdca03c8ea22db9e690beba  the commit that produced the original artifact package
+reviewHandoffHead  b5558f973fa11b1576d0746c4c98e92e7f398b4c  the evidence package as the REVIEW saw it
+correctionHead     a9bf4fc8be637a17d11b9fbb0338e4774cd98b56  the CORRECTION01 commit (the boundary-contract production fix)
+finalHead          d893b4bd96b6ac7d04ca44aa1d9cb14795fd1315  the ACT's TERMINAL commit (manifest regeneration only)
+```
+
+The working tree after the terminal commit is CLEAN. Every SHA is recorded
+after its commit, never predicted.
+
 ---
 
 ## 6. The quantitative qualification

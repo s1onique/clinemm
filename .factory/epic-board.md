@@ -37499,6 +37499,8 @@ CORRECTION: ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01-CORRECTION01
   p1_display_only_boundary_divergence: CONFIRMED -> production defect fixed
   p2_budget_rationale: CONFIRMED false -> withdrawn, replaced by the final dispatch-seam guard
   p2_final_artifact_identity: CONFIRMED -> head identities made explicit
+CORRECTION_HEAD: a9bf4fc8be637a17d11b9fbb0338e4774cd98b56
+FINAL_HEAD: d893b4bd96b6ac7d04ca44aa1d9cb14795fd1315
 ```
 
 ## What was repaired

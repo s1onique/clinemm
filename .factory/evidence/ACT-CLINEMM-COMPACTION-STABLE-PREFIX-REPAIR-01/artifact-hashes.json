@@ -1,13 +1,13 @@
 {
   "act": "ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01",
   "algorithm": "sha256",
-  "note": "Non-self-referential: artifact-hashes.json does not hash itself. Regenerated after CORRECTION01. The `finalHead` below is the CORRECTION01 commit, which is the ACT's terminal state; the commit that carries this manifest is one commit later and is recorded in correction01-receipt.txt. Every SHA is recorded after its commit, never predicted.",
-  "sourceHead": "9117f13ae7d643373c56eeedc30da661fc790b08",
+  "note": "Non-self-referential: artifact-hashes.json does not hash itself. Regenerated after CORRECTION01. The head identities below are the ACT's complete chain; `finalHead` is the ACT's TERMINAL commit, and the commit that carries this regenerated manifest is one commit later (it changes no production module and no test). Every SHA is recorded after its commit, never predicted.",
   "entryHead": "9117f13ae7d643373c56eeedc30da661fc790b08",
   "subjectHead": "9f57bc84d98f3439a0d70e4bf74300efef6564cd",
   "artifactHead": "155eb4b400d1bed95cdca03c8ea22db9e690beba",
   "reviewHandoffHead": "b5558f973fa11b1576d0746c4c98e92e7f398b4c",
-  "finalHead": "a9bf4fc8be637a17d11b9fbb0338e4774cd98b56",
+  "correctionHead": "a9bf4fc8be637a17d11b9fbb0338e4774cd98b56",
+  "finalHead": "d893b4bd96b6ac7d04ca44aa1d9cb14795fd1315",
   "correction": "ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01-CORRECTION01",
   "artifactCount": 14,
   "artifacts": [
@@ -18,8 +18,8 @@
     },
     {
       "path": ".factory/evidence/ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01/correction01-receipt.txt",
-      "bytes": 8904,
-      "sha256": "df3ebbe2d00614518ff67bb1b5d3de0f61038c44ac036025674885acbf7164e4"
+      "bytes": 10225,
+      "sha256": "08bf73f41c59c5952899e25b3b1fe389500174e6a2c952c40ebd6665409238af"
     },
     {
       "path": ".factory/evidence/ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01/identity.json",
