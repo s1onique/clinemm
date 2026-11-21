@@ -1,0 +1,42 @@
+# Disposition of the SDK workspace test run (job cmd_mwqn0i9ci69v29lo)
+
+## Observed output
+  agents dist ok
+  EXIT=1
+   Test Files  544 failed (544)
+        Tests  no tests
+
+## Diagnosis: the sdk/ workspace was never installed in this environment.
+
+$ ls -d sdk/node_modules
+ls: cannot access 'sdk/node_modules': No such file or directory
+
+$ ls sdk/node_modules/.bin/vitest
+ls: cannot access 'sdk/node_modules/.bin/vitest': No such file or directory
+
+$ ls sdk/packages/agents/node_modules/.bin/vitest
+ls: cannot access 'sdk/packages/agents/node_modules/.bin/vitest': No such file or directory
+
+The SDK build itself SUCCEEDED ('agents dist ok', and sdk/packages/{agents,core,shared}/dist
+all exist). The failure is in the SDK's TEST RUNNER, not its build: 'vitest run' cannot
+resolve a test runner from the uninstalled sdk/ workspace, so every one of the 544
+files collects ZERO tests and is reported as failed ('no tests').
+
+sdk/packages/agents/package.json declares: "test": "vitest run"
+
+## Proof that this ACT is unrelated to the failure
+
+$ git diff --name-only 0b6b3ba51..HEAD | grep '^sdk/'
+(none - ZERO sdk/ files were touched by any of this ACT's commits)
+
+$ git status --short sdk/
+(empty - sdk/ is clean and unmodified in the working tree)
+
+$ git log --oneline -1 -- sdk/
+b0bf8fcb1 fix(core): apply the canonical filter before slicing the boundary prefix (CORRECTION02)
+  ^ PREDATES this ACT's base commit 0b6b3ba51
+
+The SDK suite is therefore a PRE-EXISTING environment/dependency gap (an uninstalled
+workspace), NOT a regression from this ACT. It was already flagged as known
+environment drift in the inherited context and is NOT fixed by this ACT - fixing it
+requires a workspace install, which is outside this ACT's scope.
