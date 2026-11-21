@@ -56,6 +56,10 @@
 import type { MessageWithMetadata } from "@cline/shared";
 import { describe, expect, it } from "vitest";
 import {
+	createSessionCompactionState,
+	projectSessionCompactionState,
+} from "../../session/models/session-compaction";
+import {
 	applyVerifiedEvidenceToCompactedMessages,
 	EVIDENCE_SECTION_HEADING,
 	extractVerifiedToolOutcomes,
@@ -67,10 +71,6 @@ import {
 	applyTaskContractToCompactedMessages,
 	stripTaskContractSection,
 } from "./task-contract";
-import {
-	createSessionCompactionState,
-	projectSessionCompactionState,
-} from "../../session/models/session-compaction";
 
 // ---------------------------------------------------------------------------
 // Fixtures — production-shaped, synthetic
@@ -116,10 +116,7 @@ function toolResult(
 }
 
 /** A SUCCESSFUL canonical call/result pair in the production payload shape. */
-function successfulPair(
-	id: string,
-	command: string,
-): MessageWithMetadata[] {
+function successfulPair(id: string, command: string): MessageWithMetadata[] {
 	return [
 		toolCall(id, "run_commands", { commands: [command] }),
 		toolResult(id, "run_commands", [
@@ -133,9 +130,7 @@ function successfulPair(
  * text DELIBERATELY omits the verified outcome — that is the lossy
  * projection the carry-forward exists to correct.
  */
-function compactionSummaryMessage(
-	summaryText: string,
-): MessageWithMetadata {
+function compactionSummaryMessage(summaryText: string): MessageWithMetadata {
 	return {
 		role: "user",
 		content: [{ type: "text", text: `Context summary:\n\n${summaryText}` }],
@@ -347,7 +342,11 @@ describe("ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01 — the churn reproduces", () 
 		assistantTurn("continuing"),
 	];
 
-	it("rewrites the provider-visible summary when an append-only canonical continuation adds a verified outcome", async () => {
+	// ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01: this suite USED TO pin
+	// the churn itself. The stable-prefix repair removed the churn, so the
+	// assertion is INVERTED: the summary the model already saw must now stay
+	// byte-identical across the same append-only continuation.
+	it("keeps the provider-visible summary byte-identical when an append-only canonical continuation adds a verified outcome", async () => {
 		const state = persistedState(h0);
 		const h1: MessageWithMetadata[] = [
 			...h0,
@@ -357,33 +356,28 @@ describe("ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01 — the churn reproduces", () 
 		const projectedH0 = projectedOrFail(state, h0);
 		const projectedH1 = projectedOrFail(state, h1);
 
-
-
-		const before = await prepareProviderVisible(
-			projectedH0,
-			h0,
-			{ contract: true, evidence: true },
-		);
-		const after = await prepareProviderVisible(
-			projectedH1,
-			h1,
-			{ contract: true, evidence: true },
-		);
+		const before = await prepareProviderVisible(projectedH0, h0, {
+			contract: true,
+			evidence: true,
+		});
+		const after = await prepareProviderVisible(projectedH1, h1, {
+			contract: true,
+			evidence: true,
+		});
 
 		const beforeText = projectedSummaryText(before);
 		const afterText = projectedSummaryText(after);
 
-		// THE CHURN: the summary the model already saw is DIFFERENT.
-		expect(afterText).not.toBe(beforeText);
-		// ...and the difference is the VERIFIED-EVIDENCE section: the contract
-		// section and the generated prose are byte-identical.
-		expect(evidenceSection(afterText)).not.toBe(
-			evidenceSection(beforeText),
-		);
+		// THE REPAIR: the summary the model already saw is UNCHANGED.
+		expect(afterText).toBe(beforeText);
+		// Every section is byte-identical: the contract, the evidence and the
+		// generated prose.
+		expect(evidenceSection(afterText)).toBe(evidenceSection(beforeText));
 		expect(contractSection(afterText)).toBe(contractSection(beforeText));
 		expect(proseOf(afterText)).toBe(proseOf(beforeText));
-		// The newly verified outcome IS carried.
-		expect(afterText).toContain("call_h1_new");
+		// The outcome verified AT the boundary is still carried.
+		expect(afterText).toContain("call_h0_a");
+		expect(afterText).toContain("call_h0_b");
 	});
 
 	it("keeps the summary byte-stable when the canonical history is UNCHANGED", async () => {
@@ -499,7 +493,11 @@ describe("ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01 — the causal ablation", () =
 		return projectedSummaryText(prepared);
 	}
 
-	it("only the variants that enable EVIDENCE restoration reproduce the churn", async () => {
+	// ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01: the ablation USED TO
+	// show that only the EVIDENCE-enabled variants churn. The stable-prefix
+	// repair removed the churn from every variant, so the ablation now shows
+	// that NO variant mutates the summary across an append-only continuation.
+	it("no variant mutates the summary across an append-only continuation after the stable-prefix repair", async () => {
 		const observed: Record<string, boolean> = {};
 		for (const variant of variants) {
 			const before = await summaryFor(h0, variant);
@@ -509,9 +507,9 @@ describe("ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01 — the causal ablation", () =
 		// The ORIGINAL projection and the CONTRACT-ONLY projection are stable.
 		expect(observed.A).toBe(false);
 		expect(observed.B).toBe(false);
-		// The EVIDENCE-ONLY and the PRODUCTION COMPOSITION churn.
-		expect(observed.C).toBe(true);
-		expect(observed.D).toBe(true);
+		// The EVIDENCE-ONLY and the PRODUCTION COMPOSITION are stable too.
+		expect(observed.C).toBe(false);
+		expect(observed.D).toBe(false);
 	});
 
 	it("contract restoration ALONE never changes the summary across an append-only continuation", async () => {
@@ -526,7 +524,12 @@ describe("ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01 — the causal ablation", () =
 		expect(after).toBe(before);
 	});
 
-	it("re-enabling evidence restoration RESTORES the mutation under equivalent inputs", async () => {
+	// ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01: the evidence
+	// restoration is no longer a MUTATION — it is the boundary-scoped
+	// enrichment. It still ADDS the carried section when the summary lacks
+	// one (a historical sidecar), so the two variants DIFFER; what it no
+	// longer does is rewrite the section on every continuation.
+	it("still enriches a summary that lacks the section, without mutating one that carries it", async () => {
 		const withEvidence = await summaryFor(h1, {
 			contract: false,
 			evidence: true,
@@ -536,6 +539,11 @@ describe("ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01 — the causal ablation", () =
 			evidence: false,
 		});
 		expect(withEvidence).not.toBe(withoutEvidence);
+		// The enrichment carries the boundary-verified outcome.
+		expect(withEvidence).toContain("call_ab_h0");
+		// ...and it does NOT carry the post-boundary outcome, because the
+		// section is scoped to the source boundary.
+		expect(withEvidence).not.toContain("call_ab_h1");
 	});
 });
 
@@ -705,9 +713,9 @@ describe("ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01 — conservation", () => {
 		const tailTexts = projected
 			.slice(state.messages.length)
 			.flatMap((message) => messageFragments(message));
-		expect(
-			tailTexts.filter((text) => text.includes("echo bravo")).length,
-		).toBe(1);
+		expect(tailTexts.filter((text) => text.includes("echo bravo")).length).toBe(
+			1,
+		);
 	});
 
 	it("does not let a carried excerpt spoof the section delimiter", () => {
@@ -731,9 +739,7 @@ describe("ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01 — conservation", () => {
 		// allowlist, never the user's raw command, so a raw delimiter in the
 		// command can never reach the section at all. Exactly ONE real begin
 		// marker and ONE real end marker exist: the section's own.
-		expect(
-			rendered.split("<!-- cline-evidence:begin -->").length - 1,
-		).toBe(1);
+		expect(rendered.split("<!-- cline-evidence:begin -->").length - 1).toBe(1);
 		expect(rendered.split("<!-- cline-evidence:end -->").length - 1).toBe(1);
 		// The raw command text is NOT carried.
 		expect(rendered).not.toContain("<!-- cline-evidence:begin -->\\n");
@@ -761,9 +767,7 @@ describe("ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01 — conservation", () => {
 		const ledger = extractVerifiedToolOutcomes(canonical);
 		const rendered = renderedEvidenceSection(ledger);
 
-		expect(
-			rendered.split("<!-- cline-evidence:begin -->").length - 1,
-		).toBe(1);
+		expect(rendered.split("<!-- cline-evidence:begin -->").length - 1).toBe(1);
 	});
 });
 
@@ -822,7 +826,13 @@ describe("ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01 — one-sided section movement
 	 * instruction, so the contract is unchanged. The summary must change, and
 	 * the change must be attributable to the EVIDENCE section alone.
 	 */
-	it("moves the evidence section alone when a new outcome is verified but the contract is unchanged", async () => {
+	// ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01: this case USED TO show
+	// the evidence section moving on its own. After the stable-prefix repair
+	// the section is scoped to the source boundary, so it does not move when a
+	// post-boundary outcome is verified. The CONTRACT section still moves on
+	// its own when the canonical contract genuinely changes (the other case in
+	// this describe block).
+	it("does NOT move the evidence section when a post-boundary outcome is verified but the contract is unchanged", async () => {
 		const h0: MessageWithMetadata[] = [
 			userTurn("Adjudicate the ten findings."),
 			...successfulPair("call_one_sided_2", "echo alpha"),
@@ -848,12 +858,14 @@ describe("ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01 — one-sided section movement
 		const beforeText = projectedSummaryText(before);
 		const afterText = projectedSummaryText(after);
 
-		expect(afterText).not.toBe(beforeText);
+		expect(afterText).toBe(beforeText);
 		// The CONTRACT section is unchanged: no new user instruction.
 		expect(contractSection(afterText)).toBe(contractSection(beforeText));
+		// The EVIDENCE section is unchanged: the boundary did not move.
+		expect(evidenceSection(afterText)).toBe(evidenceSection(beforeText));
 		// The PROSE is unchanged.
 		expect(proseOf(afterText)).toBe(proseOf(beforeText));
-		// ...and the new outcome IS carried.
-		expect(afterText).toContain("call_one_sided_3");
+		// The boundary-verified outcome IS carried.
+		expect(afterText).toContain("call_one_sided_2");
 	});
 });

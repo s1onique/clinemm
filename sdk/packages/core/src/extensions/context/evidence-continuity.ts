@@ -1346,6 +1346,78 @@ export interface EvidenceApplicationResult {
 }
 
 /**
+ * ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01
+ *
+ * The SOURCE BOUNDARY of a compacted projection.
+ *
+ * A compaction projection is:
+ *
+ *     [ ...the persisted sidecar's messages..., ...the canonical TAIL... ]
+ *
+ * where the canonical tail is EXACTLY `canonicalMessages.slice(boundary)` —
+ * a true SUFFIX of the canonical history — and `boundary` is the sidecar's
+ * `source_message_count`.
+ *
+ * The boundary can therefore be recovered from the projection itself by
+ * measuring the longest common suffix between the projected message list and
+ * the canonical history. The measurement is EXACT for every real production
+ * shape:
+ *
+ *   - The sidecar's own messages are the compaction summary (not a canonical
+ *     message) and, after a re-compaction, canonical messages from an OLDER
+ *     boundary. Those sit BEFORE the tail in the canonical history, so
+ *     extending the suffix match backwards reaches a message that does not
+ *     match the canonical message at the corresponding position, and the
+ *     match stops exactly at the boundary.
+ *
+ * The recovery is a FALLBACK. A caller that KNOWS the boundary (the
+ * compaction pipeline does: it holds the persisted sidecar) passes it
+ * explicitly, and the explicit value is always authoritative.
+ */
+export function inferCompactionSourceBoundary(
+	compactedMessages: readonly MessageWithMetadata[],
+	canonicalMessages: readonly MessageWithMetadata[],
+): number {
+	let tailLength = 0;
+	const maxTail = Math.min(compactedMessages.length, canonicalMessages.length);
+	while (
+		tailLength < maxTail &&
+		sameMessage(
+			compactedMessages[compactedMessages.length - 1 - tailLength],
+			canonicalMessages[canonicalMessages.length - 1 - tailLength],
+		)
+	) {
+		tailLength += 1;
+	}
+	return canonicalMessages.length - tailLength;
+}
+
+/**
+ * Whether two messages are the SAME canonical message.
+ *
+ * The comparison is by the persisted content shape (role + content), NOT by
+ * object identity: the projection holds deep copies of the canonical
+ * messages. The volatile transport identity (`id`, `ts`) is deliberately
+ * EXCLUDED, exactly as the persisted source-prefix hash excludes it, because
+ * the message codec regenerates both on every storage round-trip.
+ */
+function sameMessage(
+	left: MessageWithMetadata | undefined,
+	right: MessageWithMetadata | undefined,
+): boolean {
+	if (!left || !right) {
+		return false;
+	}
+	if (left.role !== right.role) {
+		return false;
+	}
+	return (
+		JSON.stringify(left.content ?? null) ===
+		JSON.stringify(right.content ?? null)
+	);
+}
+
+/**
  * Apply the verified-outcome carry-forward to a compacted message list.
  *
  * The outcomes are attached to the EXISTING `compaction_summary` message -
@@ -1362,12 +1434,63 @@ export interface EvidenceApplicationResult {
  * summary is never an authority source: a summary that already carries a
  * section has it STRIPPED and replaced, so repeated compactions converge on
  * the canonical record instead of accumulating copies.
+ *
+ * ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01 — THE SOURCE BOUNDARY
+ * --------------------------------------------------------------------
+ *
+ * The carried section is derived from the canonical history AS IT WAS AT THE
+ * SOURCE BOUNDARY, not from the whole growing canonical history.
+ *
+ * WHY. The compaction summary is the FIRST provider-visible message of every
+ * request. A prompt cache can only reuse a checkpoint over an UNCHANGED
+ * prefix, so a summary rewritten on every continuation invalidates every
+ * deeper checkpoint. The section must therefore be a function of the
+ * BOUNDARY, which does not change when the canonical transcript grows.
+ *
+ * WHAT THIS PRESERVES. The evidence-continuity guarantee is:
+ *
+ *   > A generated summary may omit historical detail, but it must not become
+ *   > MORE AUTHORITATIVE than the canonical record of what actually executed.
+ *
+ * Every outcome verified AT the boundary stays carried — including the ones
+ * that have fallen out of the visible tail, which is exactly the set the tail
+ * CANNOT represent. Every outcome verified AFTER the boundary remains
+ * model-visible through the provider-visible canonical tail, whose
+ * `tool_result` block carries the canonical tool-call identity
+ * (`tool_use_id`), the tool name, and the affirmative success payload that
+ * `classifyToolResultStatus()` reads. The canonical history remains the
+ * ONLY authority; a previous summary is never one.
  */
 export function applyVerifiedEvidenceToCompactedMessages(
 	compactedMessages: readonly MessageWithMetadata[],
 	canonicalMessages: readonly MessageWithMetadata[],
+	options: {
+		/**
+		 * The number of canonical messages that belonged to the compacted
+		 * prefix — the persisted sidecar's `source_message_count`.
+		 *
+		 * When omitted, the boundary is INFERRED from the projection itself
+		 * (see {@link inferCompactionSourceBoundary}). The inferred value is
+		 * exact for every real production shape, and the compaction pipeline
+		 * always supplies the authoritative value explicitly.
+		 */
+		sourceMessageCount?: number;
+	} = {},
 ): EvidenceApplicationResult {
-	const ledger = extractVerifiedToolOutcomes(canonicalMessages);
+	const boundaryCount = Math.max(
+		0,
+		Math.min(
+			options.sourceMessageCount ??
+				inferCompactionSourceBoundary(compactedMessages, canonicalMessages),
+			canonicalMessages.length,
+		),
+	);
+	// The boundary prefix is the canonical history AS IT WAS at the boundary.
+	// It is a prefix of the growing canonical history, so the derivation is
+	// stable across every continuation.
+	const ledger = extractVerifiedToolOutcomes(
+		canonicalMessages.slice(0, boundaryCount),
+	);
 	const summaryIndex = compactedMessages.findIndex(
 		(message) =>
 			(message.metadata as { kind?: string } | undefined)?.kind ===

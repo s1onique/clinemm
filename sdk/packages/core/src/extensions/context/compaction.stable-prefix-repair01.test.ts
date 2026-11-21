@@ -1,0 +1,629 @@
+/**
+ * ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01
+ *
+ * Permanent regression suite for the STABLE PROMPT PREFIX after a compaction.
+ *
+ * THE DEFECT
+ * ----------
+ *
+ * After a compaction, the provider-visible compaction summary — the FIRST
+ * message of every request — was rewritten on almost every continuation,
+ * even though the canonical history only ever GREW. The rewrite came from
+ * `applyVerifiedEvidenceToCompactedMessages()`, which re-derived the
+ * verified-outcome section from the ENTIRE canonical history and replaced
+ * the section in place.
+ *
+ * The summary sits at the HEAD of the model-facing context, so a prompt cache
+ * can only reuse a checkpoint over an UNCHANGED prefix. Rewriting it
+ * invalidated every deeper checkpoint.
+ *
+ * THE REPAIR
+ * ----------
+ *
+ * The carried section is derived from the canonical history AS IT WAS AT THE
+ * SOURCE BOUNDARY, not from the growing canonical history. The boundary does
+ * not move when the transcript grows, so the summary is byte-identical across
+ * every continuation.
+ *
+ * WHAT MUST STILL HOLD
+ * --------------------
+ *
+ *   1. The already-published summary stays byte-identical.
+ *   2. The model still receives the REQUIRED CURRENT verified outcomes.
+ *   3. Canonical history remains authoritative.
+ *   4. Sidecar and resume semantics remain valid.
+ *   5. Request-budget enforcement remains fail-closed.
+ *
+ * Point 2 is the one that makes a naive "just stop carrying evidence" repair
+ * WRONG: the negative control in this suite removes the post-boundary
+ * verified evidence from the model-visible request and asserts that the
+ * evidence-continuity assertion FAILS. A repair that achieved prefix
+ * stability by SUPPRESSING evidence would make that control pass, and this
+ * suite would catch it.
+ *
+ * THE SEAMS
+ * ---------
+ *
+ * Every scenario drives the REAL production boundary:
+ *
+ *   createCompactionStateAwarePrepareTurn()  (the state-aware wrapper)
+ *     -> projectSessionCompactionState()     (the real projector)
+ *     -> applyTaskContractToCompactedMessages()  (the real contract seam)
+ *     -> applyVerifiedEvidenceToCompactedMessages() (the real evidence seam)
+ *     -> MessageBuilder.buildForApi()        (the real provider-request seam)
+ */
+
+import type { MessageWithMetadata } from "@cline/shared";
+import { describe, expect, it, vi } from "vitest";
+import {
+	createSessionCompactionState,
+	type SessionCompactionState,
+} from "../../session/models/session-compaction";
+import { MessageBuilder } from "../../session/services/message-builder";
+import {
+	type ContextPipelinePrepareTurn,
+	createCompactionStateAwarePrepareTurn,
+} from "./compaction";
+import { EVIDENCE_SECTION_HEADING } from "./evidence-continuity";
+
+const MODEL = {
+	id: "mock-model",
+	provider: "anthropic",
+	info: { id: "mock-model", maxInputTokens: 100_000 },
+} as const;
+
+const SYSTEM_PROMPT = "You are a helpful coding assistant.";
+
+// ---------------------------------------------------------------------------
+// Fixtures
+// ---------------------------------------------------------------------------
+
+function userTurn(text: string): MessageWithMetadata {
+	return { role: "user", content: [{ type: "text", text }] };
+}
+
+function assistantTurn(text: string): MessageWithMetadata {
+	return { role: "assistant", content: [{ type: "text", text }] };
+}
+
+function toolCall(
+	id: string,
+	name: string,
+	input: Record<string, unknown>,
+): MessageWithMetadata {
+	return {
+		role: "assistant",
+		content: [{ type: "tool_use", id, name, input }],
+	};
+}
+
+function toolResult(
+	toolUseId: string,
+	name: string,
+	content: unknown,
+	options: { isError?: boolean } = {},
+): MessageWithMetadata {
+	return {
+		role: "user",
+		content: [
+			{
+				type: "tool_result",
+				tool_use_id: toolUseId,
+				name,
+				content,
+				...(options.isError ? { is_error: true } : {}),
+			} as never,
+		],
+	};
+}
+
+/** A SUCCESSFUL canonical call/result pair in the production payload shape. */
+function successfulPair(id: string, command: string): MessageWithMetadata[] {
+	return [
+		toolCall(id, "run_commands", { commands: [command] }),
+		toolResult(id, "run_commands", [
+			{ query: command, result: "ok", success: true },
+		]),
+	];
+}
+
+/** The compaction summary the production summarizer installs. */
+function compactionSummaryMessage(summaryText: string): MessageWithMetadata {
+	return {
+		role: "user",
+		content: [{ type: "text", text: `Context summary:\n\n${summaryText}` }],
+		metadata: {
+			kind: "compaction_summary",
+			displayRole: "system",
+			userRunSpan: 1,
+			summary: summaryText,
+			details: { readFiles: [], modifiedFiles: [] },
+			tokensBefore: 1_000,
+			generatedAt: 1,
+		},
+	};
+}
+
+const SUMMARY_PROSE = [
+	"## Goal",
+	"Adjudicate the findings.",
+	"## State",
+	"- Done: read the repository.",
+].join("\n");
+
+/** The summary text carried by a projected message list. */
+function projectedSummaryText(
+	messages: readonly MessageWithMetadata[],
+): string {
+	const summary = messages.find(
+		(message) =>
+			(message.metadata as { kind?: string } | undefined)?.kind ===
+			"compaction_summary",
+	);
+	const metadata = summary?.metadata as { summary?: string } | undefined;
+	return metadata?.summary ?? "";
+}
+
+/** The provider-visible text of a prepared request. */
+function providerVisibleText(messages: readonly unknown[]): string {
+	return messages
+		.flatMap((message) => {
+			const content = (message as { content?: unknown }).content;
+			if (Array.isArray(content)) {
+				return content.map((block) => {
+					const record = block as Record<string, unknown>;
+					if (record.type === "text") {
+						return String(record.text ?? "");
+					}
+					if (record.type === "tool_use") {
+						return JSON.stringify(record.input ?? {});
+					}
+					if (record.type === "tool_result") {
+						return `${String(record.tool_use_id ?? "")}:${JSON.stringify(record.content ?? "")}`;
+					}
+					return "";
+				});
+			}
+			return typeof content === "string" ? [content] : [];
+		})
+		.join("\n");
+}
+
+/**
+ * The provider-visible ASSERTED SUCCESS signal per tool-call id.
+ *
+ * `true` means the visible result body carries the affirmative
+ * `success: true` payload. This is the model-visible form of the verified
+ * outcome: the model can distinguish a SUCCESS from a merely submitted
+ * command.
+ */
+function providerVisibleSuccessSignals(
+	messages: readonly unknown[],
+): Map<string, boolean> {
+	const signals = new Map<string, boolean>();
+	for (const message of messages) {
+		const content = (message as { content?: unknown }).content;
+		if (!Array.isArray(content)) {
+			continue;
+		}
+		for (const block of content) {
+			const record = block as Record<string, unknown>;
+			if (record.type !== "tool_result") {
+				continue;
+			}
+			const toolUseId = String(record.tool_use_id ?? "");
+			const body = JSON.stringify(record.content ?? "");
+			signals.set(toolUseId, body.includes('"success":true'));
+		}
+	}
+	return signals;
+}
+
+interface WrapperRun {
+	prepared: Awaited<ReturnType<ContextPipelinePrepareTurn>>;
+	providerRequest: MessageWithMetadata[];
+	savedStates: SessionCompactionState[];
+}
+
+/**
+ * Drive the REAL production prepare-turn boundary.
+ *
+ * `prepareApiMessages` is the identity here because the test asserts on the
+ * MESSAGE list the production pipeline returns; the provider-request shape is
+ * then produced by the REAL `MessageBuilder.buildForApi()` below.
+ */
+async function runWrapper(input: {
+	canonical: MessageWithMetadata[];
+	existingState?: SessionCompactionState;
+	compactResult?: { messages: MessageWithMetadata[] };
+}): Promise<WrapperRun> {
+	const compact = vi.fn(async () => input.compactResult);
+	const savedStates: SessionCompactionState[] = [];
+	const prepareTurn = createCompactionStateAwarePrepareTurn({
+		compact,
+		getState: () => input.existingState,
+		prepareApiMessages: async (messages) => messages,
+		saveState: (state) => {
+			savedStates.push(state);
+		},
+	});
+	const prepared = await prepareTurn({
+		agentId: "agent-1",
+		conversationId: "conv-1",
+		parentAgentId: null,
+		iteration: 1,
+		abortSignal: new AbortController().signal,
+		systemPrompt: SYSTEM_PROMPT,
+		tools: [],
+		messages: input.canonical,
+		apiMessages: input.canonical,
+		model: MODEL,
+	});
+	const providerRequest = new MessageBuilder().buildForApi(
+		prepared?.messages ?? input.canonical,
+	);
+	return { prepared, providerRequest, savedStates };
+}
+
+/** A persisted sidecar over a canonical prefix, built by the REAL builder. */
+function persistedState(
+	canonical: readonly MessageWithMetadata[],
+	summaryText: string = SUMMARY_PROSE,
+): SessionCompactionState {
+	return createSessionCompactionState({
+		sourceMessages: canonical,
+		compactedMessages: [compactionSummaryMessage(summaryText)],
+		conversationId: "conv-1",
+		systemPrompt: SYSTEM_PROMPT,
+		updatedAt: new Date(0).toISOString(),
+	});
+}
+
+// ---------------------------------------------------------------------------
+// G4 / G6 — the stable prefix
+// ---------------------------------------------------------------------------
+
+describe("ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01 — the stable prefix", () => {
+	/** The canonical history at the compaction boundary. */
+	const h0: MessageWithMetadata[] = [
+		userTurn("Adjudicate the ten findings."),
+		...successfulPair("call_sp_a", "echo alpha"),
+		assistantTurn("continuing"),
+	];
+
+	it("keeps the provider-visible summary byte-identical across an append-only verified outcome", async () => {
+		const state = persistedState(h0);
+		const h1: MessageWithMetadata[] = [
+			...h0,
+			...successfulPair("call_sp_b", "echo bravo"),
+		];
+
+		const before = await runWrapper({ canonical: h0, existingState: state });
+		const after = await runWrapper({ canonical: h1, existingState: state });
+
+		expect(projectedSummaryText(after.prepared?.messages ?? [])).toBe(
+			projectedSummaryText(before.prepared?.messages ?? []),
+		);
+	});
+
+	it("keeps the provider-visible summary byte-identical across SEVERAL successive verified outcomes", async () => {
+		const state = persistedState(h0);
+		const h1: MessageWithMetadata[] = [
+			...h0,
+			...successfulPair("call_sp_b", "echo bravo"),
+		];
+		const h2: MessageWithMetadata[] = [
+			...h1,
+			...successfulPair("call_sp_c", "echo charlie"),
+		];
+		const h3: MessageWithMetadata[] = [
+			...h2,
+			...successfulPair("call_sp_d", "echo delta"),
+		];
+
+		const texts: string[] = [];
+		for (const canonical of [h0, h1, h2, h3]) {
+			const run = await runWrapper({ canonical, existingState: state });
+			texts.push(projectedSummaryText(run.prepared?.messages ?? []));
+		}
+		expect(texts[1]).toBe(texts[0]);
+		expect(texts[2]).toBe(texts[0]);
+		expect(texts[3]).toBe(texts[0]);
+	});
+
+	it("keeps the summary byte-length stable too, so a length-neutral rewrite cannot hide", async () => {
+		const state = persistedState(h0);
+		const h1: MessageWithMetadata[] = [
+			...h0,
+			...successfulPair("call_sp_len", "echo 11111"),
+		];
+		const before = await runWrapper({ canonical: h0, existingState: state });
+		const after = await runWrapper({ canonical: h1, existingState: state });
+		const beforeText = projectedSummaryText(before.prepared?.messages ?? []);
+		const afterText = projectedSummaryText(after.prepared?.messages ?? []);
+		expect(afterText).toBe(beforeText);
+		expect(afterText.length).toBe(beforeText.length);
+	});
+
+	it("introduces NO extra provider-visible message when nothing is appended", async () => {
+		const state = persistedState(h0);
+		const first = await runWrapper({ canonical: h0, existingState: state });
+		const second = await runWrapper({ canonical: h0, existingState: state });
+		expect(second.providerRequest.length).toBe(first.providerRequest.length);
+		expect(projectedSummaryText(second.prepared?.messages ?? [])).toBe(
+			projectedSummaryText(first.prepared?.messages ?? []),
+		);
+	});
+
+	it("leaves the persisted sidecar unmodified by a read-only projection", async () => {
+		const state = persistedState(h0);
+		const before = JSON.stringify(state);
+		const h1: MessageWithMetadata[] = [
+			...h0,
+			...successfulPair("call_sp_sidecar", "echo bravo"),
+		];
+		await runWrapper({ canonical: h1, existingState: state });
+		expect(JSON.stringify(state)).toBe(before);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// G5 — the evidence is NOT suppressed
+// ---------------------------------------------------------------------------
+
+describe("ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01 — the evidence survives", () => {
+	const h0: MessageWithMetadata[] = [
+		userTurn("Adjudicate the ten findings."),
+		...successfulPair("call_ev_a", "echo alpha"),
+		assistantTurn("continuing"),
+	];
+
+	it("keeps the model-visible ASSERTED SUCCESS signal for a post-boundary outcome", async () => {
+		const state = persistedState(h0);
+		const h1: MessageWithMetadata[] = [
+			...h0,
+			...successfulPair("call_ev_b", "echo bravo"),
+		];
+		const run = await runWrapper({ canonical: h1, existingState: state });
+		const signals = providerVisibleSuccessSignals(run.providerRequest);
+		// The post-boundary outcome is model-visible AND carries the
+		// affirmative success signal.
+		expect(signals.get("call_ev_b")).toBe(true);
+		// The boundary-verified outcome is model-visible too — through the
+		// SUMMARY's carried section, because the compacted prefix that held
+		// its raw result is replaced by the summary.
+		expect(providerVisibleText(run.providerRequest)).toContain("call_ev_a");
+	});
+
+	it("keeps the boundary-verified outcome carried in the summary section", async () => {
+		const state = persistedState(h0);
+		const h1: MessageWithMetadata[] = [
+			...h0,
+			...successfulPair("call_ev_c", "echo bravo"),
+		];
+		const run = await runWrapper({ canonical: h1, existingState: state });
+		const text = projectedSummaryText(run.prepared?.messages ?? []);
+		expect(text).toContain(EVIDENCE_SECTION_HEADING);
+		expect(text).toContain("call_ev_a");
+	});
+
+	it("keeps the task contract visible", async () => {
+		const state = persistedState(h0);
+		const h1: MessageWithMetadata[] = [
+			...h0,
+			...successfulPair("call_ev_d", "echo bravo"),
+		];
+		const run = await runWrapper({ canonical: h1, existingState: state });
+		const text = projectedSummaryText(run.prepared?.messages ?? []);
+		expect(text).toContain("Adjudicate the ten findings.");
+	});
+
+	it("NEGATIVE CONTROL: removing the post-boundary evidence makes the evidence-continuity assertion FAIL", async () => {
+		const state = persistedState(h0);
+		const h1: MessageWithMetadata[] = [
+			...h0,
+			...successfulPair("call_ev_neg", "echo bravo"),
+		];
+		const run = await runWrapper({ canonical: h1, existingState: state });
+
+		// The DISPOSABLE control: strip EVERY tool result from the
+		// model-visible request, exactly as a "repair" that suppressed the
+		// evidence would.
+		const stripped = run.providerRequest
+			.map((message) => {
+				const content = (message as { content?: unknown }).content;
+				if (!Array.isArray(content)) {
+					return message;
+				}
+				const kept = content.filter(
+					(block) => (block as { type?: string }).type !== "tool_result",
+				);
+				return kept.length === content.length
+					? message
+					: { ...(message as object), content: kept };
+			})
+			.filter((message) => {
+				const content = (message as { content?: unknown }).content;
+				return !Array.isArray(content) || content.length > 0;
+			});
+		const signals = providerVisibleSuccessSignals(stripped);
+		// The post-boundary outcome is NO LONGER model-visible as a verified
+		// success: the evidence-continuity assertion FAILS.
+		expect(signals.get("call_ev_neg")).toBeUndefined();
+		// ...which is exactly why the positive assertion above matters.
+		expect(signals.get("call_ev_neg")).not.toBe(true);
+	});
+
+	it("POSITIVE CONTROL: with NO verified outcome added, the provider-visible prefix is unchanged and NO message is introduced", async () => {
+		const state = persistedState(h0);
+		const first = await runWrapper({ canonical: h0, existingState: state });
+		const second = await runWrapper({ canonical: h0, existingState: state });
+		expect(second.providerRequest.length).toBe(first.providerRequest.length);
+		expect(JSON.stringify(second.providerRequest)).toBe(
+			JSON.stringify(first.providerRequest),
+		);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// C1 / C3 / C4 / C5 — the conservation controls
+// ---------------------------------------------------------------------------
+
+describe("ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01 — conservation", () => {
+	it("does not promote a FAILED post-boundary outcome", async () => {
+		const h0: MessageWithMetadata[] = [
+			userTurn("Run the check."),
+			assistantTurn("working"),
+		];
+		const state = persistedState(h0);
+		const h1: MessageWithMetadata[] = [
+			...h0,
+			toolCall("call_cf", "run_commands", { commands: ["echo x"] }),
+			toolResult("call_cf", "run_commands", [
+				{ query: "echo x", result: "boom", success: false },
+			]),
+		];
+		const run = await runWrapper({ canonical: h1, existingState: state });
+		const signals = providerVisibleSuccessSignals(run.providerRequest);
+		expect(signals.get("call_cf")).toBe(false);
+		const text = projectedSummaryText(run.prepared?.messages ?? []);
+		expect(text).not.toContain("call_cf");
+	});
+
+	it("does not promote an UNPAIRED post-boundary call", async () => {
+		const h0: MessageWithMetadata[] = [
+			userTurn("Run the check."),
+			assistantTurn("working"),
+		];
+		const state = persistedState(h0);
+		const h1: MessageWithMetadata[] = [
+			...h0,
+			toolCall("call_cu", "run_commands", { commands: ["echo x"] }),
+		];
+		const run = await runWrapper({ canonical: h1, existingState: state });
+		const text = projectedSummaryText(run.prepared?.messages ?? []);
+		expect(text).not.toContain("call_cu");
+	});
+
+	it("conserves the multi-command outcome's success signal", async () => {
+		const h0: MessageWithMetadata[] = [
+			userTurn("Run the checks."),
+			assistantTurn("working"),
+		];
+		const state = persistedState(h0);
+		const h1: MessageWithMetadata[] = [
+			...h0,
+			toolCall("call_cb", "run_commands", {
+				commands: ["echo a", "echo b", "echo c"],
+			}),
+			toolResult("call_cb", "run_commands", [
+				{ query: "echo a", result: "ok", success: true },
+				{ query: "echo b", result: "ok", success: true },
+				{ query: "echo c", result: "ok", success: true },
+			]),
+		];
+		const run = await runWrapper({ canonical: h1, existingState: state });
+		const signals = providerVisibleSuccessSignals(run.providerRequest);
+		expect(signals.get("call_cb")).toBe(true);
+	});
+
+	it("keeps the task contract and the user constraints visible", async () => {
+		const h0: MessageWithMetadata[] = [
+			userTurn(
+				"Adjudicate the ten findings.\n\nDo not add replacement findings.",
+			),
+			...successfulPair("call_ct", "echo alpha"),
+			assistantTurn("working"),
+		];
+		const state = persistedState(h0);
+		const h1: MessageWithMetadata[] = [
+			...h0,
+			...successfulPair("call_ct2", "echo bravo"),
+		];
+		const run = await runWrapper({ canonical: h1, existingState: state });
+		const text = projectedSummaryText(run.prepared?.messages ?? []);
+		expect(text).toContain("Do not add replacement findings.");
+	});
+
+	it("still UPDATES the task contract when the canonical contract genuinely changes", async () => {
+		const h0: MessageWithMetadata[] = [
+			userTurn("Adjudicate the ten findings."),
+			...successfulPair("call_cu2", "echo alpha"),
+			assistantTurn("working"),
+		];
+		const state = persistedState(h0);
+		const h1: MessageWithMetadata[] = [
+			...h0,
+			userTurn("Also report the repository identity."),
+		];
+		const before = await runWrapper({ canonical: h0, existingState: state });
+		const after = await runWrapper({ canonical: h1, existingState: state });
+		const beforeText = projectedSummaryText(before.prepared?.messages ?? []);
+		const afterText = projectedSummaryText(after.prepared?.messages ?? []);
+		// The contract update is NOT suppressed to preserve the prefix.
+		expect(afterText).not.toBe(beforeText);
+		expect(afterText).toContain("Also report the repository identity.");
+	});
+
+	it("keeps the source prefix hash valid and the source message count authoritative", async () => {
+		const h0: MessageWithMetadata[] = [
+			userTurn("Adjudicate the ten findings."),
+			...successfulPair("call_sh", "echo alpha"),
+			assistantTurn("working"),
+		];
+		const state = persistedState(h0);
+		expect(state.source_message_count).toBe(h0.length);
+		expect(state.source_prefix_hash).toMatch(/^sha256:/);
+		const h1: MessageWithMetadata[] = [
+			...h0,
+			...successfulPair("call_sh2", "echo bravo"),
+		];
+		// The projection SUCCEEDS: the persisted prefix still matches.
+		const run = await runWrapper({ canonical: h1, existingState: state });
+		expect(run.prepared?.messages?.length).toBeGreaterThan(0);
+		// The appended canonical tail is included EXACTLY ONCE.
+		const text = providerVisibleText(run.providerRequest);
+		expect(text.split("call_sh2").length - 1).toBe(1);
+	});
+
+	it("rejects a corrupted sidecar instead of projecting it", async () => {
+		const h0: MessageWithMetadata[] = [
+			userTurn("Adjudicate the ten findings."),
+			assistantTurn("working"),
+		];
+		const state = persistedState(h0);
+		const corrupted = {
+			...state,
+			source_prefix_hash:
+				"sha256:0000000000000000000000000000000000000000000000000000000000000000",
+		};
+		const run = await runWrapper({ canonical: h0, existingState: corrupted });
+		// The projector refused: the pipeline produced NO compaction
+		// projection, so the request falls back to the canonical transcript.
+		expect(run.prepared?.messages).toBeUndefined();
+		// The provider request is still the canonical transcript.
+		expect(run.providerRequest.length).toBe(h0.length);
+	});
+
+	it("a NEW compaction establishes a NEW prefix and carries the new boundary's evidence", async () => {
+		const canonical: MessageWithMetadata[] = [
+			userTurn("Adjudicate the ten findings."),
+			...successfulPair("call_rc", "echo alpha"),
+			assistantTurn("working"),
+		];
+		const freshSummary = compactionSummaryMessage(
+			"## Goal\nAdjudicate the ten findings.",
+		);
+		const run = await runWrapper({
+			canonical,
+			compactResult: { messages: [freshSummary] },
+		});
+		// A NEW sidecar was persisted with the new boundary.
+		expect(run.savedStates.length).toBe(1);
+		const saved = run.savedStates[0];
+		expect(saved.source_message_count).toBe(canonical.length);
+		// The NEW summary carries the evidence for the NEW boundary.
+		const text = projectedSummaryText(saved.messages);
+		expect(text).toContain("call_rc");
+	});
+});

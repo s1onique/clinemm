@@ -1583,9 +1583,19 @@ export function createCompactionStateAwarePrepareTurn(input: {
 				// It is applied AFTER the task contract so the two
 				// carry-forwards compose without either overwriting the
 				// other's section.
+				//
+				// ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01: this is PHASE
+				// A — a NEW COMPACTION. The summary is a fresh lossy projection
+				// of the canonical history, and its boundary is the whole
+				// canonical history at this moment. The section is therefore
+				// derived from the FULL canonical history, which is the
+				// explicit boundary the new sidecar will be persisted with
+				// (`createSessionCompactionState` uses `context.messages` as its
+				// source).
 				const evidenced = applyVerifiedEvidenceToCompactedMessages(
 					contracted.messages,
 					context.messages,
+					{ sourceMessageCount: context.messages.length },
 				);
 				const contractedMessages = evidenced.messages;
 				const nextState = createSessionCompactionState({
@@ -1615,15 +1625,34 @@ export function createCompactionStateAwarePrepareTurn(input: {
 				context.messages,
 				contractBudget(projectedSystemPrompt ?? context.systemPrompt),
 			);
-			// ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-RECON01: the same
-			// provider-visible restoration for the VERIFIED tool outcomes - a
-			// historical sidecar written before this repair carries no
-			// verified-outcome section, so the projection the model receives
-			// is enriched from the canonical history. The persisted sidecar is
-			// NOT rewritten on read.
+			// ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01: the same
+			// provider-visible restoration for the VERIFIED tool outcomes, but
+			// SCOPED TO THE SIDECAR'S OWN SOURCE BOUNDARY.
+			//
+			// The persisted summary is a HISTORICAL SNAPSHOT. Re-deriving its
+			// verified-outcome section from the GROWING canonical transcript
+			// rewrote the first provider-visible message on every
+			// continuation, which invalidated every deeper prompt-cache
+			// checkpoint. The section is now derived from the canonical prefix
+			// that existed AT THE BOUNDARY, so it is byte-identical across
+			// every continuation.
+			//
+			// The evidence-continuity guarantee is preserved: every outcome
+			// verified AT the boundary stays carried (including the ones the
+			// visible tail cannot represent), a historical sidecar without the
+			// section is still enriched once, and the outcomes verified AFTER
+			// the boundary remain model-visible through the provider-visible
+			// canonical tail, whose `tool_result` block carries the canonical
+			// tool-call identity, the tool name and the affirmative success
+			// payload. The persisted sidecar is NOT rewritten on read.
+			//
+			// The boundary is the persisted sidecar's `source_message_count`.
+			// It is AUTHORITATIVE here: the wrapper holds the sidecar, so the
+			// boundary never has to be inferred.
 			const restoredWithEvidence = applyVerifiedEvidenceToCompactedMessages(
 				restored.messages,
 				context.messages,
+				{ sourceMessageCount: existingState.source_message_count },
 			);
 			return publishWorkingContextEstimate(
 				restoredWithEvidence.messages,
@@ -1647,9 +1676,17 @@ export function createCompactionStateAwarePrepareTurn(input: {
 			// VERIFIED tool outcomes forward from the CANONICAL history into the
 			// freshly produced compaction summary, before persistence and
 			// before provider preparation.
+			//
+			// ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01: this is PHASE A
+			// — a NEW COMPACTION. The summary is a fresh lossy projection of
+			// the canonical history and its boundary is the whole canonical
+			// history at this moment, so the section is derived from the FULL
+			// canonical history — the explicit boundary the new sidecar will be
+			// persisted with.
 			const evidenced = applyVerifiedEvidenceToCompactedMessages(
 				contracted.messages,
 				context.messages,
+				{ sourceMessageCount: context.messages.length },
 			);
 			const contractedMessages = evidenced.messages;
 			const nextState = createSessionCompactionState({
