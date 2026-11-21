@@ -2,6 +2,14 @@
 
 **Verdict:** `PASS_STABLE_PREFIX_REPAIR`
 
+> **CORRECTION02 note.** The CORRECTION01 review returned
+> `HALT_CANONICAL_BOUNDARY_INDEX_MISMATCH` with one new P0 — a canonical
+> boundary count applied to an unfiltered array — which was confirmed,
+> reproduced against the real seams and fixed. The principal verdict is
+> unchanged because the P0 was a defect in the CORRECTION01 seam, not in the
+> original repair, and the original RED witness, the evidence-conservation
+> guarantee and the budget guarantees are all intact after the fix.
+
 **Entry HEAD:** `9117f13ae7d643373c56eeedc30da661fc790b08`
 **Subject HEAD:** `9f57bc84d98f3439a0d70e4bf74300efef6564cd`
 
@@ -13,24 +21,33 @@
 RED_REPRODUCED:               YES — at ENTRY_HEAD, unmodified witness, EXIT 1
 STABLE_PREFIX_GREEN:          YES — same witness, same assertion, EXIT 0
 CANONICAL_EVIDENCE_CONSERVED: YES — boundary outcomes carried in the summary section;
-                               post-boundary outcomes model-visible in the canonical
-                               tail with the affirmative success signal; negative control
-                               proves the assertion fails when they are removed
-TASK_CONTRACT_CONSERVED:      YES — unchanged seam; a genuine contract change still
-                               updates the summary
-SIDECAR_RESUME_CONSERVED:     YES — source_prefix_hash, source_message_count and the
-                               boundary identity untouched; persisted sidecar not rewritten
-                               on read; invalid sidecar still rejected
-RECOMPACTION_CONSERVED:       YES — Phase A derives the section from the new boundary;
-                               the new sidecar binds to the correct canonical source
-BUDGET_SAFETY:                YES — the FINAL budget guard at the provider-dispatch
-                               seam (`agent-runtime.ts`,
-                               `assertProviderRequestWithinBudget()`) is unchanged and
-                               fails closed before dispatch. The repair adds no
-                               model-visible content and no message.
+                                post-boundary outcomes model-visible in the canonical
+                                tail with the affirmative success signal; negative control
+                                proves the assertion fails when they are removed.
+                                (CORRECTION02: the boundary ledger's SOURCE COLLECTION
+                                was the raw list while the boundary COUNT was canonical,
+                                so a display-only message could drop a verified outcome
+                                from the section — measured `carriedOutcomeCount: 0`,
+                                `EVIDENCE LOST`, in both Phase A and Phase B. FIXED: the
+                                canonical filter is applied BEFORE the slice, so the count
+                                and the slice operate over the identical collection.)
+BUDGET_SAFETY:                YES — two DISTINCT fail-closed guarantees.
+                               PERSISTENCE safety: the compaction-side budget
+                               projection, which runs before the sidecar is written.
+                               DISPATCH safety: the FINAL provider-request guard at
+                               the dispatch seam (`agent-runtime.ts`,
+                               `assertProviderRequestWithinBudget()`), which measures
+                               the provider-visible projection of the FINAL messages
+                               after every `beforeModel` mutation and fails closed
+                               before any provider request leaves the process. The
+                               repair adds no model-visible content and no message.
                                (CORRECTION01: the earlier "can only REDUCE" argument
                                was WITHDRAWN — the rolling-12 window means a
-                               boundary-scoped ledger is NOT always a subset.)
+                               boundary-scoped ledger is NOT always a subset.
+                               CORRECTION02: the earlier "before any sidecar write"
+                               ordering claim was WRONG — the compaction path calls
+                               `saveState` internally, so the two guarantees are
+                               stated separately above.)
 PROVIDER_SEMANTIC_DELTA:      The provider-visible request gains NO message and NO
                                field. It LOSES the redundant re-derivation of the
                                post-boundary verified outcomes from the early summary.
@@ -38,7 +55,14 @@ PROVIDER_SEMANTIC_DELTA:      The provider-visible request gains NO message and 
                                the canonical tail instead of a duplicated summary
                                section.
 SOURCE_HEAD:                  9117f13ae7d643373c56eeedc30da661fc790b08
-FINAL_HEAD:                   <recorded-after-the-evidence-commit>
+SUBJECT_HEAD:                 9f57bc84d98f3439a0d70e4bf74300efef6564cd
+CORRECTION_HEAD:              a9bf4fc8be637a17d11b9fbb0338e4774cd98b56
+CORRECTION02_HEAD:            b0bf8fcb13b97d4f7ada75496a30d76a2b314bfd
+FINAL_HEAD:                   b0bf8fcb13b97d4f7ada75496a30d76a2b314bfd
+                              (the terminal PRODUCTION commit; the documentation
+                              commits that carry the artifact package and this
+                              manifest follow it and change no production module
+                              and no test)
 LIVE_STRATA_CACHE_EFFECT:     NOT_EXECUTED
 ```
 
@@ -51,7 +75,9 @@ LIVE_STRATA_CACHE_EFFECT:     NOT_EXECUTED
 | The summary churns across an append-only continuation at ENTRY_HEAD | **OBSERVED** | the original RED witness, unmodified, EXIT 1, with the exact one-line diff |
 | The producer is the verified-evidence restoration | **ESTABLISHED** | inherited from the predecessor (`EVIDENCE_RESTORATION_CAUSAL`), and re-isolated here |
 | The canonical tail already represents every post-boundary verified outcome | **ESTABLISHED** (offline, real seams) | `tail-sufficiency-matrix.json`: 12 scenarios (A–L), 12/12 `postBoundarySufficient: true` |
-| The repair stabilises the summary without suppressing evidence | **ESTABLISHED** (offline, real seams) | the RED witness GREEN + the new suite's 18 tests, including the negative control |
+| The repair stabilises the summary without suppressing evidence | **ESTABLISHED** (offline, real seams) | the RED witness GREEN + the new suite's 28 tests, including the negative control |
+| A display-only message cannot drop a verified outcome from the boundary section | **ESTABLISHED** (offline, real seams) | CORRECTION02: the P0 reproduced (`carriedOutcomeCount: 0`, `EVIDENCE LOST`) and the fix is proven to be a true discriminator (revert → 3 failed / 23 passed; apply → 26 passed) |
+| The boundary inference is authoritative for evidence conservation | **NOT ESTABLISHED — CLAIM WITHDRAWN** | CORRECTION02: measured, an under-estimated boundary can OMIT a boundary outcome (the section carried zero). The inference is safe for FABRICATION but not for OMISSION; the production path always passes the authoritative boundary |
 | The repair is fail-closed on budget | **ESTABLISHED** | the unchanged budget-authority suite passes, and the final dispatch-seam guard is unchanged and fail-closed. CORRECTION01: the "the measured request can only shrink" argument was WITHDRAWN as mathematically false (the rolling-12 window means a boundary-scoped ledger can render LARGER); the authority is the final guard, not a shrinkage property |
 | A provider retained a checkpoint at the new boundary | **NOT ESTABLISHED** | requires a live provider; out of scope for this ACT |
 

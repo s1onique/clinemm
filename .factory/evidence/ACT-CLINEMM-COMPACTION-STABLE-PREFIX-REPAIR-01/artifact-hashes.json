@@ -1,30 +1,37 @@
 {
   "act": "ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01",
   "algorithm": "sha256",
-  "note": "Non-self-referential: artifact-hashes.json does not hash itself. Regenerated after ALL CORRECTION01 content edits, so every hash matches the committed artifact bytes. `finalHead` is the ACT's terminal PRODUCTION commit; the documentation commits that carry this manifest follow it and change no production module and no test. Every SHA is recorded after its commit, never predicted.",
+  "note": "Non-self-referential: artifact-hashes.json does not hash itself. Regenerated after ALL CORRECTION02 content edits, so every hash matches the committed artifact bytes. `finalHead` is the ACT's terminal PRODUCTION commit; the documentation commits that carry this manifest follow it and change no production module and no test. Every SHA is recorded after its commit, never predicted.",
   "entryHead": "9117f13ae7d643373c56eeedc30da661fc790b08",
   "subjectHead": "9f57bc84d98f3439a0d70e4bf74300efef6564cd",
   "artifactHead": "155eb4b400d1bed95cdca03c8ea22db9e690beba",
   "reviewHandoffHead": "b5558f973fa11b1576d0746c4c98e92e7f398b4c",
   "correctionHead": "a9bf4fc8be637a17d11b9fbb0338e4774cd98b56",
-  "finalHead": "a9bf4fc8be637a17d11b9fbb0338e4774cd98b56",
+  "correction02Head": "b0bf8fcb13b97d4f7ada75496a30d76a2b314bfd",
+  "finalHead": "b0bf8fcb13b97d4f7ada75496a30d76a2b314bfd",
   "correction": "ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01-CORRECTION01",
-  "artifactCount": 14,
+  "correction02": "ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01-CORRECTION02",
+  "artifactCount": 17,
   "artifacts": [
     {
       "path": ".factory/evidence/ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01/conservation-results.md",
-      "bytes": 13205,
-      "sha256": "88050fa86031b3620f62deb4a18d473ac195915a750b49eaed5d9af2bba64cdc"
+      "bytes": 14663,
+      "sha256": "83310eba20006832ae2a0c4efca3aacf3d11a6db6d305d00bfbd50c0fd973267"
     },
     {
       "path": ".factory/evidence/ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01/correction01-receipt.txt",
-      "bytes": 10394,
-      "sha256": "72058914c177e3bea4f0cafe439394332886bd008fae2bc4a1ae08131f00a460"
+      "bytes": 10787,
+      "sha256": "c50a84fab0419ec2c1ed2c811ad19b53d96c8907f649d532e8f95bb9566fc7aa"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01/correction02-receipt.txt",
+      "bytes": 10622,
+      "sha256": "e5bdbcd9870647ee03a2abe6ddb0b72b594f82ffcd25feac7610a7421d4a853c"
     },
     {
       "path": ".factory/evidence/ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01/identity.json",
-      "bytes": 5824,
-      "sha256": "3531f5f26ad014783da59e73a2a07bbbb9ad491cab7031f9042095e71914f275"
+      "bytes": 8269,
+      "sha256": "2f73c8d1b392ac917b1c287893b2f6000b96188938d3255da686dc64f2373923"
     },
     {
       "path": ".factory/evidence/ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01/provider-prefix-comparison.json",
@@ -33,8 +40,8 @@
     },
     {
       "path": ".factory/evidence/ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01/qualification-report.md",
-      "bytes": 11659,
-      "sha256": "ff2b39423df7fd5fd5c242563b66d211ac8785ff81ed1bf887800a4a1e578eec"
+      "bytes": 15568,
+      "sha256": "ac3b15657b73160b9049e54179fdac16e1879901db4efb30a78f9e2ba85d4e23"
     },
     {
       "path": ".factory/evidence/ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01/red-green-receipt.txt",
@@ -43,13 +50,13 @@
     },
     {
       "path": ".factory/evidence/ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01/repair-contract.md",
-      "bytes": 13110,
-      "sha256": "a99c9fcdfc29d1a5e7847c36a88a0d54cab7264e8118d7a28c40bec9ae721279"
+      "bytes": 14569,
+      "sha256": "c5999a467b990c9aaad555e864a28ed71c3c315bc0612d6d8020447a6bf9ec9c"
     },
     {
       "path": ".factory/evidence/ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01/source-map.md",
-      "bytes": 10353,
-      "sha256": "5f1faaaf3f1e8a53e0f16fb8dd54300f42eb7ec90b932fd4800cad4c05096ce3"
+      "bytes": 11811,
+      "sha256": "4bc4705f3bd1f9676d4d9c1e379f508bc7e753069eb11ca030afe7d3d0b65eca"
     },
     {
       "path": ".factory/evidence/ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01/tail-sufficiency-matrix.json",
@@ -58,8 +65,8 @@
     },
     {
       "path": ".factory/evidence/ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01/test-receipts.txt",
-      "bytes": 9821,
-      "sha256": "7c380f6fbed467c4cd806c86e773999d6317e70095231cb71c52f3245ef294ec"
+      "bytes": 13746,
+      "sha256": "df208ce0595ab62cbd49a21cae6ecd537403a107785e8c8d696e1397e4567835"
     },
     {
       "path": ".factory/evidence/ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01/tool/prefix-comparison.ts",
@@ -75,6 +82,16 @@
       "path": ".factory/evidence/ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01/tool/probe-budget.ts",
       "bytes": 1923,
       "sha256": "228ebc64c7c7fff41f5c695b26d92b3537209ac7a2825552e59bf8c748d32ae3"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01/tool/probe-fallback-underestimate.ts",
+      "bytes": 3842,
+      "sha256": "8e15e267b438bf3e503b8d21b85a6105056e90ad7f430e4d7a6fe45692ece218"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01/tool/probe-index-mismatch.ts",
+      "bytes": 4620,
+      "sha256": "d5946c935b104c44b09bf524221fe5b033bbc331a4b345b1c11723ddcdb393c9"
     },
     {
       "path": ".factory/evidence/ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01/tool/tail-sufficiency.ts",
