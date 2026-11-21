@@ -37477,3 +37477,137 @@ Do NOT assume that slicing the evidence ledger at `source_message_count` handles
 Use the existing RED witness without weakening its stability assertion. Keep the installed-runtime
 performance qualification on the P40 as a SEPARATELY authorized step. No more forensic
 infrastructure, no Strata modification, and no additional review cycle unless a new P0 appears.
+
+---
+
+# ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01 — PASS_STABLE_PREFIX_REPAIR — 2026-11-21
+
+```text
+ACT_ID: ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01
+TYPE: bounded production repair
+VERDICT: PASS_STABLE_PREFIX_REPAIR
+ENTRY_HEAD: 9117f13ae7d643373c56eeedc30da661fc790b08
+SUBJECT_HEAD: 9f57bc84d98f3439a0d70e4bf74300efef6564cd
+BRANCH: main
+PRODUCTION_CODE_CHANGES: 2 files
+NEW_TEST_FILES: 1 (18 tests)
+EXISTING_TEST_MODIFICATIONS: 1 file (3 assertions INVERTED; 0 skips, 0 deletions, 0 weakenings)
+EVIDENCE: .factory/evidence/ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01/
+```
+
+## What was repaired
+
+`applyVerifiedEvidenceToCompactedMessages()` re-derived the verified-outcome section from the ENTIRE growing
+canonical history on every provider-visible restoration and replaced the section in place. The compaction
+summary is the FIRST provider-visible message of every request, so every later verified outcome rewrote the
+head of the request and invalidated every deeper prompt-cache checkpoint.
+
+The carried section is now derived from the canonical history **AS IT WAS AT THE SOURCE BOUNDARY**. The
+boundary does not move when the transcript grows, so the summary is byte-identical across every continuation.
+
+- **Phase A — a NEW compaction.** A freshly produced summary is a lossy projection and must carry the
+  verified outcomes that existed at ITS OWN boundary. The pipeline passes `context.messages.length`.
+- **Phase B — a SUBSEQUENT CONTINUATION.** The persisted summary is a historical snapshot and is not
+  rebuilt. The pipeline passes the persisted sidecar's `source_message_count`, which is authoritative.
+
+## The discriminator came first
+
+The canonical-tail sufficiency discriminator ran against the REAL production seams BEFORE any production
+code changed, for all twelve required scenarios (A–L).
+
+**Tail-only conservation is sufficient for every required class: 12/12 `postBoundarySufficient: true`.**
+
+The one case that needed care was scenario **B** (tool call before the boundary, result after it). The
+tool_use block is not in the tail, but the RESULT block carries the canonical tool-call identity in
+`tool_use_id`, so the tail is sufficient. The discriminator's first pass demanded the block and reported B
+as insufficient; it was corrected to demand the call IDENTITY — which is what the verified-success
+authority is bound to.
+
+**Design alternative 1 (tail-only conservation) was selected. Design alternative 2 was NOT built:** there
+is no second representation of the post-boundary evidence, so nothing is duplicated and nothing can
+contradict.
+
+## The repair is NOT evidence suppression
+
+Every outcome verified AT the boundary stays carried — including the ones that have fallen out of the
+visible tail, which is exactly the set the tail cannot represent. Every outcome verified AFTER the
+boundary remains model-visible through the provider-visible canonical tail, whose `tool_result` block
+carries the canonical tool-call identity, the tool name and the affirmative success payload that
+`classifyToolResultStatus()` reads. A historical sidecar written before the section existed is still
+enriched — once, and the enrichment is itself boundary-scoped, so it does not re-introduce the churn.
+
+The new suite's NEGATIVE CONTROL removes the post-boundary verified evidence from the model-visible
+request and asserts that the evidence-continuity assertion FAILS. A repair that achieved prefix stability
+by suppressing evidence would make that control pass.
+
+## The predecessor's inverted assertions
+
+`compaction.summary-churn01.test.ts` pinned the DEFECT and explicitly deferred the repair to a later ACT
+("It does NOT assert a repair. The stable-prefix repair is a SEPARATE, later ACT."). Three assertions
+asserted that the churn HAPPENED; they are INVERTED to pin the repaired behaviour. The file still has 20
+tests; nothing was weakened, skipped or deleted. The exact before/after of each is in
+`conservation-results.md`.
+
+## Gates
+
+| Gate | Result |
+|---|---|
+| G0 repository / ancestry / clean entry | PASS — expected predecessor final HEAD; all five `protected-stash-*` branches and the recovery worktree byte-identical; no `refs/stash` ever existed; no new worktree |
+| G1 canonical-tail sufficiency inventory | PASS — 12/12 |
+| G2 existing RED reproduced unmodified | PASS — EXIT 1, the exact one-line evidence diff |
+| G3 minimal production repair applied | PASS — 2 production files, 1 behavioural change |
+| G4 original RED → GREEN | PASS — same witness, same assertion, EXIT 0 |
+| G5 verified evidence remains model-visible | PASS — positive + negative + positive control |
+| G6 stable summary across multiple continuations | PASS — four successive continuations |
+| G7 cross-boundary and rolling-ledger conservation | PASS |
+| G8 task-contract and budget conservation | PASS — the contract and budget seams are UNCHANGED; a genuine contract change still updates the summary |
+| G9 sidecar / resume / re-compaction conservation | PASS |
+| G10 stale-read behaviour conserved | PASS — `message-builder.ts` unchanged |
+| G11 focused tests, typechecks, lint | PASS — 172 passed / 1 skipped focused; full package suite failure set BYTE-IDENTICAL to the pristine baseline (139 pre-existing failures, 0 contributed, 18 added passes); 44 typecheck diagnostics before and after (0 contributed); Biome clean |
+| G12 exact-head artifacts and privacy | PASS |
+
+## The quantitative qualification
+
+| Metric | Baseline | Repaired |
+|---|---|---|
+| Step-B summary fingerprint | `f7930102aa7ab8e7` — changes | `9b138b60ddcdff17` — stable |
+| Step-B summary byte length | 413 | 366 — stable |
+| Step-B provider-visible common prefix (code units) | **419** | **1001** |
+| Step-C provider-visible common prefix (code units) | **465** | **1292** |
+| Current verified outcomes visible | Yes | **Yes** |
+| Task contract visible | Yes | **Yes** |
+| Additional provider requests | 0 | **0** |
+| Effective budget respected | Yes | **Yes** |
+
+The measure is the structural common prefix in UTF-16 code units over the serialized provider-visible
+message list. It is NOT a tokenizer token offset and NOT a byte count.
+
+```text
+PREFIX_STABILITY:               measured
+EVIDENCE_CONSERVATION:          measured
+TOKEN_LEVEL_CACHE_COMPATIBILITY: unavailable unless directly verified
+LIVE_PREFILL_IMPROVEMENT:       NOT_EXECUTED
+```
+
+An increased structural common prefix establishes that ClineMM has stopped the targeted early mutation.
+It does **not** establish that Strata retained a checkpoint at that boundary. No seconds are reported as
+measured performance.
+
+## Not done (not authorized)
+
+No VSIX installation, no further Round C benchmark, no additional live inference workload, no
+Strata/PolyStrata change, no engine restart, no prompt-cache tuning, no quantization change, no new tracing
+subsystem, no provider API or wire-protocol change, no git push, no PR, no history rewrite. The existing
+prefix-forensics instrumentation was consumed, not expanded. The predecessor's history containing the
+previously committed absolute private path was NOT pushed or distributed by this ACT.
+
+## Decision
+
+**PASS_STABLE_PREFIX_REPAIR.** The successor is
+`ACT-CLINEMM-COMPACTION-STABLE-PREFIX-LIVE-QUALIFICATION-01`, which may build a provenance-bound dogfood
+VSIX, install it into the isolated ClineMM profile, use the existing prefix-forensics capture, observe one
+naturally occurring compaction and several subsequent turns, compare prompt-cache reuse with the previous
+live baseline, and measure engine-side read/reused tokens and prefill latency where available.
+
+A green source-level repair is **not** a demonstrated live performance improvement. The performance
+qualification is NOT part of this ACT.

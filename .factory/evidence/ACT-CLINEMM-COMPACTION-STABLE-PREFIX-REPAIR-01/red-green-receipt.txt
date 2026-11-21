@@ -1,0 +1,120 @@
+======================================================================
+ RED -> GREEN RECEIPT
+ ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01
+======================================================================
+
+The RED witness is the PREDECESSOR'S ORIGINAL witness. It was NOT modified,
+NOT weakened, and NOT replaced:
+  sdk/packages/core/src/extensions/context/compaction.summary-churn01.red.test.ts
+
+Its stability assertion is unchanged:
+  expect(after).toBe(before);
+
+----------------------------------------------------------------------
+BEFORE - production sources at ENTRY_HEAD
+         9117f13ae7d643373c56eeedc30da661fc790b08
+         (compaction.ts + evidence-continuity.ts restored verbatim from
+          that commit; the witness was the current, unmodified file)
+----------------------------------------------------------------------
+$ cd sdk/packages/core
+$ bun x vitest run --config vitest.red.summary-churn01.config.ts
+
+ RUN  v4.1.10 <redacted:absolute-local-path>/sdk/packages/core
+
+ ❯ src/extensions/context/compaction.summary-churn01.red.test.ts (1 test | 1 failed) 6ms
+     × FAILS: the provider-visible summary is NOT byte-stable across an append-only canonical continuation 6ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/extensions/context/compaction.summary-churn01.red.test.ts > ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01 — RED witness > FAILS: the provider-visible summary is NOT byte-stable across an append-only canonical continuation
+AssertionError: expected '## Goal\nAdjudicate the findings.\n\n…' to be '## Goal\nAdjudicate the findings.\n\n…' // Object.is equality
+
+- Expected
++ Received
+
+@@ -8,6 +8,7 @@
+  <!-- cline-task-contract:end -->
+
+  ## Verified tool outcomes (canonical record)
+  <!-- cline-evidence:begin -->
+  - run_commands (call_red_h0): succeeded — echo
++ - run_commands (call_red_h1): succeeded — echo
+  <!-- cline-evidence:end -->
+
+ ❯ src/extensions/context/compaction.summary-churn01.red.test.ts:173:17
+    171|   //
+    172|   // This assertion FAILS against the current production behaviour.
+    173|   expect(after).toBe(before);
+       |                 ^
+    174|  });
+    175| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed (1)
+   Start at  07:16:16
+   Duration  358ms (transform 228ms, setup 0ms, import 308ms, tests 6ms, environment 0ms)
+
+EXIT=1
+
+OBSERVED: the summary changes after an append-only verified outcome.
+  The stability assertion FAILS.
+  The diff is exactly the verified-outcome section gaining one line:
+    + - run_commands (call_red_h1): succeeded — echo
+  EXIT CODE: 1
+
+----------------------------------------------------------------------
+AFTER - production sources at SUBJECT_HEAD
+        9f57bc84d98f3439a0d70e4bf74300efef6564cd
+----------------------------------------------------------------------
+$ cd sdk/packages/core
+$ bun x vitest run --config vitest.red.summary-churn01.config.ts
+
+ RUN  v4.1.10 <redacted:absolute-local-path>/sdk/packages/core
+
+ ✓ src/extensions/context/compaction.summary-churn01.red.test.ts (1 test) 6ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  07:16:21
+   Duration  352ms (transform 223ms, setup 0ms, import 302ms, tests 6ms, environment 0ms)
+
+EXIT=0
+
+OBSERVED: the original summary stays byte-identical.
+  The stability assertion PASSES.
+  EXIT CODE: 0
+
+----------------------------------------------------------------------
+ THE SAME WITNESS, THE SAME ASSERTION, THE SAME CONFIGURATION.
+----------------------------------------------------------------------
+
+THE REPAIR IS NOT EVIDENCE SUPPRESSION.
+
+A passing stability assertion alone is insufficient, so the repair suite
+additionally establishes continued verified-evidence visibility, with an
+explicit NEGATIVE CONTROL and an explicit POSITIVE CONTROL:
+
+  NEGATIVE CONTROL (compaction.stable-prefix-repair01.test.ts):
+    removes every tool_result from the model-visible request - exactly
+    what a repair that SUPPRESSED the evidence would do - and asserts that
+    the evidence-continuity assertion FAILS:
+      expect(signals.get("call_ev_neg")).toBeUndefined();
+      expect(signals.get("call_ev_neg")).not.toBe(true);
+
+  POSITIVE CONTROL:
+    with NO verified outcome added, the provider-visible request is
+    byte-identical and NO message is introduced:
+      expect(second.providerRequest.length).toBe(first.providerRequest.length);
+      expect(JSON.stringify(second.providerRequest)).toBe(
+        JSON.stringify(first.providerRequest));
+
+  The positive evidence-visibility assertion (the repaired behaviour):
+      expect(signals.get("call_ev_b")).toBe(true);   // post-boundary
+      expect(providerVisibleText(run.providerRequest)).toContain("call_ev_a"); // boundary
+
+The post-boundary outcome's VERIFIED-SUCCESS signal is model-visible in
+the provider request; the boundary outcome's is carried in the summary's
+evidence section. Neither is suppressed.

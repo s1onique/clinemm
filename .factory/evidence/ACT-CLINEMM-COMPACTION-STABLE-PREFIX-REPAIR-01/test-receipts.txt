@@ -1,0 +1,130 @@
+
+  Witness file SHA-256 (identical at ENTRY_HEAD and SUBJECT_HEAD):
+    cd00db75eb5aeec9bbace8a34ded53c0431f93132f9800def5137fd730f03a56
+    sdk/packages/core/src/extensions/context/compaction.summary-churn01.red.test.ts
+  Config file SHA-256 (identical at ENTRY_HEAD and SUBJECT_HEAD):
+    4e2d30b5f16b19771be46468bfd1b532c1ce0fe4c05e68140b6f88664a326284
+    sdk/packages/core/vitest.red.summary-churn01.config.ts
+
+======================================================================
+R2 - THE NEW REPAIR SUITE
+======================================================================
+$ cd sdk/packages/core
+$ bun x vitest run --config vitest.config.ts \
+    src/extensions/context/compaction.stable-prefix-repair01.test.ts
+
+  18 tests passed, 0 failed. EXIT 0.
+  (Full suite output: R4.)
+
+======================================================================
+R3 - THE FOCUSED PRODUCTION-SEAM SUITES
+======================================================================
+$ cd sdk/packages/core
+$ bun x vitest run --config vitest.config.ts \
+    src/extensions/context/evidence-continuity.test.ts \
+    src/extensions/context/compaction.summary-churn01.test.ts \
+    src/extensions/context/compaction.stable-prefix-repair01.test.ts \
+    src/extensions/context/task-contract-conservation.test.ts \
+    src/extensions/context/task-contract-conservation.historical.test.ts \
+    src/extensions/context/task-contract-budget-authority.test.ts \
+    src/session/models/session-compaction.test.ts \
+    src/extensions/context/compaction.roundc-fidelity-recon02.test.ts
+
+  Test Files  8 passed (8)
+  Tests      172 passed | 1 skipped (173)
+  EXIT 0.
+
+  NOTE ON compaction.summary-churn01.test.ts: the predecessor's suite
+  pinned the DEFECT and explicitly deferred the repair to a later ACT.
+  Three of its assertions asserted that the churn HAPPENED; they are
+  INVERTED to pin the repaired behaviour. The file still has 20 tests;
+  no assertion was weakened, skipped or deleted. See
+  conservation-results.md for the exact before/after of each.
+
+======================================================================
+R4 - THE FULL @cline/core PACKAGE SUITE
+======================================================================
+$ cd sdk/packages/core
+$ bun x vitest run --config vitest.config.ts
+
+  PRISTINE BASELINE (at ENTRY_HEAD, before any ACT change):
+    Test Files  28 failed | 335 passed | 3 skipped (366)
+    Tests       139 failed | 5473 passed | 159 skipped (5771)
+    EXIT 1
+
+  AFTER THE REPAIR (at SUBJECT_HEAD):
+    Test Files  28 failed | 336 passed | 3 skipped (367)
+    Tests       139 failed | 5491 passed | 159 skipped (5789)
+    EXIT 1
+
+  DELTA: +18 tests, +18 passes, +1 test file. The FAILURE SET IS
+  BYTE-IDENTICAL (168 unique failing-file entries in both runs; the
+  extracted failing-file sets diff to EMPTY).
+
+  NO ACT-OWNED REGRESSION.
+
+  The 139 pre-existing failures are environment/toolchain drift in the
+  hub/transport/process suites; they are unrelated to the compaction
+  seams and are unchanged by this ACT. The predecessor reported 113
+  pre-existing package-test failures and 44 pre-existing typecheck
+  diagnostics as historical reference values; this run re-established
+  the ACTUAL baseline in the ACTUAL entry environment.
+
+======================================================================
+R5 - TYPECHECK
+======================================================================
+$ cd sdk/packages/core
+$ bun tsc -p tsconfig.dev.json --noEmit
+
+  PRISTINE BASELINE (entry production sources, ACT changes stashed):
+    44 diagnostics
+  AFTER THE REPAIR:
+    44 diagnostics
+  The two extracted diagnostic sets are IDENTICAL (they diff to EMPTY).
+  0 diagnostics contributed by this ACT.
+
+======================================================================
+R6 - LINT / FORMAT
+======================================================================
+$ bun x biome check \
+    sdk/packages/core/src/extensions/context/compaction.ts \
+    sdk/packages/core/src/extensions/context/evidence-continuity.ts \
+    sdk/packages/core/src/extensions/context/compaction.summary-churn01.test.ts \
+    sdk/packages/core/src/extensions/context/compaction.stable-prefix-repair01.test.ts
+
+  Checked 4 files. No fixes applied. EXIT 0.
+
+======================================================================
+R7 - THE DISPOSABLE EVIDENCE TOOLS
+======================================================================
+$ bun .factory/evidence/ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01/tool/tail-sufficiency.ts
+  -> tail-sufficiency-matrix.json. 12 scenarios (A-L). EXIT 0.
+$ bun .factory/evidence/ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01/tool/prefix-comparison.ts
+  -> provider-prefix-comparison.json. 4 steps (A-D) x 2 modes. EXIT 0.
+
+  Both tools live under .factory/evidence/ and are NOT part of any
+  production build, package export or runtime path.
+======================================================================
+ TEST RECEIPTS
+ ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01
+======================================================================
+
+SOURCE VERSION
+  ENTRY_HEAD    9117f13ae7d643373c56eeedc30da661fc790b08
+  SUBJECT_HEAD  9f57bc84d98f3439a0d70e4bf74300efef6564cd
+  toolchain     bun 1.4.4 / vitest 4.1.10 (node v26.3.0, darwin-arm64)
+  working tree  clean at SUBJECT_HEAD except the untracked .factory/evidence/
+                directory for THIS ACT.
+
+======================================================================
+R1 - THE ORIGINAL RED WITNESS, UNMODIFIED
+======================================================================
+$ cd sdk/packages/core
+$ bun x vitest run --config vitest.red.summary-churn01.config.ts
+
+  BEFORE (entry production sources): EXIT 1, 1 test failed.
+  AFTER  (subject production sources): EXIT 0, 1 test passed.
+  Full transcript: red-green-receipt.txt
+  Binding: the witness file is byte-identical at ENTRY_HEAD and SUBJECT_HEAD.
+
+  PASS 1 test, 0 failed.

@@ -1,0 +1,183 @@
+{
+  "act": "ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01",
+  "tool": "offline provider-prefix comparison",
+  "mode": "SYNTHETIC_REAL_SEAM",
+  "measure": "Structural common prefix in UTF-16 code units over the serialized provider-visible message list. NOT a tokenizer token offset and NOT a byte count.",
+  "limitations": [
+    "A longer structural common prefix establishes that ClineMM stopped the targeted early mutation.",
+    "It does NOT establish that Strata retained a checkpoint at that boundary.",
+    "TOKEN_LEVEL_CACHE_COMPATIBILITY is unavailable unless directly verified.",
+    "LIVE_PREFILL_IMPROVEMENT is NOT_EXECUTED."
+  ],
+  "steps": [],
+  "baseline": [
+    {
+      "id": "A",
+      "label": "persisted compaction summary established",
+      "providerVisibleMessageCount": 1,
+      "summaryByteLength": 366,
+      "summaryFingerprintSha256Prefix": "9b138b60ddcdff17",
+      "serializedLengthCodeUnits": 1002,
+      "commonPrefixWithPreviousCodeUnits": 1002,
+      "containsPostBoundaryOutcome": true,
+      "containsBoundaryOutcome": true,
+      "containsTaskContract": true
+    },
+    {
+      "id": "B",
+      "label": "first append-only verified outcome",
+      "providerVisibleMessageCount": 3,
+      "summaryByteLength": 413,
+      "summaryFingerprintSha256Prefix": "f7930102aa7ab8e7",
+      "serializedLengthCodeUnits": 1385,
+      "commonPrefixWithPreviousCodeUnits": 419,
+      "containsPostBoundaryOutcome": true,
+      "containsBoundaryOutcome": true,
+      "containsTaskContract": true
+    },
+    {
+      "id": "C",
+      "label": "second append-only verified outcome",
+      "providerVisibleMessageCount": 5,
+      "summaryByteLength": 460,
+      "summaryFingerprintSha256Prefix": "9a186d3a37bd717c",
+      "serializedLengthCodeUnits": 1772,
+      "commonPrefixWithPreviousCodeUnits": 465,
+      "containsPostBoundaryOutcome": true,
+      "containsBoundaryOutcome": true,
+      "containsTaskContract": true
+    },
+    {
+      "id": "D",
+      "label": "unchanged-history control",
+      "providerVisibleMessageCount": 5,
+      "summaryByteLength": 460,
+      "summaryFingerprintSha256Prefix": "9a186d3a37bd717c",
+      "serializedLengthCodeUnits": 1772,
+      "commonPrefixWithPreviousCodeUnits": 1772,
+      "containsPostBoundaryOutcome": true,
+      "containsBoundaryOutcome": true,
+      "containsTaskContract": true
+    }
+  ],
+  "repaired": [
+    {
+      "id": "A",
+      "label": "persisted compaction summary established",
+      "providerVisibleMessageCount": 1,
+      "summaryByteLength": 366,
+      "summaryFingerprintSha256Prefix": "9b138b60ddcdff17",
+      "serializedLengthCodeUnits": 1002,
+      "commonPrefixWithPreviousCodeUnits": 1002,
+      "containsPostBoundaryOutcome": true,
+      "containsBoundaryOutcome": true,
+      "containsTaskContract": true
+    },
+    {
+      "id": "B",
+      "label": "first append-only verified outcome",
+      "providerVisibleMessageCount": 3,
+      "summaryByteLength": 366,
+      "summaryFingerprintSha256Prefix": "9b138b60ddcdff17",
+      "serializedLengthCodeUnits": 1293,
+      "commonPrefixWithPreviousCodeUnits": 1001,
+      "containsPostBoundaryOutcome": true,
+      "containsBoundaryOutcome": true,
+      "containsTaskContract": true
+    },
+    {
+      "id": "C",
+      "label": "second append-only verified outcome",
+      "providerVisibleMessageCount": 5,
+      "summaryByteLength": 366,
+      "summaryFingerprintSha256Prefix": "9b138b60ddcdff17",
+      "serializedLengthCodeUnits": 1588,
+      "commonPrefixWithPreviousCodeUnits": 1292,
+      "containsPostBoundaryOutcome": true,
+      "containsBoundaryOutcome": true,
+      "containsTaskContract": true
+    },
+    {
+      "id": "D",
+      "label": "unchanged-history control",
+      "providerVisibleMessageCount": 5,
+      "summaryByteLength": 366,
+      "summaryFingerprintSha256Prefix": "9b138b60ddcdff17",
+      "serializedLengthCodeUnits": 1588,
+      "commonPrefixWithPreviousCodeUnits": 1588,
+      "containsPostBoundaryOutcome": true,
+      "containsBoundaryOutcome": true,
+      "containsTaskContract": true
+    }
+  ],
+  "comparison": [
+    {
+      "step": "A",
+      "label": "persisted compaction summary established",
+      "baselineSummaryFingerprint": "9b138b60ddcdff17",
+      "repairedSummaryFingerprint": "9b138b60ddcdff17",
+      "baselineSummaryByteLength": 366,
+      "repairedSummaryByteLength": 366,
+      "baselineCommonPrefixCodeUnits": 1002,
+      "repairedCommonPrefixCodeUnits": 1002,
+      "baselineCurrentVerifiedOutcomesVisible": true,
+      "repairedCurrentVerifiedOutcomesVisible": true,
+      "baselineTaskContractVisible": true,
+      "repairedTaskContractVisible": true,
+      "baselineProviderVisibleMessageCount": 1,
+      "repairedProviderVisibleMessageCount": 1,
+      "additionalProviderRequests": 0
+    },
+    {
+      "step": "B",
+      "label": "first append-only verified outcome",
+      "baselineSummaryFingerprint": "f7930102aa7ab8e7",
+      "repairedSummaryFingerprint": "9b138b60ddcdff17",
+      "baselineSummaryByteLength": 413,
+      "repairedSummaryByteLength": 366,
+      "baselineCommonPrefixCodeUnits": 419,
+      "repairedCommonPrefixCodeUnits": 1001,
+      "baselineCurrentVerifiedOutcomesVisible": true,
+      "repairedCurrentVerifiedOutcomesVisible": true,
+      "baselineTaskContractVisible": true,
+      "repairedTaskContractVisible": true,
+      "baselineProviderVisibleMessageCount": 3,
+      "repairedProviderVisibleMessageCount": 3,
+      "additionalProviderRequests": 0
+    },
+    {
+      "step": "C",
+      "label": "second append-only verified outcome",
+      "baselineSummaryFingerprint": "9a186d3a37bd717c",
+      "repairedSummaryFingerprint": "9b138b60ddcdff17",
+      "baselineSummaryByteLength": 460,
+      "repairedSummaryByteLength": 366,
+      "baselineCommonPrefixCodeUnits": 465,
+      "repairedCommonPrefixCodeUnits": 1292,
+      "baselineCurrentVerifiedOutcomesVisible": true,
+      "repairedCurrentVerifiedOutcomesVisible": true,
+      "baselineTaskContractVisible": true,
+      "repairedTaskContractVisible": true,
+      "baselineProviderVisibleMessageCount": 5,
+      "repairedProviderVisibleMessageCount": 5,
+      "additionalProviderRequests": 0
+    },
+    {
+      "step": "D",
+      "label": "unchanged-history control",
+      "baselineSummaryFingerprint": "9a186d3a37bd717c",
+      "repairedSummaryFingerprint": "9b138b60ddcdff17",
+      "baselineSummaryByteLength": 460,
+      "repairedSummaryByteLength": 366,
+      "baselineCommonPrefixCodeUnits": 1772,
+      "repairedCommonPrefixCodeUnits": 1588,
+      "baselineCurrentVerifiedOutcomesVisible": true,
+      "repairedCurrentVerifiedOutcomesVisible": true,
+      "baselineTaskContractVisible": true,
+      "repairedTaskContractVisible": true,
+      "baselineProviderVisibleMessageCount": 5,
+      "repairedProviderVisibleMessageCount": 5,
+      "additionalProviderRequests": 0
+    }
+  ]
+}

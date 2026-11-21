@@ -1,0 +1,65 @@
+{
+  "act": "ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01",
+  "type": "bounded production repair",
+  "verdict": "PASS_STABLE_PREFIX_REPAIR",
+  "repository": {
+    "remote": "git@github.com:s1onique/clinemm.git",
+    "path": "<redacted:absolute-local-path>",
+    "branch": "main",
+    "upstream": "https://github.com/cline/cline.git"
+  },
+  "heads": {
+    "entryHead": "9117f13ae7d643373c56eeedc30da661fc790b08",
+    "entryHeadMatchesExpectedPredecessorFinalHead": true,
+    "subjectHead": "9f57bc84d98f3439a0d70e4bf74300efef6564cd",
+    "finalHead": "<recorded-after-the-evidence-commit>"
+  },
+  "ancestry": {
+    "predecessorAct": "ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01",
+    "predecessorVerdict": "EVIDENCE_RESTORATION_CAUSAL",
+    "predecessorFinalHead": "9117f13ae7d643373c56eeedc30da661fc790b08",
+    "predecessorCorrectionCommits": [
+      "6c4bcf6166f2dc35d171c8df1423e3bbd0ce14c5",
+      "9e9e2955c1ced7e656ac8835dff4fdf59f5ba33d",
+      "a2cea5b5fd8b88aceabd87927e8ca5818cdc49c2",
+      "9117f13ae7d643373c56eeedc30da661fc790b08"
+    ]
+  },
+  "publication": {
+    "pushed": false,
+    "pullRequest": false,
+    "historyRewritten": false,
+    "note": "The predecessor history contains a previously committed absolute private path that was redacted at HEAD. That history was NOT pushed or distributed by this ACT, and no history rewrite was performed. Publication remains separately gated."
+  },
+  "workspace": {
+    "worktreesCreated": 0,
+    "stashesPopped": 0,
+    "stashesDropped": 0,
+    "protectedStashesUntouched": true,
+    "unrelatedDirtyFilesPreserved": true,
+    "unexpectedTrackedDirt": false,
+    "seatbeltEvidenceFileTouched": false
+  },
+  "changedPaths": {
+    "production": [
+      "sdk/packages/core/src/extensions/context/evidence-continuity.ts",
+      "sdk/packages/core/src/extensions/context/compaction.ts"
+    ],
+    "tests": [
+      "sdk/packages/core/src/extensions/context/compaction.stable-prefix-repair01.test.ts",
+      "sdk/packages/core/src/extensions/context/compaction.summary-churn01.test.ts"
+    ],
+    "evidence": [
+      ".factory/acts/ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01.md",
+      ".factory/evidence/ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01/"
+    ]
+  },
+  "privacy": {
+    "privateTranscriptsCommitted": false,
+    "rawPromptsCommitted": false,
+    "providerBodiesCommitted": false,
+    "hmacKeysCommitted": false,
+    "absoluteLocalPathsCommitted": false,
+    "fingerprintKeyRequired": "ACT_CHURN_FINGERPRINT_KEY (never committed; the committed artifacts carry only structural, non-reversible measurements)"
+  }
+}
