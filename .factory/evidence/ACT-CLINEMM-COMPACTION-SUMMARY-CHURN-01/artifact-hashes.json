@@ -17,8 +17,8 @@
   "artifacts": [
     {
       "name": ".factory/evidence/ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01/identity.json",
-      "sha256": "c7578d256825681ae00ffea36ff49bc28733d30d3336338e47da4512d420a430",
-      "bytes": 2684
+      "sha256": "b8cb876c722a07caae807673451b44c01207c08c0c27b789f6eada6b66912c93",
+      "bytes": 2893
     },
     {
       "name": ".factory/evidence/ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01/source-map.md",

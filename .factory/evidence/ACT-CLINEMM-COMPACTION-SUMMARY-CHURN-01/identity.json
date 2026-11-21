@@ -66,5 +66,10 @@
     "REPAIR_NECESSITY": "not evaluated"
   },
   "engineJoinLabel": "TEMPORAL_ONE_TO_ONE_SUPPORTED",
-  "productionDeploymentAuthorized": false
+  "productionDeploymentAuthorized": false,
+  "subjectHead": "6c4bcf6166f2dc35d171c8df1423e3bbd0ce14c5",
+  "subjectHeadNote": "Recorded AFTER the local evidence commit. The SHA was NOT predicted.",
+  "committed": true,
+  "pushed": false,
+  "pr": false
 }
