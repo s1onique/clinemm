@@ -19,7 +19,27 @@ export default defineConfig({
 	test: {
 		environment: "node",
 		include: ["src/**/*.test.ts"],
-		exclude: ["src/**/*.e2e.test.ts"],
+		exclude: [
+			"src/**/*.e2e.test.ts",
+			// ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01: the RED witness.
+			//
+			// This file asserts the CACHE-PREFIX STABILITY invariant — the
+			// invariant a prompt cache depends on. It FAILS against the
+			// current production behaviour, because
+			// `applyVerifiedEvidenceToCompactedMessages()` re-derives the
+			// verified-outcome section from the evolved canonical history on
+			// every provider-visible restoration and replaces it in place.
+			//
+			// It is deliberately EXCLUDED from the default suite and retained
+			// as an isolated receipt of the observed defect. It must not be
+			// flipped to GREEN by weakening the assertion; the repair is a
+			// SEPARATE, later ACT
+			// (ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01).
+			//
+			// The PASSING witness for the same mechanism and for the causal
+			// ablation is `compaction.summary-churn01.test.ts`.
+			"src/extensions/context/compaction.summary-churn01.red.test.ts",
+		],
 		// Process, Git, and SQLite integration coverage shares this suite with
 		// pure unit tests. Windows hosted runners regularly exceed Vitest's 5s
 		// default while starting those processes, so retain a bounded but realistic

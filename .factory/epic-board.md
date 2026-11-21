@@ -37312,3 +37312,122 @@ cacheable, and whether checkpoint retention prevents recovery. The stale-read
 policy and the engine's checkpoint placement are both left untouched — this ACT
 makes the instrumentation able to carry the evidence, and the evidence is what
 will tell us whether either of them should change.
+
+# ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01 — EVIDENCE_RESTORATION_CAUSAL — 2026-11-21
+
+```text
+ACT_ID: ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01
+TYPE: causal reproduction and ablation (no production repair authorized)
+VERDICT: EVIDENCE_RESTORATION_CAUSAL
+ENTRY_HEAD: 60432babb98729f1c6b7116c79f5709750472718   (== EXPECTED ENTRY_HEAD)
+BRANCH: main (no ACT branch created)
+PRODUCTION_CODE_CHANGES: 0
+EXISTING_TEST_MODIFICATIONS: 0   (0 skips, 0 deletions, 0 weakenings)
+EVIDENCE: .factory/evidence/ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01/
+  identity.json
+  source-map.md
+  live-transition-matrix.json
+  production-reproduction.md
+  production-reproduction.json
+  ablation-matrix.json
+  conservation-results.md
+  test-receipts.txt
+  causal-classification.md
+  artifact-hashes.json
+  tool/reproduce.ts
+  tool/probe.ts
+```
+
+**Status.** The producer of the repeated post-compaction summary mutation is
+ISOLATED and its NECESSITY is ESTABLISHED. The engine-side cache effect
+remains INFERRED, not measured.
+
+**Producer.** `applyVerifiedEvidenceToCompactedMessages()`
+(`sdk/packages/core/src/extensions/context/evidence-continuity.ts:1366`).
+It re-derives the verified-outcome ledger from the ENTIRE canonical history
+(`:1370`) and REPLACES the section inside the already-model-visible summary
+(`:1394`/`:1403`). The section sits at the TAIL, but the summary is the FIRST
+provider-visible message, so its content change invalidates every deeper
+prompt-cache checkpoint.
+
+**Task-contract restoration is NOT independently responsible.**
+
+| Status | Value |
+|---|---|
+| `LIVE_WIRE_MUTATION` | **observed** |
+| `OFFLINE_CAUSAL_MECHANISM` | **established** |
+| `ENGINE_CACHE_EFFECT` | **inferred** |
+| `REPAIR_NECESSITY` | **not evaluated** |
+
+**Live evidence (session `1795229584545_t33f9`, `openai-compatible` /
+`qwen3.8-flash-next-q2_0`).** The mutable provider-visible user message is at
+wire index 1. Across iterations 26→39 its content fingerprint changed on
+**12 of 13** adjacent transitions. The 25→26 transition is the genuine
+compaction boundary (71 → 15 messages). 30→31 is the negative control and
+did NOT change. The system prompt fingerprint and the ordered tool inventory
+were byte-stable across EVERY transition. The mutation is introduced at the
+`runtime_projection` stage and propagates byte-identically through
+`ai_sdk_prompt` to `wire_request` — `MessageBuilder.buildForApi()` is
+exonerated.
+
+**Offline reproduction (the REAL sidecar and the REAL canonical transcript).**
+H0 = canonical[0..73); H1 and H2 are append-only continuations. The persisted
+sidecar was NOT modified and no new summary was created. The change class is
+`VERIFIED_EVIDENCE_SECTION` on both transitions, with `contractChanged: false`
+and `proseChanged: false`.
+
+**The 2×2 ablation** (switches exist ONLY in the disposable offline
+experiment — NOT production flags, NOT public API):
+
+| Variant | Contract | Evidence | H0→H1 | H1→H2 |
+|---|---|---|---|---|
+| A — Original projection | OFF | OFF | no | no |
+| B — Contract only | ON | OFF | **no** | **no** |
+| C — Evidence only | OFF | ON | **yes** | **yes** |
+| D — Production composition | ON | ON | **yes** | **yes** |
+
+All four ACT necessity conditions are MET. ⇒ `EVIDENCE_RESTORATION_CAUSAL`,
+not `MULTIPLE_CAUSES`.
+
+**The RED.** `compaction.summary-churn01.red.test.ts` asserts the
+cache-prefix stability invariant and FAILS against the original behaviour,
+showing the observed mutation. It is EXCLUDED from the default suite via
+`sdk/packages/core/vitest.config.ts` and is runnable on demand with
+`bun run test:red:summary-churn01`. It is a cache-prefix stability
+counterexample, NOT a semantic correctness bug.
+
+**Conservation.** Canonical evidence, task obligations, the fail-closed budget
+guard, the sidecar identity, resume correctness and the provider serialization
+are all CONSERVED. The explicit cost of the ablation is recorded: disabling
+the evidence carry-forward would lose the verified-evidence continuity
+guarantee that ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-CORRECTION01
+established. **The repair is NOT "remove the carry-forward".**
+
+**Gates.** 20/20 passing witness tests; the RED fails as designed; the
+62-test `evidence-continuity.test.ts` unchanged. Full package suite:
+PRISTINE baseline 5,751 total / 5,476 passed / **113 failed**; AFTER 5,771 /
+5,496 / **113 failed** — **ADDED failures 0, REMOVED failures 0**. The 113
+are ENVIRONMENT failures present at the pristine entry HEAD (macOS sandbox,
+hub server suites, bash supervised startup env, checkpoint hooks, persistence
+service, path authority, composio tools). Typecheck 44 pre-existing errors,
+**0 contributed**. Biome lint **0 diagnostics**.
+
+**Cross-system join.** `TEMPORAL_ONE_TO_ONE_SUPPORTED`. The Strata server
+logs were NOT rewritten and are NOT presented as an instrumented causal
+trace. No shared cross-process request ID was independently verified. The
+observed prefill cost and the estimated recoverable prefill are
+`UNAVAILABLE_FROM_TRACE` at the per-request level; no counterfactual is
+presented as an executed speedup, and a stable prefix is stated as
+NECESSARY but NOT SUFFICIENT for a deeper checkpoint to be reusable.
+
+**Decision.** The causal discriminator is complete. The possible successor is
+`ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01`, whose proposed invariant is
+to preserve the existing compaction summary's stable provider-facing prefix
+while making newly verified canonical tool outcomes available later in the
+model-facing context, without losing evidence, ordering, task obligations,
+resume correctness or budget safety. **That is a PROPOSAL, not an
+authorized implementation; the successor design is deliberately NOT frozen.**
+
+**Not done (not authorized).** No production repair; no production module
+modified; no installed VSIX replacement; no Strata changes or service
+restarts; no new inference runs; no push; no PR; no compaction-policy change.

@@ -1,0 +1,37 @@
+
+=== FULL PACKAGE SUITE — PRISTINE BASELINE vs AFTER ===
+
+command: cd sdk/packages/core && vitest run --config vitest.config.ts
+
+PRISTINE BASELINE (entry HEAD 60432babb, this ACT's test files moved aside):
+  total tests : 5751
+  passed      : 5476
+  failed      : 113
+
+AFTER THIS ACT (same command, same tree, this ACT's files present):
+  total tests : 5771
+  passed      : 5496
+  failed      : 113
+
+ADDED failures (regressions introduced by this ACT) : 0
+REMOVED failures                                        : 0
+
+CLASSIFICATION OF THE 113 PRE-EXISTING FAILURES:
+  All 113 are ENVIRONMENT failures present at the PRISTINE entry HEAD:
+  macOS sandbox (seatbelt-availability, sandbox-backend),
+  hub server suites, bash supervised startup env, checkpoint hooks,
+  persistence service, path authority, composio tools.
+  They are IDENTICAL before and after this ACT. This ACT introduced none.
+
+NOTE: the RED witness is EXCLUDED from the default suite via
+      sdk/packages/core/vitest.config.ts, so it does not appear above.
+      It is runnable on demand with: bun run test:red:summary-churn01
+
+=== TYPECHECK ===
+command: cd sdk/packages/core && tsc -p tsconfig.dev.json --noEmit
+  pre-existing errors (pristine) : 44
+  errors contributed by this ACT  : 0
+
+=== LINT ===
+command: bunx biome lint <the four files this ACT touches>
+  diagnostics : 0

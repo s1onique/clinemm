@@ -1,0 +1,70 @@
+{
+  "schema": "cline.compaction-summary-churn.identity.v1",
+  "act": "ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01",
+  "repository": {
+    "path": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm",
+    "remote": "git@github.com:s1onique/clinemm.git",
+    "branch": "main",
+    "entryHead": "60432babb98729f1c6b7116c79f5709750472718",
+    "entryHeadIs60432babb": true,
+    "predecessorChain": "60432babb (CORRECTION05) <- 2b49d2ed0 (CORRECTION04) <- 3b1d8bb72 (CORRECTION03) <- a49bd8e5d (CORRECTION02) <- 03d887fde (CORRECTION01) <- 19b610083 <- 616c9db8a",
+    "trackedDirtAtEntry": "none (git status --short was empty at entry)",
+    "protectedStashes": "none",
+    "worktrees": [
+      "<repo> [main]",
+      "<private>/clinemm-stash-recovery-20261117 [recovery/protected-stash-20261117]",
+      "<private>/worktree-bun.<random> (detached HEAD) prunable",
+      "<private>/clinemm-m31-action-first [experiment/m31-action-first]",
+      "<private>/clinemm-m31-bounded (detached HEAD)"
+    ],
+    "worktreesNote": "Absolute paths redacted; the protected stash worktree was NOT touched."
+  },
+  "liveSession": {
+    "sessionId": "1795229584545_t33f9",
+    "provider": "openai-compatible",
+    "model": "qwen3.8-flash-next-q2_0",
+    "source": "operator-preserved private artifacts (not committed)",
+    "captureCohort": "01544f1e1a025c46",
+    "captureRecords": 135,
+    "captureStages": [
+      "runtime_projection",
+      "ai_sdk_prompt",
+      "wire_request"
+    ]
+  },
+  "artifacts": {
+    "sidecarSourceMessageCount": 73,
+    "sidecarMessageCount": 14,
+    "canonicalMessageCount": 123,
+    "canonicalTailBeyondBoundary": 50,
+    "sidecarUpdatedAt": "2026-11-21T03:01:47.318Z"
+  },
+  "tool": {
+    "probe": ".factory/evidence/ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01/tool/probe.ts",
+    "library": ".factory/evidence/ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01/tool/reproduce.ts",
+    "version": "offline-summary-churn.v1"
+  },
+  "configuration": {
+    "networkCalls": 0,
+    "providerRequestsIssued": 0,
+    "productionChanges": 0,
+    "productionModulesModified": 0,
+    "inferenceRuns": 0,
+    "strataChanges": 0,
+    "serviceRestarts": 0,
+    "push": false,
+    "pr": false,
+    "installedExtensionReplaced": false,
+    "compactionPolicyModified": false,
+    "disposableAblationSwitches": "offline-only; NOT production flags; NOT public API"
+  },
+  "verdict": "EVIDENCE_RESTORATION_CAUSAL",
+  "statuses": {
+    "LIVE_WIRE_MUTATION": "observed",
+    "OFFLINE_CAUSAL_MECHANISM": "established",
+    "ENGINE_CACHE_EFFECT": "inferred",
+    "REPAIR_NECESSITY": "not evaluated"
+  },
+  "engineJoinLabel": "TEMPORAL_ONE_TO_ONE_SUPPORTED",
+  "productionDeploymentAuthorized": false
+}

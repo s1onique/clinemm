@@ -1,0 +1,94 @@
+{
+  "schema": "cline.compaction-summary-churn.artifact-hashes.v1",
+  "act": "ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01",
+  "note": [
+    "Hashes cover the COMMITTED evidence artifacts and the source files this ACT",
+    "touches. No raw prompt, tool-result body, canonical transcript, sidecar",
+    "body, credential or HMAC key is present in any committed artifact.",
+    "The keyed fingerprint used by the offline probe is NOT committed; the",
+    "fingerprints in the JSON receipts are therefore opaque and non-reversible",
+    "against this repository."
+  ],
+  "productionSourceDiff": {
+    "filesChangedUnderProductionSource": [],
+    "stat": "",
+    "interpretation": "The ONLY changes under sdk/packages/core/src are the two NEW test files. No production module was modified."
+  },
+  "artifacts": [
+    {
+      "name": ".factory/evidence/ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01/identity.json",
+      "sha256": "c7578d256825681ae00ffea36ff49bc28733d30d3336338e47da4512d420a430",
+      "bytes": 2684
+    },
+    {
+      "name": ".factory/evidence/ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01/source-map.md",
+      "sha256": "3104e55108e25370e155bad2178eb25aacd4cb999c5e6bfa11486bb257af6e53",
+      "bytes": 8839
+    },
+    {
+      "name": ".factory/evidence/ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01/live-transition-matrix.json",
+      "sha256": "749bc0424a413343597ab9cabdc3e3cfbae6e5c85fd2d9a58177f0e07a1bacca",
+      "bytes": 77870
+    },
+    {
+      "name": ".factory/evidence/ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01/production-reproduction.md",
+      "sha256": "4c7654f917ec6835bb6883895f9d14cd65c352a1337b17ca03715861f3aaf678",
+      "bytes": 7409
+    },
+    {
+      "name": ".factory/evidence/ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01/production-reproduction.json",
+      "sha256": "49e4dad9c8edcb396791eb1cc47ce0bc797b0f496826b2acd5a08f40ccd24de6",
+      "bytes": 3447
+    },
+    {
+      "name": ".factory/evidence/ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01/ablation-matrix.json",
+      "sha256": "a6984de6ed66bf9bbc165b4d233733615ca1583835197f745b8a45b30f317e05",
+      "bytes": 8442
+    },
+    {
+      "name": ".factory/evidence/ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01/conservation-results.md",
+      "sha256": "d7e324f58a60433ef5e6c14ea29465994b2d43a69c05c5f0b71a9d3058afd430",
+      "bytes": 8519
+    },
+    {
+      "name": ".factory/evidence/ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01/test-receipts.txt",
+      "sha256": "9e5d9cea805a7d84ef631989c0bb9360899d708faeb31ca3e0e179d32eb37453",
+      "bytes": 1350
+    },
+    {
+      "name": ".factory/evidence/ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01/causal-classification.md",
+      "sha256": "f882d6453be948d02e185742cb1d4d99b448968ba87d1d91f94275c9a2298036",
+      "bytes": 10492
+    },
+    {
+      "name": ".factory/evidence/ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01/tool/reproduce.ts",
+      "sha256": "64577fbf651420a0ab855eb45fa27db3993ca33b0caf03de3521f006784b2e14",
+      "bytes": 14282
+    },
+    {
+      "name": ".factory/evidence/ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01/tool/probe.ts",
+      "sha256": "db7df5eb6df1002a306d72b970629b2f6e5978682f3dc7df35b1edbf37a8ea2b",
+      "bytes": 16153
+    },
+    {
+      "name": "sdk/packages/core/src/extensions/context/compaction.summary-churn01.test.ts",
+      "sha256": "0a82efadc7092a7af75abfad7c29a554bcc45095557b4727dc2cc27a88b2399b",
+      "bytes": 28063
+    },
+    {
+      "name": "sdk/packages/core/src/extensions/context/compaction.summary-churn01.red.test.ts",
+      "sha256": "cd00db75eb5aeec9bbace8a34ded53c0431f93132f9800def5137fd730f03a56",
+      "bytes": 5136
+    },
+    {
+      "name": "sdk/packages/core/vitest.config.ts",
+      "sha256": "3c847402ed0671096c7fc384734c684f77795830b4ed2c139c3214300bb9424a",
+      "bytes": 2869
+    },
+    {
+      "name": "sdk/packages/core/vitest.red.summary-churn01.config.ts",
+      "sha256": "4e2d30b5f16b19771be46468bfd1b532c1ce0fe4c05e68140b6f88664a326284",
+      "bytes": 1032
+    }
+  ]
+}
