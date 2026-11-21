@@ -31,6 +31,7 @@ import { join } from "node:path";
 import {
 	_resetPrefixForensicsCohortForTests,
 	computeCaptureRecordSha256,
+	groupCapturesIntoRequestBundles,
 } from "@cline/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
@@ -252,6 +253,117 @@ describe("ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01 — the capture writer
 				messages: [{ role: "user", content: "hi" }],
 			}),
 		).not.toThrow();
+	});
+
+	it("THREE-STAGE-01: the three stages of ONE request form ONE groupable bundle", () => {
+		// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION05 — the
+		// LIVE-GATE witness.
+		//
+		// The analyzer's lineage gate makes FIVE identities mandatory on
+		// BOTH sides of a comparison: cohort, session, iteration,
+		// preparation and attempt. The runtime projection stage (A) did not
+		// carry the SESSION identity, while the two provider-bound stages
+		// (B, C) did. Stage A therefore landed in a DIFFERENT bundle from
+		// stages B and C of the SAME request, and every authoritative
+		// comparison was refused.
+		//
+		// This witness captures all three stages through the REAL writer
+		// with the identities the runtime actually mints, groups them with
+		// the REAL analyzer, and requires ONE bundle with all THREE stages.
+		dir = mkdtempSync(join(tmpdir(), "prefix-forensics-three-stage-"));
+		process.env.CLINEMM_PREFIX_FORENSICS_DIR = dir;
+		process.env.CLINEMM_PREFIX_FORENSICS = "1";
+		const identity = {
+			sessionId: "session-1",
+			preparationRequestId: "prep-29",
+			providerAttemptId: "attempt-29",
+			iteration: 29,
+		};
+		const messages = [
+			{ role: "user", content: [{ type: "text", text: "hi" }] },
+		];
+		for (const stage of [
+			"runtime_projection",
+			"ai_sdk_prompt",
+			"wire_request",
+		] as const) {
+			recordPrefixForensics({
+				stage,
+				messages,
+				...identity,
+			});
+		}
+
+		const files = readdirSync(dir);
+		expect(files).toHaveLength(3);
+		const records = files.map((file) =>
+			JSON.parse(readFileSync(join(dir, file), "utf8")),
+		);
+		// Every stage carries the session identity — the capture contract.
+		for (const record of records) {
+			expect(record.sessionId).toBe("session-1");
+			expect(record.preparationRequestId).toBe("prep-29");
+			expect(record.providerAttemptId).toBe("attempt-29");
+			expect(record.iteration).toBe(29);
+		}
+
+		// The REAL analyzer groups them into ONE request bundle.
+		const bundles = groupCapturesIntoRequestBundles(records);
+		expect(bundles).toHaveLength(1);
+		const bundle = bundles[0];
+		expect(bundle?.sessionId).toBe("session-1");
+		expect(bundle?.preparationRequestId).toBe("prep-29");
+		expect(bundle?.providerAttemptId).toBe("attempt-29");
+		expect(bundle?.iteration).toBe(29);
+		// All THREE representation stages are present...
+		expect(bundle?.stages.size).toBe(3);
+		expect(bundle?.stages.has("runtime_projection")).toBe(true);
+		expect(bundle?.stages.has("ai_sdk_prompt")).toBe(true);
+		expect(bundle?.stages.has("wire_request")).toBe(true);
+	});
+
+	it("THREE-STAGE-02: a MISSING session identity on ONE stage breaks the bundle", () => {
+		// The NEGATIVE control for the witness above: if a stage omits the
+		// session identity, it lands in a DIFFERENT bundle and the
+		// three-stage comparison collapses. This is exactly the defect the
+		// runtime-projection stage had, so the control must show the
+		// failure the defect produced.
+		dir = mkdtempSync(join(tmpdir(), "prefix-forensics-three-stage-neg-"));
+		process.env.CLINEMM_PREFIX_FORENSICS_DIR = dir;
+		process.env.CLINEMM_PREFIX_FORENSICS = "1";
+		const messages = [
+			{ role: "user", content: [{ type: "text", text: "hi" }] },
+		];
+		// The runtime projection WITHOUT the session identity.
+		recordPrefixForensics({
+			stage: "runtime_projection",
+			messages,
+			preparationRequestId: "prep-29",
+			providerAttemptId: "attempt-29",
+			iteration: 29,
+		});
+		// The provider-bound stages WITH it.
+		for (const stage of ["ai_sdk_prompt", "wire_request"] as const) {
+			recordPrefixForensics({
+				stage,
+				messages,
+				sessionId: "session-1",
+				preparationRequestId: "prep-29",
+				providerAttemptId: "attempt-29",
+				iteration: 29,
+			});
+		}
+
+		const records = readdirSync(dir).map((file) =>
+			JSON.parse(readFileSync(join(dir, file), "utf8")),
+		);
+		const bundles = groupCapturesIntoRequestBundles(records);
+		// TWO bundles: the missing session identity SPLIT the request.
+		expect(bundles).toHaveLength(2);
+		// And neither bundle has all three stages.
+		for (const bundle of bundles) {
+			expect(bundle.stages.size).toBeLessThan(3);
+		}
 	});
 
 	it("the capture directory is created with restrictive permissions", () => {

@@ -3035,7 +3035,22 @@ export class AgentRuntime {
 		// projection (stage A). This seam is AFTER compaction, AFTER every
 		// `beforeModel` hook and AFTER the request-budget enforcement, so it
 		// observes exactly what the runtime INTENDED to submit. DEFAULT OFF.
+		//
+		// ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION05: the
+		// SESSION identity is carried here too.
+		//
+		// The analyzer makes the session identity MANDATORY on BOTH sides of
+		// a comparison, and the two provider-bound stages already carry it
+		// (`request.metadata?.sessionId`). Stage A did NOT, so the runtime
+		// projection could never be grouped with the AI-SDK and wire stages
+		// of the SAME request and every authoritative comparison was refused.
+		//
+		// This is a CAPTURE-CONTRACT defect, not a cache diagnosis. The
+		// identity is the one the runtime already puts into the request
+		// metadata for stages B and C, so the three stages of one request
+		// now share ONE session identity and land in ONE bundle.
 		recordPrefixForensicsRuntimeProjection(request, {
+			sessionId: this.modelBehaviorTraceIdentity().sessionId,
 			preparationRequestId:
 				this.modelBehaviorTraceIdentity().preparationRequestId,
 			providerAttemptId: this.modelBehaviorTraceIdentity().modelRequestId,

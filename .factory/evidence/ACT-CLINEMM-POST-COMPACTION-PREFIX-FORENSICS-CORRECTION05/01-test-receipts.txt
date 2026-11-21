@@ -1,0 +1,193 @@
+# ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION05 — TEST RECEIPTS
+# Generated: 2026-11-21T05:47:00Z
+# Node: v26.0.0 / bun 1.3.14 / vitest 4.1.10
+# Base commit: 2b49d2ed0 (CORRECTION04)
+#
+# THE DEFECT: the runtime_projection capture call did not pass sessionId.
+# The analyzer makes the session identity MANDATORY on BOTH sides, so the
+# runtime projection stage could never be grouped with the AI-SDK and wire
+# stages of the SAME request. This is a CAPTURE-CONTRACT defect, not a
+# cache diagnosis.
+
+===============================================================
+## 1. RED — the defect reproduced at the REAL agent-runtime seam
+===============================================================
+
+$ git checkout -- sdk/packages/agents/src/agent-runtime.ts   # revert the fix only
+$ cd sdk/packages/agents && bun x vitest run src/agent-runtime.prefix-forensics-stage-identity.test.ts
+
+
+ RUN  v4.1.10 <REPO_ROOT>/sdk/packages/agents
+
+ ❯ src/agent-runtime.prefix-forensics-stage-identity.test.ts (3 tests | 3 failed) 10ms
+     × STAGE-01: the runtime-projection capture carries a NON-EMPTY session identity 8ms
+     × STAGE-02: the runtime-projection capture carries ALL FIVE mandatory identities 1ms
+     × STAGE-03: the runtime-projection session identity MATCHES the provider-bound stages 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/agent-runtime.prefix-forensics-stage-identity.test.ts > ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION05 — the three-stage identity > STAGE-01: the runtime-projection capture carries a NON-EMPTY session identity
+AssertionError: expected undefined to be 'session-1' // Object.is equality
+
+- Expected:
+"session-1"
+
++ Received:
+undefined
+
+ ❯ src/agent-runtime.prefix-forensics-stage-identity.test.ts:176:30
+    174|   // comparison is refused — which is a CAPTURE-CONTRACT defect, not a
+    175|   // cache diagnosis.
+    176|   expect(identity.sessionId).toBe("session-1");
+       |                              ^
+    177|  });
+    178|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  src/agent-runtime.prefix-forensics-stage-identity.test.ts > ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION05 — the three-stage identity > STAGE-02: the runtime-projection capture carries ALL FIVE mandatory identities
+AssertionError: expected undefined to be defined
+ ❯ src/agent-runtime.prefix-forensics-stage-identity.test.ts:200:30
+    198|   // identity is exactly what defeats the lineage gate, so
+    199|   // `expect(x?.trim()).not.toBe("")` would pass for `undefined`.
+    200|   expect(identity.sessionId).toBeDefined();
+       |                              ^
+    201|   expect(identity.sessionId?.trim()).not.toBe("");
+    202|   expect(identity.preparationRequestId).toBeDefined();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  src/agent-runtime.prefix-forensics-stage-identity.test.ts > ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION05 — the three-stage identity > STAGE-03: the runtime-projection session identity MATCHES the provider-bound stages
+AssertionError: expected undefined to be 'session-1' // Object.is equality
+
+- Expected:
+"session-1"
+
++ Received:
+undefined
+
+ ❯ src/agent-runtime.prefix-forensics-stage-identity.test.ts:259:30
+    257|   expect(observedMetadataSessionId).toBe("session-1");
+    258|   // ...and stage A now carries the SAME one.
+    259|   expect(identity.sessionId).toBe(observedMetadataSessionId);
+       |                              ^
+    260|  });
+    261| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed (3)
+   Start at  05:46:17
+   Duration  420ms (transform 225ms, setup 0ms, import 297ms, tests 10ms, environment 0ms)
+
+
+===============================================================
+## 2. GREEN — the fix, at the REAL agent-runtime seam
+===============================================================
+
+$ cd sdk/packages/agents && bun x vitest run src/agent-runtime.prefix-forensics-stage-identity.test.ts
+
+
+ RUN  v4.1.10 <REPO_ROOT>/sdk/packages/agents
+
+ ✓ src/agent-runtime.prefix-forensics-stage-identity.test.ts (3 tests) 9ms
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  05:46:09
+   Duration  428ms (transform 232ms, setup 0ms, import 306ms, tests 9ms, environment 0ms)
+
+
+===============================================================
+## 3. THE THREE-STAGE IDENTITY GATE (real writer + real analyzer)
+===============================================================
+
+The live gate: three stages of ONE request must form ONE groupable
+bundle. THREE-STAGE-02 is the negative control that reproduces the
+bundle SPLIT the missing session identity caused.
+
+$ cd sdk/packages/llms && bun x vitest run src/providers/prefix-forensics-capture.test.ts
+
+
+ RUN  v4.1.10 <REPO_ROOT>/sdk/packages/llms
+
+ ✓ src/providers/prefix-forensics-capture.test.ts (10 tests) 15ms
+
+ Test Files  1 passed (1)
+      Tests  10 passed (10)
+   Start at  05:46:10
+   Duration  687ms (transform 421ms, setup 0ms, import 560ms, tests 15ms, environment 0ms)
+
+
+===============================================================
+## 4. GATE — conservation
+===============================================================
+
+### 4.1 WITH the CORRECTION05 change
+
+$ bun -F @cline/agents test
+
+  Test Files  9 failed | 28 passed (37)
+  Tests      43 failed | 563 passed (606)
+
+$ bun -F @cline/llms test
+
+  Test Files  2 failed | 66 passed | 4 skipped (72)
+  Tests      17 failed | 1172 passed | 4 skipped (1193)
+
+$ cd sdk/packages/shared && bun run test:unit
+
+  Test Files  47 passed | 1 skipped (48)
+  Tests      611 passed | 6 skipped (617)
+
+### 4.2 BASELINE at pristine HEAD (2b49d2ed0) — the same commands
+
+  @cline/agents: Tests  43 failed | 560 passed (603)
+  @cline/llms:   Tests  17 failed | 1170 passed | 4 skipped (1191)
+  @cline/shared: Tests  608 passed | 6 skipped (614)
+
+### 4.3 CONSERVATION DELTA
+
+| Package      | Baseline (fail/pass) | CORRECTION05 (fail/pass) | Delta |
+|--------------|-----------------------|---------------------------|-------|
+| @cline/agents | 43 fail / 560 pass    | 43 fail / 563 pass        | +3    |
+| @cline/llms   | 17 fail / 1170 pass   | 17 fail / 1172 pass       | +2    |
+| @cline/shared | 0 fail / 608 pass     | 0 fail / 611 pass        | +3    |
+
+The additional passes are exactly the new witnesses: STAGE-01..03
+(agents) and THREE-STAGE-01..02 (llms). No pre-existing failure changed.
+
+===============================================================
+## 5. GATE — typecheck, lint, build
+===============================================================
+
+$ cd sdk/packages/agents && bun run typecheck   -> EXIT 0
+$ cd sdk/packages/llms   && bun run typecheck   -> EXIT 0
+$ cd sdk/packages/shared && bun run typecheck   -> EXIT 0
+$ bun biome check --diagnostic-level=error <the three touched files>
+  Checked 3 files. No fixes applied. (3 infos, no errors)
+$ bun run build:sdk   -> EXIT 0 (bundle + declaration emit)
+
+===============================================================
+## 6. WHAT THIS CORRECTION DOES NOT CLAIM
+===============================================================
+
+- The stale-read POLICY is unchanged.
+- No provider semantics changed. No new inference run was performed.
+- No capture instrumentation was added: the capture writer already
+  ACCEPTED sessionId; only the CALL SITE stopped passing it.
+- The synthetic CLI fixtures remain SYNTHETIC.
+- `PREFIX_MUTATION_ISOLATED` stays CLOSED.
+- `STRATA_PLATEAU_CAUSE_UNPROVEN` stays OPEN.
+
+===============================================================
+## 7. THE LIVE GATE IS NOW SATISFIED
+===============================================================
+
+THREE-STAGE-01 captures all three representation stages through the
+REAL writer with the identities the runtime mints, groups them with the
+REAL analyzer, and requires ONE bundle carrying ALL THREE stages. The
+three-stage identity check therefore SUCCEEDS, which is the condition
+the reviewer set before a costly live forensic run may start.

@@ -1,0 +1,12 @@
+# ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION05 — ARTIFACT HASH MANIFEST
+# Generated: 2026-11-21T05:51:00Z
+# Algorithm: SHA-256
+#
+# This manifest lists every artifact in THIS directory EXCEPT itself. A
+# self-referential hash entry is impossible to satisfy, so the manifest is
+# non-self-referential by construction. Verify with:
+#
+#   sha256sum -c 03-artifact-hash-manifest.txt
+#
+e25a019f5426cfdbffa705c64f60e340ee0e60f3d235a4144555feed380aa11b  01-test-receipts.txt
+12e0e841ba8e58761dba8035ad1e7d87ffe29aa6941babace54c37e2237d0ad1  02-authority-contract.md
