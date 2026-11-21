@@ -12,8 +12,8 @@
     "entryHead": "9117f13ae7d643373c56eeedc30da661fc790b08",
     "entryHeadMatchesExpectedPredecessorFinalHead": true,
     "subjectHead": "9f57bc84d98f3439a0d70e4bf74300efef6564cd",
-    "finalHead": "34f916cfa615f544879bf89d34442d4918e51049",
-    "finalHeadNote": "The documentation-only follow-up that recorded the FINAL_HEAD and attributed the run-to-run noise in the full-suite comparison. It changes no production module and no test. The SHA was recorded after the commit, never predicted."
+    "finalHead": "155eb4b400d1bed95cdca03c8ea22db9e690beba",
+    "finalHeadNote": "The documentation-only commit that recorded the FINAL_HEAD and regenerated the artifact hash manifest. It changes no production module and no test. The SHA was recorded after that commit, never predicted. This is the SAME self-reference convention the predecessor ACT used for its finalHead."
   },
   "ancestry": {
     "predecessorAct": "ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01",

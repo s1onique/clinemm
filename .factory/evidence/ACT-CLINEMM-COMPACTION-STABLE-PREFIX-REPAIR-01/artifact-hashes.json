@@ -4,7 +4,7 @@
   "note": "Non-self-referential: artifact-hashes.json does not hash itself.",
   "sourceHead": "9117f13ae7d643373c56eeedc30da661fc790b08",
   "subjectHead": "9f57bc84d98f3439a0d70e4bf74300efef6564cd",
-  "finalHead": "34f916cfa615f544879bf89d34442d4918e51049",
+  "finalHead": "155eb4b400d1bed95cdca03c8ea22db9e690beba",
   "artifactCount": 11,
   "artifacts": [
     {
@@ -14,8 +14,8 @@
     },
     {
       "path": "evidence/ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01/identity.json",
-      "bytes": 2837,
-      "sha256": "623b8f8624825084ef3a5813a4440da8cddb87634d9c61f507402c97f1cc477e"
+      "bytes": 2900,
+      "sha256": "b0461ac0ad21f2778e282cf101dfa0ec04c1a147eef188b67f7383009f35e207"
     },
     {
       "path": "evidence/ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01/provider-prefix-comparison.json",
