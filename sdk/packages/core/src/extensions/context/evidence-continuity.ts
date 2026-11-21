@@ -184,6 +184,7 @@
  */
 
 import type { MessageWithMetadata } from "@cline/shared";
+import { canonicalSourceMessages } from "../../session/models/session-compaction";
 
 /**
  * The maximum number of verified outcomes carried into one summary.
@@ -1379,15 +1380,32 @@ export interface EvidenceApplicationResult {
  * precede its own boundary. Those messages also match the canonical suffix,
  * so the suffix measurement reports an EARLIER boundary than the true one.
  *
- * THE MEASUREMENT IS CONSERVATIVE
- * ------------------------------
+ * THE MEASUREMENT UNDER-ESTIMATES
+ * -------------------------------
  *
- * An UNDER-estimated boundary is the safe direction for this measurement:
- * it scopes the ledger to a SHORTER prefix of the canonical history, so the
- * carried section can only ever be a SUBSET of the boundary's own outcomes.
- * The section therefore never claims an outcome the boundary did not
- * contain. (It can be smaller than the boundary's section — which costs
- * compactness, never correctness.)
+ * An UNDER-estimated boundary scopes the ledger to a SHORTER prefix of the
+ * canonical history, so the carried section can only ever be a SUBSET of the
+ * boundary's own outcomes. The section therefore never claims an outcome the
+ * boundary did not contain.
+ *
+ * ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01-CORRECTION02
+ *
+ * That SUBSET property is NOT a correctness guarantee, and this contract no
+ * longer claims one. An under-estimated boundary can OMIT a boundary outcome:
+ * a verified `tool_result` that sits between the inferred boundary and the
+ * true boundary is carried by neither the section nor the canonical tail, so
+ * it disappears from the provider-visible request.
+ *
+ * MEASURED (tool/probe-fallback-underestimate.ts): with a canonical history
+ * of `A, B, tool_use(call_y), tool_result(call_y), E` and a sidecar retaining
+ * the trailing `E`, the inferred boundary is 3 while the true boundary is 5.
+ * The ledger over the inferred prefix carries ZERO outcomes — `call_y` is
+ * inside the true boundary but outside the inferred one.
+ *
+ * So the correct statement is: the measurement is a SAFE DIRECTION FOR
+ * FABRICATION — it never invents an outcome — but it is NOT SAFE FOR
+ * OMISSION. It is an APPROXIMATION whose result is NOT AUTHORITATIVE for
+ * evidence conservation.
  *
  * THE AUTHORITATIVE VALUE
  * -----------------------
@@ -1400,6 +1418,9 @@ export interface EvidenceApplicationResult {
  * It exists so that a DIRECT helper call — which has no sidecar — still
  * produces a stable, evidence-preserving result rather than re-deriving the
  * section from the growing transcript on every call.
+ *
+ * A caller that needs the evidence-conservation guarantee MUST pass the
+ * authoritative boundary explicitly.
  */
 export function inferCompactionSourceBoundary(
 	compactedMessages: readonly MessageWithMetadata[],
@@ -1496,13 +1517,18 @@ export function applyVerifiedEvidenceToCompactedMessages(
 		 * The number of canonical messages that belonged to the compacted
 		 * prefix — the persisted sidecar's `source_message_count`.
 		 *
+		 * This is an INDEX into the CANONICAL message collection (the
+		 * display-only messages excluded), which is the same collection the
+		 * persisted boundary was counted over.
+		 *
 		 * When omitted, the boundary is INFERRED from the projection itself
 		 * (see {@link inferCompactionSourceBoundary}). That inference is an
 		 * APPROXIMATION: it can report an EARLIER boundary than the true one
 		 * when the sidecar retained canonical messages from before its own
-		 * boundary (the re-compaction shape). It is CONSERVATIVE — the
-		 * section can only be a subset of the boundary's outcomes, never a
-		 * superset — so it costs compactness, never correctness.
+		 * boundary (the re-compaction shape). It never FABRICATES an outcome,
+		 * but it CAN OMIT one — so it is not authoritative for evidence
+		 * conservation, and a caller that needs that guarantee must pass the
+		 * authoritative boundary explicitly.
 		 *
 		 * The compaction pipeline always supplies the authoritative value
 		 * explicitly, so the production path never depends on the inference.
@@ -1510,20 +1536,39 @@ export function applyVerifiedEvidenceToCompactedMessages(
 		sourceMessageCount?: number;
 	} = {},
 ): EvidenceApplicationResult {
+	// ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01-CORRECTION02
+	//
+	// The boundary is an INDEX INTO THE CANONICAL COLLECTION, so the prefix
+	// must be selected over THAT SAME COLLECTION.
+	//
+	// A persisted sidecar's `source_message_count` counts the CANONICAL
+	// messages — `createSessionCompactionState()` and
+	// `projectSessionCompactionState()` both exclude the display-only
+	// messages first. Slicing the RAW list with a CANONICAL count selects the
+	// wrong messages: every display-only message that precedes the boundary
+	// consumes one slot of the slice, so the prefix ends EARLY and can drop a
+	// verified outcome that is genuinely INSIDE the boundary.
+	//
+	// That failure is silent and it is a CORRECTNESS failure, not a
+	// compactness one: the dropped outcome is before the canonical tail, so
+	// nothing else restores it, and the provider-visible request loses a
+	// verified result while the prefix still looks stable.
+	//
+	// The count and the slice therefore operate over the identical ordered
+	// collection.
+	const canonical = canonicalSourceMessages(canonicalMessages);
 	const boundaryCount = Math.max(
 		0,
 		Math.min(
 			options.sourceMessageCount ??
-				inferCompactionSourceBoundary(compactedMessages, canonicalMessages),
-			canonicalMessages.length,
+				inferCompactionSourceBoundary(compactedMessages, canonical),
+			canonical.length,
 		),
 	);
 	// The boundary prefix is the canonical history AS IT WAS at the boundary.
 	// It is a prefix of the growing canonical history, so the derivation is
 	// stable across every continuation.
-	const ledger = extractVerifiedToolOutcomes(
-		canonicalMessages.slice(0, boundaryCount),
-	);
+	const ledger = extractVerifiedToolOutcomes(canonical.slice(0, boundaryCount));
 	const summaryIndex = compactedMessages.findIndex(
 		(message) =>
 			(message.metadata as { kind?: string } | undefined)?.kind ===

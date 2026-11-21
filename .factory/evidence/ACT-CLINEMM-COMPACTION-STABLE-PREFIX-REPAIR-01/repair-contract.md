@@ -233,6 +233,29 @@ A lower estimated token count is NOT permission to drop required evidence:
 the evidence was not dropped — it is carried by the canonical tail, which the
 budget guard already measures.
 
+**CORRECTION02 — PERSISTENCE SAFETY vs DISPATCH SAFETY (the two are
+DISTINCT).** An earlier version of this document stated that the final
+budget guard runs "before any compaction sidecar write". **That claim was
+wrong about the ORDER.** The compaction path calls `saveState` INTERNALLY —
+`compaction.ts:1618` (Phase A) and `compaction.ts:1715` (re-compaction) —
+and only THEN returns to the dispatch path, where the final guard runs.
+
+The two guarantees must be read separately:
+
+| Guarantee | Enforced by | When it applies |
+|---|---|---|
+| **PERSISTENCE safety** | the compaction-side budget projection (`applyTaskContractToCompactedMessages`, which measures an ISOLATED accounting projection via `prepareBudgetAccountingMessages`) | BEFORE the sidecar is written, inside the compaction path |
+| **DISPATCH safety** | the final provider-request guard (`agent-runtime.ts`, `assertProviderRequestWithinBudget()`), which measures the PROVIDER-VISIBLE projection of the FINAL messages after every `beforeModel` mutation | before any provider request leaves the process |
+
+Both fail closed. The dispatch guard is the last line of defence and it
+cannot be bypassed: an over-budget request raises `TaskContractBudgetError`
+before any provider call. The persistence guard ensures an over-budget
+compaction does not WRITE a sidecar in the first place.
+
+Nothing about the repair changes either guard. The repair adds no
+model-visible content and no message.
+
+
 ---
 
 ## 4. What the repair deliberately does NOT do

@@ -145,3 +145,25 @@ deleted.
 | "re-enabling evidence restoration RESTORES the mutation under equivalent inputs" | `expect(withEvidence).not.toBe(withoutEvidence)` | kept, but the assertion now also states WHAT the difference is: the enrichment still adds the section (`expect(withEvidence).toContain("call_ab_h0")`) and does NOT add the post-boundary outcome (`expect(withEvidence).not.toContain("call_ab_h1")`) |
 | "moves the evidence section alone when a new outcome is verified but the contract is unchanged" | `expect(afterText).not.toBe(beforeText)` | "does NOT move the evidence section …": `expect(afterText).toBe(beforeText)` + `expect(evidenceSection(afterText)).toBe(evidenceSection(beforeText))` |
 | "moves the contract section alone when the canonical contract changes but no new outcome is verified" | UNCHANGED | UNCHANGED — a genuine contract change still moves the summary, and that is asserted in the new suite too |
+
+**CORRECTION02 — PERSISTENCE SAFETY vs DISPATCH SAFETY (the two are
+DISTINCT).** An earlier version of this document stated that the final
+budget guard runs "before any compaction sidecar write". **That claim was
+wrong about the ORDER.** The compaction path calls `saveState` INTERNALLY —
+`compaction.ts:1618` (Phase A) and `compaction.ts:1715` (re-compaction) —
+and only THEN returns to the dispatch path, where the final guard runs.
+
+The two guarantees must be read separately:
+
+| Guarantee | Enforced by | When it applies |
+|---|---|---|
+| **PERSISTENCE safety** | the compaction-side budget projection (`applyTaskContractToCompactedMessages`, which measures an ISOLATED accounting projection via `prepareBudgetAccountingMessages`) | BEFORE the sidecar is written, inside the compaction path |
+| **DISPATCH safety** | the final provider-request guard (`agent-runtime.ts`, `assertProviderRequestWithinBudget()`), which measures the PROVIDER-VISIBLE projection of the FINAL messages after every `beforeModel` mutation | before any provider request leaves the process |
+
+Both fail closed. The dispatch guard is the last line of defence and it
+cannot be bypassed: an over-budget request raises `TaskContractBudgetError`
+before any provider call. The persistence guard ensures an over-budget
+compaction does not WRITE a sidecar in the first place.
+
+Nothing about the repair changes either guard. The repair adds no
+model-visible content and no message.

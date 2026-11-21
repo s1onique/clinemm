@@ -49,9 +49,15 @@ CORRECTION APPLIED:
      APPROXIMATION.
 
   2. The CORRECT contract is stated: the inference UNDER-estimates the
-     boundary, and that direction is CONSERVATIVE — the carried section can
-     only ever be a SUBSET of the boundary's own outcomes, so it costs
-     compactness, never correctness.
+     boundary, so the carried section can only ever be a SUBSET of the
+     boundary's own outcomes — it never FABRICATES an outcome.
+
+     CORRECTION02 SUPERSEDES THE "never correctness" HALF OF THIS CLAIM.
+     An under-estimated boundary can also OMIT a boundary outcome, so the
+     subset property is safe for FABRICATION but NOT for OMISSION. The
+     contract is narrowed accordingly: the inference is an APPROXIMATION
+     that is not authoritative for evidence conservation, and a caller that
+     needs that guarantee must pass the authoritative boundary explicitly.
 
   3. A focused regression test pins the counterexample:
        "reproduces the RETAINED-TAIL counterexample: the inferred boundary

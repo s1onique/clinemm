@@ -37,7 +37,21 @@ export type SessionCompactionState = z.infer<
 	typeof SessionCompactionStateSchema
 >;
 
-function canonicalSourceMessages(
+/**
+ * The CANONICAL source messages of a message list.
+ *
+ * The display-only messages are excluded: they are not part of the canonical
+ * history, so they are not counted by the persisted boundary and they are not
+ * projected into the canonical tail.
+ *
+ * ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01-CORRECTION02
+ *
+ * This is EXPORTED so that every consumer of the canonical boundary selects
+ * its prefix over THE SAME ORDERED COLLECTION that the boundary was counted
+ * over. A boundary is an INDEX into a collection; counting one collection and
+ * slicing another silently selects the wrong messages.
+ */
+export function canonicalSourceMessages(
 	messages: readonly MessageWithMetadata[],
 ): MessageWithMetadata[] {
 	return messages.filter((message) => message.metadata?.displayOnly !== true);
@@ -57,6 +71,12 @@ function canonicalSourceMessages(
  * display-only messages are excluded from the canonical history, so a caller
  * that used the raw list length would disagree with the persisted boundary
  * whenever a display-only message is present.
+ *
+ * ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01-CORRECTION02
+ *
+ * The count alone is NOT sufficient to select a prefix. The prefix must be
+ * taken from `canonicalSourceMessages(messages)` — the SAME collection this
+ * count measures — never from the raw list.
  */
 export function countCanonicalSourceMessages(
 	messages: readonly MessageWithMetadata[],

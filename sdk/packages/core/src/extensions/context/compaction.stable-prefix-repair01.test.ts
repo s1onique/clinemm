@@ -67,6 +67,7 @@ import {
 	createCompactionStateAwarePrepareTurn,
 } from "./compaction";
 import {
+	applyVerifiedEvidenceToCompactedMessages,
 	EVIDENCE_SECTION_HEADING,
 	inferCompactionSourceBoundary,
 } from "./evidence-continuity";
@@ -222,6 +223,31 @@ function providerVisibleSuccessSignals(
 		}
 	}
 	return signals;
+}
+
+/**
+ * The number of `tool_result` blocks in the provider-visible request.
+ *
+ * The canonical tail is the carrier for POST-boundary outcomes. A boundary
+ * outcome is carried by the summary SECTION instead, so this count is how a
+ * test distinguishes "carried by the section" from "carried by the tail" —
+ * and how it detects a DUPLICATED outcome presented twice as two
+ * independent verified outcomes.
+ */
+function canonicalTailToolResultCount(messages: readonly unknown[]): number {
+	let count = 0;
+	for (const message of messages) {
+		const content = (message as { content?: unknown }).content;
+		if (!Array.isArray(content)) {
+			continue;
+		}
+		for (const block of content) {
+			if ((block as Record<string, unknown>).type === "tool_result") {
+				count += 1;
+			}
+		}
+	}
+	return count;
 }
 
 interface WrapperRun {
@@ -734,5 +760,214 @@ describe("ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01-CORRECTION01 — the bo
 		// canonical prefix is carried.
 		const text = projectedSummaryText(saved.messages);
 		expect(text).toContain("call_do");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// CORRECTION02 — the canonical boundary INDEX mismatch
+// ---------------------------------------------------------------------------
+
+describe("ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01-CORRECTION02 — the canonical boundary index", () => {
+	/**
+	 * The reviewer's counterexample.
+	 *
+	 * RAW:      0 USER task | 1 DISPLAY(displayOnly) | 2 ASSISTANT tool_use | 3 USER tool_result
+	 * CANONICAL:0 USER task |                       | 1 ASSISTANT tool_use | 2 USER tool_result
+	 *
+	 * The persisted boundary is the CANONICAL count (3). A raw slice of
+	 * `slice(0, 3)` therefore stops at raw index 2 — the `tool_use` — and
+	 * DROPS the verified `tool_result`, which lives at raw index 3.
+	 *
+	 * The result is INSIDE the canonical boundary, so the canonical tail
+	 * cannot restore it either: the tail begins at canonical index 3.
+	 */
+	function interleavedHistory(callId: string): MessageWithMetadata[] {
+		return [
+			userTurn("Adjudicate the findings."),
+			{
+				role: "user",
+				content: [{ type: "text", text: "a transient display-only notice" }],
+				metadata: { displayOnly: true, displayRole: "error" },
+			},
+			toolCall(callId, "run_commands", { commands: ["echo alpha"] }),
+			toolResult(callId, "run_commands", [
+				{ query: "echo alpha", result: "ok", success: true },
+			]),
+		];
+	}
+
+	it("the counterexample IS the discriminator: the result is past the RAW boundary but inside the CANONICAL one", () => {
+		const history = interleavedHistory("call_idx_a");
+		const rawIndex = history.findIndex(
+			(message) =>
+				(message.content?.[0] as { type?: string } | undefined)?.type ===
+				"tool_result",
+		);
+		const canonicalCount = countCanonicalSourceMessages(history);
+		// The RAW index is at or past the canonical count...
+		expect(rawIndex).toBeGreaterThanOrEqual(canonicalCount);
+		// ...but the result IS inside the canonical source boundary.
+		expect(canonicalCount).toBe(3);
+		expect(history.length).toBe(4);
+	});
+
+	it("PHASE A — a NEW compaction carries the verified outcome despite the interleaved display-only message", async () => {
+		const history = interleavedHistory("call_idx_b");
+		const run = await runWrapper({
+			canonical: history,
+			compactResult: { messages: [compactionSummaryMessage(SUMMARY_PROSE)] },
+		});
+		expect(run.savedStates.length).toBe(1);
+		const saved = run.savedStates[0];
+		expect(saved.source_message_count).toBe(3);
+
+		// The carried section must contain the verified outcome...
+		const summaryText = projectedSummaryText(saved.messages);
+		expect(summaryText).toContain("call_idx_b");
+		// ...and the model-visible request must carry the ASSERTED SUCCESS
+		// for that call id, not merely the call id.
+		//
+		// The canonical boundary (3) consumes the whole canonical history
+		// here, so the canonical tail is EMPTY and the section is the ONLY
+		// carrier of this outcome. That is exactly why losing it is a
+		// correctness failure.
+		expect(canonicalTailToolResultCount(run.providerRequest)).toBe(0);
+		const visible = providerVisibleText(run.providerRequest);
+		expect(visible).toContain("call_idx_b");
+		// The section states the outcome in its own vocabulary: the call id
+		// AND the ASSERTED status. A bare call id would not distinguish a
+		// success from a merely submitted command.
+		expect(visible).toContain("succeeded");
+	});
+
+	it("PHASE B — persisted-sidecar restoration carries the verified outcome too", async () => {
+		const history = interleavedHistory("call_idx_c");
+		const state = persistedState(history);
+		expect(state.source_message_count).toBe(3);
+
+		const run = await runWrapper({ canonical: history, existingState: state });
+		const summaryText = projectedSummaryText(run.prepared?.messages ?? []);
+		expect(summaryText).toContain("call_idx_c");
+
+		// The canonical boundary consumes the whole canonical history, so the
+		// tail is empty and the section is the ONLY carrier.
+		expect(canonicalTailToolResultCount(run.providerRequest)).toBe(0);
+		const visible = providerVisibleText(run.providerRequest);
+		expect(visible).toContain("call_idx_c");
+		expect(visible).toContain("succeeded");
+	});
+
+	it("the canonical TAIL does not duplicate the result that the section carries", async () => {
+		const history = interleavedHistory("call_idx_d");
+		const state = persistedState(history);
+		const run = await runWrapper({ canonical: history, existingState: state });
+		const messages = run.prepared?.messages ?? [];
+
+		// The outcome is carried in the SUMMARY...
+		expect(projectedSummaryText(messages)).toContain("call_idx_d");
+		// ...and the canonical tail must NOT also present it as a second
+		// independent verified outcome.
+		const tailOccurrences = messages.filter(
+			(message) =>
+				(message.content?.[0] as { type?: string } | undefined)?.type ===
+				"tool_result",
+		).length;
+		expect(tailOccurrences).toBe(0);
+	});
+
+	it("the summary stays STABLE across a continuation that appends a VERIFIED outcome", async () => {
+		// The stability invariant is scoped to the EVIDENCE section. An
+		// append-only canonical continuation must not rewrite the early
+		// summary, even when the appended outcome is itself verified.
+		const history = interleavedHistory("call_idx_e");
+		const state = persistedState(history);
+		const before = await runWrapper({
+			canonical: history,
+			existingState: state,
+		});
+		const after = await runWrapper({
+			canonical: [...history, ...successfulPair("call_idx_f", "echo bravo")],
+			existingState: state,
+		});
+		expect(projectedSummaryText(after.prepared?.messages ?? [])).toBe(
+			projectedSummaryText(before.prepared?.messages ?? []),
+		);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// CORRECTION02 — the fallback's corrected contract
+// ---------------------------------------------------------------------------
+
+describe("ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01-CORRECTION02 — the fallback contract", () => {
+	/**
+	 * The corrected contract of `inferCompactionSourceBoundary()`.
+	 *
+	 * An under-estimated boundary never FABRICATES an outcome — the section
+	 * is always a subset of the true boundary's outcomes — but it CAN OMIT
+	 * one. The earlier claim that it "costs compactness, never correctness"
+	 * was NOT proven and is withdrawn.
+	 */
+	it("an under-estimated boundary can OMIT a boundary outcome (the 'never correctness' claim is FALSE)", () => {
+		const canonical: MessageWithMetadata[] = [
+			userTurn("A"),
+			assistantTurn("B"),
+			toolCall("call_fb", "run_commands", { commands: ["echo hi"] }),
+			toolResult("call_fb", "run_commands", [
+				{ query: "echo hi", result: "ok", success: true },
+			]),
+			assistantTurn("E"),
+		];
+		const sidecar = [
+			compactionSummaryMessage(SUMMARY_PROSE),
+			canonical[3],
+			canonical[4],
+		];
+		const inferred = inferCompactionSourceBoundary(sidecar, canonical);
+		// The inference UNDER-estimates: 3 vs the true 5.
+		expect(inferred).toBe(3);
+		expect(inferred).toBeLessThan(5);
+
+		// The outcome at canonical index 3 is INSIDE the true boundary but
+		// OUTSIDE the inferred one, so the section carries NOTHING.
+		const applied = applyVerifiedEvidenceToCompactedMessages(
+			sidecar,
+			canonical,
+		);
+		expect(applied.carriedOutcomeCount).toBe(0);
+		const sectionText =
+			(applied.messages[0].metadata as { summary?: string } | undefined)
+				?.summary ?? "";
+		expect(sectionText).not.toContain("call_fb");
+	});
+
+	it("the AUTHORITATIVE boundary does not omit that outcome", () => {
+		const canonical: MessageWithMetadata[] = [
+			userTurn("A"),
+			assistantTurn("B"),
+			toolCall("call_fb2", "run_commands", { commands: ["echo hi"] }),
+			toolResult("call_fb2", "run_commands", [
+				{ query: "echo hi", result: "ok", success: true },
+			]),
+			assistantTurn("E"),
+		];
+		const sidecar = [
+			compactionSummaryMessage(SUMMARY_PROSE),
+			canonical[3],
+			canonical[4],
+		];
+		// The SAME history, but with the authoritative boundary supplied.
+		const applied = applyVerifiedEvidenceToCompactedMessages(
+			sidecar,
+			canonical,
+			{
+				sourceMessageCount: 5,
+			},
+		);
+		expect(applied.carriedOutcomeCount).toBe(1);
+		const sectionText =
+			(applied.messages[0].metadata as { summary?: string } | undefined)
+				?.summary ?? "";
+		expect(sectionText).toContain("call_fb2");
 	});
 });
