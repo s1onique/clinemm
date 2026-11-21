@@ -374,4 +374,5 @@ experiment was **not** started inside this ACT, as instructed.
 | `08-baseline-head-suite-summary.txt` | the HEAD full-suite baseline summary |
 | `09-full-suite-comparison.txt` | baseline vs. after: 169 → 169 failed, 5974 → 6004 passed, zero regressions |
 | `10-state-proto-generator-defect.txt` | the state-proto generator defect (pre-existing) |
+| `11-suite-reproducibility.txt` | two independent post-ACT runs agree exactly (identical failing-file set) |
 | `verify-prime-equivalence.mjs` | the re-runnable prime-equivalence checker |
