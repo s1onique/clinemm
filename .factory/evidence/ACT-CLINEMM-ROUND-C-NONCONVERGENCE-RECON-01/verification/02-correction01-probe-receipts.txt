@@ -1,0 +1,47 @@
+# CORRECTION01 probe receipts — each command's exact invocation, exit code and output
+
+## 1. compaction-probe.py (F1)
+$ python3 tools/compaction-probe.py --capture-dir <private> --out compaction-probe.json
+provider requests total                       : 277
+requests carrying a compacted summary (STATE) : 257
+requests without a compacted summary          : 20
+distinct summary generations                  : 16
+compaction EVENTS observed (identity change)  : 16
+retention (task contract)                     : 257/257
+retention (completion obligation)             : 257/257
+retention (canonical evidence record)         : 257/257
+EXIT=0
+
+## 2. novelty-probe.py (F2)
+$ python3 tools/novelty-probe.py --session-dir <private> --out novelty-probe.json
+body tiers: {"CONTENT_DISTINCT": 342, "EMPTY": 26, "NONEMPTY_DUPLICATE_BODY": 3}
+source reads: 136 total; 129 added new lines; 7 were pure re-reads
+total new distinct lines added: 4388
+distinct sources read: 50
+FACTUALLY_NOVEL (decision-relevant): UNPROVEN at this layer
+EXIT=0
+
+## 3. build-timeline.py
+$ python3 tools/build-timeline.py --session-dir <private> --capture-dir <private> --out timeline.jsonl
+wrote 661 events to timeline.jsonl
+EXIT=0
+
+## 4. readiness-probe.py (F3)
+$ python3 tools/readiness-probe.py --session-dir <private> --out readiness-probe.json
+all_ten_subjects_verdicted=True
+  R1  first-verdict turn= 153 classes=CONFIRMED                              stability=STABLE
+  R2  first-verdict turn= 134 classes=CONFIRMED                              stability=REFINED
+  R3  first-verdict turn= 229 classes=NARROWED                               stability=REFINED
+  R4  first-verdict turn= 221 classes=CONDITIONAL,CONFIRMED,NARROWED         stability=REFINED
+  R5  first-verdict turn= 192 classes=CONFIRMED                              stability=REFINED
+  R6  first-verdict turn=  64 classes=CONDITIONAL,NARROWED                   stability=REFINED
+  R7  first-verdict turn= 177 classes=CONFIRMED                              stability=REFINED
+  R8  first-verdict turn= 271 classes=CONFIRMED                              stability=STABLE
+  R9  first-verdict turn=  56 classes=CONFIRMED,NARROWED                     stability=REFINED
+  R10 first-verdict turn=  53 classes=CONFIRMED                              stability=REFINED
+readiness_turn_index=271
+cost_after_readiness={"output_tokens_after_readiness": 71194, "tool_calls_after_readiness": 202, "turns_after_readiness": 174}
+readiness_semantics: first_recorded_verdict_coverage=271; independent_factual_sufficiency=UNPROVEN
+subjects_refined_after_first_assertion=[2, 3, 4, 5, 6, 7, 9, 10] (8/10)
+last_turn_all_ten_verdicts_STABLE=None (null when any subject's first assertion was later refined)
+EXIT=0

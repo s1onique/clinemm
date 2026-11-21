@@ -89,17 +89,27 @@ further investigation.
 
 ### 4.1 What the agent did after the readiness point (turn 271)
 
-| Measure | Value |
-|---|---|
-| Turns after readiness (before operator input) | **174** |
-| Tool calls after readiness | **202** |
-| Distinct command payloads after readiness | **202 / 202** (zero repeats) |
-| Payloads executed more than once | **0** |
-| Tool results with novel content | **186** |
-| Tool results that were an exact repeat of an earlier result | **1** |
-| Tool results that were empty (failed fetch / no output) | **15** |
-| Output tokens after readiness | **71,194** |
-| Wall-clock span of the whole autonomous phase | 10,004.6 s (2 h 46 m 45 s) |
+| Measure | Value | Evidence strength |
+|---|---|---|
+| Turns after turn 271 (before operator input) | **174** | measured |
+| Tool calls after turn 271 | **202** | measured |
+| Distinct command payloads after turn 271 | **202 / 202** (zero repeats) | measured — *diversity*, not information gain |
+| Payloads executed more than once | **0** | measured |
+| Tool results with `CONTENT_DISTINCT` bodies | **186** | measured — *body-level diversity only* |
+| Tool results that were an exact repeat of an earlier result | **1** | measured |
+| Tool results that were empty (failed fetch / no output) | **15** | measured |
+| Tool results that were **factually novel** | **UNPROVEN** | requires independent adjudication of R1–R10 |
+| Output tokens after turn 271 | **71,194** | measured |
+| Wall-clock span of the whole autonomous phase | 10,004.6 s (2 h 46 m 45 s) | measured |
+
+**CORRECTION01 F2.** The parent ACT reported "186 novel results" as proof
+that the post-readiness work was productive. That conflated
+`CONTENT_DISTINCT` with factual novelty. The corrected label is in the table
+above. The stronger, mechanically verifiable measurement is per-source
+novelty, reported in `novelty-probe.json` and summarised in
+`causal-discriminators.md` § H4: of **136** source-attributable reads, **129**
+added at least one previously-unseen line from that source and only **7** were
+pure re-reads.
 
 ### 4.2 Was useful new information still being discovered near the end?
 
@@ -204,24 +214,31 @@ behaviour the model never exhibited.
 Turn 271 is the **earliest** point at which all ten subjects had a recorded
 verdict. It is *not* the point after which work became worthless. The model
 kept refining verdicts — narrowing R4, empirically re-confirming R1 at turn
-636, and producing material new results (186 novel tool results after turn
+636, and producing materially new results (186 `CONTENT_DISTINCT` bodies after turn
 271, all with distinct commands).
 
-The correct reading is therefore:
+The correct reading, after CORRECTION01 F1/F2/F3, is:
 
-* The agent **had enough evidence to emit a defensible R1–R10 report at turn
-  271** (≈ 39 minutes into a 2 h 47 m run).
+* From turn 271 (≈ 39 minutes into a 2 h 47 m run) the model had **recorded
+  a verdict for all ten subjects**, and from turn 634 it **explicitly said**
+  it had enough for R4. Whether the report *could have been produced
+  correctly* at that point is **UNPROVEN** — 8 of 10 subjects' first
+  assertions were later refined, and the model may well have been correcting
+  early errors.
 * It spent a further **174 turns / 202 tool calls / 71,194 output tokens /
-  ≈ 1 h 42 m** refining that report, and **still did not emit it**.
-* The refinement was **productive** — it was not a redundant loop — so the
-  post-readiness work is **not** evidence of a harness-side evidence-collection
-  defect. It is evidence of a model that kept improving a deliverable it was
-  never structurally prevented from delivering.
+  ≈ 1 h 42 m** refining, and **still did not emit it**.
+* The refinement was **not a redundant loop** in the literal sense: only 7 of
+  136 source-attributable reads were pure re-reads, and 129 added new content
+  from their source. Whether every verdict change was *warranted* is not
+  established.
 
 This distinction matters for the successor selection in
 `qualification-report.md`: the harness cannot be said to have "wasted" the
-post-readiness effort, because the effort produced new information. What the
-harness *did* fail to do is provide any pressure to stop.
+post-readiness effort, because the effort demonstrably added new source
+content. What the harness *did* fail to do is provide any pressure to stop.
+The evidence-sufficiency half of the causal story remains open — which is
+precisely why the successor is an **experiment with independently assessed
+verdict quality**, not a repair.
 
 | **R5** indexes not reproducible from migrations | are 6 prod indexes absent from Liquibase? | the 6 index names are enumerated in `pg-index-diff-20260624T070800Z/index_delta_db1_to_db2.sql`; the changelogs create only `PHONE_MESSAGE_TOKEN_CODE_PHONE_NUMBER`, `IDX_TOKEN_CODE_IP_CREATED` (MARK_RAN), `IDX_BCALL_PENDING_PHONE`, `IDX_BCALL_PENDING_IP` | some indexes (user_attribute / user_entity) may be created by Keycloak core Liquibase, so "absent from changelogs" ≠ "absent from schema" | **Yes** — verdict at turn 192 | No | **Yes**, with the direction caveat the model applied |
 | **R6** OTP retention | are token-code rows purged? | only `insert` for `PHONE_MESSAGE_TOKEN_CODE`; no delete path; retention absent | retention may be handled operationally outside the code path | **Yes** — verdict at turn 64 | No | **Yes** — `CONDITIONAL`/`NARROWED` is a decidable answer |
@@ -243,9 +260,63 @@ cost_after_readiness={"output_tokens_after_readiness": 71194,
                       "turns_after_readiness": 174}
 ```
 
-**Earliest independently defensible synthesis point: transcript turn 271**
+**First recorded verdict COVERAGE: transcript turn 271**
 (2026-11-21T09:55:18.482Z), the turn at which R8 received its first verdict
 assertion.
 
-`READINESS_UNPROVEN` is **not** reported: readiness is established, with the
-rubric, the per-subject evidence and the probe all published.
+---
+
+## 2.1 CORRECTION01 F3 — the readiness claim is NARROWED
+
+The parent ACT reported turn 271 as the "earliest independently defensible
+synthesis point" and asserted that the necessary evidence was therefore
+available for the whole run. **That was a promotion beyond the rubric**, and
+this section replaces it.
+
+**What the rubric actually measures.** It detects *the model's own recorded
+adjudication language*. It therefore establishes **first recorded verdict
+COVERAGE** — the earliest turn at which all ten subjects had some recorded
+verdict assertion. It does **not** establish independent factual sufficiency.
+
+**The measurement that shows the promotion was wrong.** The rubric can now
+also report per-subject verdict **stability**:
+
+| Subject | First assertion | Stability |
+|---|---|---|
+| R1 | 153 | `STABLE` |
+| R2 | 134 | `REFINED` |
+| R3 | 229 | `REFINED` |
+| R4 | 221 | `REFINED` |
+| R5 | 192 | `REFINED` |
+| R6 | 64 | `REFINED` |
+| R7 | 177 | `REFINED` |
+| R8 | 271 | `STABLE` |
+| R9 | 56 | `REFINED` |
+| R10 | 53 | `REFINED` |
+
+**8 of 10 subjects** had their first verdict assertion **later refined**
+(R2, R3, R4, R5, R6, R7, R9, R10). Only R1 and R8 were stable. A first
+assertion that the model itself later refined was, on the model's own
+account, **not final** — so its turn is **not** a defensible synthesis point
+for that subject.
+
+Consequently:
+
+* `last_turn_all_ten_verdicts_STABLE` = **`null`** — there is **no** turn at
+  which all ten subjects had a verdict that was never subsequently revised.
+* **Independent readiness is `UNPROVEN`.**
+* The parent's "readiness established" phrasing is **withdrawn**.
+
+**What survives.** The readiness analysis still establishes a *bounded and
+honest* cost figure: after turn 271 the model performed **174 further turns
+/ 202 tool calls / 71,194 output tokens** without submitting. And it still
+records the model's own explicit sufficiency statements (turn 634: *"I have
+enough for R4"*). What it does **not** establish is that the report could
+have been produced correctly at turn 271 — only that the model *believed* it
+had enough from turn 271 onward, and kept working.
+
+**Consequence for the causal claim.** The H1 verdict does not rest on
+readiness. It rests on the two directly measured facts: the completion route
+and the completion obligation were present in **277 / 277** pre-intervention
+requests, and the model invoked the route **0** times. The readiness
+analysis is now a **supporting** observation, not a load-bearing premise.

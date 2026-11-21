@@ -105,6 +105,9 @@ def main() -> int:
 
     first_verdict: dict[int, dict[str, Any]] = {}
     per_turn: list[dict[str, Any]] = []
+    # CORRECTION01 F3: the FULL assertion history per subject, so that
+    # stability (was the first assertion later refined?) can be assessed.
+    subject_assertions: dict[int, list[tuple[int, tuple[str, ...]]]] = {}
 
     for index, message in enumerate(messages):
         if message.get("role") != "assistant":
@@ -137,6 +140,9 @@ def main() -> int:
                 if subject in SUBJECTS:
                     attributed.setdefault(subject, set()).update(s_classes)
         for subject, s_classes in attributed.items():
+            subject_assertions.setdefault(subject, []).append(
+                (index, tuple(sorted(s_classes)))
+            )
             if subject not in first_verdict:
                 first_verdict[subject] = {
                     "turn_index": index,
@@ -157,6 +163,47 @@ def main() -> int:
     readiness_turn = None
     if complete:
         readiness_turn = max(first_verdict[s]["turn_index"] for s in SUBJECTS)
+
+    # CORRECTION01 F3: verdict STABILITY. A subject whose verdict class set
+    # changed after its first assertion was REFINEd: its first assertion was
+    # not final, so the first-assertion turn is not a defensible synthesis
+    # point for that subject.
+    verdict_stability: dict[str, Any] = {}
+    refined_subjects: set[int] = set()
+    stable_coverage_turns: list[int] = []
+    for s in SUBJECTS:
+        assertions = subject_assertions.get(s, [])
+        if not assertions:
+            verdict_stability[f"R{s}"] = {"status": "NO_ASSERTION"}
+            continue
+        first_classes = set(assertions[0][1])
+        later = [a for a in assertions[1:] if set(a[1]) != first_classes]
+        if later:
+            refined_subjects.add(s)
+            verdict_stability[f"R{s}"] = {
+                "status": "REFINED",
+                "first_assertion_turn": assertions[0][0],
+                "first_classes": sorted(first_classes),
+                "later_assertion_turns": [a[0] for a in assertions[1:]],
+                "refined_at_turns": [a[0] for a in later],
+                "all_classes": sorted({c for _, cs in assertions for c in cs}),
+            }
+        else:
+            verdict_stability[f"R{s}"] = {
+                "status": "STABLE",
+                "first_assertion_turn": assertions[0][0],
+                "first_classes": sorted(first_classes),
+                "later_assertion_turns": [a[0] for a in assertions[1:]],
+                "all_classes": sorted({c for _, cs in assertions for c in cs}),
+            }
+            stable_coverage_turns.append(assertions[0][0])
+
+    # The turn at which every subject had a verdict assertion that was never
+    # subsequently refined. This is the strongest readiness statement the
+    # trace supports.
+    last_stable_turn = None
+    if len(stable_coverage_turns) == len(SUBJECTS):
+        last_stable_turn = max(stable_coverage_turns)
 
     cost_after: dict[str, Any] = {}
     if readiness_turn is not None:
@@ -191,6 +238,25 @@ def main() -> int:
         "cost_after_readiness": cost_after,
         "operator_input_index": args.operator_index,
         "per_turn_verdict_index": per_turn,
+        # CORRECTION01 F3: the rubric measures the model's OWN recorded
+        # adjudication language. It therefore establishes FIRST RECORDED
+        # VERDICT COVERAGE, NOT independent factual sufficiency.
+        # `readiness_semantics` states exactly what the number means.
+        "readiness_semantics": {
+            "measures": "first recorded verdict-assertion coverage over R1..R10",
+            "does_not_measure": "independent factual sufficiency of the evidence",
+            "independent_readiness": "UNPROVEN",
+            "refinement_correction": (
+                "A subject whose verdict was later REFINEd means its first "
+                "assertion was not final; the first-assertion turn therefore "
+                "cannot be treated as a defensible synthesis point for that "
+                "subject."
+            ),
+        },
+        # CORRECTION01 F3: per-subject verdict stability.
+        "verdict_stability": verdict_stability,
+        "subjects_refined_after_first_assertion": sorted(refined_subjects),
+        "last_stable_coverage_turn": last_stable_turn,
     }
 
     with open(args.out, "w", encoding="utf-8") as handle:
@@ -200,14 +266,30 @@ def main() -> int:
     for s in SUBJECTS:
         fv = first_verdict.get(s)
         if fv:
+            stab = verdict_stability[f"R{s}"]
             print(
                 f"  R{s:<2} first-verdict turn={fv['turn_index']:>4} "
-                f"classes={','.join(fv['verdict_classes'])}"
+                f"classes={','.join(fv['verdict_classes']):<38} "
+                f"stability={stab['status']}"
             )
         else:
             print(f"  R{s:<2} NO VERDICT ASSERTION FOUND")
     print(f"readiness_turn_index={readiness_turn}")
     print(f"cost_after_readiness={json.dumps(cost_after, sort_keys=True)}")
+    # CORRECTION01 F3: the corrected, bounded readiness statements.
+    print(
+        "readiness_semantics: first_recorded_verdict_coverage="
+        f"{readiness_turn}; independent_factual_sufficiency=UNPROVEN"
+    )
+    print(
+        "subjects_refined_after_first_assertion="
+        f"{sorted(refined_subjects)} ({len(refined_subjects)}/{len(SUBJECTS)})"
+    )
+    print(
+        "last_turn_all_ten_verdicts_STABLE="
+        f"{last_stable_turn} "
+        "(null when any subject's first assertion was later refined)"
+    )
     return 0
 
 

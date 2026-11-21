@@ -1,0 +1,373 @@
+{
+  "body_tier_counts": {
+    "CONTENT_DISTINCT": 342,
+    "EMPTY": 26,
+    "NONEMPTY_DUPLICATE_BODY": 3
+  },
+  "distinct_sources_read": 50,
+  "operator_input_index": 650,
+  "probe_id": "CORRECTION01_F2_EVIDENCE_STRENGTH_V1",
+  "semantics": {
+    "CONTENT_DISTINCT": "a body exists and differs from every other body seen",
+    "EMPTY": "no result body",
+    "FACTUALLY_NOVEL": "NOT ESTABLISHED AT THIS LAYER -- would require independent adjudication of R1-R10, which this ACT does not perform",
+    "NONEMPTY_DUPLICATE_BODY": "a body exists and is byte-identical to an earlier body",
+    "SOURCE_CONTENT_NOVEL": "a read of the SAME source added at least one normalised line that had not been observed from that source before"
+  },
+  "source_reads_adding_new_lines": 129,
+  "source_reads_adding_zero_new_lines": 7,
+  "source_reads_total": 136,
+  "sources": [
+    {
+      "new_distinct_lines_added": 823,
+      "reads": 35,
+      "reads_adding_no_new_lines": 0,
+      "source_fingerprint": "sha256:3fafd0ce3108002b",
+      "source_kind": "FILE_PATH"
+    },
+    {
+      "new_distinct_lines_added": 437,
+      "reads": 13,
+      "reads_adding_no_new_lines": 0,
+      "source_fingerprint": "sha256:201188b0abf4837c",
+      "source_kind": "FILE_PATH"
+    },
+    {
+      "new_distinct_lines_added": 423,
+      "reads": 1,
+      "reads_adding_no_new_lines": 0,
+      "source_fingerprint": "sha256:922c47cba811729a",
+      "source_kind": "FILE_PATH"
+    },
+    {
+      "new_distinct_lines_added": 229,
+      "reads": 5,
+      "reads_adding_no_new_lines": 0,
+      "source_fingerprint": "sha256:ed81da773f8d060c",
+      "source_kind": "FILE_PATH"
+    },
+    {
+      "new_distinct_lines_added": 188,
+      "reads": 1,
+      "reads_adding_no_new_lines": 0,
+      "source_fingerprint": "sha256:c72e12c7477ed4f8",
+      "source_kind": "FILE_PATH"
+    },
+    {
+      "new_distinct_lines_added": 160,
+      "reads": 5,
+      "reads_adding_no_new_lines": 2,
+      "source_fingerprint": "sha256:789bbbb43f496bf2",
+      "source_kind": "FILE_PATH"
+    },
+    {
+      "new_distinct_lines_added": 157,
+      "reads": 4,
+      "reads_adding_no_new_lines": 0,
+      "source_fingerprint": "sha256:c4a80cf62e345beb",
+      "source_kind": "FILE_PATH"
+    },
+    {
+      "new_distinct_lines_added": 143,
+      "reads": 7,
+      "reads_adding_no_new_lines": 0,
+      "source_fingerprint": "sha256:e50294f83eb42634",
+      "source_kind": "FILE_PATH"
+    },
+    {
+      "new_distinct_lines_added": 137,
+      "reads": 3,
+      "reads_adding_no_new_lines": 1,
+      "source_fingerprint": "sha256:b9cca0937a259d20",
+      "source_kind": "FILE_PATH"
+    },
+    {
+      "new_distinct_lines_added": 126,
+      "reads": 1,
+      "reads_adding_no_new_lines": 0,
+      "source_fingerprint": "sha256:0969d43335f76a3c",
+      "source_kind": "URL"
+    },
+    {
+      "new_distinct_lines_added": 118,
+      "reads": 3,
+      "reads_adding_no_new_lines": 0,
+      "source_fingerprint": "sha256:7560e8f53c6eee8d",
+      "source_kind": "FILE_PATH"
+    },
+    {
+      "new_distinct_lines_added": 107,
+      "reads": 4,
+      "reads_adding_no_new_lines": 0,
+      "source_fingerprint": "sha256:73644a98d902d158",
+      "source_kind": "FILE_PATH"
+    },
+    {
+      "new_distinct_lines_added": 106,
+      "reads": 1,
+      "reads_adding_no_new_lines": 0,
+      "source_fingerprint": "sha256:34a91a41302033c0",
+      "source_kind": "URL"
+    },
+    {
+      "new_distinct_lines_added": 103,
+      "reads": 1,
+      "reads_adding_no_new_lines": 0,
+      "source_fingerprint": "sha256:eac053d15f14d9db",
+      "source_kind": "FILE_PATH"
+    },
+    {
+      "new_distinct_lines_added": 88,
+      "reads": 2,
+      "reads_adding_no_new_lines": 1,
+      "source_fingerprint": "sha256:519885d203d7a73a",
+      "source_kind": "FILE_PATH"
+    },
+    {
+      "new_distinct_lines_added": 77,
+      "reads": 4,
+      "reads_adding_no_new_lines": 1,
+      "source_fingerprint": "sha256:8eb3f325224f5c50",
+      "source_kind": "FILE_PATH"
+    },
+    {
+      "new_distinct_lines_added": 76,
+      "reads": 1,
+      "reads_adding_no_new_lines": 0,
+      "source_fingerprint": "sha256:68a8bbff5f4208ac",
+      "source_kind": "FILE_PATH"
+    },
+    {
+      "new_distinct_lines_added": 71,
+      "reads": 1,
+      "reads_adding_no_new_lines": 0,
+      "source_fingerprint": "sha256:748ae64709abda3c",
+      "source_kind": "FILE_PATH"
+    },
+    {
+      "new_distinct_lines_added": 64,
+      "reads": 1,
+      "reads_adding_no_new_lines": 0,
+      "source_fingerprint": "sha256:9fdf27eb86f4f15f",
+      "source_kind": "FILE_PATH"
+    },
+    {
+      "new_distinct_lines_added": 60,
+      "reads": 3,
+      "reads_adding_no_new_lines": 2,
+      "source_fingerprint": "sha256:fd8dcc2d9d5f9423",
+      "source_kind": "FILE_PATH"
+    },
+    {
+      "new_distinct_lines_added": 58,
+      "reads": 1,
+      "reads_adding_no_new_lines": 0,
+      "source_fingerprint": "sha256:1f338e2deb52cf7e",
+      "source_kind": "FILE_PATH"
+    },
+    {
+      "new_distinct_lines_added": 54,
+      "reads": 2,
+      "reads_adding_no_new_lines": 0,
+      "source_fingerprint": "sha256:336dcf716686e8d7",
+      "source_kind": "FILE_PATH"
+    },
+    {
+      "new_distinct_lines_added": 54,
+      "reads": 1,
+      "reads_adding_no_new_lines": 0,
+      "source_fingerprint": "sha256:550153e23b345b52",
+      "source_kind": "FILE_PATH"
+    },
+    {
+      "new_distinct_lines_added": 50,
+      "reads": 1,
+      "reads_adding_no_new_lines": 0,
+      "source_fingerprint": "sha256:b44012340f072cf9",
+      "source_kind": "FILE_PATH"
+    },
+    {
+      "new_distinct_lines_added": 47,
+      "reads": 1,
+      "reads_adding_no_new_lines": 0,
+      "source_fingerprint": "sha256:5fc88fa2af81e6d9",
+      "source_kind": "FILE_PATH"
+    },
+    {
+      "new_distinct_lines_added": 44,
+      "reads": 3,
+      "reads_adding_no_new_lines": 0,
+      "source_fingerprint": "sha256:b485124340df0349",
+      "source_kind": "FILE_PATH"
+    },
+    {
+      "new_distinct_lines_added": 43,
+      "reads": 1,
+      "reads_adding_no_new_lines": 0,
+      "source_fingerprint": "sha256:9a90dc8580dcdf4e",
+      "source_kind": "FILE_PATH"
+    },
+    {
+      "new_distinct_lines_added": 42,
+      "reads": 1,
+      "reads_adding_no_new_lines": 0,
+      "source_fingerprint": "sha256:f6ec555e870d882a",
+      "source_kind": "FILE_PATH"
+    },
+    {
+      "new_distinct_lines_added": 28,
+      "reads": 1,
+      "reads_adding_no_new_lines": 0,
+      "source_fingerprint": "sha256:47198d7fcaf471f3",
+      "source_kind": "FILE_PATH"
+    },
+    {
+      "new_distinct_lines_added": 26,
+      "reads": 1,
+      "reads_adding_no_new_lines": 0,
+      "source_fingerprint": "sha256:969c5bd5d36acd2f",
+      "source_kind": "FILE_PATH"
+    },
+    {
+      "new_distinct_lines_added": 25,
+      "reads": 1,
+      "reads_adding_no_new_lines": 0,
+      "source_fingerprint": "sha256:e186d3264f762116",
+      "source_kind": "URL"
+    },
+    {
+      "new_distinct_lines_added": 24,
+      "reads": 1,
+      "reads_adding_no_new_lines": 0,
+      "source_fingerprint": "sha256:697b7a9296f0f492",
+      "source_kind": "FILE_PATH"
+    },
+    {
+      "new_distinct_lines_added": 22,
+      "reads": 1,
+      "reads_adding_no_new_lines": 0,
+      "source_fingerprint": "sha256:a4d16d2c9c1480cb",
+      "source_kind": "URL"
+    },
+    {
+      "new_distinct_lines_added": 21,
+      "reads": 1,
+      "reads_adding_no_new_lines": 0,
+      "source_fingerprint": "sha256:95e0a42d9d6b5d82",
+      "source_kind": "FILE_PATH"
+    },
+    {
+      "new_distinct_lines_added": 21,
+      "reads": 1,
+      "reads_adding_no_new_lines": 0,
+      "source_fingerprint": "sha256:e56fa4d9d98583bd",
+      "source_kind": "FILE_PATH"
+    },
+    {
+      "new_distinct_lines_added": 15,
+      "reads": 4,
+      "reads_adding_no_new_lines": 0,
+      "source_fingerprint": "sha256:e8386f12ae261b3c",
+      "source_kind": "URL"
+    },
+    {
+      "new_distinct_lines_added": 15,
+      "reads": 1,
+      "reads_adding_no_new_lines": 0,
+      "source_fingerprint": "sha256:f0e15d8d2308664c",
+      "source_kind": "FILE_PATH"
+    },
+    {
+      "new_distinct_lines_added": 14,
+      "reads": 1,
+      "reads_adding_no_new_lines": 0,
+      "source_fingerprint": "sha256:eab8db20e010ef49",
+      "source_kind": "FILE_PATH"
+    },
+    {
+      "new_distinct_lines_added": 13,
+      "reads": 1,
+      "reads_adding_no_new_lines": 0,
+      "source_fingerprint": "sha256:0989fd99d1776a75",
+      "source_kind": "URL"
+    },
+    {
+      "new_distinct_lines_added": 13,
+      "reads": 3,
+      "reads_adding_no_new_lines": 0,
+      "source_fingerprint": "sha256:7400f7aca6e07131",
+      "source_kind": "URL"
+    },
+    {
+      "new_distinct_lines_added": 13,
+      "reads": 3,
+      "reads_adding_no_new_lines": 0,
+      "source_fingerprint": "sha256:a312fb53aad19eca",
+      "source_kind": "FILE_PATH"
+    },
+    {
+      "new_distinct_lines_added": 12,
+      "reads": 1,
+      "reads_adding_no_new_lines": 0,
+      "source_fingerprint": "sha256:f58192b0080ebb90",
+      "source_kind": "FILE_PATH"
+    },
+    {
+      "new_distinct_lines_added": 10,
+      "reads": 1,
+      "reads_adding_no_new_lines": 0,
+      "source_fingerprint": "sha256:6be2a94092e542ee",
+      "source_kind": "URL"
+    },
+    {
+      "new_distinct_lines_added": 9,
+      "reads": 1,
+      "reads_adding_no_new_lines": 0,
+      "source_fingerprint": "sha256:d371c3cabd91cf2a",
+      "source_kind": "FILE_PATH"
+    },
+    {
+      "new_distinct_lines_added": 7,
+      "reads": 1,
+      "reads_adding_no_new_lines": 0,
+      "source_fingerprint": "sha256:bc4fd0dbb8e5cfb2",
+      "source_kind": "URL"
+    },
+    {
+      "new_distinct_lines_added": 5,
+      "reads": 1,
+      "reads_adding_no_new_lines": 0,
+      "source_fingerprint": "sha256:28a22f99af2d8dde",
+      "source_kind": "URL"
+    },
+    {
+      "new_distinct_lines_added": 5,
+      "reads": 1,
+      "reads_adding_no_new_lines": 0,
+      "source_fingerprint": "sha256:b75dca7d3615dbb9",
+      "source_kind": "FILE_PATH"
+    },
+    {
+      "new_distinct_lines_added": 2,
+      "reads": 1,
+      "reads_adding_no_new_lines": 0,
+      "source_fingerprint": "sha256:375d39534d6e3cc2",
+      "source_kind": "URL"
+    },
+    {
+      "new_distinct_lines_added": 2,
+      "reads": 1,
+      "reads_adding_no_new_lines": 0,
+      "source_fingerprint": "sha256:d7170d9aa629ba56",
+      "source_kind": "FILE_PATH"
+    },
+    {
+      "new_distinct_lines_added": 1,
+      "reads": 1,
+      "reads_adding_no_new_lines": 0,
+      "source_fingerprint": "sha256:343d55dbcb262421",
+      "source_kind": "FILE_PATH"
+    }
+  ],
+  "total_new_distinct_lines_added": 4388
+}

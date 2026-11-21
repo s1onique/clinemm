@@ -1,12 +1,27 @@
 # qualification-report.md — ACT-CLINEMM-ROUND-C-NONCONVERGENCE-RECON-01
 
-**Outcome: `PASS_BOUNDARY_CLASSIFIED`**
+**Outcome: `PASS_BOUNDARY_CLASSIFIED`** (corrected under
+`ACT-CLINEMM-ROUND-C-NONCONVERGENCE-RECON-CORRECTION01`)
 
 The causal boundary is classified. **No harness-owned defect was reproduced.**
+
+> **CORRECTION01 summary.** Three overclaims found by expert review were
+> corrected; the corrections are evidence-only and touch no production code.
+>
+> | | Parent ACT claim | Corrected claim |
+> |---|---|---|
+> | **F1** | "257 compaction boundaries" | **257 requests carried a compacted summary; 16 compaction EVENTS observed** (summary-identity changes). Retention 257/257 unchanged. |
+> | **F2** | "186 novel results ⇒ productive" | tiers separated: `EMPTY` 26 / `CONTENT_DISTINCT` 342 / `NONEMPTY_DUPLICATE_BODY` 3 / `FACTUALLY_NOVEL` **UNPROVEN**. New per-source novelty measurement added. **H4 → INCONCLUSIVE.** |
+> | **F3** | "readiness established at turn 271" | **first recorded verdict COVERAGE at turn 271**; independent sufficiency **UNPROVEN**; 8/10 first assertions later **REFINED**. **H1 SUPPORTED but not proved exclusive.** |
+>
+> **H2 and H5 are unchanged and were re-verified against the same captures.**
+
 The autonomous non-completion is attributable to **H1 — model stopping
-judgment** — the model continued choosing tools despite having the evidence, an
-explicit completion obligation, and a working completion route, all present
-simultaneously in every one of the 277 pre-intervention provider requests.
+judgment**: the model continued choosing tools despite an explicit completion
+obligation and a working completion route, both present simultaneously in
+every one of the 277 pre-intervention provider requests. The *sufficiency of
+the evidence* half of H1 is now explicitly **UNPROVEN**, and H4 is
+**INCONCLUSIVE** rather than refuted.
 
 ---
 
@@ -30,27 +45,56 @@ turns contained at least one tool call, so the runtime's zero-tool-call
 completion re-injection path
 (`sdk/packages/agents/src/agent-runtime.ts:2031-2045`) was **never reached**.
 
-### F3 — The evidence was sufficient from turn 271
+### F3 — First recorded verdict coverage was reached at turn 271 (CORRECTED)
 
 Under the frozen rubric (`ROUND_C_FROZEN_VERDICT_ASSERTION_RUBRIC_V1`), all
-ten subjects R1–R10 had a recorded verdict assertion by transcript turn 271 —
-**≈ 39 minutes** into a run that lasted 2 h 46 m 45 s. The model then spent a
-further 174 turns / 202 tool calls / 71,194 output tokens / ≈ 1 h 42 m
+ten subjects R1–R10 had a **recorded verdict assertion** by transcript turn
+271 — **≈ 39 minutes** into a run that lasted 2 h 46 m 45 s. The model then
+spent a further 174 turns / 202 tool calls / 71,194 output tokens / ≈ 1 h 42 m
 refining, without emitting.
 
-### F4 — The post-readiness work was productive, not redundant
+**CORRECTION01 F3 — this is now bounded.** The rubric measures the model's
+*own* adjudication language, so turn 271 establishes **first recorded verdict
+COVERAGE**, **not** independent factual sufficiency. The corrected probe
+shows **8 of 10 subjects' first assertions were later REFINED** (R2, R3, R4,
+R5, R6, R7, R9, R10); only R1 and R8 were stable. `last_turn_all_ten_verdicts_STABLE`
+is **`null`**, and independent readiness is **UNPROVEN**. The model may have
+been correcting early errors — which is exactly why the successor experiment
+must measure **independently assessed** verdict quality.
+
+### F4 — The post-readiness work added new source content (CORRECTED)
 
 202 tool calls after turn 271 used **202 distinct command payloads** (zero
-repeats) and produced **186 novel results**. New verdict assertions appeared in
-every 50-turn window to the end of the run. This is why the ACT does **not**
-attribute the duration to a harness-side evidence-collection defect, and why a
-stop-after-N-tools rule would have been the wrong remedy.
+repeats). New verdict assertions appeared in every 50-turn window to the end
+of the run.
 
-### F5 — Compaction lost nothing
+**CORRECTION01 F2 — the tier is now stated honestly.** "186 novel results"
+was a body-level diversity measurement, not proof of factual novelty; the
+correct label is `CONTENT_DISTINCT` 186, with `FACTUALLY_NOVEL` **UNPROVEN**.
 
-257 real compaction boundaries; **0 / 257** summaries lost the task contract or
-the runtime completion obligation; **0 / 277** provider requests lacked the
-obligation. The compaction/task-contract conservation machinery did its job.
+The stronger, mechanically verifiable measurement is **per-source novelty**:
+of **136** source-attributable reads, **129** added at least one
+previously-unseen line from that source and only **7** were pure re-reads,
+adding **4,388** new distinct lines. So the post-readiness work was **not** a
+literal re-litigation of settled questions. Whether every verdict change was
+*warranted* is **not** established, which is why **H4 is INCONCLUSIVE**
+rather than refuted.
+
+### F5 — Contract retention held; the compaction count is corrected (CORRECTION01 F1)
+
+**16 compaction EVENTS** were observed, not 257: a summary *persists* across
+requests, so the parent ACT's "257 compaction boundaries" was a request count
+mistaken for an event count. The authoritative discriminator is a change in
+the carried summary's **identity** (a new compaction replaces the summary).
+
+**257 / 257** requests carrying a compacted summary retained the task
+contract, the runtime completion obligation **and** the canonical evidence
+record. **0 / 277** provider requests lacked the obligation.
+
+What is **not** established: that the canonical evidence was preserved *in
+full* across a compaction — the `<!-- cline-evidence:begin -->` record is a
+bounded projection, and the probe verifies its presence, not its
+completeness. **H3 is NARROWED accordingly.**
 
 ### F6 — No budget, truncation or generation boundary was applied
 
@@ -93,13 +137,21 @@ non-completion (it never engaged during phase A).
    iteration 278 was dispatched. The ACT does not invent a cause. This does
    not affect the classification: the absence of `submit_and_exit` is
    established independently and the quiescence is consistent with it.
-2. **The readiness rubric is a proxy.** It measures *the model's own recorded
-   adjudication language*, not an external oracle for "sufficient evidence".
-   It is deliberately conservative (a subject is only ready once the model
-   itself adjudicated it), it was frozen before inspection, and it was NOT
-   derived from final-answer length, confidence, or any later statement. A
-   stricter rubric would move the readiness point **later**, never earlier,
-   which would only strengthen the finding.
+2. **The readiness rubric is a proxy (CORRECTION01 F3).** It measures *the
+   model's own recorded adjudication language*, not an external oracle for
+   "sufficient evidence". Turn 271 is therefore **first recorded verdict
+   COVERAGE**, and independent factual sufficiency is **UNPROVEN**. The
+   measured refinement rate (**8 of 10** first assertions were later
+   refined) is positive evidence that the first assertions were not final, so
+   no defensible synthesis turn can be named for all ten subjects. The
+   parent ACT's assertion that "necessary evidence was available throughout
+   all 277 requests" is **withdrawn**.
+2b. **Factual novelty is unproven (CORRECTION01 F2).** `CONTENT_DISTINCT`
+   (342) and the per-source novelty figures (129/136 reads added new content)
+   are diversity/source-content measurements. Whether a given result
+   contributed a new **decision-relevant fact** would require an independent
+   adjudication of R1–R10, which this ACT does not perform. **H4 is
+   INCONCLUSIVE**, not refuted.
 3. **The per-subject evidence matrix (§ 3 of `readiness-analysis.md`) reports
    the model's adjudications**, not an independent re-adjudication of the
    Keycloak findings. Re-adjudicating R1–R10 is a different act and is not
@@ -167,6 +219,15 @@ tool schema, varying **only** whether a mid-run completion affordance is
 present. **No production behaviour changes**; the affordance is injected by the
 experiment harness, not by a product change.
 
+**CORRECTION01 — start with one bounded paired pilot**, not another
+unrestricted multi-hour run. The parent ACT's open question is now sharper:
+H1's "had the evidence" half is **UNPROVEN**, so the experiment must
+establish, in the same run, (a) whether the affordance produces autonomous
+completion, and (b) whether the verdict quality is preserved. A single
+paired pilot on a shortened task is sufficient to discriminate
+model-limited convergence from harness-limited convergence; a multi-hour
+unrestricted run is not, and repeats the failure mode this ACT just analysed.
+
 | Arm | Configuration | Measures |
 |---|---|---|
 | **Control** | current production contract (obligation at run start + on zero-tool-call turns) — i.e. exactly the historical condition | whether the model converges autonomously |
@@ -178,7 +239,8 @@ experiment harness, not by a product change.
   of a single observation, with no evidence that the harness is at fault. The
   ACT's own rules forbid that.
 * The post-readiness evidence shows that the *work* was productive
-  (202 distinct commands, 186 novel results). A blunt stop would destroy
+  (202 distinct commands, 186 `CONTENT_DISTINCT` bodies; 129 / 136
+  source-attributable reads added new content). A blunt stop would destroy
   value; a cadence affordance tests the specific hypothesis ("would a
   periodic reminder have converted this model?") without truncating work.
 * The treatment arm is explicitly **not** a stop-after-N-tools rule: it never
@@ -189,12 +251,18 @@ and turn budget.
 
 **Secondary endpoints (to detect the cost of the affordance):**
 
-* the R1–R10 verdict-quality delta between arms (the treatment must not
-  degrade the deliverable — this is the real risk, and the reason a blunt
-  stop is wrong);
+* **independently assessed verdict quality** between arms — this is now the
+  decisive secondary endpoint, because CORRECTION01 F3 left the evidence-
+  sufficiency question open. The quality assessment must be performed by an
+  assessor that did **not** watch the arm, and must be independent of the
+  model's own recorded adjudication language (which is what the parent ACT's
+  rubric measured, and what this correction narrowed);
 * the number of tool calls and output tokens per arm;
 * the number of post-readiness tool calls in the treatment arm (to detect that
-  the affordance merely interrupts work rather than enabling it).
+  the affordance merely interrupts work rather than enabling it);
+* the **per-source novelty** metric (from `tools/novelty-probe.py`) in each
+  arm, so that a treatment arm that converges by *abandoning* investigation
+  is distinguishable from one that converges after doing the work.
 
 **Stopping rule:** if the treatment arm does not converge autonomously, or
 converges with a material verdict-quality regression, the result is recorded
@@ -218,16 +286,26 @@ which is itself a valuable, publishable outcome.
 |---|---|
 | Autonomous and assisted phases are separated | ✅ §F7 — four intervals with exact timestamps |
 | The completion-tool path is inspected at the real production boundary | ✅ provider-visible tool schema in all 277 pre-intervention requests; registration, obligation, enforcement seams mapped in `source-map.md` §3 |
-| Evidence readiness is established or explicitly marked unknown | ✅ **established** at turn 271 under a frozen rubric; not `READINESS_UNPROVEN` |
-| The five hypotheses are supported, rejected or marked unobservable using exact evidence | ✅ H1 SUPPORTED; H2, H3, H4, H5 REFUTED — each with its required discriminator, evidence, controls and counterexamples |
+| Evidence readiness is established or explicitly marked unknown | ✅ **explicitly marked unknown**: first recorded verdict COVERAGE at turn 271; independent sufficiency **UNPROVEN** (CORRECTION01 F3) |
+| The five hypotheses are supported, rejected or marked unobservable using exact evidence | ✅ H1 SUPPORTED (not proved exclusive); H2 REFUTED; H3 NARROWED; H4 INCONCLUSIVE; H5 REFUTED — each with its required discriminator, evidence, controls and counterexamples |
 | Every harness-owned defect claim has a reproducing RED and relevant control | ✅ **vacuously satisfied** — no harness-owned defect claim is made; the production seam was exercised green as a control (`verification/01-production-seam-definitions-test.txt`, exit 0, 87 passed) |
 | Artifacts are sanitized and bound to exact source identities | ✅ `artifact-hashes.json`; timeline carries fingerprints only, no raw text or credentials |
 | No production change was made | ✅ `git status --porcelain` empty apart from the ACT evidence directory |
 
-**Dispositions:** `HALT_RED_NOT_REPRODUCED` is recorded for each of H2, H3, H4
-and H5 individually (no RED could be constructed because no defect exists).
-`HALT_P0` does **not** apply: no correctness or security blocker was
-established. `CAPTURE_INSUFFICIENT` does **not** apply: the required causal
-observations (tool schema, obligation text, compaction boundaries, token
-counts, dispatch correlation) were all present and were joined
-authoritatively.
+**Dispositions (CORRECTION01):** `HALT_RED_NOT_REPRODUCED` is recorded for
+each of H2, H3, H4 and H5 individually (no RED could be constructed because no
+defect exists; for H4 the correct record is `INCONCLUSIVE`, which is not a
+defect finding in either direction). `HALT_P0` does **not** apply: no
+correctness or security blocker was established. `CAPTURE_INSUFFICIENT` does
+**not** apply: the required causal observations (tool schema, obligation text,
+compaction boundaries, token counts, dispatch correlation) were all present
+and were joined authoritatively.
+
+**CORRECTION01 exit requirements — all met:**
+
+| Requirement | Status |
+|---|---|
+| Correct the compaction count or mark it unavailable | ✅ **corrected**: 16 compaction EVENTS (identity-change transitions) vs 257 requests carrying a summary; both numbers published with their meaning (`compaction-probe.json`) |
+| Relabel the novelty/readiness measurements to their actual evidence strength | ✅ tiers separated (`EMPTY`/`NONEMPTY`/`CONTENT_DISTINCT`); `FACTUALLY_NOVEL` marked unproven; readiness relabelled as first recorded verdict COVERAGE with stability measured |
+| Narrow H3/H4 conclusions where necessary | ✅ H3 REFUTED → **NARROWED**; H4 REFUTED → **INCONCLUSIVE**; H1 SUPPORTED → **SUPPORTED, not proved exclusive** |
+| Re-run the existing probes, regenerate affected artifacts and hashes, and commit | ✅ all five probes re-run; `timeline.jsonl`, `readiness-probe.json`, `compaction-probe.json`, `novelty-probe.json` regenerated; `artifact-hashes.json` regenerated; committed |

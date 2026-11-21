@@ -5,6 +5,7 @@
     "tool_calls_after_readiness": 202,
     "turns_after_readiness": 174
   },
+  "last_stable_coverage_turn": null,
   "operator_input_index": 650,
   "per_subject_first_verdict": {
     "R1": {
@@ -2947,6 +2948,12 @@
       ]
     }
   ],
+  "readiness_semantics": {
+    "does_not_measure": "independent factual sufficiency of the evidence",
+    "independent_readiness": "UNPROVEN",
+    "measures": "first recorded verdict-assertion coverage over R1..R10",
+    "refinement_correction": "A subject whose verdict was later REFINEd means its first assertion was not final; the first-assertion turn therefore cannot be treated as a defensible synthesis point for that subject."
+  },
   "readiness_turn_index": 271,
   "rubric_id": "ROUND_C_FROZEN_VERDICT_ASSERTION_RUBRIC_V1",
   "subjects": [
@@ -2960,5 +2967,259 @@
     8,
     9,
     10
-  ]
+  ],
+  "subjects_refined_after_first_assertion": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    9,
+    10
+  ],
+  "verdict_stability": {
+    "R1": {
+      "all_classes": [
+        "CONFIRMED"
+      ],
+      "first_assertion_turn": 153,
+      "first_classes": [
+        "CONFIRMED"
+      ],
+      "later_assertion_turns": [
+        165,
+        271,
+        310,
+        347,
+        353,
+        410,
+        481,
+        541,
+        565,
+        636,
+        638
+      ],
+      "status": "STABLE"
+    },
+    "R10": {
+      "all_classes": [
+        "CONDITIONAL",
+        "CONFIRMED",
+        "NARROWED"
+      ],
+      "first_assertion_turn": 53,
+      "first_classes": [
+        "CONFIRMED"
+      ],
+      "later_assertion_turns": [
+        168,
+        333,
+        384,
+        450
+      ],
+      "refined_at_turns": [
+        168,
+        333,
+        384,
+        450
+      ],
+      "status": "REFINED"
+    },
+    "R2": {
+      "all_classes": [
+        "CONFIRMED",
+        "NARROWED"
+      ],
+      "first_assertion_turn": 134,
+      "first_classes": [
+        "CONFIRMED"
+      ],
+      "later_assertion_turns": [
+        246,
+        340,
+        400,
+        479
+      ],
+      "refined_at_turns": [
+        340
+      ],
+      "status": "REFINED"
+    },
+    "R3": {
+      "all_classes": [
+        "CONDITIONAL",
+        "CONFIRMED",
+        "NARROWED"
+      ],
+      "first_assertion_turn": 229,
+      "first_classes": [
+        "NARROWED"
+      ],
+      "later_assertion_turns": [
+        342,
+        372,
+        441,
+        507
+      ],
+      "refined_at_turns": [
+        342,
+        372,
+        507
+      ],
+      "status": "REFINED"
+    },
+    "R4": {
+      "all_classes": [
+        "CONDITIONAL",
+        "CONFIRMED",
+        "NARROWED",
+        "REFUTED",
+        "SUFFICIENT"
+      ],
+      "first_assertion_turn": 221,
+      "first_classes": [
+        "CONDITIONAL",
+        "CONFIRMED",
+        "NARROWED"
+      ],
+      "later_assertion_turns": [
+        287,
+        359,
+        395,
+        483,
+        630,
+        634
+      ],
+      "refined_at_turns": [
+        359,
+        395,
+        483,
+        634
+      ],
+      "status": "REFINED"
+    },
+    "R5": {
+      "all_classes": [
+        "CONFIRMED",
+        "NARROWED",
+        "REFUTED"
+      ],
+      "first_assertion_turn": 192,
+      "first_classes": [
+        "CONFIRMED"
+      ],
+      "later_assertion_turns": [
+        249,
+        295,
+        362,
+        364,
+        370,
+        415,
+        485
+      ],
+      "refined_at_turns": [
+        370,
+        415,
+        485
+      ],
+      "status": "REFINED"
+    },
+    "R6": {
+      "all_classes": [
+        "CONDITIONAL",
+        "CONFIRMED",
+        "NARROWED"
+      ],
+      "first_assertion_turn": 64,
+      "first_classes": [
+        "CONDITIONAL",
+        "NARROWED"
+      ],
+      "later_assertion_turns": [
+        261,
+        366,
+        428,
+        489
+      ],
+      "refined_at_turns": [
+        261,
+        366,
+        428,
+        489
+      ],
+      "status": "REFINED"
+    },
+    "R7": {
+      "all_classes": [
+        "CONFIRMED",
+        "NARROWED"
+      ],
+      "first_assertion_turn": 177,
+      "first_classes": [
+        "CONFIRMED"
+      ],
+      "later_assertion_turns": [
+        331,
+        436,
+        529
+      ],
+      "refined_at_turns": [
+        331
+      ],
+      "status": "REFINED"
+    },
+    "R8": {
+      "all_classes": [
+        "CONFIRMED"
+      ],
+      "first_assertion_turn": 271,
+      "first_classes": [
+        "CONFIRMED"
+      ],
+      "later_assertion_turns": [
+        274,
+        388,
+        390,
+        392,
+        468,
+        543
+      ],
+      "status": "STABLE"
+    },
+    "R9": {
+      "all_classes": [
+        "CONDITIONAL",
+        "CONFIRMED",
+        "NARROWED",
+        "REFUTED"
+      ],
+      "first_assertion_turn": 56,
+      "first_classes": [
+        "CONFIRMED",
+        "NARROWED"
+      ],
+      "later_assertion_turns": [
+        123,
+        171,
+        264,
+        267,
+        271,
+        376,
+        378,
+        463
+      ],
+      "refined_at_turns": [
+        123,
+        171,
+        264,
+        267,
+        271,
+        376,
+        378,
+        463
+      ],
+      "status": "REFINED"
+    }
+  }
 }

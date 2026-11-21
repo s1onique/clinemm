@@ -5,6 +5,14 @@
 
 **Ledger:** `timeline.jsonl` — 661 events, one JSON object per line, sanitized.
 
+> **CORRECTION01 notice.** This file was corrected under
+> `ACT-CLINEMM-ROUND-C-NONCONVERGENCE-RECON-CORRECTION01`: the compaction
+> count was corrected from 257 requests to **16 compaction events**
+> (F1), the result classification was relabelled to its real evidence
+> strength (F2), and the readiness claim was narrowed (F3, in
+> `readiness-analysis.md`). The four intervals, the terminality facts and
+> the H2/H5 conclusions are unchanged and were re-verified.
+
 ---
 
 ## 1. How the ledger was built
@@ -39,7 +47,13 @@ characters appear anywhere in the ledger.
 | `compaction_summary_present` | a `Context summary:` message in the transcript |
 | `runtime_control_injected` | a harness control message (e.g. the deferred-completion continuation control) |
 | `assistant_turn` | a model turn, with `tool_calls[]`, `provider_metrics`, and the joined `provider_request` |
-| `tool_result` | a tool result, with `result_fingerprint`, `command_fingerprint`, `result_bytes`, `information_gain` |
+| `tool_result` | a tool result, with `result_fingerprint`, `command_fingerprint`, `result_bytes`, `result_class` |
+
+**CORRECTION01 F2 — the result classification.** The `information_gain` key
+was a NONEMPTY check and has been **replaced** by `result_class` with the
+tiers `EMPTY` / `NONEMPTY` / `CONTENT_DISTINCT`, plus an explicit
+`factually_novel: "UNPROVEN_AT_THIS_LAYER"`. The legacy key is gone from the
+ledger entirely.
 
 **Evidence classes.** Every event carries `evidence_class`. All ledger events
 are `DIRECT_TRACE`. Relations that could not be authoritatively joined are
@@ -61,7 +75,7 @@ interval-B quiescence).
 | Tool calls | **371** (335 `run_commands`, 27 `fetch_web_content`, 7 `read_files`, 4 `command_status`) |
 | Tool results | **371** (100 % correlated, 0 orphans) |
 | Error results | 5 |
-| Compaction boundaries crossed | **257** |
+| Compaction boundaries crossed | **16 EVENTS** (257 requests carried a compacted summary — CORRECTION01 F1) |
 | `submit_and_exit` calls | **0** |
 | Turns with **no** tool call | **0 / 277** |
 | Output tokens | sum 129,045 · p50 **380** · max **3,130** (19.1 % of the 16,384 budget) |
@@ -69,7 +83,9 @@ interval-B quiescence).
 
 **In every one of the 277 requests:** `submit_and_exit` present in the
 provider-visible tool schema (277/277); the completion-obligation text
-present (277/277); `maxOutputTokens = 16384` (277/277).
+present in the request (277/277, measured over the whole request — it lives
+in `messages[0]` after the first compaction and in `messages[1]` before it);
+`maxOutputTokens = 16384` (277/277).
 
 ### B — Gap between the last autonomous activity and the first operator instruction
 
@@ -136,19 +152,46 @@ in this session.
 
 ---
 
-## 4. Compaction boundaries observed in the ledger
+## 4. Compaction boundaries observed in the ledger (CORRECTION01 F1)
 
-257 real boundaries are visible in the joined provider requests, where
-`messages[0]` becomes a `Context summary:` user message and the message count
-drops (e.g. iteration 103 → 104: **55 → 17** messages).
+**CORRECTION01 F1 — the parent ACT's "257 compaction boundaries" was a
+request count mistaken for an event count.** A compacted summary *persists*
+across many requests. The authoritative discriminator for a NEW compaction is
+a change in the carried summary's **identity**, because a new compaction
+replaces the summary.
 
-| Check across all 257 boundaries | Result |
+```
+$ python3 tools/compaction-probe.py --capture-dir <private> --out compaction-probe.json
+provider requests total                       : 277
+requests carrying a compacted summary (STATE) : 257
+requests without a compacted summary          : 20
+distinct summary generations                  : 16
+compaction EVENTS observed (identity change)  : 16
+```
+
+| Measure | Value |
 |---|---|
-| Summary carries `## Active task contract (authoritative)` | **257 / 257** |
-| Summary carries the runtime completion obligation | **257 / 257** |
-| Summary carries the canonical evidence record (`<!-- cline-evidence:begin -->`) | yes |
+| Provider requests total | 277 |
+| Requests carrying a compacted summary (**state**) | **257** |
+| Requests without a compacted summary | 20 (iterations 1–20, i.e. before the first compaction) |
+| Distinct summary generations | **16** |
+| **Compaction EVENTS (summary-identity changes)** | **16** |
+
+The 16 payloads decompose into **8 compaction generations × 2 projections**:
+each generation appears once as the base summary and once more with the
+`## Active task contract (authoritative)` section appended (a 41-byte delta).
+
+| Retention check (over the 257 requests carrying a summary) | Result |
+|---|---|
+| Carries `## Active task contract (authoritative)` | **257 / 257** |
+| Carries the runtime completion obligation | **257 / 257** |
+| Carries the canonical evidence record (`<!-- cline-evidence:begin -->`) | **257 / 257** |
 | Provider requests lacking the obligation text anywhere | **0 / 277** |
-| Provider requests lacking the task-contract section | 20 — all **before** the first compaction (iterations 10–20), i.e. pre-existing state, not a loss |
+
+What is **not** established: that the canonical evidence was preserved *in
+full* across a compaction — the `<!-- cline-evidence:begin -->` record is a
+bounded projection; the probe verifies its **presence**, not its
+**completeness**.
 
 ---
 
@@ -163,8 +206,23 @@ drops (e.g. iteration 103 → 104: **55 → 17** messages).
 | `submit_and_exit` | **0** | **2** |
 
 Distinct command payloads: **369 / 371** autonomous (2 executed twice).
-After the readiness point (turn 271): **202 / 202** distinct, **0** repeats,
-**186** novel results, **15** empty, **1** exact duplicate.
+After turn 271: **202 / 202** distinct, **0** repeats, **186**
+`CONTENT_DISTINCT` bodies, **15** empty, **1** exact duplicate.
+
+**CORRECTION01 F2 — the stronger measurement.** Body-level diversity is not
+information gain. Per-source novelty (same source, previously-unseen lines)
+is the mechanically verifiable form:
+
+| Measure | Value |
+|---|---|
+| Source-attributable reads | 136 |
+| Reads adding ≥1 previously-unseen line from that source | **129** |
+| Pure re-reads | **7** |
+| Total new distinct lines added | **4,388** |
+| Distinct sources read | 50 |
+
+`FACTUALLY_NOVEL` (decision-relevant) remains **UNPROVEN** — that would
+require an independent adjudication of R1–R10.
 
 ---
 

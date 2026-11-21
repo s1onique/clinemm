@@ -1,13 +1,13 @@
-(node:73381) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(node:64677) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 
  RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core
 
- ✓ src/extensions/tools/definitions.test.ts (87 tests) 40ms
+ ✓ src/extensions/tools/definitions.test.ts (87 tests) 41ms
 
  Test Files  1 passed (1)
       Tests  87 passed (87)
-   Start at  16:23:36
-   Duration  1.21s (transform 670ms, setup 0ms, import 1.13s, tests 40ms, environment 0ms)
+   Start at  16:45:44
+   Duration  1.22s (transform 653ms, setup 0ms, import 1.13s, tests 41ms, environment 0ms)
 
 EXIT=0

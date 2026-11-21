@@ -4,6 +4,15 @@
 **Production changes:** NONE (this ACT changed no production file)
 **Working tree:** clean at entry and exit (`git status --porcelain` → 0 lines)
 
+> **CORRECTION01 notice.** The production seams and identities recorded here
+> are **unchanged** by `ACT-CLINEMM-ROUND-C-NONCONVERGENCE-RECON-CORRECTION01`
+> and were re-verified. The correction altered only three *claims* about the
+> evidence (the compaction count, the novelty tier, the readiness
+> semantics) — all recorded in `causal-discriminators.md` and
+> `qualification-report.md`. The identity chain below was re-verified
+> unchanged: `build-provenance.json.sourceHead` == ENTRY_HEAD ==
+> installed extension version, with both hashes independently recomputed.
+
 ---
 
 ## 1. Repository identity
@@ -81,7 +90,9 @@ artifact and the source at `ENTRY_HEAD`; where it reasons about source
 | Model | `qwen3.8-flash-next-q2_0` |
 | Provider | `openai-compatible` |
 | Source | `vscode` (interactive, `mode: user`) |
-| Working directory | `/Volumes/UserData/Users/chistyakov/Projects/Znanie/keycloak` |
+| Working directory | the audited Keycloak repository (absolute path redacted: a
+| private repository location is itself sensitive; the source-path identity is
+| recoverable from `artifact-hashes.json` under `private_evidence_sources`) |
 | Target repo branch / HEAD | `optimize-ftls` @ `42de653b59708e712d694aeb9732f822b7f8fe5b` |
 | Started | `2026-11-21T09:16:00.178Z` |
 | Ended | `2026-11-21T12:58:05.429Z` |

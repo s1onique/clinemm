@@ -134,6 +134,9 @@ def build_events(
     session_messages: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     events: list[dict[str, Any]] = []
+    # CORRECTION01 F2: result-body fingerprints already seen, so that
+    # NONEMPTY can be distinguished from CONTENT_DISTINCT.
+    seen_result_fingerprints: set[str] = set()
 
     for index, message in enumerate(session_messages):
         phase = phase_for(index)
@@ -192,6 +195,9 @@ def build_events(
                     continue
                 text = tool_result_text(b)
                 cmd = tool_result_command(b)
+                result_fp = short_fp(text) if text else None
+                if result_fp is not None:
+                    seen_result_fingerprints.add(result_fp)
                 events.append(
                     {
                         **base,
@@ -202,9 +208,27 @@ def build_events(
                         "result_fingerprint": short_fp(text) if text else None,
                         "command_fingerprint": short_fp(cmd) if cmd else None,
                         "is_error": bool(b.get("is_error")),
-                        "information_gain": (
-                            "none" if not text.strip() else "content_present"
+                        # CORRECTION01 F2: the previous value "none" /
+                        # "content_present" conflated NONEMPTY with
+                        # information gain. The corrected categories are:
+                        #   EMPTY            -- no result body at all
+                        #   NONEMPTY         -- a result body exists
+                        #   CONTENT_DISTINCT -- the body differs from every
+                        #                       other body seen so far
+                        # FACTUALLY_NOVEL is NOT asserted here: whether a
+                        # result contributed a new decision-relevant fact
+                        # requires independent assessment and is left
+                        # unproven at this layer.
+                        "result_class": (
+                            "EMPTY"
+                            if not text.strip()
+                            else (
+                                "CONTENT_DISTINCT"
+                                if short_fp(text) not in seen_result_fingerprints
+                                else "NONEMPTY"
+                            )
                         ),
+                        "factually_novel": "UNPROVEN_AT_THIS_LAYER",
                     }
                 )
             continue
@@ -256,6 +280,9 @@ def attach_provider_requests(
     authoritatively observable -- not inferred.
     """
     assistant_events = [e for e in events if e.get("event") == "assistant_turn"]
+    # CORRECTION01 F1: distinct compacted-summary generations seen so far.
+    # A new generation id marks ONE compaction event.
+    seen_generation_ids: set[str] = set()
     for ordinal, event in enumerate(assistant_events, start=1):
         capture = capture_index.get(ordinal)
         if capture is None:
@@ -280,6 +307,33 @@ def attach_provider_requests(
                 first_text = "".join(
                     str(b.get("text") or "") for b in c if isinstance(b, dict)
                 )
+        # CORRECTION01 F1: a compacted summary is a STATE that persists
+        # across requests; it is not one compaction event per request.
+        carries_summary = first_text.startswith("Context summary:")
+        # CORRECTION01 (H2 claim integrity): the completion obligation is
+        # measured over the WHOLE request, not only messages[0]. Before the
+        # first compaction the obligation lives in messages[1]; after it, in
+        # messages[0]. Measuring only messages[0] understates H2.
+        whole_request_text = ""
+        for m in messages:
+            c = m.get("content")
+            if isinstance(c, str):
+                whole_request_text += c
+            elif isinstance(c, list):
+                whole_request_text += "".join(
+                    str(b.get("text") or "") for b in c if isinstance(b, dict)
+                )
+        # CORRECTION01 F1: the previous key "is_compaction_summary" implied
+        # one compaction EVENT per request. A summary PERSISTS across many
+        # requests, so that inference was wrong. The corrected model is:
+        #   carries_compacted_summary -- this request's messages[0] IS a
+        #                                compacted summary (a state, not an event)
+        #   compaction_generation_id    -- which distinct summary payload this
+        #                                request carries; a NEW generation id
+        #                                marks a new compaction event
+        #   compaction_event            -- True only at the FIRST request that
+        #                                carries a given generation id
+        generation_id = short_fp(first_text) if carries_summary else None
         event["provider_request"] = {
             "join": "DIRECT_TRACE",
             "capture_file": capture.get("_file"),
@@ -293,10 +347,20 @@ def attach_provider_requests(
             "tool_schema_names": names,
             "submit_and_exit_in_tool_schema": "submit_and_exit" in names,
             "completion_obligation_in_messages": REMINDER_MARKER in first_text,
+            "completion_obligation_anywhere_in_request": (
+                REMINDER_MARKER in whole_request_text
+            ),
             "task_contract_in_messages": "Active task contract (authoritative)"
             in first_text,
-            "is_compaction_summary": "Context summary:" in first_text,
+            "carries_compacted_summary": carries_summary,
+            "compaction_generation_id": generation_id,
+            "compaction_event": bool(
+                generation_id is not None
+                and generation_id not in seen_generation_ids
+            ),
         }
+        if generation_id is not None:
+            seen_generation_ids.add(generation_id)
 
 
 def main() -> int:

@@ -1,0 +1,232 @@
+{
+  "compaction_event_index": [
+    {
+      "generation_id": "sha256:931dadfb33c07cd5",
+      "iteration": 21,
+      "message_count": 9,
+      "summary_bytes": 14571
+    },
+    {
+      "generation_id": "sha256:6906fa0911895618",
+      "iteration": 22,
+      "message_count": 11,
+      "summary_bytes": 14612
+    },
+    {
+      "generation_id": "sha256:e427d5320f5c7691",
+      "iteration": 55,
+      "message_count": 9,
+      "summary_bytes": 17737
+    },
+    {
+      "generation_id": "sha256:91814409e86f7c5a",
+      "iteration": 56,
+      "message_count": 11,
+      "summary_bytes": 17778
+    },
+    {
+      "generation_id": "sha256:17bc9eb62edd3c5f",
+      "iteration": 82,
+      "message_count": 13,
+      "summary_bytes": 18534
+    },
+    {
+      "generation_id": "sha256:a7523ad61d331b12",
+      "iteration": 83,
+      "message_count": 15,
+      "summary_bytes": 18575
+    },
+    {
+      "generation_id": "sha256:76ee386a5c258313",
+      "iteration": 104,
+      "message_count": 17,
+      "summary_bytes": 15475
+    },
+    {
+      "generation_id": "sha256:24a4691a6dcd8329",
+      "iteration": 105,
+      "message_count": 19,
+      "summary_bytes": 15516
+    },
+    {
+      "generation_id": "sha256:9905ae129361dbc3",
+      "iteration": 130,
+      "message_count": 17,
+      "summary_bytes": 21250
+    },
+    {
+      "generation_id": "sha256:145c38e2a487d020",
+      "iteration": 131,
+      "message_count": 19,
+      "summary_bytes": 21291
+    },
+    {
+      "generation_id": "sha256:42424e72002b70cf",
+      "iteration": 164,
+      "message_count": 17,
+      "summary_bytes": 23037
+    },
+    {
+      "generation_id": "sha256:343c9f47f4011b55",
+      "iteration": 165,
+      "message_count": 19,
+      "summary_bytes": 23078
+    },
+    {
+      "generation_id": "sha256:019d3d07e2460258",
+      "iteration": 203,
+      "message_count": 27,
+      "summary_bytes": 20298
+    },
+    {
+      "generation_id": "sha256:48210a2b7d83fcc1",
+      "iteration": 204,
+      "message_count": 29,
+      "summary_bytes": 20339
+    },
+    {
+      "generation_id": "sha256:213f4be654e392c4",
+      "iteration": 240,
+      "message_count": 25,
+      "summary_bytes": 20223
+    },
+    {
+      "generation_id": "sha256:d575480b4c6c4341",
+      "iteration": 241,
+      "message_count": 27,
+      "summary_bytes": 20264
+    }
+  ],
+  "compaction_events_observed": 16,
+  "distinct_summary_generations": 16,
+  "probe_id": "CORRECTION01_F1_COMPACTION_IDENTITY_V1",
+  "provider_requests_total": 277,
+  "requests_with_compacted_summary": 257,
+  "requests_without_compacted_summary": 20,
+  "retention_across_requests_carrying_a_summary": {
+    "carries_canonical_evidence_record": 257,
+    "carries_completion_obligation": 257,
+    "carries_task_contract": 257
+  },
+  "retention_denominator": 257,
+  "run_id": "run_3tw2rDtz",
+  "semantics": {
+    "compaction_events_observed": "how many times the carried summary IDENTITY changed, i.e. how many new compaction generations began. A new compaction replaces the summary, so an identity change is the observable signature of a new compaction.",
+    "distinct_summary_generations": "how many distinct summary payloads existed over the run",
+    "requests_with_compacted_summary": "how many provider requests carried a compacted summary -- a STATE count, NOT a count of compaction events"
+  },
+  "summary_generations": [
+    {
+      "first_iteration": 21,
+      "generation_id": "sha256:931dadfb33c07cd5",
+      "last_iteration": 21,
+      "request_count": 1,
+      "summary_bytes": 14571
+    },
+    {
+      "first_iteration": 22,
+      "generation_id": "sha256:6906fa0911895618",
+      "last_iteration": 54,
+      "request_count": 33,
+      "summary_bytes": 14612
+    },
+    {
+      "first_iteration": 55,
+      "generation_id": "sha256:e427d5320f5c7691",
+      "last_iteration": 55,
+      "request_count": 1,
+      "summary_bytes": 17737
+    },
+    {
+      "first_iteration": 56,
+      "generation_id": "sha256:91814409e86f7c5a",
+      "last_iteration": 81,
+      "request_count": 26,
+      "summary_bytes": 17778
+    },
+    {
+      "first_iteration": 82,
+      "generation_id": "sha256:17bc9eb62edd3c5f",
+      "last_iteration": 82,
+      "request_count": 1,
+      "summary_bytes": 18534
+    },
+    {
+      "first_iteration": 83,
+      "generation_id": "sha256:a7523ad61d331b12",
+      "last_iteration": 103,
+      "request_count": 21,
+      "summary_bytes": 18575
+    },
+    {
+      "first_iteration": 104,
+      "generation_id": "sha256:76ee386a5c258313",
+      "last_iteration": 104,
+      "request_count": 1,
+      "summary_bytes": 15475
+    },
+    {
+      "first_iteration": 105,
+      "generation_id": "sha256:24a4691a6dcd8329",
+      "last_iteration": 129,
+      "request_count": 25,
+      "summary_bytes": 15516
+    },
+    {
+      "first_iteration": 130,
+      "generation_id": "sha256:9905ae129361dbc3",
+      "last_iteration": 130,
+      "request_count": 1,
+      "summary_bytes": 21250
+    },
+    {
+      "first_iteration": 131,
+      "generation_id": "sha256:145c38e2a487d020",
+      "last_iteration": 163,
+      "request_count": 33,
+      "summary_bytes": 21291
+    },
+    {
+      "first_iteration": 164,
+      "generation_id": "sha256:42424e72002b70cf",
+      "last_iteration": 164,
+      "request_count": 1,
+      "summary_bytes": 23037
+    },
+    {
+      "first_iteration": 165,
+      "generation_id": "sha256:343c9f47f4011b55",
+      "last_iteration": 202,
+      "request_count": 38,
+      "summary_bytes": 23078
+    },
+    {
+      "first_iteration": 203,
+      "generation_id": "sha256:019d3d07e2460258",
+      "last_iteration": 203,
+      "request_count": 1,
+      "summary_bytes": 20298
+    },
+    {
+      "first_iteration": 204,
+      "generation_id": "sha256:48210a2b7d83fcc1",
+      "last_iteration": 239,
+      "request_count": 36,
+      "summary_bytes": 20339
+    },
+    {
+      "first_iteration": 240,
+      "generation_id": "sha256:213f4be654e392c4",
+      "last_iteration": 240,
+      "request_count": 1,
+      "summary_bytes": 20223
+    },
+    {
+      "first_iteration": 241,
+      "generation_id": "sha256:d575480b4c6c4341",
+      "last_iteration": 277,
+      "request_count": 37,
+      "summary_bytes": 20264
+    }
+  ]
+}

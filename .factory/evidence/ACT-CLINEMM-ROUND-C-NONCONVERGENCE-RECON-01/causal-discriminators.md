@@ -1,8 +1,27 @@
 # causal-discriminators.md — ACT-CLINEMM-ROUND-C-NONCONVERGENCE-RECON-01
 
+> **CORRECTION01 notice.** This file was corrected under
+> `ACT-CLINEMM-ROUND-C-NONCONVERGENCE-RECON-CORRECTION01` after expert
+> review. Three overclaims were corrected:
+>
+> * **F1** — "257 compactions" → **257 requests carried a compacted summary;
+>   16 compaction EVENTS were observed** (summary-identity changes). The
+>   retention conclusion (257/257) is unchanged.
+> * **F2** — "novel results ⇒ information gain" → the result tiers are now
+>   `EMPTY` / `NONEMPTY` / `CONTENT_DISTINCT`, and `FACTUALLY_NOVEL` is
+>   explicitly **unproven**. A separate per-source novelty measurement was
+>   added; H4 is downgraded from REFUTED to **INCONCLUSIVE**.
+> * **F3** — "readiness established at turn 271" → **first recorded verdict
+>   COVERAGE at turn 271**; independent factual sufficiency is **UNPROVEN**,
+>   and 8 of 10 subjects' first assertions were later refined.
+>
+> The H2 and H5 conclusions are **unchanged** and were re-verified.
+> Section headings below carry the corrected values inline.
+
 **Verdict in one line:** no harness-owned defect was reproduced. The
 autonomous non-completion is best explained by **H1 (model stopping
-judgment)**, with H5 and H4 excluded and H3 refuted at the artifact level.
+judgment)**; H4 is **INCONCLUSIVE**, H3 is narrowed to **contract retention
+established**, and H2 and H5 are **REFUTED**.
 
 ---
 
@@ -45,18 +64,45 @@ provider request capture contains the complete model-visible state.
 |---|---|---|
 | Tool availability | `submit_and_exit` present in the tool schema of **277 / 277** autonomous provider requests | `provider-request-captures/cap_run_3tw2rDtz_*.json` → `payload.tools` |
 | Completion instruction | completion-obligation text present in **277 / 277** autonomous provider requests | same captures → `payload.messages` |
-| Necessary evidence | all ten subjects had a recorded verdict assertion by turn 271 | `readiness-probe.json` |
+| Necessary evidence | **UNPROVEN** — see CORRECTION01 F3 below | `readiness-probe.json` |
 | Opportunity to act | the model emitted a tool call on **277 / 277** autonomous turns, so the tool route was continuously available | transcript, `timeline.jsonl` |
 
-**The decisive observation.** All three preconditions are satisfied
-*simultaneously and continuously* — not merely at some point — in every single
-one of the 277 pre-intervention requests. There is no turn at which the model
-lacked the evidence, the instruction, or the tool.
+**The decisive observation.** The *observable* preconditions — tool
+availability, completion instruction, and opportunity to act — are satisfied
+**simultaneously and continuously** in every single one of the 277
+pre-intervention requests. There is no turn at which the model lacked the
+tool or the instruction.
 
-**The model's own words confirm it had enough.** At turn 634 — 113 turns after
-it had already adjudicated R4 — the model wrote *"I have enough for R4: the
-mechanism (rebuild at startup) is real and is Keycloak's default"*, and at
-turns 636/638 *"R1 fully confirmed"* / *"R1 confirmed empirically"*. It kept
+**CORRECTION01 F3 — what is NOT claimed.** The parent ACT asserted that the
+"necessary evidence" precondition also held in all 277 requests, citing a
+readiness point of turn 271. That was a promotion beyond the rubric:
+
+* The rubric measures the model's **own recorded adjudication language**. It
+  establishes **first recorded verdict COVERAGE at turn 271**, not
+  independent factual sufficiency. Independent readiness is **UNPROVEN**.
+* The measurement shows why the promotion was wrong: **8 of 10 subjects'
+  first verdict assertions were later REFINED** (R2, R3, R4, R5, R6, R7, R9,
+  R10). Only R1 and R8 were stable. A first assertion that was later refined
+  was, on the model's own account, not final — so its turn is **not** a
+  defensible synthesis point for that subject.
+* Consequently no turn can be claimed as a point of *defensible* synthesis
+  for all ten subjects, and `last_turn_all_ten_verdicts_STABLE` is `null`.
+
+**What survives.** The claim that does **not** depend on readiness is the one
+that carries the causal weight: the model had a **working completion route**
+and an **explicit completion obligation** in every one of the 277 requests,
+and **never invoked it** — not once, and not even on the turns where it
+recorded explicit sufficiency. The model's own words confirm it considered
+itself to have enough: at turn 634 — 113 turns after it had already
+adjudicated R4 — it wrote *"I have enough for R4: the mechanism (rebuild at
+startup) is real and is Keycloak's default"*, and at turns 636/638 *"R1 fully
+confirmed"* / *"R1 confirmed empirically"*. It kept choosing tools anyway.
+
+**This is why H1 is SUPPORTED but not proved EXCLUSIVE.** H1 requires that
+the model had the evidence and continued anyway. The "continued anyway" and
+"had a usable completion route" halves are directly measured. The "had the
+evidence" half is **not** independently established, so H1 cannot be shown to
+be the *only* contributor. H4 is correspondingly INCONCLUSIVE (see below).
 
 ### Controls / counterexamples
 
@@ -86,7 +132,9 @@ re-assert it mid-run**.
 harness-owned *defect* under this ACT's definition**, because:
 
 1. the completion contract was **exposed** (tool present),
-2. the completion contract was **preserved** (through 257 compactions),
+2. the completion contract was **preserved** (through **16 compaction
+   events**; 257 / 257 requests carrying a compacted summary retained it —
+   CORRECTION01 F1),
 3. the completion contract was **enforceable** (a `completesRun` call
    terminates the run — proven by the two post-intervention calls),
 4. and the harness's existing conservation guarantees all held.
@@ -131,7 +179,10 @@ same registration.
 
 ### Evidence — preserve
 
-See H3 below: 257 / 257 compaction summaries preserved the obligation.
+See H3 below: **257 / 257 requests carrying a compacted summary** preserved the
+task contract, the runtime completion obligation and the canonical evidence
+record. (CORRECTION01 F1: 16 compaction EVENTS, not 257 — the 257 is a request
+count.)
 
 ### Evidence — enforce
 
@@ -150,32 +201,51 @@ See H3 below: 257 / 257 compaction summaries preserved the obligation.
 > *Previously gathered evidence or task obligations ceased to be available
 > following compaction.*
 
-**Verdict: REFUTED at the artifact level.**
+**Verdict: NARROWED — contract retention ESTABLISHED; full evidence preservation NOT established.**
 
 ### Required discriminator
 
 > "compare canonical evidence, persisted sidecars and provider-visible
 > representations across real compaction boundaries."
 
-### Real compaction boundaries identified
+### CORRECTION01 F1 — the compaction count was wrong
 
-The autonomous run compacted **257 times**. Real boundaries are directly
-observable in the provider requests: `messages[0]` becomes a
-`Context summary:` user message and the message count drops (e.g. iteration
-103 → 104: **55 → 17** messages).
+The parent ACT reported **"257 real compaction boundaries"**. That number
+counted provider requests whose `messages[0]` was a compacted summary. A
+summary **persists** across many requests, so that was a **state** count, not
+an **event** count.
 
-### Evidence
+The corrected count is derived from authoritative state transitions: a new
+compaction **replaces** the summary, so a change in the carried summary's
+**identity** is the observable signature of a new compaction.
+
+```
+$ python3 tools/compaction-probe.py --capture-dir <private> --out compaction-probe.json
+provider requests total                       : 277
+requests carrying a compacted summary (STATE) : 257
+requests without a compacted summary          : 20
+distinct summary generations                  : 16
+compaction EVENTS observed (identity change)  : 16
+```
+
+**16 compaction events**, across **16 distinct summary generations**, each
+generation persisting for 1–38 subsequent requests. The structure is
+consistent and verifiable: each generation appears as a base summary, then
+reappears once more with the `## Active task contract (authoritative)`
+section appended (a 41-byte delta, the task-contract carry-forward applied
+to the already-compacted summary). That yields 8 compaction generations ×
+2 projections = 16 distinct payloads.
+
+### Evidence — retention (the H3 question)
 
 | Check | Result |
 |---|---|
-| Compaction summaries inspected | **257** (iterations 21…277) |
-| Summaries **missing** the `## Active task contract (authoritative)` section | **0** |
-| Summaries **missing** the runtime completion obligation | **0** |
-| Summaries carrying the canonical evidence record (`<!-- cline-evidence:begin -->`) | **yes** (verified at iteration 104) |
-| Provider requests lacking the obligation text anywhere | **0 / 277** |
-| Provider requests lacking the task-contract section | 20 (iterations 10–20, i.e. **before** the first compaction — not a loss) |
+| Requests carrying a compacted summary | **257** |
+| Of those, carrying `## Active task contract (authoritative)` | **257 / 257** |
+| Of those, carrying the runtime completion obligation | **257 / 257** |
+| Of those, carrying the canonical evidence record (`<!-- cline-evidence:begin -->`) | **257 / 257** |
 
-At the first real boundary (iteration 104) the compacted provider request
+At the first compaction event (iteration 21) the compacted provider request
 still contained, byte-for-byte:
 
 * the **user-authored objective** (the full Round C task text),
@@ -189,6 +259,21 @@ The persisted sidecar
 id:msg_NtYmvXtp`) shows the same contract section, with the operator
 instruction correctly recorded under "Later user instructions (user authority)".
 
+### What is and is not established
+
+* **ESTABLISHED:** across every request that carried a compacted summary, the
+  task contract, the runtime completion obligation and the canonical evidence
+  record were all present (257/257). The **contract retention** mechanism did
+  not lose the completion obligation or the contract.
+* **NOT ESTABLISHED:** that the *canonical evidence* itself was preserved
+  **in full** across a compaction. The `<!-- cline-evidence:begin -->` record
+  is a bounded projection; the probe verifies its **presence**, not the
+  **completeness** of every prior tool outcome. The parent ACT's "no evidence
+  was lost" phrasing was stronger than this evidence supports.
+* The parent ACT's `0 / 257 summaries lost …` framing was also mis-stated:
+  the correct statement is `0 / 257 requests carrying a summary lacked …`.
+  The number 257 is unchanged; only its meaning is corrected.
+
 ### Note on the excluded shortcut
 
 The ACT instruction says not to reopen the already-qualified stable-prefix
@@ -199,8 +284,9 @@ provider-visible projection.
 
 ### Verdict
 
-**REFUTED.** Evidence and task obligations were fully preserved across every
-real compaction boundary.
+**NARROWED.** Contract retention is established (257/257). Full evidence
+preservation is **not** established. Neither the parent ACT's "REFUTED" nor a
+broader "progress was lost" reading is supported.
 
 ---
 
@@ -209,7 +295,7 @@ real compaction boundary.
 > *The model repeatedly investigated already-resolved questions or changed its
 > conclusion without new evidence.*
 
-**Verdict: REFUTED.**
+**Verdict: INCONCLUSIVE** (was: REFUTED — downgraded under CORRECTION01 F2).
 
 ### Required discriminator
 
@@ -217,16 +303,41 @@ real compaction boundary.
 > observations. A repeated command alone is not enough; the result must be
 > assessed for information gain."
 
-### Whole autonomous phase
+### CORRECTION01 F2 — the classification was too coarse, and so was the inference
 
-| Measure | Value |
+The parent ACT used `information_gain = "none" | "content_present"` — a
+**NONEMPTY** check — and then treated "186 novel results" as proof that the
+post-readiness work was productive. Distinct command payloads and unique
+result bodies are **diversity** measurements; they are not proof of new
+decision-relevant facts.
+
+The corrected classification separates three mechanically verifiable tiers
+from the one that is not:
+
+| Tier | Meaning | Status |
+|---|---|---|
+| `EMPTY` | no result body | **measurable** |
+| `NONEMPTY` | a result body exists | **measurable** |
+| `CONTENT_DISTINCT` | the body differs from every other body seen | **measurable** |
+| `FACTUALLY_NOVEL` | the read contributed a new decision-relevant fact | **UNPROVEN — requires independent adjudication of R1-R10, which this ACT does not perform** |
+
+### Body-tier measurement (whole autonomous phase)
+
+```
+$ python3 tools/novelty-probe.py --session-dir <private> --out novelty-probe.json
+body tiers: {"CONTENT_DISTINCT": 342, "EMPTY": 26, "NONEMPTY_DUPLICATE_BODY": 3}
+```
+
+| Tier | Count |
 |---|---|
-| Tool calls | 371 |
-| Distinct command payloads | **369** |
-| Payloads executed more than once | 2 |
-| Tool results that were empty (no information) | 34 |
-| Tool results with content | 337 |
-| **Non-informative results (empty or exact normalised duplicate)** | **34 / 371 = 9.2 %** |
+| `EMPTY` | 26 |
+| `CONTENT_DISTINCT` | 342 |
+| `NONEMPTY_DUPLICATE_BODY` | 3 |
+| `FACTUALLY_NOVEL` | **UNPROVEN** |
+
+The 26 empty results are dominated by **failed external web fetches** — a
+network-restriction artefact. The model detected this itself at turns
+600-614 and adapted by reasoning from upstream source code instead.
 
 ---
 
@@ -295,16 +406,18 @@ applied to any pre-intervention request.
 
 | Hypothesis | Verdict | Basis |
 |---|---|---|
-| **H1** model stopping judgment | **SUPPORTED (primary)** | tool + instruction + evidence coexisted in 277/277 pre-intervention requests; 0 calls emitted; model stated sufficiency at turn 634 |
-| **H2** harness completion-contract failure | **REFUTED** | tool in schema 277/277; contract preserved 257/257; enforcement path green; 0 calls to reject |
-| **H3** compaction-induced progress loss | **REFUTED** | 0/257 summaries lost the contract or obligation |
-| **H4** ineffective evidence collection loop | **REFUTED** | 369/371 distinct payloads; post-readiness 202/202 distinct, 186 novel results |
-| **H5** output-budget / generation-boundary | **REFUTED** | max 3,130 / 16,384 output tokens per autonomous turn (19.1 %); 0 truncations |
+| **H1** model stopping judgment | **SUPPORTED (primary), not proved exclusive** | tool in schema 277/277 and obligation 277/277; 0 calls emitted; model stated sufficiency at turn 634. The "had the evidence" half is UNPROVEN (F3) |
+| **H2** harness completion-contract failure | **REFUTED** (unchanged) | tool in schema 277/277; obligation 277/277; contract retained 257/257; enforcement path green; 0 calls to reject |
+| **H3** compaction-induced progress loss | **NARROWED** (was REFUTED) | 16 compaction EVENTS (not 257); contract/obligation/evidence-record retained 257/257; full evidence completeness NOT established |
+| **H4** ineffective evidence collection loop | **INCONCLUSIVE** (was REFUTED) | per-source novelty 129/136 reads added new content (redundancy clause strongly evidenced against); unwarranted-change clause unassessed |
+| **H5** output-budget / generation-boundary | **REFUTED** (unchanged) | max 3,130 / 16,384 output tokens per autonomous turn (19.1 %); 0 truncations |
 
 **No harness-owned defect was reproduced.** Per the ACT's G4 rules, this
 means there is no RED witness to construct for a harness repair, and no
 bounded harness-repair ACT may be proposed. The finding is model behaviour
-under a fully functional completion contract.
+under a completion contract that was exposed, retained and enforceable
+throughout — with the explicit caveat that the *sufficiency of the evidence*
+is unproven and H4 therefore remains open.
 
 ---
 
@@ -328,33 +441,47 @@ network-restriction artefact, not an evidence loop. The model detected this
 itself at turns 600–614 and adapted by reasoning from upstream source code
 instead.
 
-### After the readiness point (turn 271) — the decisive window
+### The stronger, mechanically verifiable measurement: per-source novelty
+
+`CONTENT_DISTINCT` is still only a body-level observation. A stricter and
+more defensible measurement is available: for every read attributable to a
+**source** (a file path or a URL), compare the normalised lines against the
+union of lines already seen from that **same** source. A read that adds no
+unseen line is a **pure re-read**; a read that adds unseen lines contributed
+**new source content** to that source.
+
+```
+source reads: 136 total; 129 added new lines; 7 were pure re-reads
+total new distinct lines added: 4388
+distinct sources read: 50
+```
 
 | Measure | Value |
 |---|---|
-| Tool calls | 202 |
-| Distinct command payloads | **202 / 202** |
-| Payloads executed more than once | **0** |
-| Results with novel content | **186** |
-| Results that were an exact repeat | **1** |
-| Results that were empty | 15 |
+| Source-attributable reads | 136 |
+| Reads that added >=1 previously-unseen line from that source | **129** |
+| Pure re-reads (no new line from that source) | **7** |
+| Total new distinct lines added | **4,388** |
+| Distinct sources read | 50 |
 
-**Zero repeated commands and 186 novel results.** The post-readiness work was
-*productive*, not redundant. This is the single most important reason the ACT
-does **not** attribute the 2 h 47 m to a harness-side evidence-collection
-defect: the harness was not forcing the model to re-answer settled questions.
+### Why H4 is nevertheless INCONCLUSIVE rather than REFUTED
 
-### Finding changes
+The per-source measurement is strong evidence against the *literal* form of
+H4 — "the model repeatedly investigated already-resolved questions" — because
+re-reading the same source overwhelmingly added new content rather than
+re-deriving the same facts (only 7 of 136 reads were pure re-reads).
 
-Verdict assertions changed state for all ten subjects across the run, and new
-ones kept appearing in every 50-turn window to the end (§ 4.2 of
-`readiness-analysis.md`). The model's conclusions were *refined with new
-evidence*, not changed without it.
+But H4 has a second clause: *"or changed its conclusion without new
+evidence"*. Settling that clause requires judging whether each verdict
+change was warranted by the new evidence — which is an **independent
+adjudication of R1-R10** and therefore **out of scope for this ACT**. The
+verdict-class trajectory (CORRECTION01 F3) shows the model *did* change
+conclusions for 8 of 10 subjects after their first assertion; whether those
+changes were evidence-driven is **not established here**.
 
-### Verdict
-
-**REFUTED.** The evidence-collection loop was effective. The model was not
-re-litigating settled questions; it was deepening the record.
+**Verdict: INCONCLUSIVE.** The redundancy clause is strongly evidenced
+against; the unwarranted-change clause is unassessed. The parent ACT's
+"REFUTED" was stronger than the evidence supports.
 
 * Existing coverage `sdk/packages/core/src/runtime/host/local-runtime-host.test.ts:8262-8490`
   pins `task.completed` with `source=submit_and_exit`, the `source=shutdown`

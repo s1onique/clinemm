@@ -152,39 +152,54 @@
   ],
   "published_artifacts": [
     {
-      "bytes": 16406,
+      "bytes": 11256,
+      "path": "./artifact-hashes.json",
+      "sha256": "47409e7ddfedf4ea6a87c14ad8b17bbb5a54157034e5ab9c3c5cbe6cac9416ff"
+    },
+    {
+      "bytes": 23848,
       "path": "./causal-discriminators.md",
-      "sha256": "83f53d9721c589774b075c0b5824a0891f0855b5241217771cc12a68caedc5e0"
+      "sha256": "7cf720e806de4227afb4869fdbaa02fa5ad0b44153d9ebd561a68fe54c19b455"
     },
     {
-      "bytes": 13151,
+      "bytes": 6177,
+      "path": "./compaction-probe.json",
+      "sha256": "3c0c908a84ad1b7f3ff4a8d87736d539bcc2e6d0b627256fad465bc0b4c2d9b5"
+    },
+    {
+      "bytes": 10598,
+      "path": "./novelty-probe.json",
+      "sha256": "a4898527b937b3b128ecf0f915d611db3fb241524c9539b72a322e6904b5f0fb"
+    },
+    {
+      "bytes": 18870,
       "path": "./qualification-report.md",
-      "sha256": "129e8c7f1a5a38dd44d1a34913e6637cdded0f78e3051bb47eb0c5e44c7616c3"
+      "sha256": "0217f90ea502fb96aa6d9485c14c6f62bbeb4fcd4960ec3e15dd299aed626b8f"
     },
     {
-      "bytes": 14164,
+      "bytes": 17786,
       "path": "./readiness-analysis.md",
-      "sha256": "a02dd048f70947608b57b8e42c9670d036128cc384f340616724d1f2d09ed1f3"
+      "sha256": "235d2d258b44961a807a3770ef6d1ecd191e446a6aaefb9187ba6eb1937fa9bf"
     },
     {
-      "bytes": 59384,
+      "bytes": 64093,
       "path": "./readiness-probe.json",
-      "sha256": "9ec28d5cbac9a4f37af100ca21f0ab6636f84598c269f3d3cada22d7a89bc9a9"
+      "sha256": "a519668a7586abed3f7aafc8d5792cb4b20605e60547e0f6b4894e06a967dc33"
     },
     {
-      "bytes": 12134,
+      "bytes": 12859,
       "path": "./source-map.md",
-      "sha256": "1e8ca9a4bd36e368e431e411583489e49eab1145bac5dd70c528987323d741b4"
+      "sha256": "7003ede207f15903348ce0c7c0d0509a4e9f38cd13949562996556a687ee7d33"
     },
     {
-      "bytes": 8159,
+      "bytes": 10826,
       "path": "./timeline-summary.md",
-      "sha256": "8fc8edfa9c5eb524aa095358426d676738b8ddac6e7c8362d70f12340a7bf011"
+      "sha256": "7b73c7d088bda3ae846eccf6869c641e30aa6a1e5f4f9a4289b79f570ae75840"
     },
     {
-      "bytes": 609866,
+      "bytes": 660369,
       "path": "./timeline.jsonl",
-      "sha256": "ace20940634fe93090245ec7e98526252ca40f0f495b2b13f880d1259f15e591"
+      "sha256": "dc15637f841d76e647803046e7e09873518cc52abd6a4d7c7c206f816ac4ac08"
     },
     {
       "bytes": 6921,
@@ -192,30 +207,45 @@
       "sha256": "44b13fc76dc7c80aa804b989bd15f75d4056cb2702dd8f9ea3201d01d79246b4"
     },
     {
-      "bytes": 13227,
+      "bytes": 16920,
       "path": "./tools/build-timeline.py",
-      "sha256": "84cea5e5860efc40886ecf83de28d5f930123f04e5d2453a66b465486861e164"
+      "sha256": "dd0c52aade546f9885c65ad97754097ff481434f4b24bf67233e7570970c70b0"
     },
     {
-      "bytes": 7807,
+      "bytes": 7971,
+      "path": "./tools/compaction-probe.py",
+      "sha256": "6576ca2b6541d163d2efaa90a82121dc503fc94c61036b03745aa0105965959c"
+    },
+    {
+      "bytes": 7340,
+      "path": "./tools/novelty-probe.py",
+      "sha256": "df092c4eca23a1f16f124cc5d52eab965753a8b366276bd99774b02ede2f7a8a"
+    },
+    {
+      "bytes": 11777,
       "path": "./tools/readiness-probe.py",
-      "sha256": "d4836ffad07e2bd6aa6ee2b864235966b9b3d5fb8b700307725cfc612ea7929c"
+      "sha256": "9acc84d6cdcbaa51d7620e88187e20024ace710155255ec9c947a77b4a02ba54"
     },
     {
       "bytes": 495,
       "path": "./verification/01-production-seam-definitions-test.txt",
-      "sha256": "0795c09f0fe23fe06fffb0be6efb2d58445626f1f8c8957bc6964fa0144e9610"
+      "sha256": "74c9148208d25ce831a14af47a22615b0e836398ee652234932a8c71b8abff29"
+    },
+    {
+      "bytes": 2725,
+      "path": "./verification/02-correction01-probe-receipts.txt",
+      "sha256": "ad959a385e2afc1642cedc85fda00dc17c084aab5b25d32ef2dc15743aea78c2"
     }
   ],
   "sanitization": "Private evidence sources are referenced by absolute path and sha256 only. No raw transcript text, command text, file content or credential is copied into any published artifact.",
   "source_identity": {
     "branch": "main",
-    "entry_head": "6883c7c52f19de5966bacb31973577179eac42de",
-    "entry_head_date": "2026-11-21T07:51:12+03:00",
-    "entry_head_subject": "docs(clinemm): bind the CORRECTION02 terminal identity and regenerate the manifest",
+    "entry_head": "1df0217fb67cb966f587051ff0190ee0e9995e7a",
+    "entry_head_date": "2026-11-21T16:27:55+03:00",
+    "entry_head_subject": "docs(clinemm): classify Round C autonomous non-completion as model stopping judgment",
     "installed_extension_dir": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/extensions/s1onique.clinemm-4.1.26-6883c7c52",
     "installed_extension_version": "s1onique.clinemm-4.1.26-6883c7c52",
     "repo_root": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm",
-    "working_tree_porcelain_lines": 1
+    "working_tree_porcelain_lines": 17
   }
 }

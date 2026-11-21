@@ -37749,3 +37749,135 @@ model-limited convergence and the harness contract is left unchanged.
 
 `ACT-CLINEMM-COMPACTION-STABLE-PREFIX-LIVE-QUALIFICATION-01` **remains open and separate** and was
 NOT merged into this ACT.
+
+# ACT-CLINEMM-ROUND-C-NONCONVERGENCE-RECON-CORRECTION01 — PASS_EVIDENCE_STRENGTH_CORRECTED — 2026-11-21
+
+**Type:** Evidence-only corrective continuation of
+`ACT-CLINEMM-ROUND-C-NONCONVERGENCE-RECON-01` (commit `1df0217fb`).
+
+**Production changes: NONE.** No production file was modified, rebuilt,
+packaged or installed. No inference was re-run against a new capture — every
+number comes from the existing captures and existing session artifacts.
+
+## Why
+
+Expert review of `1df0217fb` found three P0 evidence-contract problems:
+observations had been promoted into causal conclusions beyond their actual
+evidence strength. This continuation reclassifies those three claims at
+source, narrows the affected verdicts, and preserves everything already
+directly observed. The reviewer's disposition was accepted in full.
+
+## The three corrections
+
+**F1 — compaction count.** The parent ACT reported "257 real compaction
+boundaries". That counted provider requests whose `messages[0]` was a compacted
+summary; a summary PERSISTS across requests, so a request count was presented
+as an event count. The authoritative discriminator is a change in the carried
+summary's IDENTITY (a new compaction replaces the summary).
+
+```
+provider requests total                       : 277
+requests carrying a compacted summary (STATE) : 257
+requests without a compacted summary          : 20
+distinct summary generations                  : 16
+compaction EVENTS observed (identity change)  : 16
+retention (task contract / obligation / evidence record) : 257/257 each
+```
+
+The 16 payloads decompose into 8 compaction generations x 2 projections (base
+summary, then summary + the 41-byte task-contract section). H3 REFUTED ->
+**NARROWED**: contract retention is established; full evidence COMPLETENESS
+is not (the probe verifies presence of the evidence record, not completeness
+of every prior tool outcome).
+
+**F2 — novelty vs information gain.** The parent ACT used
+`information_gain = "none" | "content_present"` (a NONEMPTY check) and then
+treated "186 novel results" as proof of productive work. Tiers are now
+separated: `EMPTY` 26 / `CONTENT_DISTINCT` 342 / `NONEMPTY_DUPLICATE_BODY` 3
+/ `FACTUALLY_NOVEL` **UNPROVEN**. The legacy key was removed from
+`timeline.jsonl`. A stronger, mechanically verifiable measurement was added:
+per-source novelty — of **136** source-attributable reads, **129** added at
+least one previously-unseen line from that source and only **7** were pure
+re-reads (4,388 new distinct lines). H4 REFUTED -> **INCONCLUSIVE**: the
+redundancy clause is strongly evidenced against, the unwarranted-change
+clause is unassessed (it needs independent adjudication of R1-R10).
+
+**F3 — readiness promoted beyond the rubric.** Turn 271 is **first recorded
+verdict COVERAGE**, not independent factual sufficiency. The probe now
+measures verdict stability: **8 of 10** subjects' first assertions were later
+REFINED (R2,R3,R4,R5,R6,R7,R9,R10); only R1 and R8 were stable. Therefore
+`last_turn_all_ten_verdicts_STABLE` is **null**, no defensible synthesis
+turn can be named for all ten subjects, and independent readiness is
+**UNPROVEN**. The parent's "readiness established" phrasing is withdrawn.
+H1 SUPPORTED -> **SUPPORTED, not proved exclusive**.
+
+## Unchanged and re-verified
+
+H2 and H5 were not affected by the three findings and were re-verified against
+the same captures: `submit_and_exit` in the provider-visible tool schema
+**277/277**; completion obligation **277/277** (now measured over the WHOLE
+request, since before the first compaction it lives in `messages[1]` —
+stronger than the parent's `messages[0]` measurement of 257/277);
+`maxOutputTokens` {16384}; max used 3,130 (19.1 %), p50 380; 0 truncations;
+0 autonomous `submit_and_exit`; 0/277 autonomous turns without a tool call;
+production-seam control exit 0, 87 passed.
+
+| Hypothesis | Parent | **Corrected** |
+|---|---|---|
+| H1 model stopping judgment | SUPPORTED | **SUPPORTED, not proved exclusive** |
+| H2 completion-contract failure | REFUTED | **REFUTED (re-verified)** |
+| H3 compaction progress loss | REFUTED | **NARROWED** |
+| H4 ineffective evidence loop | REFUTED | **INCONCLUSIVE** |
+| H5 output-budget boundary | REFUTED | **REFUTED (re-verified)** |
+
+## Evidence
+
+`.factory/evidence/ACT-CLINEMM-ROUND-C-NONCONVERGENCE-RECON-CORRECTION01.md`
+and the corrected artifacts in
+`.factory/evidence/ACT-CLINEMM-ROUND-C-NONCONVERGENCE-RECON-01/`:
+`compaction-probe.json`, `novelty-probe.json`, regenerated `timeline.jsonl`
+and `readiness-probe.json`, regenerated `artifact-hashes.json` (17 published
+artifacts), plus `tools/compaction-probe.py`, `tools/novelty-probe.py` and
+`verification/02-correction01-probe-receipts.txt` (every invocation with its
+exit code).
+
+All four probes reproduce **byte-identically**. All verification commands
+exited 0. **ACT-owned failures: zero.** The pre-existing diagnostic baseline
+is untouched because no production file was touched.
+
+Conservation preserved: canonical evidence authority, task-contract
+continuation, tool-call/result correlation, failed/ambiguous result rejection
+(now made explicit by the `EMPTY` tier), request-budget fail-closed behaviour,
+sidecar/resume integrity, exact session/task/epoch terminality. No
+stop-after-N-tools rule, no diagnostic side effects in React functional
+updaters, no prompt/compaction/tool-authorization change, no Strata or
+cache-policy change, no new harness comparison, no synthetic observations, no
+orchestration redesign, no new scoring infrastructure (both new probes are
+read-only re-derivations of artifacts the parent ACT already consumed).
+
+Sensitive-data boundary: the new probes publish only aggregates and
+non-reversible fingerprints; source paths/URLs are published as
+`sha256:<16 hex>` plus a `FILE_PATH`/`URL` kind, never verbatim. One private
+repository path that the parent ACT had published in `source-map.md` was
+redacted. Verified 0 strings >200 chars in `timeline.jsonl`, 0
+credential-shape matches, and gitleaks reported "no leaks found".
+
+## Decision
+
+**PASS_EVIDENCE_STRENGTH_CORRECTED.** The central result is unchanged: the
+completion tool was exposed, the completion obligation was present, and the
+model never invoked the route. What changed is the honesty of the surrounding
+claims — evidence sufficiency is **UNPROVEN**, evidence collection is
+**INCONCLUSIVE**, and the compaction count is **16 events**.
+
+**C1: GO** for `ACT-CLINEMM-ROUND-C-CONVERGENCE-EXPERIMENT-01`, with two
+additions this correction makes necessary: (1) **independently assessed
+verdict quality** as a first-class secondary endpoint, assessed by a party
+that did not watch the arm; (2) the **per-source novelty metric** per arm, so
+a treatment arm converging by abandoning investigation is distinguishable from
+one converging after doing the work. Begin with **one bounded paired pilot**,
+not another unrestricted multi-hour run. Tool calls remain permitted in both
+arms.
+
+`ACT-CLINEMM-COMPACTION-STABLE-PREFIX-LIVE-QUALIFICATION-01` remains open and
+separate and was **not** merged into this continuation.
