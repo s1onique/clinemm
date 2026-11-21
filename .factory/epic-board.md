@@ -37636,3 +37636,116 @@ live baseline, and measure engine-side read/reused tokens and prefill latency wh
 
 A green source-level repair is **not** a demonstrated live performance improvement. The performance
 qualification is NOT part of this ACT.
+
+# ACT-CLINEMM-ROUND-C-NONCONVERGENCE-RECON-01 — PASS_BOUNDARY_CLASSIFIED — 2026-11-21
+
+## Question
+
+Why did the Qwen3.8 Q2_0 Round C session `1795252560069_t82cp` fail to reach autonomous completion
+after ~2h47m and 277 assistant turns / 371 tool calls, when the same session completed successfully
+after operator intervention?
+
+## Identity
+
+`ENTRY_HEAD` `6883c7c52f19de5966bacb31973577179eac42de` (branch `main`, clean tree, no stashes).
+The installed extension `s1onique.clinemm-4.1.26-6883c7c52` binds to that head through its own
+`build-provenance.json` (`sourceHead` == ENTRY_HEAD; `sourcePackageSha256` and `bundledExtensionSha256`
+independently recomputed and matched). The working-tree `apps/vscode/dist/extension.js` bundle has a
+DIFFERENT sha256 from the installed bundle and was NOT treated as the historical binary.
+
+Evidence: `.factory/evidence/ACT-CLINEMM-ROUND-C-NONCONVERGENCE-RECON-01/`
+
+- `source-map.md` — production boundaries and installed/source identities
+- `timeline.jsonl` — 661-event sanitized ledger, joined 1:1 to the provider-visible request payloads
+- `timeline-summary.md` — the four intervals, compaction boundaries, terminality
+- `readiness-analysis.md` — frozen rubric, per-subject evidence matrix, post-readiness cost
+- `causal-discriminators.md` — H1–H5 with discriminators, controls and counterexamples
+- `qualification-report.md` — findings, limitations, successor recommendation
+- `artifact-hashes.json` — source revision, paths, byte sizes, SHA-256 identities
+- `tools/` — the two read-only probes and the artifact binder (re-runnable)
+- `verification/01-production-seam-definitions-test.txt` — production-seam control, exit 0, 87 passed
+
+## Method note
+
+The provider-request captures (`ai_sdk_prompt` stage) hold the ACTUAL provider-visible request payload,
+including the tool schema. That makes the completion contract directly observable at the production
+boundary, which is what allowed H2/H3/H5 to be decided exactly rather than by inference.
+
+## Result
+
+| Phase | Span (UTC) | Turns | Tool calls | `submit_and_exit` |
+|---|---|---|---|---|
+| A autonomous | 09:16:09 → 12:02:54 | 277 | 371 | **0** |
+| B gap | 12:02:54 → 12:31:44 (28m50s) | — | — | — |
+| C operator synthesis | 12:31:44 → 12:41:00 | 1 | 0 | — |
+| D post-intervention | 12:41:00 → 12:44:39 | 3 | 4 | **2** |
+
+| Hypothesis | Verdict | Key evidence |
+|---|---|---|
+| H1 model stopping judgment | **SUPPORTED (primary)** | `submit_and_exit` in the tool schema of **277/277** pre-intervention provider requests; completion-obligation text in **277/277**; all ten subjects adjudicated by turn 271; **0** completion calls emitted; model wrote *"I have enough for R4"* at turn 634 |
+| H2 harness completion-contract failure | **REFUTED** | expose 277/277, preserve 257/257, enforce path green (87 passed, exit 0); nothing was dispatched so nothing could be rejected |
+| H3 compaction-induced progress loss | **REFUTED** | 257 real boundaries; **0/257** summaries lost the task contract or the runtime completion obligation |
+| H4 ineffective evidence-collection loop | **REFUTED** | 369/371 distinct command payloads overall; after readiness 202/202 distinct, **186** novel results, 0 repeats |
+| H5 output-budget / generation boundary | **REFUTED** | `maxOutputTokens` 16384 in every request; max used 3,130 (19.1 %); p50 380; 0 truncations |
+
+**Root cause.** The harness exposed, preserved and enforced the completion contract correctly
+throughout. The model never emitted a completion call. Because it emitted a tool call on **every**
+one of its 277 turns, the runtime's only mid-run completion affordance — the zero-tool-call
+re-injection at `sdk/packages/agents/src/agent-runtime.ts:2031-2045` — was never reached. The
+harness provided a valid completion route and no pressure to stop.
+
+**No harness-owned defect was reproduced.** `HALT_RED_NOT_REPRODUCED` is recorded individually for
+H2, H3, H4 and H5. `HALT_P0` does not apply; `CAPTURE_INSUFFICIENT` does not apply.
+
+## Readiness
+
+`ROUND_C_FROZEN_VERDICT_ASSERTION_RUBRIC_V1`, frozen before inspection, implemented in
+`tools/readiness-probe.py`. Deliverable readiness is turn **271** (≈ 39 min into the run). After that
+point the model spent **174 turns / 202 tool calls / 71,194 output tokens / ≈ 1h42m** refining —
+productively (202 distinct commands, 186 novel results) — and still never submitted. The rubric does
+not use final-answer length, model confidence, or any later statement; a stricter rubric would only
+move readiness later, strengthening the finding. `READINESS_UNPROVEN` is NOT reported.
+
+## Limitations
+
+1. The reason for the 28m50s interval-B quiescence is `UNAVAILABLE_FROM_TRACE` — the artifact does not
+   record why no iteration 278 was dispatched, and this ACT does not invent a cause. The absence of
+   `submit_and_exit` is established independently of it.
+2. The readiness rubric is a proxy over the model's own adjudication language, not an external oracle.
+3. The per-subject matrix reports the model's adjudications, not a re-adjudication of R1–R10.
+4. One historical session only — establishes what happened, not how reproducible it is.
+5. The system prompt carried no completion instruction; the obligation reached the model solely via the
+   runtime-synthetic message (the canonical channel), which survived 257 compactions.
+6. The installed bundle differs from the working-tree bundle; no claim depends on the latter.
+
+## Conservation
+
+Canonical evidence authority, task-contract continuation, tool-call/result correlation, failed/ambiguous
+result rejection, request-budget fail-closed behaviour, sidecar/resume integrity and exact
+session/task/epoch terminality are all **PRESERVED**. No production change was made
+(`git status --porcelain --untracked-files=no` → 0 lines; the only working-tree entry is this ACT's
+own untracked evidence directory). No stop-after-N-tools rule, no diagnostic side effects in React
+functional updaters, no prompt/compaction/tool-authorization change, no Strata or cache-policy change,
+no new harness comparison, no synthetic observations, no orchestration redesign.
+
+## Sensitive-data boundary
+
+Raw captures stay private and access-restricted outside Git. Published artifacts carry only structural
+identifiers, timestamps, byte counts and non-reversible `sha256:` fingerprints; verified 0 strings
+longer than 200 characters in `timeline.jsonl` and 0 credential-shape matches across the published set.
+No credential is reproduced in any artifact, report, fixture or commit message.
+
+## Decision
+
+**PASS_BOUNDARY_CLASSIFIED.** The 2h47m autonomous non-completion is explained by model stopping
+judgment under a fully functional completion contract — not by a ClineMM defect.
+
+The successor is **`ACT-CLINEMM-ROUND-C-CONVERGENCE-EXPERIMENT-01`**: a controlled
+model-versus-harness A/B convergence experiment on the same model, task and tool schema, varying only
+whether a periodic, evidence-neutral completion affordance is present. The affordance would never
+forbid a tool call, because the post-readiness work was productive and a blunt stop would destroy
+value. If the treatment arm does not converge autonomously, the result is recorded as
+model-limited convergence and the harness contract is left unchanged.
+
+`ACT-CLINEMM-COMPACTION-STABLE-PREFIX-LIVE-QUALIFICATION-01` **remains open and separate** and was
+NOT merged into this ACT.

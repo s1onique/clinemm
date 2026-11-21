@@ -1,0 +1,2964 @@
+{
+  "all_ten_subjects_verdicted": true,
+  "cost_after_readiness": {
+    "output_tokens_after_readiness": 71194,
+    "tool_calls_after_readiness": 202,
+    "turns_after_readiness": 174
+  },
+  "operator_input_index": 650,
+  "per_subject_first_verdict": {
+    "R1": {
+      "ts_ms": 1795254119888,
+      "turn_index": 153,
+      "verdict_classes": [
+        "CONFIRMED"
+      ]
+    },
+    "R10": {
+      "ts_ms": 1795253053410,
+      "turn_index": 53,
+      "verdict_classes": [
+        "CONFIRMED"
+      ]
+    },
+    "R2": {
+      "ts_ms": 1795253752719,
+      "turn_index": 134,
+      "verdict_classes": [
+        "CONFIRMED"
+      ]
+    },
+    "R3": {
+      "ts_ms": 1795254975670,
+      "turn_index": 229,
+      "verdict_classes": [
+        "NARROWED"
+      ]
+    },
+    "R4": {
+      "ts_ms": 1795254914825,
+      "turn_index": 221,
+      "verdict_classes": [
+        "CONDITIONAL",
+        "CONFIRMED",
+        "NARROWED"
+      ]
+    },
+    "R5": {
+      "ts_ms": 1795254371828,
+      "turn_index": 192,
+      "verdict_classes": [
+        "CONFIRMED"
+      ]
+    },
+    "R6": {
+      "ts_ms": 1795253268534,
+      "turn_index": 64,
+      "verdict_classes": [
+        "CONDITIONAL",
+        "NARROWED"
+      ]
+    },
+    "R7": {
+      "ts_ms": 1795254284281,
+      "turn_index": 177,
+      "verdict_classes": [
+        "CONFIRMED"
+      ]
+    },
+    "R8": {
+      "ts_ms": 1795255318482,
+      "turn_index": 271,
+      "verdict_classes": [
+        "CONFIRMED"
+      ]
+    },
+    "R9": {
+      "ts_ms": 1795253188593,
+      "turn_index": 56,
+      "verdict_classes": [
+        "CONFIRMED",
+        "NARROWED"
+      ]
+    }
+  },
+  "per_turn_verdict_index": [
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795252569619,
+      "turn_index": 2,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795252585432,
+      "turn_index": 5,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795252617834,
+      "turn_index": 8,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795252633037,
+      "turn_index": 11,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795252654280,
+      "turn_index": 14,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        1,
+        2
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795252675519,
+      "turn_index": 17,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        9
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795252699148,
+      "turn_index": 20,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        1,
+        2,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795252720194,
+      "turn_index": 23,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        2,
+        5,
+        6
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795252742337,
+      "turn_index": 26,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795252764924,
+      "turn_index": 29,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        5
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795252815365,
+      "turn_index": 31,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        2,
+        5,
+        6,
+        8,
+        9,
+        10
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795252843180,
+      "turn_index": 33,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        2
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795252862935,
+      "turn_index": 36,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        2
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795252883675,
+      "turn_index": 39,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795252894187,
+      "turn_index": 41,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795252917428,
+      "turn_index": 44,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795252933016,
+      "turn_index": 46,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795252942269,
+      "turn_index": 48,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        2,
+        4,
+        6
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795253018804,
+      "turn_index": 50,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        1,
+        3,
+        7,
+        9,
+        10
+      ],
+      "subjects_with_verdict": [
+        10
+      ],
+      "ts_ms": 1795253053410,
+      "turn_index": 53,
+      "verdict_classes_present": [
+        "CONDITIONAL",
+        "CONFIRMED",
+        "NARROWED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        2,
+        9
+      ],
+      "subjects_with_verdict": [
+        9
+      ],
+      "ts_ms": 1795253188593,
+      "turn_index": 56,
+      "verdict_classes_present": [
+        "CONFIRMED",
+        "NARROWED",
+        "REFUTED"
+      ]
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795253242897,
+      "turn_index": 59,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795253252348,
+      "turn_index": 62,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        6
+      ],
+      "subjects_with_verdict": [
+        6
+      ],
+      "ts_ms": 1795253268534,
+      "turn_index": 64,
+      "verdict_classes_present": [
+        "CONDITIONAL",
+        "NARROWED"
+      ]
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795253274970,
+      "turn_index": 67,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795253286136,
+      "turn_index": 69,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795253295468,
+      "turn_index": 71,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795253315209,
+      "turn_index": 73,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795253336701,
+      "turn_index": 75,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        5
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795253359633,
+      "turn_index": 77,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        5
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795253382384,
+      "turn_index": 79,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        5
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795253400374,
+      "turn_index": 82,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        5
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795253417206,
+      "turn_index": 85,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        5
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795253445775,
+      "turn_index": 88,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795253464163,
+      "turn_index": 90,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        5
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795253483347,
+      "turn_index": 92,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        5
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795253501931,
+      "turn_index": 94,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795253510508,
+      "turn_index": 97,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795253516160,
+      "turn_index": 99,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795253546406,
+      "turn_index": 101,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795253554150,
+      "turn_index": 104,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795253561022,
+      "turn_index": 106,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795253568374,
+      "turn_index": 108,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        1
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795253590878,
+      "turn_index": 111,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        1
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795253618293,
+      "turn_index": 114,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795253632069,
+      "turn_index": 117,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        1
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795253646978,
+      "turn_index": 119,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795253653634,
+      "turn_index": 121,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        1,
+        9
+      ],
+      "subjects_with_verdict": [
+        9
+      ],
+      "ts_ms": 1795253666177,
+      "turn_index": 123,
+      "verdict_classes_present": [
+        "CONDITIONAL",
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        10
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795253682369,
+      "turn_index": 126,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        2,
+        3
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795253708500,
+      "turn_index": 128,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795253721612,
+      "turn_index": 131,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        2
+      ],
+      "subjects_with_verdict": [
+        2
+      ],
+      "ts_ms": 1795253752719,
+      "turn_index": 134,
+      "verdict_classes_present": [
+        "CONDITIONAL",
+        "CONFIRMED",
+        "NARROWED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        2,
+        4
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795253807897,
+      "turn_index": 137,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        4
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795254006966,
+      "turn_index": 140,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795254063351,
+      "turn_index": 143,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795254071683,
+      "turn_index": 145,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        4
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795254092770,
+      "turn_index": 148,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795254102639,
+      "turn_index": 151,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        1
+      ],
+      "subjects_with_verdict": [
+        1
+      ],
+      "ts_ms": 1795254119888,
+      "turn_index": 153,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795254132175,
+      "turn_index": 156,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795254147379,
+      "turn_index": 159,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        1
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795254165946,
+      "turn_index": 162,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        1,
+        9,
+        10
+      ],
+      "subjects_with_verdict": [
+        1
+      ],
+      "ts_ms": 1795254178889,
+      "turn_index": 165,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        9,
+        10
+      ],
+      "subjects_with_verdict": [
+        10
+      ],
+      "ts_ms": 1795254216884,
+      "turn_index": 168,
+      "verdict_classes_present": [
+        "CONDITIONAL",
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        1,
+        9,
+        10
+      ],
+      "subjects_with_verdict": [
+        9
+      ],
+      "ts_ms": 1795254247809,
+      "turn_index": 171,
+      "verdict_classes_present": [
+        "NARROWED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        7
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795254263721,
+      "turn_index": 174,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        3,
+        5,
+        6,
+        7,
+        8
+      ],
+      "subjects_with_verdict": [
+        7
+      ],
+      "ts_ms": 1795254284281,
+      "turn_index": 177,
+      "verdict_classes_present": [
+        "CONFIRMED",
+        "NARROWED"
+      ]
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795254293608,
+      "turn_index": 180,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795254302610,
+      "turn_index": 183,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795254318488,
+      "turn_index": 186,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795254334593,
+      "turn_index": 189,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        2,
+        3,
+        5,
+        6
+      ],
+      "subjects_with_verdict": [
+        5
+      ],
+      "ts_ms": 1795254371828,
+      "turn_index": 192,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795254385257,
+      "turn_index": 195,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        1,
+        3,
+        6,
+        8
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795254405205,
+      "turn_index": 198,
+      "verdict_classes_present": [
+        "CONDITIONAL",
+        "NARROWED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        4,
+        8
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795254430516,
+      "turn_index": 201,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795254439496,
+      "turn_index": 204,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        4
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795254496017,
+      "turn_index": 206,
+      "verdict_classes_present": [
+        "CONDITIONAL",
+        "SUFFICIENT"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        4
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795254525174,
+      "turn_index": 208,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        4
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795254554611,
+      "turn_index": 211,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795254575027,
+      "turn_index": 214,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795254756960,
+      "turn_index": 216,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        4
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795254860361,
+      "turn_index": 218,
+      "verdict_classes_present": [
+        "CONDITIONAL",
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        1,
+        4
+      ],
+      "subjects_with_verdict": [
+        4
+      ],
+      "ts_ms": 1795254914825,
+      "turn_index": 221,
+      "verdict_classes_present": [
+        "CONDITIONAL",
+        "CONFIRMED",
+        "NARROWED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        1,
+        3
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795254928026,
+      "turn_index": 224,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        3
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795254942812,
+      "turn_index": 226,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        1,
+        3
+      ],
+      "subjects_with_verdict": [
+        3
+      ],
+      "ts_ms": 1795254975670,
+      "turn_index": 229,
+      "verdict_classes_present": [
+        "NARROWED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        7
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795254989248,
+      "turn_index": 232,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795255006287,
+      "turn_index": 235,
+      "verdict_classes_present": [
+        "CONFIRMED",
+        "NARROWED"
+      ]
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795255015878,
+      "turn_index": 238,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795255030514,
+      "turn_index": 240,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795255048026,
+      "turn_index": 243,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        2,
+        5,
+        6
+      ],
+      "subjects_with_verdict": [
+        2
+      ],
+      "ts_ms": 1795255074407,
+      "turn_index": 246,
+      "verdict_classes_present": [
+        "CONFIRMED",
+        "NARROWED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        5,
+        6
+      ],
+      "subjects_with_verdict": [
+        5
+      ],
+      "ts_ms": 1795255111190,
+      "turn_index": 249,
+      "verdict_classes_present": [
+        "CONFIRMED",
+        "NARROWED",
+        "REFUTED"
+      ]
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795255125938,
+      "turn_index": 252,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795255132057,
+      "turn_index": 254,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795255143775,
+      "turn_index": 257,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        6
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795255158007,
+      "turn_index": 259,
+      "verdict_classes_present": [
+        "CONFIRMED",
+        "NARROWED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        6,
+        9,
+        10
+      ],
+      "subjects_with_verdict": [
+        6
+      ],
+      "ts_ms": 1795255178580,
+      "turn_index": 261,
+      "verdict_classes_present": [
+        "CONFIRMED",
+        "NARROWED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        9
+      ],
+      "subjects_with_verdict": [
+        9
+      ],
+      "ts_ms": 1795255198950,
+      "turn_index": 264,
+      "verdict_classes_present": [
+        "NARROWED",
+        "REFUTED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        1,
+        9
+      ],
+      "subjects_with_verdict": [
+        9
+      ],
+      "ts_ms": 1795255221744,
+      "turn_index": 267,
+      "verdict_classes_present": [
+        "CONFIRMED",
+        "REFUTED"
+      ]
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795255228143,
+      "turn_index": 269,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        1,
+        3,
+        4,
+        7,
+        8,
+        9,
+        10
+      ],
+      "subjects_with_verdict": [
+        1,
+        8,
+        9
+      ],
+      "ts_ms": 1795255318482,
+      "turn_index": 271,
+      "verdict_classes_present": [
+        "CONFIRMED",
+        "NARROWED",
+        "REFUTED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        8
+      ],
+      "subjects_with_verdict": [
+        8
+      ],
+      "ts_ms": 1795255449879,
+      "turn_index": 274,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795255504688,
+      "turn_index": 277,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        4
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795255524068,
+      "turn_index": 280,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795255538917,
+      "turn_index": 283,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795255544976,
+      "turn_index": 285,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        4,
+        5
+      ],
+      "subjects_with_verdict": [
+        4
+      ],
+      "ts_ms": 1795255589951,
+      "turn_index": 287,
+      "verdict_classes_present": [
+        "CONDITIONAL",
+        "CONFIRMED",
+        "NARROWED"
+      ]
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795255598583,
+      "turn_index": 290,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795255611485,
+      "turn_index": 293,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        5
+      ],
+      "subjects_with_verdict": [
+        5
+      ],
+      "ts_ms": 1795255628270,
+      "turn_index": 295,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795255635899,
+      "turn_index": 297,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        2,
+        3,
+        5
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795255676562,
+      "turn_index": 299,
+      "verdict_classes_present": [
+        "CONFIRMED",
+        "NARROWED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        2,
+        3,
+        7
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795255690845,
+      "turn_index": 302,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        1
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795255707811,
+      "turn_index": 305,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795255715420,
+      "turn_index": 308,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        1
+      ],
+      "subjects_with_verdict": [
+        1
+      ],
+      "ts_ms": 1795255730330,
+      "turn_index": 310,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        1,
+        2
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795255739887,
+      "turn_index": 312,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795255750758,
+      "turn_index": 314,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        2
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795255779591,
+      "turn_index": 317,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        2
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795255796314,
+      "turn_index": 320,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795255805148,
+      "turn_index": 322,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        7
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795255816997,
+      "turn_index": 324,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        7
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795255825703,
+      "turn_index": 327,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795255833848,
+      "turn_index": 329,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        7,
+        10
+      ],
+      "subjects_with_verdict": [
+        7
+      ],
+      "ts_ms": 1795255856143,
+      "turn_index": 331,
+      "verdict_classes_present": [
+        "CONDITIONAL",
+        "CONFIRMED",
+        "NARROWED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        2,
+        6,
+        10
+      ],
+      "subjects_with_verdict": [
+        10
+      ],
+      "ts_ms": 1795255896264,
+      "turn_index": 333,
+      "verdict_classes_present": [
+        "CONFIRMED",
+        "NARROWED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        2,
+        8
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795255917805,
+      "turn_index": 336,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795256096075,
+      "turn_index": 338,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        2,
+        3
+      ],
+      "subjects_with_verdict": [
+        2
+      ],
+      "ts_ms": 1795256153940,
+      "turn_index": 340,
+      "verdict_classes_present": [
+        "CONFIRMED",
+        "NARROWED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        1,
+        3
+      ],
+      "subjects_with_verdict": [
+        3
+      ],
+      "ts_ms": 1795256174086,
+      "turn_index": 342,
+      "verdict_classes_present": [
+        "CONDITIONAL",
+        "CONFIRMED",
+        "NARROWED"
+      ]
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795256184393,
+      "turn_index": 345,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        1
+      ],
+      "subjects_with_verdict": [
+        1
+      ],
+      "ts_ms": 1795256198091,
+      "turn_index": 347,
+      "verdict_classes_present": [
+        "CONFIRMED",
+        "NARROWED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        1,
+        10
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795256204390,
+      "turn_index": 349,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        1
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795256223860,
+      "turn_index": 351,
+      "verdict_classes_present": [
+        "CONFIRMED",
+        "NARROWED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        1,
+        4
+      ],
+      "subjects_with_verdict": [
+        1
+      ],
+      "ts_ms": 1795256238785,
+      "turn_index": 353,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795256243458,
+      "turn_index": 355,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795256248754,
+      "turn_index": 357,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        4,
+        5
+      ],
+      "subjects_with_verdict": [
+        4
+      ],
+      "ts_ms": 1795256272292,
+      "turn_index": 359,
+      "verdict_classes_present": [
+        "NARROWED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        5
+      ],
+      "subjects_with_verdict": [
+        5
+      ],
+      "ts_ms": 1795256286743,
+      "turn_index": 362,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        5,
+        6
+      ],
+      "subjects_with_verdict": [
+        5
+      ],
+      "ts_ms": 1795256304811,
+      "turn_index": 364,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        6
+      ],
+      "subjects_with_verdict": [
+        6
+      ],
+      "ts_ms": 1795256318784,
+      "turn_index": 366,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        5
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795256335574,
+      "turn_index": 368,
+      "verdict_classes_present": [
+        "REFUTED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        3,
+        5
+      ],
+      "subjects_with_verdict": [
+        5
+      ],
+      "ts_ms": 1795256375549,
+      "turn_index": 370,
+      "verdict_classes_present": [
+        "CONDITIONAL",
+        "CONFIRMED",
+        "NARROWED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        3,
+        9
+      ],
+      "subjects_with_verdict": [
+        3
+      ],
+      "ts_ms": 1795256392482,
+      "turn_index": 372,
+      "verdict_classes_present": [
+        "CONFIRMED",
+        "NARROWED"
+      ]
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795256400063,
+      "turn_index": 374,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        1,
+        9
+      ],
+      "subjects_with_verdict": [
+        9
+      ],
+      "ts_ms": 1795256420793,
+      "turn_index": 376,
+      "verdict_classes_present": [
+        "REFUTED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        9,
+        10
+      ],
+      "subjects_with_verdict": [
+        9
+      ],
+      "ts_ms": 1795256439960,
+      "turn_index": 378,
+      "verdict_classes_present": [
+        "CONFIRMED",
+        "REFUTED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        10
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795256452858,
+      "turn_index": 380,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        10
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795256466354,
+      "turn_index": 382,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        8,
+        10
+      ],
+      "subjects_with_verdict": [
+        10
+      ],
+      "ts_ms": 1795256492188,
+      "turn_index": 384,
+      "verdict_classes_present": [
+        "CONDITIONAL",
+        "CONFIRMED",
+        "NARROWED"
+      ]
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795256509892,
+      "turn_index": 386,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        8
+      ],
+      "subjects_with_verdict": [
+        8
+      ],
+      "ts_ms": 1795256519188,
+      "turn_index": 388,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        8
+      ],
+      "subjects_with_verdict": [
+        8
+      ],
+      "ts_ms": 1795256530386,
+      "turn_index": 390,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        4,
+        8
+      ],
+      "subjects_with_verdict": [
+        8
+      ],
+      "ts_ms": 1795256556891,
+      "turn_index": 392,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        2,
+        4,
+        6
+      ],
+      "subjects_with_verdict": [
+        4
+      ],
+      "ts_ms": 1795256623017,
+      "turn_index": 395,
+      "verdict_classes_present": [
+        "CONFIRMED",
+        "NARROWED",
+        "REFUTED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        2,
+        6
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795256635700,
+      "turn_index": 398,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        2,
+        3,
+        9
+      ],
+      "subjects_with_verdict": [
+        2
+      ],
+      "ts_ms": 1795256654382,
+      "turn_index": 400,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        1,
+        8,
+        9
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795256676702,
+      "turn_index": 402,
+      "verdict_classes_present": [
+        "CONFIRMED",
+        "NARROWED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        1
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795256684460,
+      "turn_index": 404,
+      "verdict_classes_present": [
+        "SUFFICIENT"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        10
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795256694966,
+      "turn_index": 406,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795256703307,
+      "turn_index": 408,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        1
+      ],
+      "subjects_with_verdict": [
+        1
+      ],
+      "ts_ms": 1795256920177,
+      "turn_index": 410,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        5
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795256975590,
+      "turn_index": 412,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        5
+      ],
+      "subjects_with_verdict": [
+        5
+      ],
+      "ts_ms": 1795256989945,
+      "turn_index": 415,
+      "verdict_classes_present": [
+        "NARROWED",
+        "REFUTED"
+      ]
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795257018831,
+      "turn_index": 418,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        5
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795257040464,
+      "turn_index": 420,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        5,
+        6
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795257063195,
+      "turn_index": 423,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        6
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795257075224,
+      "turn_index": 426,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        6,
+        7
+      ],
+      "subjects_with_verdict": [
+        6
+      ],
+      "ts_ms": 1795257088670,
+      "turn_index": 428,
+      "verdict_classes_present": [
+        "CONFIRMED",
+        "NARROWED"
+      ]
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795257100284,
+      "turn_index": 430,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795257108358,
+      "turn_index": 432,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        7
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795257119870,
+      "turn_index": 434,
+      "verdict_classes_present": [
+        "CONFIRMED",
+        "NARROWED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        2,
+        3,
+        7
+      ],
+      "subjects_with_verdict": [
+        7
+      ],
+      "ts_ms": 1795257142859,
+      "turn_index": 436,
+      "verdict_classes_present": [
+        "CONFIRMED",
+        "NARROWED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        3
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795257156148,
+      "turn_index": 439,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        3,
+        10
+      ],
+      "subjects_with_verdict": [
+        3
+      ],
+      "ts_ms": 1795257168323,
+      "turn_index": 441,
+      "verdict_classes_present": [
+        "NARROWED"
+      ]
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795257189874,
+      "turn_index": 443,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        10
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795257206143,
+      "turn_index": 446,
+      "verdict_classes_present": [
+        "CONDITIONAL"
+      ]
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795257214690,
+      "turn_index": 448,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        10
+      ],
+      "subjects_with_verdict": [
+        10
+      ],
+      "ts_ms": 1795257227042,
+      "turn_index": 450,
+      "verdict_classes_present": [
+        "CONDITIONAL"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        10
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795257237277,
+      "turn_index": 452,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        10
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795257251544,
+      "turn_index": 455,
+      "verdict_classes_present": [
+        "CONFIRMED",
+        "NARROWED"
+      ]
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795257259316,
+      "turn_index": 457,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795257270401,
+      "turn_index": 459,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795257279667,
+      "turn_index": 461,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        4,
+        9
+      ],
+      "subjects_with_verdict": [
+        9
+      ],
+      "ts_ms": 1795257291746,
+      "turn_index": 463,
+      "verdict_classes_present": [
+        "CONFIRMED",
+        "NARROWED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        8
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795257308982,
+      "turn_index": 466,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        2,
+        8
+      ],
+      "subjects_with_verdict": [
+        8
+      ],
+      "ts_ms": 1795257328591,
+      "turn_index": 468,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        2,
+        8
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795257337114,
+      "turn_index": 471,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795257344407,
+      "turn_index": 473,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795257354740,
+      "turn_index": 475,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        2
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795257363656,
+      "turn_index": 477,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        1,
+        2,
+        3
+      ],
+      "subjects_with_verdict": [
+        2
+      ],
+      "ts_ms": 1795257383406,
+      "turn_index": 479,
+      "verdict_classes_present": [
+        "CONFIRMED",
+        "NARROWED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        1,
+        4
+      ],
+      "subjects_with_verdict": [
+        1
+      ],
+      "ts_ms": 1795257407868,
+      "turn_index": 481,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        4,
+        8
+      ],
+      "subjects_with_verdict": [
+        4
+      ],
+      "ts_ms": 1795257437881,
+      "turn_index": 483,
+      "verdict_classes_present": [
+        "CONFIRMED",
+        "NARROWED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        4,
+        5,
+        6
+      ],
+      "subjects_with_verdict": [
+        5
+      ],
+      "ts_ms": 1795257459110,
+      "turn_index": 485,
+      "verdict_classes_present": [
+        "CONFIRMED",
+        "NARROWED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        6
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795257469631,
+      "turn_index": 487,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        1,
+        6,
+        9,
+        10
+      ],
+      "subjects_with_verdict": [
+        6
+      ],
+      "ts_ms": 1795257484966,
+      "turn_index": 489,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        7,
+        10
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795257492218,
+      "turn_index": 491,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795257496253,
+      "turn_index": 493,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        1
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795257504846,
+      "turn_index": 495,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795257742030,
+      "turn_index": 497,
+      "verdict_classes_present": [
+        "CONDITIONAL"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        10
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795257819743,
+      "turn_index": 499,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        10
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795257834378,
+      "turn_index": 501,
+      "verdict_classes_present": [
+        "CONDITIONAL"
+      ]
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795257846257,
+      "turn_index": 503,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795257857472,
+      "turn_index": 505,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        3
+      ],
+      "subjects_with_verdict": [
+        3
+      ],
+      "ts_ms": 1795257884578,
+      "turn_index": 507,
+      "verdict_classes_present": [
+        "CONFIRMED",
+        "NARROWED"
+      ]
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795257892551,
+      "turn_index": 509,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        4
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795257934466,
+      "turn_index": 511,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795257954724,
+      "turn_index": 513,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        4
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795257970638,
+      "turn_index": 515,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795257974182,
+      "turn_index": 517,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        4
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795257994887,
+      "turn_index": 519,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        7
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795258004922,
+      "turn_index": 521,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        7
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795258011938,
+      "turn_index": 523,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        7
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795258021573,
+      "turn_index": 525,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        8,
+        9,
+        10
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795258044337,
+      "turn_index": 527,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        7
+      ],
+      "subjects_with_verdict": [
+        7
+      ],
+      "ts_ms": 1795258051093,
+      "turn_index": 529,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        8,
+        9,
+        10
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795258061855,
+      "turn_index": 531,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        9
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795258072474,
+      "turn_index": 533,
+      "verdict_classes_present": [
+        "CONDITIONAL"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        9,
+        10
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795258089084,
+      "turn_index": 535,
+      "verdict_classes_present": [
+        "CONDITIONAL",
+        "CONFIRMED",
+        "NARROWED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        1,
+        10
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795258100271,
+      "turn_index": 537,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795258106203,
+      "turn_index": 539,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        1,
+        8,
+        10
+      ],
+      "subjects_with_verdict": [
+        1
+      ],
+      "ts_ms": 1795258118579,
+      "turn_index": 541,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        8
+      ],
+      "subjects_with_verdict": [
+        8
+      ],
+      "ts_ms": 1795258132552,
+      "turn_index": 543,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        2,
+        10
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795258141061,
+      "turn_index": 545,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795258154606,
+      "turn_index": 547,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        2
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795258168345,
+      "turn_index": 549,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795258181500,
+      "turn_index": 551,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        5,
+        7
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795258188324,
+      "turn_index": 553,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795258195422,
+      "turn_index": 555,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        3
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795258209303,
+      "turn_index": 557,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        3,
+        10
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795258241655,
+      "turn_index": 559,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        10
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795258251328,
+      "turn_index": 561,
+      "verdict_classes_present": [
+        "CONDITIONAL",
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        1,
+        10
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795258263738,
+      "turn_index": 563,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        1,
+        9
+      ],
+      "subjects_with_verdict": [
+        1
+      ],
+      "ts_ms": 1795258279112,
+      "turn_index": 565,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        2
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795258290086,
+      "turn_index": 567,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        2
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795258300409,
+      "turn_index": 569,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795258471860,
+      "turn_index": 571,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        2
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795258536195,
+      "turn_index": 573,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        2,
+        6
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795258547137,
+      "turn_index": 575,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795258552355,
+      "turn_index": 577,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795258559174,
+      "turn_index": 579,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795258566118,
+      "turn_index": 581,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795258582360,
+      "turn_index": 583,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795258589478,
+      "turn_index": 585,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        6
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795258599265,
+      "turn_index": 587,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        4,
+        6
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795258621256,
+      "turn_index": 589,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795258636368,
+      "turn_index": 592,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795258655586,
+      "turn_index": 594,
+      "verdict_classes_present": [
+        "NARROWED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        4
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795258675536,
+      "turn_index": 596,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        4
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795258714171,
+      "turn_index": 598,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795258717828,
+      "turn_index": 600,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795258723330,
+      "turn_index": 602,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795258729332,
+      "turn_index": 604,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795258735590,
+      "turn_index": 606,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795258753732,
+      "turn_index": 608,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        4
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795258775919,
+      "turn_index": 610,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795258786484,
+      "turn_index": 612,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795258789483,
+      "turn_index": 614,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795262330270,
+      "turn_index": 616,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795262337952,
+      "turn_index": 618,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795262344573,
+      "turn_index": 620,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795262353527,
+      "turn_index": 622,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        4
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795262402395,
+      "turn_index": 624,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795262415958,
+      "turn_index": 626,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795262426757,
+      "turn_index": 628,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        4
+      ],
+      "subjects_with_verdict": [
+        4
+      ],
+      "ts_ms": 1795262458241,
+      "turn_index": 630,
+      "verdict_classes_present": [
+        "CONDITIONAL",
+        "CONFIRMED",
+        "NARROWED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        4
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795262474666,
+      "turn_index": 632,
+      "verdict_classes_present": [
+        "NARROWED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        1,
+        4
+      ],
+      "subjects_with_verdict": [
+        4
+      ],
+      "ts_ms": 1795262488553,
+      "turn_index": 634,
+      "verdict_classes_present": [
+        "NARROWED",
+        "SUFFICIENT"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        1
+      ],
+      "subjects_with_verdict": [
+        1
+      ],
+      "ts_ms": 1795262500122,
+      "turn_index": 636,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "subjects_with_verdict": [
+        1
+      ],
+      "ts_ms": 1795262516021,
+      "turn_index": 638,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [
+        7
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795262527714,
+      "turn_index": 641,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    },
+    {
+      "subjects_mentioned": [],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795262535568,
+      "turn_index": 643,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        2,
+        3,
+        5,
+        6,
+        8,
+        9,
+        10
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795262548345,
+      "turn_index": 645,
+      "verdict_classes_present": []
+    },
+    {
+      "subjects_mentioned": [
+        5
+      ],
+      "subjects_with_verdict": [],
+      "ts_ms": 1795262574215,
+      "turn_index": 648,
+      "verdict_classes_present": [
+        "CONFIRMED"
+      ]
+    }
+  ],
+  "readiness_turn_index": 271,
+  "rubric_id": "ROUND_C_FROZEN_VERDICT_ASSERTION_RUBRIC_V1",
+  "subjects": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10
+  ]
+}

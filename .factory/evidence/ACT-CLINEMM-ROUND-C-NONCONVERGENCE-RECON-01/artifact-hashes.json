@@ -1,0 +1,221 @@
+{
+  "act_id": "ACT-CLINEMM-ROUND-C-NONCONVERGENCE-RECON-01",
+  "generated_by": "tools/build-artifact-hashes.py",
+  "inspected_production_files": [
+    {
+      "absolute_path": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core/src/extensions/tools/definitions.ts",
+      "bytes": 49334,
+      "exists": true,
+      "path": "sdk/packages/core/src/extensions/tools/definitions.ts",
+      "sha256": "d85bf9d07b0db1f0b7e857eb3a052f8745e2031b72660b9fa42d00cc863697e7"
+    },
+    {
+      "absolute_path": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core/src/extensions/tools/constants.ts",
+      "bytes": 868,
+      "exists": true,
+      "path": "sdk/packages/core/src/extensions/tools/constants.ts",
+      "sha256": "3b58fc2bb49a92fbdc4e660ad9bdb4a446698d4880c44d14b8ceaedbac991b91"
+    },
+    {
+      "absolute_path": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core/src/extensions/tools/model-tool-routing.ts",
+      "bytes": 3192,
+      "exists": true,
+      "path": "sdk/packages/core/src/extensions/tools/model-tool-routing.ts",
+      "sha256": "8ee931d74ef60f9a601efbe4beb58f619fc8227dad9ab7f6454243db71c651a2"
+    },
+    {
+      "absolute_path": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core/src/extensions/tools/presets.ts",
+      "bytes": 4453,
+      "exists": true,
+      "path": "sdk/packages/core/src/extensions/tools/presets.ts",
+      "sha256": "fb86bc1acff114963a9214137eda66758819b7f7176d11fc7bd3a9b322903ce7"
+    },
+    {
+      "absolute_path": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core/src/extensions/tools/definitions.test.ts",
+      "bytes": 62111,
+      "exists": true,
+      "path": "sdk/packages/core/src/extensions/tools/definitions.test.ts",
+      "sha256": "7d7d1e945e600268962e1c0686f2cd47fc3ef7e9840e718e0df77fc21b523ba3"
+    },
+    {
+      "absolute_path": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core/src/extensions/context/task-contract.ts",
+      "bytes": 20433,
+      "exists": true,
+      "path": "sdk/packages/core/src/extensions/context/task-contract.ts",
+      "sha256": "a9d8a9ff90c30da66df9ddfc8d704456e9b7bdd2f011cb1299e10aa6c78307e5"
+    },
+    {
+      "absolute_path": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core/src/runtime/orchestration/runtime-builder.ts",
+      "bytes": 30408,
+      "exists": true,
+      "path": "sdk/packages/core/src/runtime/orchestration/runtime-builder.ts",
+      "sha256": "ce711e9210bcb41de20533bde40c312a356e390caf011764dcd5025e7e48bcaf"
+    },
+    {
+      "absolute_path": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core/src/runtime/host/local-runtime-host.ts",
+      "bytes": 130559,
+      "exists": true,
+      "path": "sdk/packages/core/src/runtime/host/local-runtime-host.ts",
+      "sha256": "977bc1c8742cecd4cc8b2929ede7e91f096ba1888d298670758219fe8bde39bb"
+    },
+    {
+      "absolute_path": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/agents/src/agent-runtime.ts",
+      "bytes": 255503,
+      "exists": true,
+      "path": "sdk/packages/agents/src/agent-runtime.ts",
+      "sha256": "0c6080089cf7142f0b66b70c55e6ce1b90867df9ae8a4b7472ea8271f0847656"
+    },
+    {
+      "absolute_path": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/shared/src/agents/completion-reminder.ts",
+      "bytes": 3521,
+      "exists": true,
+      "path": "sdk/packages/shared/src/agents/completion-reminder.ts",
+      "sha256": "0cefd4f9de37567a54f19ef7372a3bde504262b55abf950e99969b0149de1c8d"
+    },
+    {
+      "absolute_path": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/cline-session-factory.ts",
+      "bytes": 72282,
+      "exists": true,
+      "path": "apps/vscode/src/sdk/cline-session-factory.ts",
+      "sha256": "bebccdcc838018aa08e30064d48155ac10b19a23ce3266fd2b51884bac04fabe"
+    },
+    {
+      "absolute_path": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/vscode-session-host.ts",
+      "bytes": 46265,
+      "exists": true,
+      "path": "apps/vscode/src/sdk/vscode-session-host.ts",
+      "sha256": "6e6ba511b2112a5fb3b248c5e608024c3e5ed7f556710ebc327b0bc2517d9e06"
+    },
+    {
+      "absolute_path": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/background-notify-coordinator.ts",
+      "bytes": 145079,
+      "exists": true,
+      "path": "apps/vscode/src/sdk/background-notify-coordinator.ts",
+      "sha256": "f6599d2487b5ac4d5fe61803238f9c34ac9bb1e869ba164702296072c1d81960"
+    },
+    {
+      "absolute_path": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/command-status-tool.ts",
+      "bytes": 27672,
+      "exists": true,
+      "path": "apps/vscode/src/sdk/command-status-tool.ts",
+      "sha256": "3fde71bdcb4c86b44307dfef771dbbf0c9044f7ba48e1e1018f876a5f349f34c"
+    },
+    {
+      "absolute_path": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/package.json",
+      "bytes": 24729,
+      "exists": true,
+      "path": "apps/vscode/package.json",
+      "sha256": "afb56cb537a3cfd6964bf68a516abf82eaa971e757daef1aa706795b34d615d0"
+    }
+  ],
+  "private_evidence_sources": [
+    {
+      "absolute_path": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/cline-data/sessions/1795252560069_t82cp/1795252560069_t82cp.json",
+      "bytes": 2356,
+      "exists": true,
+      "note": "session manifest",
+      "path": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/cline-data/sessions/1795252560069_t82cp/1795252560069_t82cp.json",
+      "sha256": "cf8c15b1361ff8e21c09668428049515ff833fd15aed19ecafb9357ea4c5ad0c"
+    },
+    {
+      "absolute_path": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/cline-data/sessions/1795252560069_t82cp/1795252560069_t82cp.messages.json",
+      "bytes": 2195635,
+      "exists": true,
+      "note": "session transcript (661 messages)",
+      "path": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/cline-data/sessions/1795252560069_t82cp/1795252560069_t82cp.messages.json",
+      "sha256": "961aa953a708a27cc8f950a59db29e2df21d50eddf6866ce1db656367b8a2b24"
+    },
+    {
+      "absolute_path": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/cline-data/sessions/1795252560069_t82cp/1795252560069_t82cp.compaction.json",
+      "bytes": 93945,
+      "exists": true,
+      "note": "compaction sidecar",
+      "path": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/cline-data/sessions/1795252560069_t82cp/1795252560069_t82cp.compaction.json",
+      "sha256": "61365fb86dfbf344029ee303aa9c509e97a555185670842fbe1da9c9b1ffad31"
+    },
+    {
+      "absolute_path": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/extensions/s1onique.clinemm-4.1.26-6883c7c52/dist/extension.js",
+      "bytes": 27540332,
+      "exists": true,
+      "note": "installed extension bundle that produced the session",
+      "path": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/extensions/s1onique.clinemm-4.1.26-6883c7c52/dist/extension.js",
+      "sha256": "914351930b9ec62fc988ed9fe6d125d6eced37f2fc98ca49b2c5c2e2917f6a20"
+    },
+    {
+      "absolute_path": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/extensions/s1onique.clinemm-4.1.26-6883c7c52/build-provenance.json",
+      "bytes": 398,
+      "exists": true,
+      "note": "installed extension build provenance",
+      "path": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/extensions/s1onique.clinemm-4.1.26-6883c7c52/build-provenance.json",
+      "sha256": "2860659a3e7712d8ae5b41ba30d7ac01131a4e37bff4fa1cf30e431028b04847"
+    }
+  ],
+  "published_artifacts": [
+    {
+      "bytes": 16406,
+      "path": "./causal-discriminators.md",
+      "sha256": "83f53d9721c589774b075c0b5824a0891f0855b5241217771cc12a68caedc5e0"
+    },
+    {
+      "bytes": 13151,
+      "path": "./qualification-report.md",
+      "sha256": "129e8c7f1a5a38dd44d1a34913e6637cdded0f78e3051bb47eb0c5e44c7616c3"
+    },
+    {
+      "bytes": 14164,
+      "path": "./readiness-analysis.md",
+      "sha256": "a02dd048f70947608b57b8e42c9670d036128cc384f340616724d1f2d09ed1f3"
+    },
+    {
+      "bytes": 59384,
+      "path": "./readiness-probe.json",
+      "sha256": "9ec28d5cbac9a4f37af100ca21f0ab6636f84598c269f3d3cada22d7a89bc9a9"
+    },
+    {
+      "bytes": 12134,
+      "path": "./source-map.md",
+      "sha256": "1e8ca9a4bd36e368e431e411583489e49eab1145bac5dd70c528987323d741b4"
+    },
+    {
+      "bytes": 8159,
+      "path": "./timeline-summary.md",
+      "sha256": "8fc8edfa9c5eb524aa095358426d676738b8ddac6e7c8362d70f12340a7bf011"
+    },
+    {
+      "bytes": 609866,
+      "path": "./timeline.jsonl",
+      "sha256": "ace20940634fe93090245ec7e98526252ca40f0f495b2b13f880d1259f15e591"
+    },
+    {
+      "bytes": 6921,
+      "path": "./tools/build-artifact-hashes.py",
+      "sha256": "44b13fc76dc7c80aa804b989bd15f75d4056cb2702dd8f9ea3201d01d79246b4"
+    },
+    {
+      "bytes": 13227,
+      "path": "./tools/build-timeline.py",
+      "sha256": "84cea5e5860efc40886ecf83de28d5f930123f04e5d2453a66b465486861e164"
+    },
+    {
+      "bytes": 7807,
+      "path": "./tools/readiness-probe.py",
+      "sha256": "d4836ffad07e2bd6aa6ee2b864235966b9b3d5fb8b700307725cfc612ea7929c"
+    },
+    {
+      "bytes": 495,
+      "path": "./verification/01-production-seam-definitions-test.txt",
+      "sha256": "0795c09f0fe23fe06fffb0be6efb2d58445626f1f8c8957bc6964fa0144e9610"
+    }
+  ],
+  "sanitization": "Private evidence sources are referenced by absolute path and sha256 only. No raw transcript text, command text, file content or credential is copied into any published artifact.",
+  "source_identity": {
+    "branch": "main",
+    "entry_head": "6883c7c52f19de5966bacb31973577179eac42de",
+    "entry_head_date": "2026-11-21T07:51:12+03:00",
+    "entry_head_subject": "docs(clinemm): bind the CORRECTION02 terminal identity and regenerate the manifest",
+    "installed_extension_dir": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/extensions/s1onique.clinemm-4.1.26-6883c7c52",
+    "installed_extension_version": "s1onique.clinemm-4.1.26-6883c7c52",
+    "repo_root": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm",
+    "working_tree_porcelain_lines": 1
+  }
+}
