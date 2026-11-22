@@ -289,13 +289,13 @@ Full record: `.factory/evidence/ACT-CLINEMM-BEFOREMODEL-OPERATOR-CHECKPOINT-01/0
 
 | Item | Value |
 |---|---|
-| Final source HEAD | `bb54f0fa55279557aba298d71e3370c7fa6ed814` |
+| Final source HEAD | `51fe3d229c1184706288482d52df84f75ec0fe14` |
 | Predecessor HEAD | `0b6b3ba51` |
-| VSIX path | `dist/clinemm-4.1.26-bb54f0fa5.vsix` |
-| VSIX byte count | `65609737` |
-| VSIX SHA-256 | `566571bedeb748caaaa385b8ae33de0d96a47b61892111bf19f5d9e2903e9e1f` |
+| VSIX path | `dist/clinemm-4.1.26-51fe3d229.vsix` |
+| VSIX byte count | `65609963` |
+| VSIX SHA-256 | `41e4edd06edf92680118c36afed0e494a529d1b3cb4145db657f321a88803a34` |
 | Installed extension version | `4.1.26` (`s1onique.clinemm-4.1.26`) |
-| Bundle SHA-256 (built == VSIX-embedded == installed) | `ae823a5243b07310c7594faff6bb9d936848121146a8528a9e1fd891d5b27993` |
+| Bundle SHA-256 (built == VSIX-embedded == installed) | `2920346c2a23c4ce15bff08856f18ede36d468cba0f4a3183b064772f2d00012` |
 
 The three bundle digests are **equal**, which binds the source HEAD to the installed runtime.
 

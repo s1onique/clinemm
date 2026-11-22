@@ -19,18 +19,18 @@ save/reload/display round-trip, are **unverified**.
 
 | Item | Value |
 |---|---|
-| Source HEAD (this ACT) | `bb54f0fa55279557aba298d71e3370c7fa6ed814` |
+| Source HEAD (this ACT) | `51fe3d229c1184706288482d52df84f75ec0fe14` (includes the CORRECTION01 pass) |
 | Predecessor HEAD | `0b6b3ba51` |
 | Package name | `clinemm` |
 | Package version | `4.1.26` |
-| VSIX path | `dist/clinemm-4.1.26-bb54f0fa5.vsix` (repo root) |
-| VSIX byte count | `65609737` |
-| VSIX SHA-256 | `566571bedeb748caaaa385b8ae33de0d96a47b61892111bf19f5d9e2903e9e1f` |
+| VSIX path | `dist/clinemm-4.1.26-51fe3d229.vsix` (repo root) |
+| VSIX byte count | `65609963` |
+| VSIX SHA-256 | `41e4edd06edf92680118c36afed0e494a529d1b3cb4145db657f321a88803a34` |
 | Installed extension version | `4.1.26` (`s1onique.clinemm-4.1.26`) |
 | Installed extension directory | `<repo>/.vscodium-roz-ext/s1onique.clinemm-4.1.26` |
-| Installed bundle SHA-256 | `ae823a5243b07310c7594faff6bb9d936848121146a8528a9e1fd891d5b27993` |
-| Built bundle SHA-256 | `ae823a5243b07310c7594faff6bb9d936848121146a8528a9e1fd891d5b27993` |
-| VSIX-embedded bundle SHA-256 | `ae823a5243b07310c7594faff6bb9d936848121146a8528a9e1fd891d5b27993` |
+| Installed bundle SHA-256 | `2920346c2a23c4ce15bff08856f18ede36d468cba0f4a3183b064772f2d00012` |
+| Built bundle SHA-256 | `2920346c2a23c4ce15bff08856f18ede36d468cba0f4a3183b064772f2d00012` |
+| VSIX-embedded bundle SHA-256 | `2920346c2a23c4ce15bff08856f18ede36d468cba0f4a3183b064772f2d00012` |
 
 All three bundle digests are **equal**, which is the binding between the source HEAD and the
 installed runtime.
@@ -41,6 +41,8 @@ installed runtime.
 |---|---|
 | `before-model-checkpoint` occurrences in the installed `dist/extension.js` | `1` |
 | `beforeModelCheckpointEnabled` occurrences in the installed `dist/extension.js` | `5` |
+| `Invalid before model checkpoint interval` in the installed bundle (the P1 atomicity guard) | `1` |
+| `Saving…` in the installed `webview-ui/build/assets/index.js` (the P1 acknowledged-save UI) | `1` |
 | `Before Model Hook` present in the installed `webview-ui/build/assets/index.js` | yes |
 
 ### Installation-target deviation (environment, not code)

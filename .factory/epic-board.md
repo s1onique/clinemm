@@ -38038,7 +38038,7 @@ separate and was **not** merged into this continuation.
 # ACT-CLINEMM-BEFOREMODEL-OPERATOR-CHECKPOINT-01 — PASS_STRUCTURAL_ONLY — 2026-11-21
 
 **Type:** Implementation
-**Source HEAD:** `bb54f0fa55279557aba298d71e3370c7fa6ed814`
+**Source HEAD:** `51fe3d229c1184706288482d52df84f75ec0fe14` (implementation `bb54f0fa5` + CORRECTION01 `51fe3d229`)
 **Predecessor HEAD:** `0b6b3ba51`
 
 ## What was implemented
@@ -38101,8 +38101,8 @@ repository's own tooling and the six wire tags were verified in the encoder and 
 |---|---|
 | RED (focused, against pre-ACT production code) | **7 failed / 6 passed of 13** — reproducible |
 | RED (runtime, against pre-ACT production code) | **1 failed / 2 passed of 3** — reproducible |
-| GREEN (focused) | **30/30 pass** (13 + 3 + 14) |
-| GREEN (webview) | **19/19 pass** |
+| GREEN (focused) | **33/33 pass** (13 + 4 + 16, incl. the CORRECTION01 additions) |
+| GREEN (webview) | **21/21 pass** (incl. the CORRECTION01 additions) |
 | Extension typecheck | **0 diagnostics** |
 | Webview typecheck | **0 diagnostics** |
 | `bun run build:webview` | **success** (8937 modules transformed) |
@@ -38114,7 +38114,7 @@ baseline captured, then the ACT restored):
 | | Baseline (HEAD) | After (ACT) | Delta |
 |---|---|---|---|
 | failed tests | 169 | **169** | unchanged |
-| passed tests | 5974 | **6004** | **+30** = exactly the new tests |
+| passed tests | 5974 | **6007** | **+33** = exactly the new tests |
 | failed files | 64 | 63 | −1 (the revert-induced `updateSettings.test.ts` breakage) |
 
 **Zero new regressions.** All 63 common failures are pre-existing and unrelated (MCP bootstrap,
@@ -38137,11 +38137,11 @@ feature exists precisely because they assert that nothing happens.
 
 | Item | Value |
 |---|---|
-| VSIX | `dist/clinemm-4.1.26-bb54f0fa5.vsix` |
-| VSIX byte count | `65609737` |
-| VSIX SHA-256 | `566571bedeb748caaaa385b8ae33de0d96a47b61892111bf19f5d9e2903e9e1f` |
+| VSIX | `dist/clinemm-4.1.26-51fe3d229.vsix` |
+| VSIX byte count | `65609963` |
+| VSIX SHA-256 | `41e4edd06edf92680118c36afed0e494a529d1b3cb4145db657f321a88803a34` |
 | Installed extension version | `4.1.26` (`s1onique.clinemm-4.1.26`) |
-| Bundle SHA-256 (built == VSIX-embedded == installed) | `ae823a5243b07310c7594faff6bb9d936848121146a8528a9e1fd891d5b27993` |
+| Bundle SHA-256 (built == VSIX-embedded == installed) | `2920346c2a23c4ce15bff08856f18ede36d468cba0f4a3183b064772f2d00012` |
 
 The three bundle digests are **equal**, binding the source HEAD to the installed runtime.
 
