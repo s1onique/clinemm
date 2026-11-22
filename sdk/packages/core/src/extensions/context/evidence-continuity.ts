@@ -295,22 +295,6 @@ export interface VerifiedOutcomeEvidence {
 	 * is the number of affirmatively successful commands.
 	 */
 	commandCount: number;
-	/**
-	 * ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01
-	 *
-	 * The BOUNDED, SOURCE-ATTRIBUTED excerpts of the files this outcome
-	 * read.
-	 *
-	 * These are present ONLY for a verified source-file read, whose result
-	 * payloads identify the SOURCE they came from and whose bodies ARE
-	 * those sources' text. They are deliberately NOT a generic "tool
-	 * output" field: a command's stdout has no such attribution and is
-	 * never carried.
-	 *
-	 * Each excerpt is bounded by `SOURCE_FILE_FACT_CHAR_LIMIT` characters,
-	 * and each path is the source path exactly as the tool reported it.
-	 */
-	sourceFileFacts?: SourceFileFact[];
 }
 
 /**
@@ -474,9 +458,25 @@ export function buildSourceFileFact(
 		return undefined;
 	}
 	const stripped = stripSourceLineGutter(rawResult);
+	// ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-CORRECTION01 (P0-3): a
+	// SOURCE file can contain CREDENTIALS -- a `.env`, a configmap with a
+	// password, a private key. The excerpt is therefore REDACTED with the
+	// module's existing value-position sanitizer before it is carried.
+	//
+	// This is a NARROW, EXPLICIT exception to the module's standing rule
+	// ("no regex can be made safe for arbitrary output"): the rule exists
+	// because arbitrary tool OUTPUT has no attribution. Here the content is
+	// the SOURCE the agent was reading, and the sanitizer is applied to the
+	// VALUE position of a credential-shaped assignment, so a value that
+	// cannot be shown to be safe is redacted rather than carried.
+	//
+	// The sanitizer is NOT trusted to make arbitrary content safe: it is
+	// applied on top of the source-attribution requirement, and the excerpt
+	// is still bounded.
+	const redacted = sanitizeOutcomeText(stripped);
 	return {
 		path,
-		excerpt: truncateText(stripped, SOURCE_FILE_FACT_CHAR_LIMIT),
+		excerpt: truncateText(redacted, SOURCE_FILE_FACT_CHAR_LIMIT),
 	};
 }
 
@@ -1296,11 +1296,6 @@ export function extractVerifiedToolOutcomes(
 					findCallInput(canonicalMessages, call.sourceIndex, result.toolUseId),
 				),
 				commandCount: result.commandCount,
-				// ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01: the bounded,
-				// source-attributed file facts, derived from the SAME
-				// canonical payload the verified status came from. They are
-				// present ONLY for a verified source-file read.
-				sourceFileFacts: extractSourceFileFacts(result.content, call.toolName),
 			},
 		});
 	}
@@ -1332,7 +1327,7 @@ export function extractVerifiedToolOutcomes(
  * attribution (its own source path), so each payload contributes its own
  * independently attributed fact. The facts are returned in payload order.
  */
-function extractSourceFileFacts(
+function extractSourceFileFactsFromContent(
 	content: unknown,
 	toolName: string | undefined,
 ): SourceFileFact[] {
@@ -1459,18 +1454,6 @@ export function renderEvidenceSection(
 				? `${line.slice(0, MAX_CARRIED_OUTCOME_CHARS)}...`
 				: line,
 		);
-		// ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01: the bounded,
-		// source-attributed FILE FACTS, when this verified outcome was a
-		// source-file read.
-		//
-		// They are carried on their own lines so an EXCERPT is never
-		// truncated by the outcome line's own character budget, and so the
-		// attribution and the excerpt are separable by a reader.
-		for (const sourceFileFact of outcome.evidence.sourceFileFacts ?? []) {
-			lines.push(
-				`  source-file ${escapeDelimiters(sourceFileFact.path)}: ${escapeDelimiters(sourceFileFact.excerpt)}`,
-			);
-		}
 	}
 	return [
 		EVIDENCE_SECTION_HEADING,
@@ -1522,6 +1505,246 @@ export function stripEvidenceSection(summaryText: string): string {
 		return before;
 	}
 	return `${before}\n\n${after}`;
+}
+
+/**
+ * ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-CORRECTION01 (P0-2)
+ *
+ * The section heading for the SOURCE-ATTRIBUTED FILE FACTS.
+ *
+ * It is a SEPARATE section from the verified-outcomes section on purpose.
+ * The verified-outcomes section is bounded by `MAX_CARRIED_OUTCOMES`, which
+ * keeps the MOST RECENT outcomes. A source-file read that happened early in
+ * the session therefore falls outside that window, and the deterministic
+ * carry-forward would stop rescuing the fact once the window has moved past
+ * it.
+ *
+ * The file-fact section has its OWN, independently bounded budget
+ * (`MAX_CARRIED_FILE_FACTS`), because a file fact is a different KIND of
+ * evidence: it is a bounded, source-attributed excerpt, not an execution
+ * status. Keeping it inside the outcome budget would let an execution-status
+ * budget silently decide a factual question.
+ */
+export const SOURCE_FILE_FACT_SECTION_HEADING =
+	"## Source file facts (canonical record)";
+
+const SOURCE_FILE_FACT_BEGIN_MARKER = "<!-- cline-file-facts:begin -->";
+const SOURCE_FILE_FACT_END_MARKER = "<!-- cline-file-facts:end -->";
+
+/**
+ * ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-CORRECTION01 (P0-2)
+ *
+ * The maximum number of source-file facts carried into one summary.
+ *
+ * It is a FIXED constant, independent of the transcript size. The budget is
+ * SEPARATE from `MAX_CARRIED_OUTCOMES` on purpose: the outcome budget is an
+ * execution-status budget, and it must not be the thing that decides whether
+ * a bounded factual excerpt survives.
+ */
+export const MAX_CARRIED_FILE_FACTS = 12;
+
+/**
+ * Escape delimiter occurrences inside a carried source-file fact.
+ *
+ * The same anti-spoofing rule as the outcome section: a carried excerpt can
+ * never open or close the generated section and thereby forge a new
+ * authority.
+ */
+function escapeFileFactDelimiters(text: string): string {
+	return text
+		.split(SOURCE_FILE_FACT_BEGIN_MARKER)
+		.join(`\\${SOURCE_FILE_FACT_BEGIN_MARKER}`)
+		.split(SOURCE_FILE_FACT_END_MARKER)
+		.join(`\\${SOURCE_FILE_FACT_END_MARKER}`);
+}
+
+/**
+ * ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-CORRECTION01 (P0-2)
+ *
+ * Collect the bounded, source-attributed file facts from the CANONICAL
+ * history, independently of the verified-outcome budget.
+ *
+ * The rules are the same fail-closed rules:
+ *
+ *   1. The canonical history must contain the tool CALL and the matching
+ *      tool RESULT, with the same attribution rules the outcome ledger uses
+ *      (no unmatched, ambiguous or contradicting id).
+ *   2. The result must be wholly verified: every payload affirmatively
+ *      succeeded.
+ *   3. The payloads must be source-file reads whose queries name a source
+ *      path.
+ *
+ * The facts are returned in canonical order, most recent last, and at most
+ * `MAX_CARRIED_FILE_FACTS` of them are kept.
+ */
+export function extractSourceFileFacts(
+	canonicalMessages: readonly MessageWithMetadata[],
+): SourceFileFact[] {
+	const callsById = new Map<
+		string,
+		{ toolName: string; sourceIndex: number; callCount: number }
+	>();
+	const results: {
+		toolUseId: string;
+		toolName?: string;
+		sourceIndex: number;
+		content: unknown;
+	}[] = [];
+	const resultCountsById = new Map<string, number>();
+
+	for (let index = 0; index < canonicalMessages.length; index += 1) {
+		const message = canonicalMessages[index];
+		if (!Array.isArray(message.content)) {
+			continue;
+		}
+		for (const block of message.content) {
+			if (block.type === "tool_use") {
+				const existing = callsById.get(block.id);
+				if (existing) {
+					existing.callCount += 1;
+					continue;
+				}
+				callsById.set(block.id, {
+					toolName: block.name,
+					sourceIndex: index,
+					callCount: 1,
+				});
+				continue;
+			}
+			if (block.type !== "tool_result") {
+				continue;
+			}
+			resultCountsById.set(
+				block.tool_use_id,
+				(resultCountsById.get(block.tool_use_id) ?? 0) + 1,
+			);
+			results.push({
+				toolUseId: block.tool_use_id,
+				toolName:
+					typeof (block as { name?: unknown }).name === "string"
+						? ((block as { name?: string }).name as string)
+						: undefined,
+				sourceIndex: index,
+				content: block.content,
+			});
+		}
+	}
+
+	const facts: SourceFileFact[] = [];
+	for (const result of results) {
+		const call = callsById.get(result.toolUseId);
+		if (!call || call.callCount > 1) {
+			continue;
+		}
+		if ((resultCountsById.get(result.toolUseId) ?? 0) > 1) {
+			continue;
+		}
+		if (result.toolName !== undefined && result.toolName !== call.toolName) {
+			continue;
+		}
+		if (result.sourceIndex < call.sourceIndex) {
+			continue;
+		}
+		for (const fact of extractSourceFileFactsFromContent(
+			result.content,
+			call.toolName,
+		)) {
+			facts.push(fact);
+		}
+	}
+	if (facts.length > MAX_CARRIED_FILE_FACTS) {
+		facts.splice(0, facts.length - MAX_CARRIED_FILE_FACTS);
+	}
+	return facts;
+}
+
+/**
+ * ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-CORRECTION01 (P0-2)
+ *
+ * Render the deterministic carry-forward section for the source-file facts.
+ *
+ * Returns `undefined` when there is nothing to carry, so a summary without a
+ * source-file fact is never rewritten.
+ */
+export function renderSourceFileFactSection(
+	facts: readonly SourceFileFact[],
+): string | undefined {
+	if (facts.length === 0) {
+		return undefined;
+	}
+	const lines: string[] = [];
+	for (const fact of facts) {
+		lines.push(
+			`- ${escapeFileFactDelimiters(fact.path)}: ${escapeFileFactDelimiters(fact.excerpt)}`,
+		);
+	}
+	return [
+		SOURCE_FILE_FACT_SECTION_HEADING,
+		SOURCE_FILE_FACT_BEGIN_MARKER,
+		...lines,
+		SOURCE_FILE_FACT_END_MARKER,
+	].join("\n");
+}
+
+/**
+ * ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-CORRECTION01 (P0-2)
+ *
+ * Remove any previously carried source-file-fact section from a summary text.
+ *
+ * The carry-forward is therefore IDEMPOTENT: a later compaction replaces the
+ * section rather than appending a second copy.
+ */
+export function stripSourceFileFactSection(summaryText: string): string {
+	const begin = summaryText.indexOf(SOURCE_FILE_FACT_BEGIN_MARKER);
+	if (begin === -1) {
+		return summaryText;
+	}
+	const end = summaryText.indexOf(SOURCE_FILE_FACT_END_MARKER, begin);
+	const headingIndex = summaryText.lastIndexOf(
+		SOURCE_FILE_FACT_SECTION_HEADING,
+		begin,
+	);
+	const sectionStart =
+		headingIndex !== -1 &&
+		summaryText
+			.slice(headingIndex + SOURCE_FILE_FACT_SECTION_HEADING.length, begin)
+			.trim() === ""
+			? headingIndex
+			: begin;
+	if (end === -1) {
+		return summaryText.slice(0, sectionStart).trimEnd();
+	}
+	const before = summaryText.slice(0, sectionStart).trimEnd();
+	const after = summaryText
+		.slice(end + SOURCE_FILE_FACT_END_MARKER.length)
+		.trimStart();
+	if (!before) {
+		return after;
+	}
+	if (!after) {
+		return before;
+	}
+	return `${before}\n\n${after}`;
+}
+
+/**
+ * ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-CORRECTION01 (P0-2)
+ *
+ * Apply the source-file-fact carry-forward to a summary text.
+ */
+export function applySourceFileFactsToSummary(
+	summaryText: string,
+	facts: readonly SourceFileFact[],
+): string {
+	const section = renderSourceFileFactSection(facts);
+	const stripped = stripSourceFileFactSection(summaryText).trimEnd();
+	if (!section) {
+		return stripped;
+	}
+	if (!stripped) {
+		return section;
+	}
+	return `${stripped}\n\n${section}`;
 }
 
 /**
@@ -1602,6 +1825,14 @@ export interface EvidenceApplicationResult {
 	applied: boolean;
 	/** The number of verified outcomes carried. */
 	carriedOutcomeCount: number;
+	/**
+	 * ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-CORRECTION01 (P0-2): the
+	 * number of source-attributed file facts carried.
+	 *
+	 * It is counted SEPARATELY from `carriedOutcomeCount`, because the two
+	 * have separate budgets and separate semantics.
+	 */
+	carriedFileFactCount?: number;
 }
 
 /**
@@ -1826,7 +2057,14 @@ export function applyVerifiedEvidenceToCompactedMessages(
 	// The boundary prefix is the canonical history AS IT WAS at the boundary.
 	// It is a prefix of the growing canonical history, so the derivation is
 	// stable across every continuation.
-	const ledger = extractVerifiedToolOutcomes(canonical.slice(0, boundaryCount));
+	const boundaryPrefix = canonical.slice(0, boundaryCount);
+	const ledger = extractVerifiedToolOutcomes(boundaryPrefix);
+	// ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-CORRECTION01 (P0-2): the
+	// SOURCE-ATTRIBUTED FILE FACTS are derived from the SAME
+	// boundary-scoped canonical prefix, but with their OWN budget
+	// (`MAX_CARRIED_FILE_FACTS`), so an execution-status budget never
+	// decides whether a bounded factual excerpt survives.
+	const fileFacts = extractSourceFileFacts(boundaryPrefix);
 	const summaryIndex = compactedMessages.findIndex(
 		(message) =>
 			(message.metadata as { kind?: string } | undefined)?.kind ===
@@ -1837,6 +2075,7 @@ export function applyVerifiedEvidenceToCompactedMessages(
 			messages: [...compactedMessages],
 			applied: false,
 			carriedOutcomeCount: ledger.outcomes.length,
+			carriedFileFactCount: fileFacts.length,
 		};
 	}
 	const summaryMessage = compactedMessages[summaryIndex];
@@ -1848,14 +2087,17 @@ export function applyVerifiedEvidenceToCompactedMessages(
 			messages: [...compactedMessages],
 			applied: false,
 			carriedOutcomeCount: ledger.outcomes.length,
+			carriedFileFactCount: fileFacts.length,
 		};
 	}
-	const nextSummary = applyEvidenceToSummary(currentSummary, ledger);
+	const withEvidence = applyEvidenceToSummary(currentSummary, ledger);
+	const nextSummary = applySourceFileFactsToSummary(withEvidence, fileFacts);
 	if (nextSummary === currentSummary) {
 		return {
 			messages: [...compactedMessages],
 			applied: false,
 			carriedOutcomeCount: ledger.outcomes.length,
+			carriedFileFactCount: fileFacts.length,
 		};
 	}
 	const nextMessages = [...compactedMessages];
@@ -1867,5 +2109,6 @@ export function applyVerifiedEvidenceToCompactedMessages(
 		messages: nextMessages,
 		applied: true,
 		carriedOutcomeCount: ledger.outcomes.length,
+		carriedFileFactCount: fileFacts.length,
 	};
 }

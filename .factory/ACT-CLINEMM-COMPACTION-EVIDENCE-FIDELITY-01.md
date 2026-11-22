@@ -1,6 +1,6 @@
-# ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01
+# ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01 (+ CORRECTION01)
 
-**Verdict:** `PASS_STRUCTURAL_ONLY`
+**Verdict:** `PASS_STRUCTURAL_ONLY` (after CORRECTION01)
 **Entry HEAD:** `bd39be9da2d0a610c173fbc205e2bdea570f8e70` (branch `main`)
 **Historical session:** `1795382314359_rb19c` · **Provider-capture run:** `yHaQSIjO`
 **Subject source revision:** Keycloak `42de653b59708e712d694aeb9732f822b7f8fe5b` (`optimize-ftls`)
@@ -22,7 +22,7 @@ full, and the captured provider request at iteration 84 carried them verbatim.
 ```
 
 It was present in the iteration-84 provider request (3 occurrences) and **absent from the entire
-iteration-85 request**. It was independently adjudicated against the frozen source revision, not
+iteration-85 request**. It is independently adjudicated against the frozen source revision, not
 merely accepted on a `success: true`.
 
 ## The cause
@@ -35,50 +35,60 @@ flattenToolResultContent([{ query: <path>, result: <body>, success: true }])
   -> "[succeeded] #1: [result omitted]"
 ```
 
-**Case A** — the fact was removed BEFORE the summarizer saw it. The summarizer then truthfully
-reported that the outputs were missing, and at iteration 85 (the first post-compaction request)
-the model re-ran `grep -rn "kc.sh build" ...`, seeking precisely the evicted fact.
+**Discriminator case A** — the fact was removed BEFORE the summarizer saw it. Cases B and C are
+excluded by this observation.
 
 ## The repair
 
 Option B (summarizer input fidelity), in the two existing modules:
 
-A **source-attributed file read** now carries a bounded, source-attributed excerpt
-(`SOURCE_FILE_FACT_CHAR_LIMIT = 2_000`) instead of `[result omitted]`, at the summarizer input and
-at the deterministic carry-forward seam.
+A **source-attributed file read** (a `read_files` result whose `query` is the file path and whose
+`result` is that file's content) carries a bounded, source-attributed, **redacted** excerpt
+instead of `[result omitted]` — at the summarizer input and in a dedicated deterministic section.
 
 A file read's payload identifies the source and its body IS the source text. A command's stdout
 has no attribution and may carry anything the program printed, including a credential — so
 arbitrary output is still omitted, and the pre-existing security posture is preserved.
 
-`MAX_CARRIED_OUTCOMES = 12` is unchanged.
+## CORRECTION01 — what the review changed
+
+The review of `e9ab27bc8` raised three P0 findings and one P1. **All four were accepted**; two
+were real defects in the shipped repair.
+
+| Finding | Disposition |
+|---|---|
+| P0-1 — the five-boundary replay used the FINAL canonical history for every boundary | **ACCEPTED** — the replay is regenerated with each boundary's authoritative prefix (6/8/8/8/10 reads, not 13 everywhere). |
+| P0-2 — summarizer visibility is not provider-visible preservation | **ACCEPTED — a real defect.** The file facts now have a dedicated section with their own budget (`MAX_CARRIED_FILE_FACTS = 12`). `SCENARIO 16` (fact outside the 12-outcome budget, summarizer omits it) FAILED against `e9ab27bc8` and now passes. |
+| P0-3 — source attribution does not establish confidentiality | **ACCEPTED — a real security defect.** The excerpt is now redacted with the module's existing value-position sanitizer. Four new controls (16-19). |
+| P0-4 — the behavioural causal claim used the wrong observation boundary | **ACCEPTED** — the `grep "kc.sh build"` call predated the boundary. `BEHAVIORAL_CAUSE_SUPPORTED` is **withdrawn**; the disposition is `BEHAVIORAL_CAUSE_UNPROVEN`. |
+| P1 — the fixture was labelled with a `run_commands` id but reconstructed as `read_files` | **ACCEPTED** — the LABEL was wrong; the id `call_362cfbf4cd5d44c19d876aeb` IS the historical `read_files` call (verified against the canonical transcript). Documentation corrected. |
 
 ## Receipts
 
 ```
-RED    (unchanged production)    3 failed | 4 passed (7)       EXIT=1
-RED    (production reverted)    16 failed | 7 passed (23)      EXIT=1
-GREEN  (after the repair)       23 passed (23)                 EXIT=0
-SWEP   src/extensions/context/ 440 passed | 2 skipped (442)   EXIT=0
+RED    (unchanged production)    6 failed | 22 passed (28)      EXIT=1
+GREEN  (after the repair)       28 passed (28)                EXIT=0
+SWEP   src/extensions/context/ 445 passed | 2 skipped (447)    EXIT=0
 TYPECHECK  43 diagnostics == the entry-HEAD baseline; ACT-owned = 0
-FULL SUITE  failing file set IDENTICAL to the entry HEAD (31 files, all pre-existing)
+FULL SUITE  failing file set IDENTICAL to the entry HEAD (31 files)
+BIOME  0 errors, 0 warnings
 ```
 
 ## Files changed
 
 | File | Change |
 |---|---|
-| `sdk/packages/core/src/extensions/context/compaction-shared.ts` | The tool name is threaded into the result projection; a source-attributed file read carries a bounded excerpt. |
-| `sdk/packages/core/src/extensions/context/evidence-continuity.ts` | The source-attributed file fact is derived from the canonical payload and carried in the deterministic section. |
-| `sdk/packages/core/src/extensions/context/compaction.evidence-fidelity01.test.ts` | NEW — the production-seam RED, the causal discriminator, and 15 negative controls. |
+| `sdk/packages/core/src/extensions/context/compaction-shared.ts` | The tool name is threaded into the result projection; a source-attributed file read carries a bounded, redacted excerpt. |
+| `sdk/packages/core/src/extensions/context/evidence-continuity.ts` | The source-attributed file fact is derived from the canonical payload, redacted, and carried in a dedicated, independently budgeted section. |
+| `sdk/packages/core/src/extensions/context/compaction.evidence-fidelity01.test.ts` | NEW — the production-seam RED, the causal discriminator, 19 negative controls, the realistic outside-the-budget RED and the confidentiality controls. |
 
 ## What is NOT claimed
 
 - No live model was run. The qualification is STRUCTURAL, not LIVE.
 - The repair does not prove improved autonomous completion.
+- **Behavioural causality is UNPROVEN**: the model did not re-read the R4 fact after the boundary.
 - The malformed-tool-call issue (`commands: null`) is a separate causal chain and was not touched.
-- The carry-forward's own 12-outcome budget does not reach the R4 read at the 84->85 boundary;
-  this is reported, not worked around.
+- `MAX_CARRIED_OUTCOMES = 12` is unchanged.
 
 ## Evidence
 

@@ -170,3 +170,121 @@ canonical transcript, NO provider payload, NO credential and NO secret path.
 The only credential-shaped string anywhere in the repository copy is the
 explicitly synthetic `SYNTHETIC-DO-NOT-USE-pw-abc123` in the negative
 control.
+
+---
+
+# CORRECTION01 receipts
+
+## C-1. The corrected per-boundary canonical prefixes
+
+Derived from each boundary's own PRE-compaction provider request (the last tool-call id in that
+request, looked up in the canonical transcript):
+
+```
+$ compare tool-calls(req84) vs tool-calls(req85)
+req84 tool-calls: 24
+req85 tool-calls: 4
+IN-84  {"requests": [{"prompt": "Does this class write/persist build-time configuration
+IN-84  {"requests": [{"prompt": "Quote the code showing how the build command persists
+IN-84  {"commands": ["cd ... && grep -rn -l \"startup.sh\" ...
+IN-84  {"commands": "cd ... && git rev-parse HEAD ...
+```
+
+| Boundary | Prefix end | Prefix size | Source-file reads in the prefix |
+|---|---|---|---|
+| 7 -> 8 | 15 | 16 | 6 |
+| 23 -> 24 | 49 | 50 | 8 |
+| 41 -> 42 | 85 | 86 | 8 |
+| 62 -> 63 | 127 | 128 | 8 |
+| 84 -> 85 | 171 | 172 | 10 |
+
+The persisted sidecar's `source_message_count = 217` /
+`source_last_message_key = id:msg_AdPPg-ET` (canonical index 216) independently confirms the
+method.
+
+## C-2. The realistic outside-the-budget RED (P0-2)
+
+```
+# against e9ab27bc8 (the reviewed repair):
+× SCENARIO 16: with the R4 fact outside the 12-outcome budget and the summarizer
+  omitting it, the provider-visible projection must still carry the fact
+ Test Files  1 failed (1)
+      Tests  6 failed | 22 passed (28)
+
+# against the CORRECTION01 repair:
+ Test Files  1 passed (1)
+      Tests  28 passed (28)
+EXIT=0
+```
+
+## C-3. The confidentiality boundary (P0-3)
+
+```
+CONTROL 16: a credential in a SOURCE FILE is redacted from the carried excerpt     PASS
+CONTROL 17: a credential in a SOURCE FILE never reaches the summarizer request
+            OR the persisted/provider-visible projection                         PASS
+CONTROL 18: a PEM private key in a source file is redacted                       PASS
+CONTROL 19: an ARBITRARY COMMAND's stdout is still never carried                PASS
+```
+
+## C-4. The corrected chronology (P0-4)
+
+```
+req85 tool-calls: 4  -- ALL FOUR are already present in req84
+first NEW tool call after the boundary (req 86):
+  {"commands": ["cd ... && git rev-parse HEAD && git branch --show-current && git status --porcelain | head -30", ...]}
+```
+
+The `read_files` of `startup.sh` occurs EXACTLY ONCE in the canonical transcript (canonical
+index 6). The model never re-read it after the boundary.
+
+Disposition: `BEHAVIORAL_CAUSE_UNPROVEN`.
+
+## C-5. The fixture identity (P1)
+
+```
+assistant idx 6 tool_use id = call_362cfbf4cd5d44c19d876aeb name = read_files
+user      idx 7 tool_result tool_use_id = call_362cfbf4cd5d44c19d876aeb name = read_files
+```
+
+The id and the tool name are both the historical ones. The original file's DOCSTRING was wrong
+and has been corrected.
+
+## C-6. Final verification
+
+```
+$ cd sdk/packages/core
+$ bunx vitest run --config vitest.config.ts src/extensions/context/
+ Test Files  26 passed | 1 skipped (27)
+      Tests  445 passed | 2 skipped (447)
+EXIT=0
+
+$ bun tsc -p tsconfig.dev.json --noEmit | grep -cE '^src/.*error TS'
+43
+```
+43 is the entry-HEAD baseline; the ACT-owned diagnostics are 0.
+
+```
+$ bunx vitest run --config vitest.config.ts
+ Test Files  32 failed | 331 passed | 4 skipped (368)
+      Tests  154 failed | 5488 passed | 176 skipped (5827)
+```
+The failing count (32 files / 154 tests) and the failing file set are IDENTICAL to the entry
+HEAD. The repair adds 5 passing tests relative to `e9ab27bc8` and changes no failing test.
+
+```
+$ bunx biome check <the two modified production files> <the new test file>
+Checked 3 files. 0 errors, 0 warnings.
+```
+
+## C-7. Historical artifacts unchanged (C8)
+
+```
+$ cd ~/.vscodium-roz/cline-data/sessions/1795382314359_rb19c/
+$ for f in *; do echo "$(shasum -a 256 "$f" | cut -d' ' -f1)  $f"; done
+aad44890951aebaef5539e8fea9b2e63dc4ff4d7e804f491e0f86a08a54a1769  1795382314359_rb19c.compaction.json
+5f0e9b7b85b3d87e324c9ac9a134c96ab9c17c26d78b958565c3a71838c4d4b8  1795382314359_rb19c.json
+31df6daa2ec3ec44122a572627e40e1a96b956f92e811804d38d4f60bf45d27b  1795382314359_rb19c.messages.json
+```
+
+Byte-identical to the entry-HEAD values. No historical sidecar was mutated or migrated.

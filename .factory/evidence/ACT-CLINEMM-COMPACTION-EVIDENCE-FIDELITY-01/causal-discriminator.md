@@ -49,49 +49,67 @@ omission.
 
 ## 3. Behavioural causality
 
-**`BEHAVIORAL_CAUSE_SUPPORTED`** — with direct trace support for the relevant
-sequence.
+**`BEHAVIORAL_CAUSE_UNPROVEN`** — the earlier `BEHAVIORAL_CAUSE_SUPPORTED` was **WITHDRAWN** by
+the review of `e9ab27bc8` (see `correction-record.md`, P0-4).
 
-Direct trace evidence from the captured provider requests of run `yHaQSIjO`:
+### Why the original claim was wrong
 
-1. **Iteration 84** (last pre-compaction request): the fact
-   `/opt/keycloak/bin/kc.sh build` is present, 3 occurrences.
+The first version of this document treated the `grep -rn "kc.sh build"` tool call at
+`messages[5]` of the captured provider request 85 as "the model's first action after seeing the
+iteration-85 compacted context".
 
-2. **Iteration 85** (first post-compaction request): the compacted summary
-   (messages[0]) asserts "Actual command outputs were omitted from the
-   transcript". The fact is absent from the entire request.
+A provider-request capture records the **input sent to the model**, not the response generated
+afterwards. A tool call already present in that input cannot be the model's reaction to that
+same request.
 
-3. **Iteration 85, messages[5]** — the model's FIRST tool call after the
-   compaction is:
+### The corrected chronology
 
-   ```json
-   {
-     "commands": [
-       "cd /Volumes/.../keycloak && grep -rn -l \"startup.sh\" --include=\"*.md\" --include=\"*.yaml\" --include=\"*.sh\" . | head -20",
-       "cd /Volumes/.../keycloak && grep -rn \"kc.sh build\" --include=\"*.md\" --include=\"*.sh\" --include=\"*.yaml\" . | head -30",
-       "cd /Volumes/.../keycloak && grep -rn -i \"persisted\" --include=\"*.md\" docs tools | head -30",
-       "cd /Volumes/.../keycloak && ls tools/profiling && ls .act-fm233-build-roz-p5-discriminator01"
-     ]
-   }
-   ```
+Comparing the tool calls in request 85 against request 84:
 
-   The **second command re-seeks precisely the evicted fact** (`grep -rn "kc.sh
-   build"`), and the **first** re-seeks the file that held it (`startup.sh`).
+```
+req84 tool-calls: 24
+req85 tool-calls: 4
+--- are req85 calls present in req84? ---
+IN-84  {"requests": [{"prompt": "Does this class write/persist build-time configuration ...
+IN-84  {"requests": [{"prompt": "Quote the code showing how the build command persists ...
+IN-84  {"commands": ["cd ... && grep -rn -l \"startup.sh\" ...
+IN-84  {"commands": "cd ... && git rev-parse HEAD ...
+```
 
-4. **Iteration 90**: the marker reappears in the provider request, i.e. the
-   model re-read the file and recovered the fact.
+**All four tool calls in request 85 were already present in request 84.** The
+`grep -rn "kc.sh build"` call was issued BEFORE the boundary, so it was already in the context
+when the compaction happened.
 
-This is a direct trace of: fact evicted at the boundary -> model re-runs the
-exact search for the evicted fact -> fact recovered. It is not an offline replay
-against approximate model inputs, and it is not merely a structural argument.
+The first genuinely NEW tool call after the boundary (request 86) is:
 
-### Scope limit on the behavioural claim
+```
+{"commands": ["cd ... && git rev-parse HEAD && git branch --show-current && git status --porcelain | head -30", ...]}
+```
 
-This supports the causal link **"the omission caused the re-investigation of
-this fact"**. It does **not** support **"the omission caused the session's
-failure to converge"**, and no such claim is made here. The historical session
-never produced the required R1-R10 verdict matrix for many reasons, and the
-malformed-tool-call issue (`commands: null`) is an explicitly separate causal
+— re-establishing **repository identity**, not re-seeking the R4 `kc.sh build` fact.
+
+And the canonical transcript shows the `read_files` of `startup.sh` occurs **exactly once**, at
+canonical index 6. The model never re-read `startup.sh` after the boundary.
+
+### The corrected disposition
+
+| Claim | Disposition |
+|---|---|
+| The fact was removed from the provider-visible projection | `REPRODUCED` |
+| The model re-investigated the R4 fact afterwards | `NOT_OBSERVED` |
+| Behavioural causality | **`BEHAVIORAL_CAUSE_UNPROVEN`** |
+
+### What this does and does not affect
+
+It does **not** weaken the repair's justification. The preservation contract this ACT asserts is
+a **fidelity** contract: a source-verified fact remains **accessible** in the provider-visible
+working context. The RED is a fidelity assertion, not a behavioural-convergence claim, and it
+stands: the fact WAS lost from the provider-visible projection, and the corrected projection
+restores it.
+
+It does mean the ACT no longer claims that the omission caused the session's failure to
+converge. The historical session never produced the required R1-R10 verdict matrix for many
+reasons, and the malformed-tool-call issue (`commands: null`) is an explicitly separate causal
 chain that this ACT does not touch.
 
 ## 4. Repair selected (Option B — summarizer input fidelity)

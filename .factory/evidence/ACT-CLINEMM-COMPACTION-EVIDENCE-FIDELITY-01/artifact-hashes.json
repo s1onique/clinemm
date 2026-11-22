@@ -1,6 +1,6 @@
 {
   "act": "ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01",
-  "entry_source_head": "bd39be9da2d0a610c173fbc205e2bdea570f8e70",
+  "entry_source_head": "e9ab27bc82a17e5848f286f1172f0574ceb8dc4c",
   "branch": "main",
   "subject_source_revision": "42de653b59708e712d694aeb9732f822b7f8fe5b",
   "subject_source_branch": "optimize-ftls",
@@ -230,15 +230,15 @@
     },
     {
       "path": "sdk/packages/core/src/extensions/context/evidence-continuity.ts",
-      "bytes": 68273,
-      "sha256": "6fab2397381cfbcd09a00e0d5b8beade78045ad7b05d4626f401a87b33d002db",
+      "bytes": 75842,
+      "sha256": "b697ac2f54ac04a7c907dcd488eec5f2bf5fae3d82b8ab355b9b3807b9c425b2",
       "role": "production source under this ACT",
       "private_outside_git": false
     },
     {
       "path": "sdk/packages/core/src/extensions/context/compaction.evidence-fidelity01.test.ts",
-      "bytes": 35100,
-      "sha256": "208cf5c24467a3cee983a0732de9806594dd5264a77f02997a5ce2bb516d3674",
+      "bytes": 43366,
+      "sha256": "082898723689852f2e4b55900f111821469e31628e5f3e06e4eaf97a40e5ec76",
       "role": "production-seam regression test",
       "private_outside_git": false
     }
@@ -253,36 +253,43 @@
     },
     {
       "path": ".factory/evidence/ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01/causal-discriminator.md",
-      "bytes": 7964,
-      "sha256": "0ed339b0d85061a4efd5b314202b881ffb9d9643e403060ea42850a95ca4eeca",
+      "bytes": 8630,
+      "sha256": "317a6b09f6b9ed2d8ba18d4c811f18b80c0a86500e890e412dd51312a1f7438f",
       "role": "published evidence artifact",
       "private_outside_git": false
     },
     {
       "path": ".factory/evidence/ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01/conservation-tests.md",
-      "bytes": 7970,
-      "sha256": "8d4201fda10b5875f4cd8513dce5f36a4ac685853db04747f87daec48d78dbc1",
+      "bytes": 9815,
+      "sha256": "18c5c9eadb62662d99a001ff11b7d543e92bc26ec221367d635f94eeb1d9c851",
+      "role": "published evidence artifact",
+      "private_outside_git": false
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01/correction-record.md",
+      "bytes": 11230,
+      "sha256": "51c5b3294c86a69724c6714f6aa44d8e63f0aadcd6c78feecd87393fbab8f5bf",
       "role": "published evidence artifact",
       "private_outside_git": false
     },
     {
       "path": ".factory/evidence/ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01/historical-boundary-index.json",
-      "bytes": 4487,
-      "sha256": "94264503a491fe28b0f833f723b552df449aa86f1473e5bbbadac31e7af3fbcd",
+      "bytes": 6766,
+      "sha256": "811618bae9109e7c56085d14f6d005baa1c4d710c89db0e4fd1041d5c7165ada",
       "role": "published evidence artifact",
       "private_outside_git": false
     },
     {
       "path": ".factory/evidence/ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01/qualification-report.md",
-      "bytes": 6903,
-      "sha256": "db3d9d92c48d6d7f5aa9f88219a935da07f602250e600dbb573e6c8043741688",
+      "bytes": 7545,
+      "sha256": "d519c938f1bec841a3eefe4f4a9183ce8966313b8f03cea6c0f7a55c0152f85f",
       "role": "published evidence artifact",
       "private_outside_git": false
     },
     {
       "path": ".factory/evidence/ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01/red-reproduction.md",
-      "bytes": 7934,
-      "sha256": "88e631b0a7553f74879bb1ff684fcde025cf038687dc3c3fabb9b8695f453894",
+      "bytes": 9286,
+      "sha256": "f816e51285e4c1f781ea74533481699cf2f8e06246a584bca0b580ce18ff4252",
       "role": "published evidence artifact",
       "private_outside_git": false
     },
@@ -295,15 +302,15 @@
     },
     {
       "path": ".factory/evidence/ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01/source-map.md",
-      "bytes": 6287,
-      "sha256": "ac90b4f03282451d48d16ff4f32674a60f30d3cf75e1152927ac712228935e4b",
+      "bytes": 7414,
+      "sha256": "7e1f9d0cb05f587e1628d81697b7bee4347ac9f6893119ed82f1b635cff12e8d",
       "role": "published evidence artifact",
       "private_outside_git": false
     },
     {
       "path": ".factory/evidence/ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01/verification/boundary-replay.json",
-      "bytes": 2986,
-      "sha256": "365993db9f82d394ae6b8a099e8a5e38068f0b54ab0f94921dfa6a77d40d0e3a",
+      "bytes": 3106,
+      "sha256": "6797d5fc45086db111fff58c8a5316ae97a02af39ea1aa424b63a7ef2daec4d2",
       "role": "published evidence artifact",
       "private_outside_git": false
     },
@@ -319,26 +326,20 @@
     {
       "command": "cd sdk/packages/core && bunx vitest run --config vitest.config.ts src/extensions/context/compaction.evidence-fidelity01.test.ts",
       "exit_code": 1,
-      "phase": "RED, against unchanged production code",
-      "result": "3 failed | 4 passed (7)"
-    },
-    {
-      "command": "cd sdk/packages/core && git checkout -- <the two modified production files> && bunx vitest run --config vitest.config.ts src/extensions/context/compaction.evidence-fidelity01.test.ts",
-      "exit_code": 1,
-      "phase": "DECISIVE RED-REPRODUCIBILITY (production reverted to the entry HEAD)",
-      "result": "16 failed | 7 passed (23)"
+      "phase": "RED, against unchanged production code (production reverted to the entry HEAD)",
+      "result": "6 failed | 22 passed (28)"
     },
     {
       "command": "cd sdk/packages/core && bunx vitest run --config vitest.config.ts src/extensions/context/compaction.evidence-fidelity01.test.ts",
       "exit_code": 0,
-      "phase": "GREEN, after the repair",
-      "result": "23 passed (23)"
+      "phase": "GREEN, after the CORRECTION01 repair",
+      "result": "28 passed (28)"
     },
     {
       "command": "cd sdk/packages/core && bunx vitest run --config vitest.config.ts src/extensions/context/",
       "exit_code": 0,
       "phase": "conservation sweep",
-      "result": "440 passed | 2 skipped (442)"
+      "result": "445 passed | 2 skipped (447)"
     },
     {
       "command": "cd sdk/packages/core && bun tsc -p tsconfig.dev.json --noEmit",
@@ -350,25 +351,21 @@
       "command": "cd sdk/packages/core && bunx vitest run --config vitest.config.ts",
       "exit_code": 1,
       "phase": "full-suite regression check",
-      "result": "154 failed | 5483 passed \u2014 IDENTICAL failure count and IDENTICAL failing file set (31 files) to the entry HEAD; all pre-existing and unrelated"
+      "result": "154 failed | 5488 passed \u2014 IDENTICAL failure count and IDENTICAL failing file set to the entry HEAD (31 files, all pre-existing and unrelated)"
     },
     {
       "command": "cd <repo> && bunx biome check <the two modified production files> <the new test file>",
       "exit_code": 0,
       "phase": "lint/format",
-      "result": "Checked 3 files. No fixes applied. 0 errors, 0 warnings."
-    },
-    {
-      "command": "cd sdk/packages/core && bunx vitest run --config vitest.config.ts src/extensions/context/",
-      "exit_code": 0,
-      "phase": "final GREEN verification after the lint fixes",
-      "result": "440 passed | 2 skipped (442)"
+      "result": "Checked 3 files. 0 errors, 0 warnings."
     }
   ],
   "confidentiality": {
     "raw_provider_payloads_in_git": false,
     "canonical_transcript_in_git": false,
     "credentials_in_git": false,
-    "note": "Only safe fixture values and redacted references are published. The canonical transcript, the provider-request captures and the persisted sidecar stay in the operator-local cline-data directory and are referenced by path + SHA-256 only."
-  }
+    "note": "Only safe fixture values and redacted references are published. The canonical transcript, the provider-request captures and the persisted sidecar stay in the operator-local cline-data directory and are referenced by path + SHA-256 only. The only credential-shaped strings in the repository copy are explicitly SYNTHETIC."
+  },
+  "correction": "ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-CORRECTION01 (see correction-record.md)",
+  "behavioural_causality": "BEHAVIORAL_CAUSE_UNPROVEN (the e9ab27bc8 SUPPORTED claim was withdrawn by the review; see correction-record.md P0-4)"
 }

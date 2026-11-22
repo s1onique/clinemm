@@ -26,7 +26,7 @@ capture-run identities therefore correspond, and both bind to the entry HEAD.
 | `sdk/packages/core/src/extensions/context/compaction-shared.ts` | **RESPONSIBLE TRANSFORMATION** | `renderStructuredToolPayload()` renders a structured `{query, result, success}` payload with a STRING `result` as the literal `[result omitted]`. `serializeMessage()` builds the summarizer input through it. |
 | `sdk/packages/core/src/extensions/context/agentic-compaction.ts` | Summarizer invocation | `runAgenticCompaction()` folds the prefix, calls `serializeConversation()` and `buildSummaryRequest()`. The summarizer never sees an omitted payload body. |
 | `sdk/packages/core/src/extensions/context/basic-compaction.ts` | Deterministic strategy | Not on the historical path (the historical summary is prose, i.e. agentic). |
-| `sdk/packages/core/src/extensions/context/evidence-continuity.ts` | Deterministic carry-forward | `extractVerifiedToolOutcomes()` + `renderEvidenceSection()` + `applyVerifiedEvidenceToCompactedMessages()` carry VERIFIED OUTCOMES (status + allowlisted classification). **Repaired in this ACT** to also carry a bounded, source-attributed file fact. |
+| `sdk/packages/core/src/extensions/context/evidence-continuity.ts` | Deterministic carry-forward | `extractVerifiedToolOutcomes()` + `renderEvidenceSection()` + `applyVerifiedEvidenceToCompactedMessages()` carry VERIFIED OUTCOMES (status + allowlisted classification). **Repaired in this ACT** to also carry a bounded, source-attributed file fact, in a SEPARATE, independently budgeted section (`MAX_CARRIED_FILE_FACTS`), because an execution-status budget must not decide whether a factual excerpt survives (CORRECTION01, P0-2). |
 | `sdk/packages/core/src/extensions/context/task-contract.ts` | Task-contract carry-forward | Carries the original user requirements and the terminal completion obligation. Unchanged. |
 | `sdk/packages/core/src/session/models/session-compaction.ts` | Persisted compaction state | `createSessionCompactionState()` / `projectSessionCompactionState()` bind the persisted sidecar to the canonical source history. Unchanged. |
 | `sdk/packages/core/src/agent-runtime.ts` (agents package) | Model dispatch | `MessageBuilder.buildForApi` is the last production transformation before the provider request. Unchanged. |
@@ -57,6 +57,7 @@ Canonical messages
 | `Context summary:` | `buildSummaryMessage()` | `compaction-shared.ts` |
 | `Verified tool outcomes (canonical record)` | `EVIDENCE_SECTION_HEADING` | `evidence-continuity.ts` |
 | `[result omitted]` | `OMITTED_STRUCTURED_RESULT_MARKER` | `compaction-shared.ts` |
+| `## Source file facts (canonical record)` | `SOURCE_FILE_FACT_SECTION_HEADING` | `evidence-continuity.ts` (CORRECTION01) |
 | `Concrete outputs ... are omitted` | Model-generated summary prose | (model output, not a production constant) |
 | `Actual command outputs ... were omitted` | Model-generated summary prose | (model output, not a production constant) |
 
@@ -85,3 +86,18 @@ the summary's appearance):
 `renderStructuredToolPayload()` is responsible for the REPRESENTATION loss. The
 model's later behaviour (re-investigation) is a separate causal link, qualified in
 `causal-discriminator.md`.
+
+
+## CORRECTION01 note (see `correction-record.md`)
+
+`renderStructuredToolPayload()` remains the RESPONSIBLE TRANSFORMATION for the representation
+loss, and that conclusion is unchanged by the review. What CORRECTION01 changed is:
+
+1. The **historical replay prefix**: each boundary is replayed over its OWN authoritative
+   canonical prefix, not the final session history.
+2. The **deterministic carry-forward**: the source-file facts now have their own section and
+   their own budget, so the fact survives even when the summarizer omits it AND the outcome
+   budget has moved past it.
+3. The **confidentiality contract** of the excerpt path: the excerpt is redacted with the
+   module's existing value-position sanitizer.
+4. The **behavioural causal claim**: withdrawn (the observed tool call predated the boundary).

@@ -19,7 +19,13 @@
       "witness_in_post_compacted_summary": 0,
       "witness_in_post_provider_request_total": 0,
       "witness_verdict": "LOST",
-      "note": "The fact is absent from the compacted summary AND from the entire post-compaction provider request."
+      "note": "The fact is absent from the compacted summary AND from the entire post-compaction provider request.",
+      "canonical_prefix_end_index": 15,
+      "canonical_prefix_last_tool_call_id": "call_cf2e104766564657b26b14ca",
+      "canonical_prefix_message_count": 16,
+      "corrected_source_file_reads_in_prefix": 6,
+      "corrected_summarizer_input_carries_witness": true,
+      "corrected_file_fact_section_carries_witness": true
     },
     {
       "pre_iteration": 23,
@@ -34,7 +40,13 @@
       "witness_in_post_compacted_summary": 0,
       "witness_in_post_provider_request_total": 2,
       "witness_verdict": "LOST_FROM_SUMMARY_SURVIVED_IN_TAIL",
-      "note": "The fact is absent from the compacted summary (messages[0]) but survives in the PRESERVED TAIL at messages[2] (a raw tool-result block). The compaction did not preserve it as evidence; the tail happened to still hold the raw block."
+      "note": "The fact is absent from the compacted summary (messages[0]) but survives in the PRESERVED TAIL at messages[2] (a raw tool-result block). The compaction did not preserve it as evidence; the tail happened to still hold the raw block.",
+      "canonical_prefix_end_index": 49,
+      "canonical_prefix_last_tool_call_id": "call_9fc3edfd1ee141c78a50efb8",
+      "canonical_prefix_message_count": 50,
+      "corrected_source_file_reads_in_prefix": 8,
+      "corrected_summarizer_input_carries_witness": true,
+      "corrected_file_fact_section_carries_witness": true
     },
     {
       "pre_iteration": 41,
@@ -48,7 +60,13 @@
       "witness_in_pre_provider_request": 6,
       "witness_in_post_compacted_summary": 0,
       "witness_in_post_provider_request_total": 0,
-      "witness_verdict": "LOST"
+      "witness_verdict": "LOST",
+      "canonical_prefix_end_index": 85,
+      "canonical_prefix_last_tool_call_id": "call_0bb085b10d764636b9b3e66a",
+      "canonical_prefix_message_count": 86,
+      "corrected_source_file_reads_in_prefix": 8,
+      "corrected_summarizer_input_carries_witness": true,
+      "corrected_file_fact_section_carries_witness": true
     },
     {
       "pre_iteration": 62,
@@ -62,7 +80,13 @@
       "witness_in_pre_provider_request": 4,
       "witness_in_post_compacted_summary": 0,
       "witness_in_post_provider_request_total": 0,
-      "witness_verdict": "LOST"
+      "witness_verdict": "LOST",
+      "canonical_prefix_end_index": 127,
+      "canonical_prefix_last_tool_call_id": "call_53285fd8d21a40fdb41a2ad3",
+      "canonical_prefix_message_count": 128,
+      "corrected_source_file_reads_in_prefix": 8,
+      "corrected_summarizer_input_carries_witness": true,
+      "corrected_file_fact_section_carries_witness": true
     },
     {
       "pre_iteration": 84,
@@ -77,11 +101,23 @@
       "witness_in_post_compacted_summary": 0,
       "witness_in_post_provider_request_total": 0,
       "witness_verdict": "LOST",
-      "behavioural_trace": "The first post-compaction request (iteration 85) re-runs 'grep -rn \"kc.sh build\" ...' and a startup.sh grep -- the same fact that had just been evicted."
+      "behavioural_trace": "The first post-compaction request (iteration 85) re-runs 'grep -rn \"kc.sh build\" ...' and a startup.sh grep -- the same fact that had just been evicted.",
+      "canonical_prefix_end_index": 171,
+      "canonical_prefix_last_tool_call_id": "call_2b533113c5be408a8431fcc7",
+      "canonical_prefix_message_count": 172,
+      "corrected_source_file_reads_in_prefix": 10,
+      "corrected_summarizer_input_carries_witness": true,
+      "corrected_file_fact_section_carries_witness": true
     }
   ],
   "boundary_verification_method": "Each post-compaction provider request was read in full (messages[0] is the compacted working context). The witness marker was counted in the whole pre-compaction request, in the post-compaction messages[0], and in the whole post-compaction request.",
   "historical_boundary_not_replayable": false,
   "historical_boundary_not_replayable_reason": null,
-  "replay_note": "The provider-request captures are complete and full, and the canonical transcript is complete, so all five boundaries are structurally replayable against the corrected projection. The per-boundary corrected-projection replay is reported in qualification-report.md."
+  "replay_note": "The provider-request captures are complete and full, and the canonical transcript is complete, so all five boundaries are structurally replayable against the corrected projection. The per-boundary corrected-projection replay is reported in qualification-report.md.",
+  "correction_note": "CORRECTED by ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-CORRECTION01. The first version of this index reported the SAME source-file-read count for every boundary because the replay used the complete FINAL canonical history. The per-boundary canonical prefixes above are derived from each boundary's own PRE-compaction provider request. See correction-record.md (P0-1).",
+  "behavioural_causality": "BEHAVIORAL_CAUSE_UNPROVEN (withdrawn; see correction-record.md P0-4)",
+  "preservation_paths": [
+    "summarizer input",
+    "deterministic source-file-fact section (separate budget MAX_CARRIED_FILE_FACTS=12)"
+  ]
 }

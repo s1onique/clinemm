@@ -152,3 +152,52 @@ None. The default suite contains no intentionally failing test introduced by thi
 ACT. The pre-existing `compaction.summary-churn01.red.test.ts` remains excluded by
 the pre-existing `vitest.config.ts` rule; this ACT did not touch that exclusion
 and did not weaken any assertion to make it pass.
+
+---
+
+## CORRECTION01 addendum — the new gates
+
+### The P0-2 gate (provider-visible preservation, not just summarizer visibility)
+
+| Assertion | Result |
+|---|---|
+| SCENARIO 16: with the R4 fact outside the 12-outcome budget AND the summarizer omitting it, the provider-visible projection still carries the fact | PASS |
+
+This gate **FAILED** against `e9ab27bc8` and passes only after the dedicated, independently
+budgeted source-file-fact section was added.
+
+### The P0-3 gates (confidentiality of the source-file excerpt path)
+
+| Assertion | Result |
+|---|---|
+| CONTROL 16: a credential in a SOURCE FILE is redacted from the carried excerpt | PASS |
+| CONTROL 17: a credential in a SOURCE FILE never reaches the summarizer request OR the persisted/provider-visible projection | PASS |
+| CONTROL 18: a PEM private key in a source file is redacted | PASS |
+| CONTROL 19: an ARBITRARY COMMAND's stdout is still never carried (the pre-repair posture is preserved) | PASS |
+
+### The corrected budgets
+
+| Budget | Value | Note |
+|---|---|---|
+| `MAX_CARRIED_OUTCOMES` | 12 | **UNCHANGED** — an execution-status budget. |
+| `MAX_CARRIED_FILE_FACTS` | 12 | **NEW, SEPARATE** — a factual-excerpt budget. It exists so an execution-status budget cannot decide a factual question. |
+| `SOURCE_FILE_FACT_CHAR_LIMIT` | 2000 | A fixed constant; the excerpt is marked when truncated. |
+
+### The corrected receipts
+
+```
+$ bunx vitest run --config vitest.config.ts src/extensions/context/
+ Test Files  26 passed | 1 skipped (27)
+      Tests  445 passed | 2 skipped (447)
+EXIT=0
+
+$ bun tsc -p tsconfig.dev.json --noEmit | grep -cE '^src/.*error TS'
+43
+```
+
+43 is the entry-HEAD baseline. The ACT-owned diagnostics remain at **0**.
+
+```
+$ bunx biome check <the two modified production files> <the new test file>
+Checked 3 files. 0 errors, 0 warnings.
+```

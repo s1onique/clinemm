@@ -38354,3 +38354,132 @@ added after the boundary = 0.
 ## Evidence
 
 `.factory/evidence/ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01/`
+
+# ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01-CORRECTION01 — PASS_STRUCTURAL_ONLY — 2026-11-23
+
+## Verdict
+
+`PASS_STRUCTURAL_ONLY`, after CORRECTION01. The review of `e9ab27bc8` returned
+`HALT_NEW_P0_EVIDENCE_AND_SECURITY_DEFECTS`. **All three P0 findings and the P1 were accepted.**
+Two of them were real defects in the shipped repair, not only in its documentation.
+
+| Finding | Disposition | Action |
+|---|---|---|
+| P0-1 — the five-boundary replay used the FINAL canonical history for every boundary | ACCEPTED | Replay regenerated over each boundary's OWN authoritative canonical prefix. |
+| P0-2 — summarizer visibility is not provider-visible preservation | ACCEPTED — **a real defect** | The file facts now have a dedicated section with their OWN budget. |
+| P0-3 — source attribution does not establish confidentiality | ACCEPTED — **a real security defect** | The carried excerpt is now redacted with the module's existing sanitizer. |
+| P0-4 — the behavioural causal claim used the wrong observation boundary | ACCEPTED | `BEHAVIORAL_CAUSE_SUPPORTED` **withdrawn**; disposition is `BEHAVIORAL_CAUSE_UNPROVEN`. |
+| P1 — the fixture was labelled with a `run_commands` id but reconstructed as `read_files` | ACCEPTED | The LABEL was wrong; the id `call_362cfbf4cd5d44c19d876aeb` IS the historical `read_files` call. Documentation corrected. |
+
+## P0-1 — the replay was invalid and is now corrected
+
+The first replay reported the same **13** source-file reads at every boundary because it used the
+complete final canonical history. The corrected per-boundary prefix is derived from each
+boundary's own PRE-compaction provider request (the last tool-call id, looked up in the canonical
+transcript):
+
+| Boundary | Prefix end | Prefix size | Reads in the prefix |
+|---|---|---|---|
+| 7 -> 8 | 15 | 16 | 6 |
+| 23 -> 24 | 49 | 50 | 8 |
+| 41 -> 42 | 85 | 86 | 8 |
+| 62 -> 63 | 127 | 128 | 8 |
+| 84 -> 85 | 171 | 172 | 10 |
+
+The persisted sidecar's `source_message_count = 217` / `source_last_message_key = id:msg_AdPPg-ET`
+(canonical index 216) independently confirms the method.
+
+## P0-2 — a real defect, now fixed and guarded
+
+The reviewed repair delivered the fact to the SUMMARIZER at all five boundaries, but the
+deterministic carry-forward delivered it at only TWO: at the 23->24, 41->42 and 62->63 boundaries
+the R4 read (canonical index 6) was outside the `MAX_CARRIED_OUTCOMES = 12` window (whose oldest
+retained outcome was at canonical indices 18, 59 and 99). The summarizer's prose alone decided
+preservation.
+
+`SCENARIO 16` reproduces that pressure honestly — the fact is old, there are twenty later
+verified outcomes, and the summarizer omits the fact. **It FAILED against `e9ab27bc8`** and passes
+only after the fix.
+
+The fix is a dedicated, independently budgeted section:
+
+```
+## Source file facts (canonical record)
+<!-- cline-file-facts:begin -->
+- <path>: <bounded, redacted excerpt>
+<!-- cline-file-facts:end -->
+```
+
+`MAX_CARRIED_FILE_FACTS = 12` is a **separate** constant. `MAX_CARRIED_OUTCOMES = 12` is
+**unchanged** — an execution-status budget must not decide a factual question. Both sections are
+derived from the same boundary-scoped canonical prefix, so the stable-prefix property holds.
+
+The corrected replay shows the file-fact section carrying the witness at **all five** boundaries
+(it carried it at 2 of 5 before).
+
+## P0-3 — a real security defect, now fixed and guarded
+
+The reviewed repair copied a source file's content verbatim into the summarizer request and the
+PERSISTED compaction summary. A source file can contain credentials; attribution does not make
+content safe to copy. The published `CONTROL 12` tested command stdout, not a `read_files`
+result, so the excerpt path's confidentiality contract was unestablished.
+
+Confirmed directly: a `read_files` result containing `DB_PASSWORD=...` and `API_KEY=sk-...`
+produced an excerpt containing both, verbatim.
+
+The excerpt is now passed through the module's existing value-position sanitizer
+(`sanitizeOutcomeText()`) before it is carried. The confidentiality contract is:
+
+1. Only a source-attributed file read is carried; a command's stdout is still `[result omitted]`.
+2. A credential-shaped value in the carried excerpt is redacted.
+3. A credential in a source file never reaches the summarizer request or the persisted
+   provider-visible projection.
+4. The excerpt is bounded and marked when truncated.
+5. The section delimiters inside a carried body are escaped.
+
+Four new controls (16-19) guard it.
+
+## P0-4 — the behavioural claim is withdrawn
+
+Comparing the tool calls in request 85 against request 84: **all four were already present in
+request 84**. The `grep -rn "kc.sh build"` call was issued BEFORE the boundary. The first
+genuinely new call after the boundary (request 86) re-establishes **repository identity**, not the
+R4 fact. The canonical transcript shows the `read_files` of `startup.sh` occurs **exactly once**,
+at canonical index 6.
+
+| Claim | Disposition |
+|---|---|
+| Representation loss | `REPRODUCED` |
+| Re-investigation afterwards | `NOT_OBSERVED` |
+| Behavioural causality | **`BEHAVIORAL_CAUSE_UNPROVEN`** |
+
+The repair's justification is unaffected: the preservation contract is a FIDELITY contract, not a
+behavioural-convergence claim.
+
+## Executable evidence
+
+```
+RED    (production reverted to HEAD)   6 failed | 22 passed (28)      EXIT=1
+GREEN  (after CORRECTION01)           28 passed (28)                  EXIT=0
+SWEP   src/extensions/context/       445 passed | 2 skipped (447)     EXIT=0
+TYPECHECK  43 diagnostics == entry-HEAD baseline; ACT-owned = 0
+FULL SUITE  failing file set IDENTICAL to the entry HEAD (31 files)
+BIOME  0 errors, 0 warnings
+```
+
+## Historical five-boundary qualification (corrected)
+
+All five boundaries are authoritative agentic compaction events and all five are replayable. The
+fact was lost from the compacted summary at **all five**; the corrected projection carries it at
+**all five**, through both the summarizer input and the file-fact section.
+
+## Scope honesty
+
+- No live model was run; the qualification is STRUCTURAL, not LIVE.
+- Behavioural causality is UNPROVEN; the model did not re-read the R4 fact after the boundary.
+- The malformed-tool-call issue (`commands: null`) is a separate causal chain and was not touched.
+- `MAX_CARRIED_OUTCOMES = 12` is unchanged.
+
+## Evidence
+
+`.factory/evidence/ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01/` (see `correction-record.md`)

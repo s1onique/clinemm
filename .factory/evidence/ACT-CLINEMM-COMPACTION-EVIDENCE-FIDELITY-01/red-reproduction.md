@@ -185,3 +185,40 @@ the ones that assert a **REJECTION** (CONTROL 8, CONTROL 9, CONTROL 10) plus
 the four PROOFs that do not depend on the restoration (PROOF 1, PROOF 2,
 PROOF 2b) — i.e. the control arm of the ablation and the fail-closed
 behaviour, which the pre-repair code already had.
+
+---
+
+## CORRECTION01 addendum — the realistic outside-the-budget RED
+
+The review of `e9ab27bc8` found that the production-seam RED above used a SMALL synthetic
+history in which the R4 fact stayed eligible for the deterministic carry-forward. That did not
+reproduce the historical retention pressure.
+
+`SCENARIO 16` (added by CORRECTION01) reproduces it honestly: the R4 read is old, there are
+**twenty** later verified outcomes (more than `MAX_CARRIED_OUTCOMES = 12`), and the summarizer
+OMITS the fact exactly as the historical one did.
+
+Against the `e9ab27bc8` repair it **FAILED** — the fact was lost from the provider-visible
+projection:
+
+```
+× SCENARIO 16: with the R4 fact outside the 12-outcome budget and the summarizer
+  omitting it, the provider-visible projection must still carry the fact
+AssertionError: expected '[{"role":"user","content":[{"type":"t…' to contain
+  '/opt/keycloak/bin/kc.sh build'
+```
+
+After the CORRECTION01 repair (a dedicated source-file-fact section with its OWN budget) it
+**PASSES**. The test suite is now **28 tests**, of which 4 are the P0-3 confidentiality
+controls.
+
+### The corrected RED receipts
+
+```
+$ cd sdk/packages/core
+$ bunx vitest run --config vitest.config.ts \
+    src/extensions/context/compaction.evidence-fidelity01.test.ts
+ Test Files  1 passed (1)
+      Tests  28 passed (28)
+EXIT=0
+```
