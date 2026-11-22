@@ -295,6 +295,189 @@ export interface VerifiedOutcomeEvidence {
 	 * is the number of affirmatively successful commands.
 	 */
 	commandCount: number;
+	/**
+	 * ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01
+	 *
+	 * The BOUNDED, SOURCE-ATTRIBUTED excerpts of the files this outcome
+	 * read.
+	 *
+	 * These are present ONLY for a verified source-file read, whose result
+	 * payloads identify the SOURCE they came from and whose bodies ARE
+	 * those sources' text. They are deliberately NOT a generic "tool
+	 * output" field: a command's stdout has no such attribution and is
+	 * never carried.
+	 *
+	 * Each excerpt is bounded by `SOURCE_FILE_FACT_CHAR_LIMIT` characters,
+	 * and each path is the source path exactly as the tool reported it.
+	 */
+	sourceFileFacts?: SourceFileFact[];
+}
+
+/**
+ * ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01
+ *
+ * A BOUNDED, SOURCE-ATTRIBUTED excerpt of one file's content.
+ *
+ * The excerpt is a fixed-cost fragment: it never grows with the transcript,
+ * and it is always attributed to the source it was read from.
+ */
+export interface SourceFileFact {
+	/** The source path, exactly as the tool reported it. */
+	path: string;
+	/** The bounded excerpt of the source's content. */
+	excerpt: string;
+}
+
+/**
+ * ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01
+ *
+ * The maximum number of characters of a SINGLE source-attributed file fact.
+ *
+ * The carried representation is a bounded EXCERPT of one file's content. It
+ * is a fixed constant, so neither the summarizer input nor the carried
+ * evidence section grows with the transcript size.
+ */
+export const SOURCE_FILE_FACT_CHAR_LIMIT = 2_000;
+
+/**
+ * ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01
+ *
+ * The tool whose result is a SOURCE ATTRIBUTED FILE READ.
+ *
+ * The `read_files` executor persists one `{query, result, success}` payload
+ * per requested file. Its `query` is the file PATH (optionally suffixed
+ * with `:start-end`), and its `result` is that file's numbered content.
+ *
+ * This is a DISTINCT result class from a command's stdout: the payload
+ * identifies the SOURCE it came from, and the payload body IS the source
+ * text rather than arbitrary program output. That is what makes a bounded
+ * excerpt of it safe to carry, and it is the class the Round C R4 witness
+ * fact belongs to.
+ */
+const SOURCE_FILE_READ_TOOL_NAME = "read_files";
+
+/**
+ * ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01
+ *
+ * Truncate a carried excerpt to a bounded length, marking the cut.
+ *
+ * The marker is the same shape the compaction serializer uses, so a reader
+ * (human or model) can tell that an excerpt was CUT rather than complete.
+ */
+function truncateText(text: string, limit: number): string {
+	if (text.length <= limit) {
+		return text;
+	}
+	return `${text.slice(0, limit)}\n...[truncated ${text.length - limit} chars]`;
+}
+
+/**
+ * ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01
+ *
+ * Parse a source-file-read query into its source path.
+ *
+ * `formatReadFileQuery()` (in `../../extensions/tools/helpers.ts`) renders a
+ * range as `<path>:<start>-<end>`. The range suffix is stripped so the
+ * attribution names the SOURCE, not the line window.
+ *
+ * A query that is not a path-like string (no separator, or a bare
+ * newline/control character) is rejected: the attribution must be a real
+ * source, and an ambiguous attribution is worse than none.
+ */
+export function parseSourceFilePath(query: string): string | undefined {
+	const trimmed = query.trim();
+	if (!trimmed || /[\n\r\0]/.test(trimmed)) {
+		return undefined;
+	}
+	// Strip a trailing `:start-end` / `:start` range suffix. The path itself
+	// may legitimately contain a colon (a Windows drive), so only a suffix
+	// that matches the range grammar is removed.
+	const rangeMatch = /^(.*?):(\d+)(?:-(?:(\d+)|EOF))?$/.exec(trimmed);
+	const candidate = rangeMatch?.[1] ?? trimmed;
+	if (!candidate || (!candidate.includes("/") && !candidate.includes("\\"))) {
+		return undefined;
+	}
+	return candidate;
+}
+
+/**
+ * ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01
+ *
+ * Strip the source-file-read line-number gutter from a file body.
+ *
+ * The production `read_files` executor renders each line as
+ * `<number> | <content>`. The gutter is a PRESENTATION artifact of the
+ * read tool, not part of the source, so the carried excerpt carries the
+ * source text itself.
+ *
+ * A body whose lines do NOT carry the gutter is left untouched: it is
+ * still source-attributed by path, and mangling an unrecognized shape
+ * would be worse than carrying it verbatim.
+ */
+export function stripSourceLineGutter(body: string): string {
+	const lines = body.split("\n");
+	const gutter = /^\s*\d+\s*\|\s?/;
+	// Only strip when EVERY non-empty line carries the gutter.
+	const meaningful = lines.filter((line) => line.trim().length > 0);
+	if (
+		meaningful.length === 0 ||
+		!meaningful.every((line) => gutter.test(line))
+	) {
+		return body;
+	}
+	return lines
+		.map((line) => (gutter.test(line) ? line.replace(gutter, "") : line))
+		.join("\n");
+}
+
+/**
+ * ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01
+ *
+ * Build the bounded, source-attributed file fact for ONE structured result
+ * payload, or return undefined when the payload is not a source-attributed
+ * file read.
+ *
+ * The conditions are ALL required:
+ *
+ *   1. The result's tool is the source-file read tool.
+ *   2. The payload SUCCEEDED. A failed read establishes no file content.
+ *   3. The query names a source path.
+ *   4. The result is a non-empty STRING.
+ *
+ * The excerpt is bounded by `SOURCE_FILE_FACT_CHAR_LIMIT` characters, so
+ * the carried representation is a fixed cost per payload.
+ */
+export function buildSourceFileFact(
+	payload: Record<string, unknown>,
+	toolName: string | undefined,
+): SourceFileFact | undefined {
+	if (toolName !== SOURCE_FILE_READ_TOOL_NAME) {
+		return undefined;
+	}
+	if (payload.success === false || payload.isError === true) {
+		return undefined;
+	}
+	if (payload.success !== true) {
+		// No affirmative success signal: the read establishes nothing.
+		return undefined;
+	}
+	const rawQuery = payload.query;
+	if (typeof rawQuery !== "string") {
+		return undefined;
+	}
+	const path = parseSourceFilePath(rawQuery);
+	if (!path) {
+		return undefined;
+	}
+	const rawResult = payload.result;
+	if (typeof rawResult !== "string" || rawResult.trim().length === 0) {
+		return undefined;
+	}
+	const stripped = stripSourceLineGutter(rawResult);
+	return {
+		path,
+		excerpt: truncateText(stripped, SOURCE_FILE_FACT_CHAR_LIMIT),
+	};
 }
 
 /** A canonical outcome that was NOT carried, with the reason why. */
@@ -973,6 +1156,12 @@ export function extractVerifiedToolOutcomes(
 		status: VerifiedOutcomeStatus;
 		sourceIndex: number;
 		commandCount: number;
+		/**
+		 * ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01: the raw result
+		 * CONTENT, kept so the source-attributed file fact can be derived
+		 * from the SAME canonical payload the status was derived from.
+		 */
+		content: unknown;
 	}[] = [];
 	/**
 	 * How many canonical results claimed each tool-call id.
@@ -1019,6 +1208,7 @@ export function extractVerifiedToolOutcomes(
 				status: classifyToolResultStatus(block),
 				sourceIndex: index,
 				commandCount: countSignalPayloads(block.content),
+				content: block.content,
 			});
 		}
 	}
@@ -1106,6 +1296,11 @@ export function extractVerifiedToolOutcomes(
 					findCallInput(canonicalMessages, call.sourceIndex, result.toolUseId),
 				),
 				commandCount: result.commandCount,
+				// ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01: the bounded,
+				// source-attributed file facts, derived from the SAME
+				// canonical payload the verified status came from. They are
+				// present ONLY for a verified source-file read.
+				sourceFileFacts: extractSourceFileFacts(result.content, call.toolName),
 			},
 		});
 	}
@@ -1115,6 +1310,57 @@ export function extractVerifiedToolOutcomes(
 		outcomes.splice(0, outcomes.length - MAX_CARRIED_OUTCOMES);
 	}
 	return { outcomes, rejected };
+}
+
+/**
+ * ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01
+ *
+ * Extract the bounded, source-attributed file facts from a canonical result's
+ * content, or return an empty array.
+ *
+ * The rules are the SAME fail-closed rules that govern the verified status
+ * itself:
+ *
+ *   1. The content must be an ARRAY of structured payloads (the production
+ *      `read_files` / `run_commands` result shape).
+ *   2. EVERY payload must carry an affirmative `success: true` and no
+ *      failure signal. A batch with one failed payload is not a wholly
+ *      verified read, so NO fact is extracted from it -- the same rule that
+ *      keeps a mixed batch from certifying a success.
+ *
+ * A MULTI-FILE batch is NOT ambiguous: each payload carries its OWN
+ * attribution (its own source path), so each payload contributes its own
+ * independently attributed fact. The facts are returned in payload order.
+ */
+function extractSourceFileFacts(
+	content: unknown,
+	toolName: string | undefined,
+): SourceFileFact[] {
+	if (!Array.isArray(content) || content.length === 0) {
+		return [];
+	}
+	const payloads = content.filter(
+		(payload): payload is Record<string, unknown> =>
+			payload !== null &&
+			typeof payload === "object" &&
+			!Array.isArray(payload),
+	);
+	if (payloads.length !== content.length) {
+		// An unrecognized entry shape: the batch is not wholly understood.
+		return [];
+	}
+	const facts: SourceFileFact[] = [];
+	for (const payload of payloads) {
+		const fact = buildSourceFileFact(payload, toolName);
+		if (!fact) {
+			// The batch is not wholly a verified source-file read: fail
+			// closed for the WHOLE batch, so a mixed result cannot smuggle a
+			// fact past a failure signal.
+			return [];
+		}
+		facts.push(fact);
+	}
+	return facts;
 }
 
 /**
@@ -1213,6 +1459,18 @@ export function renderEvidenceSection(
 				? `${line.slice(0, MAX_CARRIED_OUTCOME_CHARS)}...`
 				: line,
 		);
+		// ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01: the bounded,
+		// source-attributed FILE FACTS, when this verified outcome was a
+		// source-file read.
+		//
+		// They are carried on their own lines so an EXCERPT is never
+		// truncated by the outcome line's own character budget, and so the
+		// attribution and the excerpt are separable by a reader.
+		for (const sourceFileFact of outcome.evidence.sourceFileFacts ?? []) {
+			lines.push(
+				`  source-file ${escapeDelimiters(sourceFileFact.path)}: ${escapeDelimiters(sourceFileFact.excerpt)}`,
+			);
+		}
 	}
 	return [
 		EVIDENCE_SECTION_HEADING,

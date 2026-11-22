@@ -1,0 +1,44 @@
+{
+  "act": "ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01",
+  "safety_note": "Every value below is a SAFE FIXTURE VALUE or a REDACTED REFERENCE. No credential, no secret path, no private source disclosure and no raw provider payload appears here. The canonical artifacts stay outside Git.",
+  "subject_source_revision": "42de653b59708e712d694aeb9732f822b7f8fe5b",
+  "subject_source_branch": "optimize-ftls",
+  "facts": [
+    {
+      "finding_id": "R4",
+      "canonical_tool_call_id": "call_362cfbf4cd5d44c19d876aeb",
+      "canonical_tool_result_id": "call_362cfbf4cd5d44c19d876aeb",
+      "canonical_transcript_index": 7,
+      "source_revision": "42de653b59708e712d694aeb9732f822b7f8fe5b",
+      "source_anchor": "startup.sh:4 and startup.sh:7",
+      "observed_fact": "The container entrypoint script runs '/opt/keycloak/bin/kc.sh build' and then 'exec /opt/keycloak/bin/kc.sh start --optimized \"$@\"'. The build runs at container startup, on every start, even though the image is already built.",
+      "observed_fact_safe_fixture_value": {
+        "file": "startup.sh",
+        "lines": [
+          { "n": 4, "text": "/opt/keycloak/bin/kc.sh build" },
+          { "n": 7, "text": "exec /opt/keycloak/bin/kc.sh start --optimized \"$@\"" }
+        ]
+      },
+      "pre_compaction_visibility": "PROVIDER_VISIBLE — the marker '/opt/keycloak/bin/kc.sh build' appears 3 times in the captured provider request at iteration 84.",
+      "post_compaction_visibility": "ABSENT — 0 occurrences in the post-compaction compacted summary (messages[0] of the iteration-85 request) and 0 in the whole iteration-85 request.",
+      "verification_authority": "The tool output itself, adjudicated against the frozen source revision: `git rev-parse HEAD` in the audited repository returns 42de653b59708e712d694aeb9732f822b7f8fe5b, and startup.sh at that revision contains exactly these two kc.sh invocations. The command's `success: true` alone was NOT treated as sufficient.",
+      "reproduction_fixture_shape": "read_files result payload { query: <abs path>, result: <numbered file body>, success: true }",
+      "class": "source_attributed_file_read",
+      "discriminator_case": "A"
+    }
+  ],
+  "rejected_candidates": [
+    {
+      "candidate": "R1 Helm image value (quay.io/keycloak/keycloak:26.0.7)",
+      "reason": "The historical audit's own R1 discriminator showed the Helm render's OUTER shell reported success while the INNER Helm process FAILED. A fact from a masked pipeline is not independently adjudicated, so it cannot serve as the RED witness."
+    },
+    {
+      "candidate": "The `git rev-parse HEAD` output 42de653b...",
+      "reason": "Independently verifiable, but it is a repository-identity value that the TASK CONTRACT already states verbatim, so its loss would not demonstrate decision-relevant evidence loss (the contract carry-forward already preserves it)."
+    },
+    {
+      "candidate": "R5 index-diff SQL content",
+      "reason": "The historical payload contains a live production database host name and connection string. It is not safe to represent in a fixture without a disclosure risk, so it is excluded from the witness set. (Recorded here as a redacted reference only.)"
+    }
+  ]
+}

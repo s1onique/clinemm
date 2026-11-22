@@ -11,7 +11,7 @@ export { CHARS_PER_TOKEN, estimateTokens };
 
 import type { CoreCompactionSummarizerConfig } from "../../types/config";
 import type { ProviderConfig } from "../../types/provider-settings";
-import { classifyCommand } from "./evidence-continuity";
+import { buildSourceFileFact, classifyCommand } from "./evidence-continuity";
 
 export const DEFAULT_MAX_INPUT_TOKENS = 128_000;
 /** Estimate the usable input share when only a context window is reported. */
@@ -237,16 +237,28 @@ const UNSUPPORTED_TOOL_RESULT_MARKER = "[unsupported tool result shape]";
 const OMITTED_STRUCTURED_RESULT_MARKER = "[result omitted]";
 
 /**
+ * ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01
+ *
  * Render ONE structured tool payload for the summarizer input.
  *
  * The rendering is DETERMINISTIC and preserves only independently verified
  * facts: the payload status, a finite command classification, and approved
  * scalar facts. Arbitrary command arguments and arbitrary output strings
  * are never copied because regex redaction cannot make arbitrary data safe.
+ *
+ * ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01: a SOURCE ATTRIBUTED FILE
+ * READ is the one additional supported class. Its payload identifies the
+ * source it came from, and its body IS the source text, so a bounded
+ * excerpt of it is carried instead of the `[result omitted]` marker.
+ *
+ * Every OTHER payload class is unchanged: an arbitrary command's stdout
+ * is still omitted, because no attribution makes arbitrary program output
+ * safe to copy.
  */
 function renderStructuredToolPayload(
 	payload: Record<string, unknown>,
 	index: number,
+	toolName?: string,
 ): string {
 	const status = classifyStructuredPayloadStatus(payload);
 	const rawQuery = payload.query;
@@ -254,6 +266,10 @@ function renderStructuredToolPayload(
 		typeof rawQuery === "string" ? classifyCommand(rawQuery) : "";
 	const label = classification || `#${index + 1}`;
 	const rawResult = payload.result;
+	const sourceFileFact = buildSourceFileFact(payload, toolName);
+	if (sourceFileFact) {
+		return `[${status}] source-file ${sourceFileFact.path}: ${sourceFileFact.excerpt}`;
+	}
 	const approvedResult =
 		typeof rawResult === "boolean"
 			? `result=${rawResult}`
@@ -282,9 +298,16 @@ function renderStructuredToolPayload(
  * After the repair, a recognized structured payload is rendered with its
  * own status and its redacted output, and an UNRECOGNIZED shape is
  * classified explicitly with no content copied.
+ *
+ * ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01: the tool NAME of the result
+ * is threaded in, because the result CLASS is what decides whether a
+ * bounded, source-attributed excerpt may be carried. The name is the
+ * canonical call's own tool name, carried on the `tool_result` block by
+ * the shared message contract.
  */
 function renderToolResultBlocks(
 	truncated: Exclude<ToolResultContent["content"], string>,
+	toolName?: string,
 ): string {
 	const rendered = truncated
 		.map((block, index) => {
@@ -299,7 +322,7 @@ function renderToolResultBlocks(
 					// ACT-CLINEMM-COMPACTION-TOOL-RESULT-SHAPE-REPRO01: a
 					// structured tool payload. Never silently dropped.
 					return isStructuredToolPayload(block)
-						? renderStructuredToolPayload(block, index)
+						? renderStructuredToolPayload(block, index, toolName)
 						: UNSUPPORTED_TOOL_RESULT_MARKER;
 			}
 		})
@@ -320,12 +343,13 @@ function renderToolResultBlocks(
 
 export function flattenToolResultContent(
 	content: ToolResultContent["content"],
+	toolName?: string,
 ): string {
 	const truncated = truncateToolResultContentForCompaction(content);
 	if (typeof truncated === "string") {
 		return truncated;
 	}
-	return renderToolResultBlocks(truncated);
+	return renderToolResultBlocks(truncated, toolName);
 }
 
 export function truncateToolResultContentForCompaction(
@@ -384,7 +408,12 @@ export function serializeMessage(message: MessageWithMetadata): string {
 				);
 				break;
 			case "tool_result":
-				lines.push(`[Tool result]: ${flattenToolResultContent(block.content)}`);
+				// ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01: the tool
+				// name selects the RESULT CLASS, which decides whether a
+				// bounded, source-attributed excerpt may be carried.
+				lines.push(
+					`[Tool result]: ${flattenToolResultContent(block.content, block.name)}`,
+				);
 				break;
 			case "file":
 				lines.push(

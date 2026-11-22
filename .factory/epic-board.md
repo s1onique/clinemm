@@ -38229,3 +38229,128 @@ experiment was **not** started inside this ACT, as instructed.
 
 `.factory/ACT-CLINEMM-BEFOREMODEL-OPERATOR-CHECKPOINT-01.md`
 `.factory/evidence/ACT-CLINEMM-BEFOREMODEL-OPERATOR-CHECKPOINT-01/`
+
+# ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01 — PASS_STRUCTURAL_ONLY — 2026-11-23
+
+## Verdict
+
+`PASS_STRUCTURAL_ONLY`. The RED was reproduced against unchanged production code, the responsible
+transformation was causally isolated to a single function, a bounded repair passed the
+production-seam tests and every conservation gate, and the historical five boundaries were
+qualified. **Live model qualification was NOT executed.**
+
+## The reproduced loss
+
+At the 84->85 compaction boundary of the Round C session `1795382314359_rb19c` (provider-capture
+run `yHaQSIjO`), the post-compaction provider-visible working context asserted:
+
+> Blocked: Actual command outputs were omitted from the transcript, so final verdicts cannot yet
+> be made. Repository HEAD/branch/status, CI image handling details, ... remain unverified.
+
+That assertion was **false**. The canonical pre-compaction history carried the tool results in
+full (1,057,671 characters across 128 results).
+
+The witness fact is **R4**: `cat startup.sh` returned, verbatim, at the frozen Keycloak revision
+`42de653b59708e712d694aeb9732f822b7f8fe5b`:
+
+```
+4 | /opt/keycloak/bin/kc.sh build
+7 | exec /opt/keycloak/bin/kc.sh start --optimized "$@"
+```
+
+Independently adjudicated against the frozen source revision (not a model assertion, and not
+merely a `success: true`). It was present in the captured provider request at iteration 84 (3
+occurrences) and **absent from the whole iteration-85 request**.
+
+## The causal discriminator
+
+**`renderStructuredToolPayload()`** in
+`sdk/packages/core/src/extensions/context/compaction-shared.ts` renders a structured
+`{query, result, success}` payload with a STRING `result` as the literal `[result omitted]`.
+
+Direct observation:
+
+```
+flattenToolResultContent([{ query: <path>, result: <numbered body>, success: true }])
+  -> "[succeeded] #1: [result omitted]"
+```
+
+The fact was therefore **removed BEFORE the summarizer saw it** — discriminator **case A**. Case B
+(present in the summarizer input, omitted by the summary) and case C (present in the summary,
+removed by projection) are both excluded by this observation.
+
+**`BEHAVIORAL_CAUSE_SUPPORTED`**: at iteration 85 — the FIRST post-compaction request — the
+model's tool call includes `grep -rn "kc.sh build" ...` and a `startup.sh` grep, i.e. it re-seeks
+precisely the fact that had just been evicted.
+
+## The bounded repair
+
+**Option B — summarizer input fidelity**, in the two existing modules. No new subsystem, no
+generic knowledge database, no model-based adjudication, no new public protocol.
+
+A **source-attributed file read** (a `read_files` result whose `query` is the file path and whose
+`result` is that file's content) now carries a **bounded, source-attributed excerpt**
+(`SOURCE_FILE_FACT_CHAR_LIMIT = 2_000`) instead of `[result omitted]`, at both the summarizer
+input and the deterministic carry-forward seam.
+
+Why this class and not a command's stdout: a file read's payload **identifies the source** and
+its body **IS the source text** — the agent was already reading that file. A command's stdout
+has no attribution and may carry anything the program printed, including a credential. The
+pre-existing refusal to carry arbitrary output is **preserved unchanged**.
+
+Fail-closed conditions: affirmative `success: true`, no failure signal, a path-like query, a
+non-empty string body, and (for the carry-forward) a wholly-verified batch.
+
+`MAX_CARRIED_OUTCOMES = 12` is **unchanged** — it is an execution-outcome budget, not a
+semantic-evidence guarantee, and this ACT does not expand it.
+
+## Executable evidence
+
+```
+RED    (unchanged production)   3 failed | 4 passed (7)          EXIT=1
+RED    (production reverted)   16 failed | 7 passed (23)         EXIT=1
+GREEN  (after the repair)      23 passed (23)                    EXIT=0
+SWEEP  src/extensions/context/ 440 passed | 2 skipped (442)      EXIT=0
+TYPECHECK                      43 diagnostics == entry-HEAD baseline; ACT-owned = 0
+FULL SUITE                     failing file set IDENTICAL to the entry HEAD (31 files)
+```
+
+The decisive receipt is the second one: with the production repair reverted via `git checkout --`,
+the same test file fails 16 of 23. The RED is caused by the production code, not by the fixture.
+
+## Historical five-boundary qualification
+
+All five recorded boundaries (7->8, 23->24, 41->42, 62->63, 84->85) are **authoritative
+agentic compaction events** (the post-compaction `messages[0]` is a `Context summary:` block in
+every case), and all five are structurally replayable (every capture is `mode: full`; the
+canonical transcript is complete).
+
+| Boundary | Historical: fact in the compacted summary | Corrected projection |
+|---|---|---|
+| 7 -> 8 | NO (0) | carries it |
+| 23 -> 24 | NO (0); survived only in the preserved tail | carries it |
+| 41 -> 42 | NO (0) | carries it |
+| 62 -> 63 | NO (0) | carries it |
+| 84 -> 85 | NO (0) | carries it |
+
+Tracked separately, as required: source-verified facts preserved = 1 at each boundary; required
+facts missing = 0 (corrected) / 1 (historical) at each boundary; facts explicitly unverified = 0;
+contradictory evidence retained = 0; tool outcomes retained = 12 (unchanged budget); new evidence
+added after the boundary = 0.
+
+## Scope honesty
+
+- The repair restores **demonstrably lost factual evidence**. It does not preserve every command,
+  does not grow the summary indefinitely and does not force the model to finish.
+- The deterministic carry-forward's own 12-outcome budget does **not** reach the R4 read at the
+  84->85 boundary (it is at canonical index 6; the budget retains indices 229-253). This is
+  reported, not worked around: the repair's seam is the summarizer input, which covers the folded
+  prefix and therefore contains the R4 read at every boundary.
+- The malformed-tool-call issue (`commands: null`) is a **separate causal chain** and was NOT
+  touched.
+- No live model was run. The qualification is **STRUCTURAL**, not **LIVE**, and does not prove
+  improved autonomous completion.
+
+## Evidence
+
+`.factory/evidence/ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01/`

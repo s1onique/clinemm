@@ -1,0 +1,374 @@
+{
+  "act": "ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01",
+  "entry_source_head": "bd39be9da2d0a610c173fbc205e2bdea570f8e70",
+  "branch": "main",
+  "subject_source_revision": "42de653b59708e712d694aeb9732f822b7f8fe5b",
+  "subject_source_branch": "optimize-ftls",
+  "runtime": {
+    "bun": "1.3.14",
+    "node_runtime": "Node (VS Code extension host / standalone cline-core)",
+    "sdk_package": "@cline/core 0.2.0"
+  },
+  "historical_identities": {
+    "session_id": "1795382314359_rb19c",
+    "capture_run_id": "yHaQSIjO",
+    "capture_client_version": "4.1.26-bd39be9da",
+    "identity_correspondence": "capture correlation.sessionId == 1795382314359_rb19c and correlation.runId == yHaQSIjO"
+  },
+  "canonical_session_artifacts_PRIVATE": [
+    {
+      "path": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/cline-data/sessions/1795382314359_rb19c/1795382314359_rb19c.messages.json",
+      "bytes": 1730754,
+      "sha256": "31df6daa2ec3ec44122a572627e40e1a96b956f92e811804d38d4f60bf45d27b",
+      "role": "complete canonical session transcript (255 messages)",
+      "private_outside_git": true
+    },
+    {
+      "path": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/cline-data/sessions/1795382314359_rb19c/1795382314359_rb19c.compaction.json",
+      "bytes": 100535,
+      "sha256": "aad44890951aebaef5539e8fea9b2e63dc4ff4d7e804f491e0f86a08a54a1769",
+      "role": "persisted compaction sidecar (final generation)",
+      "private_outside_git": true
+    },
+    {
+      "path": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/cline-data/sessions/1795382314359_rb19c/1795382314359_rb19c.json",
+      "bytes": 2304,
+      "sha256": "5f0e9b7b85b3d87e324c9ac9a134c96ab9c17c26d78b958565c3a71838c4d4b8",
+      "role": "session sidecar / identity",
+      "private_outside_git": true
+    }
+  ],
+  "provider_request_captures_boundary_pairs_PRIVATE": [
+    {
+      "path": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/cline-data/provider-request-captures/cap_run_yHaQSIjO_7_b882ffab8948c194.ai_sdk_prompt.1.provider-request.json",
+      "bytes": 283514,
+      "sha256": "e37e305eb5ba2ca93b2e02f6a171ab61d4303e67def74bfcfe3cf20e42981fe8",
+      "role": "provider-request capture, iteration 7 (mode=full)",
+      "private_outside_git": true
+    },
+    {
+      "path": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/cline-data/provider-request-captures/cap_run_yHaQSIjO_8_41b906aa49bf4939.ai_sdk_prompt.1.provider-request.json",
+      "bytes": 97496,
+      "sha256": "75be837d5585e9e3714ba4557294c84f75975e4fd050b402a2cefd8bbae573db",
+      "role": "provider-request capture, iteration 8 (mode=full)",
+      "private_outside_git": true
+    },
+    {
+      "path": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/cline-data/provider-request-captures/cap_run_yHaQSIjO_23_21ba03b767ac96eb.ai_sdk_prompt.1.provider-request.json",
+      "bytes": 291797,
+      "sha256": "dc298c4cfb1347a4ec600d62921df2a6fd80c0ba1a5cdf9bbd015bbc05a0c614",
+      "role": "provider-request capture, iteration 23 (mode=full)",
+      "private_outside_git": true
+    },
+    {
+      "path": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/cline-data/provider-request-captures/cap_run_yHaQSIjO_24_015656ee85e0f0ac.ai_sdk_prompt.1.provider-request.json",
+      "bytes": 79047,
+      "sha256": "6be2d7873ae872704f7710b8c4f6dba297fb1b6a26045f196997052de0b56df8",
+      "role": "provider-request capture, iteration 24 (mode=full)",
+      "private_outside_git": true
+    },
+    {
+      "path": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/cline-data/provider-request-captures/cap_run_yHaQSIjO_41_414d988ca8bda09a.ai_sdk_prompt.1.provider-request.json",
+      "bytes": 292879,
+      "sha256": "3361af0134da89d91b3f2de08c78470b0b6d03c47a7ee95f4095ca082cbd8d19",
+      "role": "provider-request capture, iteration 41 (mode=full)",
+      "private_outside_git": true
+    },
+    {
+      "path": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/cline-data/provider-request-captures/cap_run_yHaQSIjO_42_e3cdf067beaa394b.ai_sdk_prompt.1.provider-request.json",
+      "bytes": 113841,
+      "sha256": "974f3c4c0e7e366de8b288285811a21f4d65c4e511b58e5404953c2a3031c936",
+      "role": "provider-request capture, iteration 42 (mode=full)",
+      "private_outside_git": true
+    },
+    {
+      "path": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/cline-data/provider-request-captures/cap_run_yHaQSIjO_62_03890597d615fcfe.ai_sdk_prompt.1.provider-request.json",
+      "bytes": 274801,
+      "sha256": "421c5be9b6634724ed20b98cd505f188833e39d4b6a4db66c2a190ab96c86932",
+      "role": "provider-request capture, iteration 62 (mode=full)",
+      "private_outside_git": true
+    },
+    {
+      "path": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/cline-data/provider-request-captures/cap_run_yHaQSIjO_63_cb8b0f9d69ef1714.ai_sdk_prompt.1.provider-request.json",
+      "bytes": 89418,
+      "sha256": "8eb38afce49f54c3796327c87222f3e35cd6bc5342480626149ad6c4055b02ce",
+      "role": "provider-request capture, iteration 63 (mode=full)",
+      "private_outside_git": true
+    },
+    {
+      "path": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/cline-data/provider-request-captures/cap_run_yHaQSIjO_84_a7d07b86b8e858b9.ai_sdk_prompt.1.provider-request.json",
+      "bytes": 302131,
+      "sha256": "005a2d3579942767a7decf5ba9c2eb0100bec3fa0df0de1445d268dac737522c",
+      "role": "provider-request capture, iteration 84 (mode=full)",
+      "private_outside_git": true
+    },
+    {
+      "path": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/cline-data/provider-request-captures/cap_run_yHaQSIjO_85_45c628422d088eed.ai_sdk_prompt.1.provider-request.json",
+      "bytes": 83823,
+      "sha256": "6c1e5822ad881fa055fb9e80a07548bef3af256938fbdd1d366ced6a73df2d61",
+      "role": "provider-request capture, iteration 85 (mode=full)",
+      "private_outside_git": true
+    }
+  ],
+  "provider_request_capture_run_PRIVATE": {
+    "capture_run_id": "yHaQSIjO",
+    "capture_count": 102,
+    "all_mode_full": true,
+    "verified_by": "every capture's root `mode` field was read and equals 'full'",
+    "per_capture_sha256": {
+      "cap_run_yHaQSIjO_100_bbba4a140f73db16.ai_sdk_prompt.1.provider-request.json": "c363e61a5befab4c313ad56c997f81ba1b2ea8c736ead3dea811557a0517e3a5",
+      "cap_run_yHaQSIjO_101_a4b009907234eaed.ai_sdk_prompt.1.provider-request.json": "aa6be5d277cb00d6b31f2a7d138d5a37aa9766b367338b12e93d3851e3b4f2b2",
+      "cap_run_yHaQSIjO_102_6b32735a303b8546.ai_sdk_prompt.1.provider-request.json": "1ffbe340b89c3dfb11758afee020c36e96545d6ba5f4b8366a16a0d1a73a8ed8",
+      "cap_run_yHaQSIjO_10_8aa8b6e121cdfdc3.ai_sdk_prompt.1.provider-request.json": "fdaf2f0530db354df976cea5eb2b32af788400829ed6577aa8a145fb402156ae",
+      "cap_run_yHaQSIjO_11_03d02f755f17d4a7.ai_sdk_prompt.1.provider-request.json": "596e975cd76d019b508501d32e5f056131e5eaf6d75f38d4b59e2634e4ba9630",
+      "cap_run_yHaQSIjO_12_a372062ea35e2748.ai_sdk_prompt.1.provider-request.json": "2641fd6ea931dbb20729058aee5a3b2c27a1717f4b5fb88078d66032a9701120",
+      "cap_run_yHaQSIjO_13_73da2afcbe1b4d08.ai_sdk_prompt.1.provider-request.json": "e037a532b4eca51a79fbe87d840599fb8cb29005e43d5f0c86e975daab3c8b6e",
+      "cap_run_yHaQSIjO_14_0765abe2c1affee0.ai_sdk_prompt.1.provider-request.json": "def86c62bd793ec820b12e6784337cb92a686ac1ff4ac20b11a488137955eecd",
+      "cap_run_yHaQSIjO_15_ef7480334bb4957e.ai_sdk_prompt.1.provider-request.json": "fccbfd8940862edf85b2dd11fca62a93d2719ecadef12fa1aa3b3241a07ba8f1",
+      "cap_run_yHaQSIjO_16_185c76cc787cfd7d.ai_sdk_prompt.1.provider-request.json": "cf89d243732c1e1f275abf9fba9f3d076cf2def1e842ac31ca5ea526ada9f399",
+      "cap_run_yHaQSIjO_17_36f36e8fff15f6ff.ai_sdk_prompt.1.provider-request.json": "14ac1e9dd1bd1c2e629a891d9fa6379f2751ad96eb53e8a90f4f0af053ec10a6",
+      "cap_run_yHaQSIjO_18_3803b9df9a335ef0.ai_sdk_prompt.1.provider-request.json": "aaf25bf07581e993ff38a2daf307d9bbbc2a6f99809ddb3a9a29593ea361c205",
+      "cap_run_yHaQSIjO_19_fff3b85de770bd0c.ai_sdk_prompt.1.provider-request.json": "9b138c5457aec8a1a46dd677a14b92cf8bab50b2a7a36d30aa36db9d2fd6969b",
+      "cap_run_yHaQSIjO_1_32048563f9ae0c65.ai_sdk_prompt.1.provider-request.json": "919ef6398e00624b21827eaba94b593353ed3374549ff6b674e6ea30940972ea",
+      "cap_run_yHaQSIjO_20_4699202ab0ef5a08.ai_sdk_prompt.1.provider-request.json": "76e5b1c2f42d526bcf7447172738327687ebfb64f015b0233fda0618292e7b6c",
+      "cap_run_yHaQSIjO_21_43fe493767ba6faf.ai_sdk_prompt.1.provider-request.json": "5e868d27ce83bc8007d69c835ca0f257cc8eccd2e2a08c1314eae0dd0bd90b90",
+      "cap_run_yHaQSIjO_22_84312748385651cc.ai_sdk_prompt.1.provider-request.json": "2630b8ad735e1be598ef0971c279a7be20a659dc3a8aa05332d4d474995880d5",
+      "cap_run_yHaQSIjO_23_21ba03b767ac96eb.ai_sdk_prompt.1.provider-request.json": "dc298c4cfb1347a4ec600d62921df2a6fd80c0ba1a5cdf9bbd015bbc05a0c614",
+      "cap_run_yHaQSIjO_24_015656ee85e0f0ac.ai_sdk_prompt.1.provider-request.json": "6be2d7873ae872704f7710b8c4f6dba297fb1b6a26045f196997052de0b56df8",
+      "cap_run_yHaQSIjO_25_870f5adbf0a4a953.ai_sdk_prompt.1.provider-request.json": "4dc5af337a6a91a049ad7a158c43703392457cb086a3d60aa11f20275b35290d",
+      "cap_run_yHaQSIjO_26_649859e826d728f1.ai_sdk_prompt.1.provider-request.json": "f29a19c5e7a6333192b785521c91988beb6a94900cebf694333c4ac72d1b55aa",
+      "cap_run_yHaQSIjO_27_b8d77f46418bff68.ai_sdk_prompt.1.provider-request.json": "da076e6f9bc25afcfd5cefa2b8cc8efb1b84b052c7281a6a30d21856db488087",
+      "cap_run_yHaQSIjO_28_304ea2f3d2323b2f.ai_sdk_prompt.1.provider-request.json": "453e0329b10ebcd7c2a592f7dea2f16b2d1c7d2d7c20cc0ddb9e2c64dc5b627a",
+      "cap_run_yHaQSIjO_29_e37205e60186ce44.ai_sdk_prompt.1.provider-request.json": "7dc866d0b246caf66b37ee0ba8b314be1304e07d58fbe3b4f217d0f329b3c0dc",
+      "cap_run_yHaQSIjO_2_c773ec158642a2df.ai_sdk_prompt.1.provider-request.json": "42ccfbb1cc24492819f3c0e6067c2299ce1cdfdd1872f48b793a28d413d4a8d4",
+      "cap_run_yHaQSIjO_30_6ebb4e00147eaf46.ai_sdk_prompt.1.provider-request.json": "5fd1d853d427e7905fe39082339884d47c2869684106fb71dd3dc534b15c3f4c",
+      "cap_run_yHaQSIjO_31_f2a9a8b256882384.ai_sdk_prompt.1.provider-request.json": "1475366e4c001da38ee449b418d920da4ab195e2b5d764fd0b6fec8ff3655908",
+      "cap_run_yHaQSIjO_32_add0fc0698ff4ca6.ai_sdk_prompt.1.provider-request.json": "5acfee6abc96bd84d03c5d6ec0b524855035256cf2a0d968dfbe75e9d740b5fc",
+      "cap_run_yHaQSIjO_33_7adf2f05ad79b12e.ai_sdk_prompt.1.provider-request.json": "004ca6b1f8f6e5e823cb22a12807f5e328b2a2d601bcd48f8e19400de91c1cbc",
+      "cap_run_yHaQSIjO_34_f9f466d92be07849.ai_sdk_prompt.1.provider-request.json": "8c2af58a7693cc466e2aa58376effcb32a1c8999f172082b7fdd40df0d652948",
+      "cap_run_yHaQSIjO_35_ebaef1c39859780d.ai_sdk_prompt.1.provider-request.json": "fb3c5b1316c5b56773c20411be157ff3297b0fc8c8d76c64da7ad83bf2d3a73d",
+      "cap_run_yHaQSIjO_36_63e09c6a261d81ab.ai_sdk_prompt.1.provider-request.json": "48bff084060cddef4fb79b372a813bb412cbf88cb1e884af4d85329ebb25f8b3",
+      "cap_run_yHaQSIjO_37_eb25e447a386a4c9.ai_sdk_prompt.1.provider-request.json": "24d2a5470cc64f5613b90890066171539a42427267e257e492afd9317799802d",
+      "cap_run_yHaQSIjO_38_4af892581e3de444.ai_sdk_prompt.1.provider-request.json": "87fa82adff8bc3cdb5f9c980fbc3397b155ed7627da5775a2a23bad6f6ace582",
+      "cap_run_yHaQSIjO_39_50d83b91432cf8a5.ai_sdk_prompt.1.provider-request.json": "97b846ef392c9dcfa410158ef44f2fb6f86e62a57628ce650a7f3b085205ee74",
+      "cap_run_yHaQSIjO_3_4c39fc6b6f2c68a6.ai_sdk_prompt.1.provider-request.json": "47394069940db5d5c255f08f0c03c7d0439a9fc3c15ea12039e334617fc9a516",
+      "cap_run_yHaQSIjO_40_2a52fb722f61365c.ai_sdk_prompt.1.provider-request.json": "8a6648fb44a4f8030278df7aa26b9fbc4cd3fd5aa90f20dc3004306679a82397",
+      "cap_run_yHaQSIjO_41_414d988ca8bda09a.ai_sdk_prompt.1.provider-request.json": "3361af0134da89d91b3f2de08c78470b0b6d03c47a7ee95f4095ca082cbd8d19",
+      "cap_run_yHaQSIjO_42_e3cdf067beaa394b.ai_sdk_prompt.1.provider-request.json": "974f3c4c0e7e366de8b288285811a21f4d65c4e511b58e5404953c2a3031c936",
+      "cap_run_yHaQSIjO_43_065b6b3e1331c3fa.ai_sdk_prompt.1.provider-request.json": "31e1a61f0d434db7e62e527755f2864cb97f8ff975ecf691f84a836eb27520d8",
+      "cap_run_yHaQSIjO_44_a7805ad3c89a2449.ai_sdk_prompt.1.provider-request.json": "d3e32a017090b19fb00cec23a13d1b705fa07eb7634c70c323dfa39e2ee470a0",
+      "cap_run_yHaQSIjO_45_6766e6b6021671dd.ai_sdk_prompt.1.provider-request.json": "3b406d07448fdef3fa770e4cdbfb79ecf31ed3761afd36efe5c255d03c7ee2b9",
+      "cap_run_yHaQSIjO_46_0479c5994bce8591.ai_sdk_prompt.1.provider-request.json": "b6317d3daab5d7befdc474d56fe22b09e717110aa532ac2991175badb0a931d9",
+      "cap_run_yHaQSIjO_47_61daf97d7d35afad.ai_sdk_prompt.1.provider-request.json": "046c9f299ab9326cb67807c4cadafb2c9e68cc1f5c3e286c85da8c9610ddcd51",
+      "cap_run_yHaQSIjO_48_d5be53d110c7a16c.ai_sdk_prompt.1.provider-request.json": "ef18d0d9ca78af00396ebe2a12daf9855df7ab9811de0690f74cf00e3cd134df",
+      "cap_run_yHaQSIjO_49_7d2a238688ac11eb.ai_sdk_prompt.1.provider-request.json": "b9ece19ff3d55a366873472f4d099c0d1aa3c4a27ed16a3686304a5884807e26",
+      "cap_run_yHaQSIjO_4_453cc216974c13e1.ai_sdk_prompt.1.provider-request.json": "3dd6b94e64dd57eb757fc15e5e81aaa4b85b16c4727034ecfd58e664d44c5099",
+      "cap_run_yHaQSIjO_50_b2cd6d80fc66427f.ai_sdk_prompt.1.provider-request.json": "dd197ea412580d66493fe94cb34eb916c7a4802d1c06ad1d564c24c53ba2596a",
+      "cap_run_yHaQSIjO_51_b24da1bed9799480.ai_sdk_prompt.1.provider-request.json": "201054a291def5b5a3cf006885ce1231d4d0e713f55d7dee31d84f2f4eda00a6",
+      "cap_run_yHaQSIjO_52_5cc13e50b05df24e.ai_sdk_prompt.1.provider-request.json": "b446604a178919ae5fa2707cdc83d19958faaeabcd51e16beaa51757199de330",
+      "cap_run_yHaQSIjO_53_44027077afd65641.ai_sdk_prompt.1.provider-request.json": "374a86489369fb62ab6cd08b4dbb305138cd652f2cba2cc8407b62d45dbcc161",
+      "cap_run_yHaQSIjO_54_221818edd3efe068.ai_sdk_prompt.1.provider-request.json": "552e54d21578971fa15fa37c8410be0b5b7f68b8a5defbf875887171f3065a09",
+      "cap_run_yHaQSIjO_55_49a7bdb6781a1479.ai_sdk_prompt.1.provider-request.json": "540984604111e899ff48168f36ad8931cf3f7bb3513336ffd211962da365a563",
+      "cap_run_yHaQSIjO_56_2ae1256ca0022130.ai_sdk_prompt.1.provider-request.json": "afc81fda76940d59ba1d46ffa67d91718a907ce48b7db6d5790e6cc0969882ae",
+      "cap_run_yHaQSIjO_57_e68eb8569621831c.ai_sdk_prompt.1.provider-request.json": "25106fc7ccb91aa3d710da96fc599260b84775d19191edca706b1975c81a5faf",
+      "cap_run_yHaQSIjO_58_713c3e81ed92ed00.ai_sdk_prompt.1.provider-request.json": "7384312e1c2fee669d466822ed55682ea10c571fa47bb43670aa34d2df88d707",
+      "cap_run_yHaQSIjO_59_1b9339bf8d355ee8.ai_sdk_prompt.1.provider-request.json": "a0b71c2a6e68bf50f23afa84fce85c1f88d8073db6ab2412f6e5bf7b92948b4b",
+      "cap_run_yHaQSIjO_5_db129324525d94fa.ai_sdk_prompt.1.provider-request.json": "9b12ddffb738a58d080047fc3ac1c1cc4acd3be9c4986c671985b0cf2eb0f6cd",
+      "cap_run_yHaQSIjO_60_358ea5f5a56a0f1f.ai_sdk_prompt.1.provider-request.json": "7a8d140ca690bdca5c2d5df6011f0eab9f509706e2733cd4a4b6b6f7b08b7d16",
+      "cap_run_yHaQSIjO_61_1197ef83a1fe9308.ai_sdk_prompt.1.provider-request.json": "18af7eb1e753ccff72709729eb63f6442192b09ed34906ff9a357bb82190f470",
+      "cap_run_yHaQSIjO_62_03890597d615fcfe.ai_sdk_prompt.1.provider-request.json": "421c5be9b6634724ed20b98cd505f188833e39d4b6a4db66c2a190ab96c86932",
+      "cap_run_yHaQSIjO_63_cb8b0f9d69ef1714.ai_sdk_prompt.1.provider-request.json": "8eb38afce49f54c3796327c87222f3e35cd6bc5342480626149ad6c4055b02ce",
+      "cap_run_yHaQSIjO_64_45ada58aaa6070ca.ai_sdk_prompt.1.provider-request.json": "059e4b87c32901e80441f8817878285a54d7009ddaf3d357b798cd99c28c8c5e",
+      "cap_run_yHaQSIjO_65_b2fc75c86dd1db21.ai_sdk_prompt.1.provider-request.json": "3154355f8453d06781b4042296017ef628e9530f0c5af1ab2f61a0165af66974",
+      "cap_run_yHaQSIjO_66_69dfae2c4cd5612e.ai_sdk_prompt.1.provider-request.json": "6d79902f301815a56896dc81e9ad60b908379eeb95eadecf57be4825674920d5",
+      "cap_run_yHaQSIjO_67_5468175fe4e77196.ai_sdk_prompt.1.provider-request.json": "767a9abe25ebc876a6d9f6ab39602d8266c9859efed72ea2c6c0ca38dcf14849",
+      "cap_run_yHaQSIjO_68_43610bd84457dcc6.ai_sdk_prompt.1.provider-request.json": "ed27a6ada0f8722e04368421a4af233c058a833ea8a746a66476a8d8224a6934",
+      "cap_run_yHaQSIjO_69_a6bfcfc6ed23fd6f.ai_sdk_prompt.1.provider-request.json": "e3d10647e182a5e18570567d74ea708a10afa50b633c9ec0331d244badc41698",
+      "cap_run_yHaQSIjO_6_6634e33a43e810f8.ai_sdk_prompt.1.provider-request.json": "18ded103393b149977a054dc7b9967a93558f75864bc3ffbf2830cf9617c97ca",
+      "cap_run_yHaQSIjO_70_5430908262f57e59.ai_sdk_prompt.1.provider-request.json": "093123b8b8da9b100baeaee83d0f6064692995f2244082637fa32b95a7bf1e10",
+      "cap_run_yHaQSIjO_71_e2324aae9a32e02f.ai_sdk_prompt.1.provider-request.json": "e6ade420de4d113620df426fc58fab3dae10a690c662e15ffcc7b5a874f217e2",
+      "cap_run_yHaQSIjO_72_6b538760378aef86.ai_sdk_prompt.1.provider-request.json": "94416ae973334a39721618c6268356ed905d27cd926cd8fb75bc10ab9e452cd6",
+      "cap_run_yHaQSIjO_73_f258b507290a37f5.ai_sdk_prompt.1.provider-request.json": "2ca3bdd28bb820c8c114e6e44d0be6d8561e5a4da0bfabf5468c62bda746d906",
+      "cap_run_yHaQSIjO_74_0734a4843e425fee.ai_sdk_prompt.1.provider-request.json": "039cef471a3a41361d20b5c9e224e8b0c988e923da05cd4d6ea5655f855ce64f",
+      "cap_run_yHaQSIjO_75_6bcf6c07d3f9c412.ai_sdk_prompt.1.provider-request.json": "b94af8f6bbd364822006e90098bae2a0523c902412ad7c6cc6166f062db653d4",
+      "cap_run_yHaQSIjO_76_ddbcfedd8863819c.ai_sdk_prompt.1.provider-request.json": "60f6bb5cde64092133c11ec8ec104e1c8325789221dd573b4372afbb9905966d",
+      "cap_run_yHaQSIjO_77_ba31c1bda5da3cf5.ai_sdk_prompt.1.provider-request.json": "c7f44211f31508495456bc7eea90f9ebc634df35a569a6d10f5a8dc6187dfac1",
+      "cap_run_yHaQSIjO_78_bb67ea9b5e647174.ai_sdk_prompt.1.provider-request.json": "c9fcc56e281c08b7443853d3fe4700cbcc075ff23407fe195a00e2134ed34cf6",
+      "cap_run_yHaQSIjO_79_7cc86bd243132f49.ai_sdk_prompt.1.provider-request.json": "5edb402e49f4a12231630a3f7b722a5cbd8d11b9f5b994ee5f9859dc6502d3c0",
+      "cap_run_yHaQSIjO_7_b882ffab8948c194.ai_sdk_prompt.1.provider-request.json": "e37e305eb5ba2ca93b2e02f6a171ab61d4303e67def74bfcfe3cf20e42981fe8",
+      "cap_run_yHaQSIjO_80_1829c4ee91c43264.ai_sdk_prompt.1.provider-request.json": "208c0159ecae114d555cbb805acd53c3d546ae79e20f6d224dbfaa3656ec4bb2",
+      "cap_run_yHaQSIjO_81_e3fca63e26b840fa.ai_sdk_prompt.1.provider-request.json": "13e94f4de6b51f90137fae31f0f7c49c337c1b6df1fca4fbfba38f8dccda48fe",
+      "cap_run_yHaQSIjO_82_55b82dd351c37f13.ai_sdk_prompt.1.provider-request.json": "cbef5b1be70f136bd8d41b318a5b01099a2fd82409d7f5367b69833d01e5acaf",
+      "cap_run_yHaQSIjO_83_ba70a74ea4ba2991.ai_sdk_prompt.1.provider-request.json": "47b91420c22c27eb0cf85159cec6e79b983d682fe8990dc4990b3e179ed8553a",
+      "cap_run_yHaQSIjO_84_a7d07b86b8e858b9.ai_sdk_prompt.1.provider-request.json": "005a2d3579942767a7decf5ba9c2eb0100bec3fa0df0de1445d268dac737522c",
+      "cap_run_yHaQSIjO_85_45c628422d088eed.ai_sdk_prompt.1.provider-request.json": "6c1e5822ad881fa055fb9e80a07548bef3af256938fbdd1d366ced6a73df2d61",
+      "cap_run_yHaQSIjO_86_e65956b9cb45b2f5.ai_sdk_prompt.1.provider-request.json": "7133834ed305c8d7bd007c09841925276102b3f344e87fe5bf05504d5444efba",
+      "cap_run_yHaQSIjO_87_1b9c9e097b1fdfe2.ai_sdk_prompt.1.provider-request.json": "8f85ae07a78a28a1f884d13dcc607ff158192ff78b8bdd7731da6a97726f864c",
+      "cap_run_yHaQSIjO_88_a976131f5840a04e.ai_sdk_prompt.1.provider-request.json": "2e5ec85e89d2307c24f58b80ad8d53650b25d5285bd7779c9e0726d9f581b077",
+      "cap_run_yHaQSIjO_89_acdbfaced8cb3e00.ai_sdk_prompt.1.provider-request.json": "27e772cc35edd9fd2a69db7d77473ede6528932ae0b8ec787d1a65b38e9eabb4",
+      "cap_run_yHaQSIjO_8_41b906aa49bf4939.ai_sdk_prompt.1.provider-request.json": "75be837d5585e9e3714ba4557294c84f75975e4fd050b402a2cefd8bbae573db",
+      "cap_run_yHaQSIjO_90_8b2b96a68e94f1cb.ai_sdk_prompt.1.provider-request.json": "e23f034acdbae626c4dc9863fcff9d78605cb0bb604b3c3e3d1dec3134905be3",
+      "cap_run_yHaQSIjO_91_a4b056fae0a31705.ai_sdk_prompt.1.provider-request.json": "2fe7e796440b173b1efedf2c67f4888073147fc4deea93b2f358e8e2dd78f50c",
+      "cap_run_yHaQSIjO_92_aae726e8ef144878.ai_sdk_prompt.1.provider-request.json": "cce5825b89345d58ac5b2786234cbf41d820414ff5b64ed4c6fd2a525788dea5",
+      "cap_run_yHaQSIjO_93_261846bc27dff3ca.ai_sdk_prompt.1.provider-request.json": "ce7c0fcb3b05f97c5752ca238c26fdaa7baf539b61fe169bd9d2276c23419c19",
+      "cap_run_yHaQSIjO_94_8c187c0fa40c7b51.ai_sdk_prompt.1.provider-request.json": "adcbbc809fc388593846fc003a865e16a0901a46eb853618f500d36815b089ca",
+      "cap_run_yHaQSIjO_95_500a93546afadf56.ai_sdk_prompt.1.provider-request.json": "bcf188d7862edc08cc9a83b126634c3875f6b50134821ec90f0d1446add4d12b",
+      "cap_run_yHaQSIjO_96_4c15729a91573fd2.ai_sdk_prompt.1.provider-request.json": "4439539881de16ee0e49eeaf08c7d23665392406f19b6888eacd0cd692e907f3",
+      "cap_run_yHaQSIjO_97_6d36700ce9360628.ai_sdk_prompt.1.provider-request.json": "6a4854b83c615ef803fbb0be0cbf61c7274dfbad8852641abfb3d9b7daa2686a",
+      "cap_run_yHaQSIjO_98_53b86e39b3c4c5cf.ai_sdk_prompt.1.provider-request.json": "d96b93691e4e6303c60857901dc28257d496782f312392c6a601520d4ae085f7",
+      "cap_run_yHaQSIjO_99_878b1c6ab654d683.ai_sdk_prompt.1.provider-request.json": "683b7a0b664cf3acec8c5acbc11b7b2efde49759e0a13107b8ca5a12166bc0a9",
+      "cap_run_yHaQSIjO_9_1166dcea24cedbb9.ai_sdk_prompt.1.provider-request.json": "d29a6d1b10247d0263e6e8a5cf8833dad11c1b251a791481df1d169fe68ce131"
+    }
+  },
+  "production_source": [
+    {
+      "path": "sdk/packages/core/src/extensions/context/compaction-shared.ts",
+      "bytes": 33427,
+      "sha256": "b869e0c2e48b67c03ae7861fcc1cb3ac0028e8d23b6ba0dd90ad6b5c76db2141",
+      "role": "production source under this ACT",
+      "private_outside_git": false
+    },
+    {
+      "path": "sdk/packages/core/src/extensions/context/evidence-continuity.ts",
+      "bytes": 68273,
+      "sha256": "6fab2397381cfbcd09a00e0d5b8beade78045ad7b05d4626f401a87b33d002db",
+      "role": "production source under this ACT",
+      "private_outside_git": false
+    },
+    {
+      "path": "sdk/packages/core/src/extensions/context/compaction.evidence-fidelity01.test.ts",
+      "bytes": 35100,
+      "sha256": "208cf5c24467a3cee983a0732de9806594dd5264a77f02997a5ce2bb516d3674",
+      "role": "production-seam regression test",
+      "private_outside_git": false
+    }
+  ],
+  "published_evidence_artifacts": [
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01/ablation-results.md",
+      "bytes": 4527,
+      "sha256": "e2cf68a16b22684a5df5969647462fbf3467e7498d295e0a1cb8e10b48f0455c",
+      "role": "published evidence artifact",
+      "private_outside_git": false
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01/causal-discriminator.md",
+      "bytes": 7964,
+      "sha256": "0ed339b0d85061a4efd5b314202b881ffb9d9643e403060ea42850a95ca4eeca",
+      "role": "published evidence artifact",
+      "private_outside_git": false
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01/conservation-tests.md",
+      "bytes": 7970,
+      "sha256": "8d4201fda10b5875f4cd8513dce5f36a4ac685853db04747f87daec48d78dbc1",
+      "role": "published evidence artifact",
+      "private_outside_git": false
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01/historical-boundary-index.json",
+      "bytes": 4487,
+      "sha256": "94264503a491fe28b0f833f723b552df449aa86f1473e5bbbadac31e7af3fbcd",
+      "role": "published evidence artifact",
+      "private_outside_git": false
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01/qualification-report.md",
+      "bytes": 6903,
+      "sha256": "db3d9d92c48d6d7f5aa9f88219a935da07f602250e600dbb573e6c8043741688",
+      "role": "published evidence artifact",
+      "private_outside_git": false
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01/red-reproduction.md",
+      "bytes": 7934,
+      "sha256": "88e631b0a7553f74879bb1ff684fcde025cf038687dc3c3fabb9b8695f453894",
+      "role": "published evidence artifact",
+      "private_outside_git": false
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01/selected-facts.json",
+      "bytes": 3217,
+      "sha256": "3b431e67198b9e796350beafd48ccd634893159127580c02b1b318fb84feb4e9",
+      "role": "published evidence artifact",
+      "private_outside_git": false
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01/source-map.md",
+      "bytes": 6287,
+      "sha256": "ac90b4f03282451d48d16ff4f32674a60f30d3cf75e1152927ac712228935e4b",
+      "role": "published evidence artifact",
+      "private_outside_git": false
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01/verification/boundary-replay.json",
+      "bytes": 2986,
+      "sha256": "365993db9f82d394ae6b8a099e8a5e38068f0b54ab0f94921dfa6a77d40d0e3a",
+      "role": "published evidence artifact",
+      "private_outside_git": false
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01/verification/verification-receipts.md",
+      "bytes": 5816,
+      "sha256": "7998006bff49baf367044f30f34f8344697fd98fbb1a67b9be2fb934d3d25926",
+      "role": "published evidence artifact",
+      "private_outside_git": false
+    }
+  ],
+  "executed_test_commands": [
+    {
+      "command": "cd sdk/packages/core && bunx vitest run --config vitest.config.ts src/extensions/context/compaction.evidence-fidelity01.test.ts",
+      "exit_code": 1,
+      "phase": "RED, against unchanged production code",
+      "result": "3 failed | 4 passed (7)"
+    },
+    {
+      "command": "cd sdk/packages/core && git checkout -- <the two modified production files> && bunx vitest run --config vitest.config.ts src/extensions/context/compaction.evidence-fidelity01.test.ts",
+      "exit_code": 1,
+      "phase": "DECISIVE RED-REPRODUCIBILITY (production reverted to the entry HEAD)",
+      "result": "16 failed | 7 passed (23)"
+    },
+    {
+      "command": "cd sdk/packages/core && bunx vitest run --config vitest.config.ts src/extensions/context/compaction.evidence-fidelity01.test.ts",
+      "exit_code": 0,
+      "phase": "GREEN, after the repair",
+      "result": "23 passed (23)"
+    },
+    {
+      "command": "cd sdk/packages/core && bunx vitest run --config vitest.config.ts src/extensions/context/",
+      "exit_code": 0,
+      "phase": "conservation sweep",
+      "result": "440 passed | 2 skipped (442)"
+    },
+    {
+      "command": "cd sdk/packages/core && bun tsc -p tsconfig.dev.json --noEmit",
+      "exit_code": 2,
+      "phase": "typecheck",
+      "result": "43 diagnostics, identical to the entry-HEAD baseline; ACT-owned diagnostics = 0"
+    },
+    {
+      "command": "cd sdk/packages/core && bunx vitest run --config vitest.config.ts",
+      "exit_code": 1,
+      "phase": "full-suite regression check",
+      "result": "154 failed | 5483 passed \u2014 IDENTICAL failure count and IDENTICAL failing file set (31 files) to the entry HEAD; all pre-existing and unrelated"
+    },
+    {
+      "command": "cd <repo> && bunx biome check <the two modified production files> <the new test file>",
+      "exit_code": 0,
+      "phase": "lint/format",
+      "result": "Checked 3 files. No fixes applied. 0 errors, 0 warnings."
+    },
+    {
+      "command": "cd sdk/packages/core && bunx vitest run --config vitest.config.ts src/extensions/context/",
+      "exit_code": 0,
+      "phase": "final GREEN verification after the lint fixes",
+      "result": "440 passed | 2 skipped (442)"
+    }
+  ],
+  "confidentiality": {
+    "raw_provider_payloads_in_git": false,
+    "canonical_transcript_in_git": false,
+    "credentials_in_git": false,
+    "note": "Only safe fixture values and redacted references are published. The canonical transcript, the provider-request captures and the persisted sidecar stay in the operator-local cline-data directory and are referenced by path + SHA-256 only."
+  }
+}
