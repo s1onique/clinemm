@@ -201,3 +201,64 @@ $ bun tsc -p tsconfig.dev.json --noEmit | grep -cE '^src/.*error TS'
 $ bunx biome check <the two modified production files> <the new test file>
 Checked 3 files. 0 errors, 0 warnings.
 ```
+
+---
+
+## SECURITY01 addendum — the confidentiality gate after the path-based fail-closed correction
+
+The second review (`HALT_NEW_P0_CREDENTIAL_EXPOSURE`) found that the content
+sanitizer does NOT recognise a credential without key-shaped syntax. The
+correction adds a **PATH-BASED fail-closed rule** in front of the content
+sanitizer. See `security-record.md`.
+
+| Assertion | Result |
+|---|---|
+| SECURITY 1: the content sanitizer does NOT recognise a `.pgpass`/`_auth=`/URL credential (pins WHY the repair is a path rule) | PASS |
+| SECURITY 2: a `.pgpass` source is never carried at all | PASS |
+| SECURITY 3: the credential-bearing SOURCE PATH is itself never carried (9 path classes) | PASS |
+| SECURITY 4: a non-sensitive source path IS still carried (not a blanket disable) | PASS |
+| SECURITY 5: a `.pgpass` credential reaches neither the summarizer request nor the persisted/provider-visible summary | PASS |
+| SECURITY 6: an ordinary source's key-shaped credential is still redacted | PASS |
+
+### The security gate is load-bearing
+
+Against the pre-correction production code (`git checkout --` of
+`evidence-continuity.ts`), **SECURITY 2, 3 and 5 FAIL** — the `.pgpass`
+credential IS carried. The gate therefore fails when the protection is removed.
+
+### The corrected receipts
+
+```
+$ bunx vitest run --config vitest.config.ts \
+    src/extensions/context/compaction.evidence-fidelity01.test.ts
+ Test Files  1 passed (1)
+      Tests  34 passed (34)
+EXIT=0
+
+$ bunx vitest run --config vitest.config.ts src/extensions/context/
+ Test Files  26 passed | 1 skipped (27)
+      Tests  451 passed | 2 skipped (453)
+EXIT=0
+
+$ bun tsc -p tsconfig.dev.json --noEmit | grep -cE '^src/.*error TS'
+43
+```
+43 is the entry-HEAD baseline; the ACT-owned diagnostics are 0.
+
+### Gate C4 restated
+
+The excerpt path's confidentiality contract is now:
+
+1. A **known credential-bearing SOURCE PATH** is not carried at all — neither
+   content nor path. (SECURITY 2, 3)
+2. For an ordinary source, a **key-shaped credential value is redacted**.
+   (CONTROL 16, 17, SECURITY 6)
+3. An **arbitrary command's stdout** is still never carried. (CONTROL 19)
+4. The excerpt is **bounded** and marked when truncated. (CONTROL 13)
+5. The section **delimiters** are escaped. (CONTROL 11)
+6. The **source attribution** names the source, so a reader can tell what the
+   excerpt belongs to.
+
+The residual limit — an unrecognized credential format inside an ORDINARY file
+— is stated in `security-record.md`, not hidden. Closing it completely needs the
+broader trust mechanism the review flagged, which is a separate design ACT.

@@ -1,6 +1,6 @@
 {
   "act": "ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01",
-  "entry_source_head": "e9ab27bc82a17e5848f286f1172f0574ceb8dc4c",
+  "entry_source_head": "43b3c062b6f0a16b71f54712b94aec79ce13ec48",
   "branch": "main",
   "subject_source_revision": "42de653b59708e712d694aeb9732f822b7f8fe5b",
   "subject_source_branch": "optimize-ftls",
@@ -230,15 +230,15 @@
     },
     {
       "path": "sdk/packages/core/src/extensions/context/evidence-continuity.ts",
-      "bytes": 75842,
-      "sha256": "b697ac2f54ac04a7c907dcd488eec5f2bf5fae3d82b8ab355b9b3807b9c425b2",
+      "bytes": 79047,
+      "sha256": "e9196d7029cfe9deb4923e323d1177bef4ef0a62e1f8515da100f593aa45e386",
       "role": "production source under this ACT",
       "private_outside_git": false
     },
     {
       "path": "sdk/packages/core/src/extensions/context/compaction.evidence-fidelity01.test.ts",
-      "bytes": 43366,
-      "sha256": "082898723689852f2e4b55900f111821469e31628e5f3e06e4eaf97a40e5ec76",
+      "bytes": 52356,
+      "sha256": "ada86dfe51d64f9e49fd20af35c0830f7dd82c32b3cb766b8671fb1a7e14ecb6",
       "role": "production-seam regression test",
       "private_outside_git": false
     }
@@ -260,8 +260,8 @@
     },
     {
       "path": ".factory/evidence/ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01/conservation-tests.md",
-      "bytes": 9815,
-      "sha256": "18c5c9eadb62662d99a001ff11b7d543e92bc26ec221367d635f94eeb1d9c851",
+      "bytes": 12424,
+      "sha256": "22f9ce4d5df275d5249fe987e0494e667c0251c181489efd9b8e5e8a5b1933aa",
       "role": "published evidence artifact",
       "private_outside_git": false
     },
@@ -294,6 +294,13 @@
       "private_outside_git": false
     },
     {
+      "path": ".factory/evidence/ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01/security-record.md",
+      "bytes": 7851,
+      "sha256": "87732914fc99c9542a7414d010e50f50bc31141011b6f38318a661a885acb8e6",
+      "role": "published evidence artifact",
+      "private_outside_git": false
+    },
+    {
       "path": ".factory/evidence/ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01/selected-facts.json",
       "bytes": 3217,
       "sha256": "3b431e67198b9e796350beafd48ccd634893159127580c02b1b318fb84feb4e9",
@@ -316,8 +323,8 @@
     },
     {
       "path": ".factory/evidence/ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01/verification/verification-receipts.md",
-      "bytes": 5816,
-      "sha256": "7998006bff49baf367044f30f34f8344697fd98fbb1a67b9be2fb934d3d25926",
+      "bytes": 9929,
+      "sha256": "1c6252def7b855f89c61ad99595593e6bc77436c7aaca12293d6259d6ef3ba7e",
       "role": "published evidence artifact",
       "private_outside_git": false
     }
@@ -326,20 +333,20 @@
     {
       "command": "cd sdk/packages/core && bunx vitest run --config vitest.config.ts src/extensions/context/compaction.evidence-fidelity01.test.ts",
       "exit_code": 1,
-      "phase": "RED, against unchanged production code (production reverted to the entry HEAD)",
-      "result": "6 failed | 22 passed (28)"
+      "phase": "RED (production reverted to the pre-correction code)",
+      "result": "SECURITY 2, 3 and 5 FAIL - the .pgpass credential IS carried"
     },
     {
       "command": "cd sdk/packages/core && bunx vitest run --config vitest.config.ts src/extensions/context/compaction.evidence-fidelity01.test.ts",
       "exit_code": 0,
-      "phase": "GREEN, after the CORRECTION01 repair",
-      "result": "28 passed (28)"
+      "phase": "GREEN, after the SECURITY01 path-based fail-closed correction",
+      "result": "34 passed (34)"
     },
     {
       "command": "cd sdk/packages/core && bunx vitest run --config vitest.config.ts src/extensions/context/",
       "exit_code": 0,
       "phase": "conservation sweep",
-      "result": "445 passed | 2 skipped (447)"
+      "result": "451 passed | 2 skipped (453)"
     },
     {
       "command": "cd sdk/packages/core && bun tsc -p tsconfig.dev.json --noEmit",
@@ -351,21 +358,30 @@
       "command": "cd sdk/packages/core && bunx vitest run --config vitest.config.ts",
       "exit_code": 1,
       "phase": "full-suite regression check",
-      "result": "154 failed | 5488 passed \u2014 IDENTICAL failure count and IDENTICAL failing file set to the entry HEAD (31 files, all pre-existing and unrelated)"
+      "result": "154 failed | 5494 passed - IDENTICAL failure count and IDENTICAL failing file set to the entry HEAD (31 files, all pre-existing and unrelated)"
     },
     {
-      "command": "cd <repo> && bunx biome check <the two modified production files> <the new test file>",
+      "command": "cd <repo> && bunx biome check <the modified production file> <the test file>",
       "exit_code": 0,
       "phase": "lint/format",
-      "result": "Checked 3 files. 0 errors, 0 warnings."
+      "result": "Checked 2 files. 0 errors, 0 warnings."
     }
   ],
   "confidentiality": {
     "raw_provider_payloads_in_git": false,
     "canonical_transcript_in_git": false,
     "credentials_in_git": false,
-    "note": "Only safe fixture values and redacted references are published. The canonical transcript, the provider-request captures and the persisted sidecar stay in the operator-local cline-data directory and are referenced by path + SHA-256 only. The only credential-shaped strings in the repository copy are explicitly SYNTHETIC."
+    "note": "Only safe fixture values and redacted references are published. The canonical transcript, the provider-request captures and the persisted sidecar stay in the operator-local cline-data directory and are referenced by path + SHA-256 only. The only credential-shaped strings in the repository copy are explicitly SYNTHETIC (SYNTHETIC-DO-NOT-USE-*, FAKE-CREDENTIAL-DO-NOT-USE, FAKE-AUTH-TOKEN-*, FAKE-DB-PASSWORD-*)."
   },
-  "correction": "ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-CORRECTION01 (see correction-record.md)",
-  "behavioural_causality": "BEHAVIORAL_CAUSE_UNPROVEN (the e9ab27bc8 SUPPORTED claim was withdrawn by the review; see correction-record.md P0-4)"
+  "correction": "ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-CORRECTION01 + ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-SECURITY-01",
+  "behavioural_causality": "BEHAVIORAL_CAUSE_UNPROVEN (the e9ab27bc8 SUPPORTED claim was withdrawn by the review; see correction-record.md P0-4)",
+  "security_correction": {
+    "act": "ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-SECURITY-01",
+    "trigger": "second review of 43b3c062b: HALT_NEW_P0_CREDENTIAL_EXPOSURE",
+    "confirmed_counterexample": "a .pgpass-style credential (host:port:db:user:password) survives sanitizeOutcomeText() verbatim",
+    "repair": "PATH-BASED fail-closed: a known credential-bearing SOURCE PATH contributes neither content nor path; NOT one more regex",
+    "path_vocabulary_source": "reuses the codebase's existing credential-target vocabulary in runtime/command-policy/structured-command-risk.ts",
+    "red_gate": "SECURITY 1-6 in compaction.evidence-fidelity01.test.ts; SECURITY 2/3/5 fail against the pre-correction code",
+    "residual_limit": "an unrecognized credential format inside an ORDINARY file is not detected; closing that needs the broader trust mechanism (separate design ACT)"
+  }
 }

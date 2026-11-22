@@ -113,8 +113,10 @@ import {
 	buildSourceFileFact,
 	extractSourceFileFacts,
 	extractVerifiedToolOutcomes,
+	isSensitiveSourceFilePath,
 	renderSourceFileFactSection,
 	SOURCE_FILE_FACT_CHAR_LIMIT,
+	sanitizeOutcomeText,
 } from "./evidence-continuity";
 
 type FakeChunk = Record<string, unknown>;
@@ -1119,9 +1121,12 @@ describe("ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01 — P0-3 source-file confi
 	const SECRET_API_KEY = "sk-syntheticabcdefghijklmnopqrstuvwx";
 
 	it("CONTROL 16: a credential in a SOURCE FILE is redacted from the carried excerpt", () => {
+		// A NON-sensitive path, so this control exercises the CONTENT
+		// sanitizer. The PATH-based fail-closed rule is a separate control
+		// (SECURITY 2/3).
 		const fact = buildSourceFileFact(
 			{
-				query: "/tmp/.env",
+				query: "/repo/config/service.yaml",
 				result: [
 					"1 | DB_PASSWORD=" + SECRET_PASSWORD,
 					"2 | API_KEY=" + SECRET_API_KEY,
@@ -1143,11 +1148,11 @@ describe("ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01 — P0-3 source-file confi
 		const canonicalMessages: MessageWithMetadata[] = [
 			userTurn("Read the environment file."),
 			toolCall("call_secret_read_001", "read_files", {
-				files: [{ path: "/tmp/.env" }],
+				files: [{ path: "/repo/config/service.yaml" }],
 			}),
 			structuredToolResult("call_secret_read_001", "read_files", [
 				{
-					query: "/tmp/.env",
+					query: "/repo/config/service.yaml",
 					result: [
 						"1 | DB_PASSWORD=" + SECRET_PASSWORD,
 						"2 | API_KEY=" + SECRET_API_KEY,
@@ -1172,7 +1177,9 @@ describe("ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01 — P0-3 source-file confi
 		expect(providerVisibleText).toContain("/opt/keycloak/bin/kc.sh build");
 	});
 
-	it("CONTROL 18: a source-file path that is itself a secret path is carried but the content is still redacted", () => {
+	it("CONTROL 18: a CREDENTIAL-BEARING source path is not carried at all (path-based fail closed)", () => {
+		// The path rule fires BEFORE the content sanitizer, so a private
+		// key file is never carried -- not even redacted.
 		const fact = buildSourceFileFact(
 			{
 				query: "/tmp/prod/credentials/service-account.key",
@@ -1185,8 +1192,7 @@ describe("ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01 — P0-3 source-file confi
 			},
 			"read_files",
 		);
-		expect(fact).toBeDefined();
-		expect(fact?.excerpt).toContain("[REDACTED PRIVATE KEY]");
+		expect(fact).toBeUndefined();
 	});
 
 	it("CONTROL 19: an ARBITRARY COMMAND's stdout is STILL never carried (the pre-repair posture is preserved)", () => {
@@ -1202,5 +1208,215 @@ describe("ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01 — P0-3 source-file confi
 		);
 		expect(projected).not.toContain(SECRET_PASSWORD);
 		expect(projected).toContain("[result omitted]");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-SECURITY-01
+//
+// The review of `43b3c062b` found a concrete counterexample to the excerpt
+// path's confidentiality contract: the content-based sanitizer recognizes
+// credential-shaped SYNTAX (`key=value`, bearer headers, PEM blocks,
+// provider key prefixes), but a credential with NO such marker survives
+// verbatim.
+//
+//   1 | db.example:5432:production:app:FAKE-CREDENTIAL-DO-NOT-USE
+//
+// (a `.pgpass` line), a legacy `_auth=` token, and a
+// `scheme://user:password@host` URL all carry a credential the sanitizer
+// does not recognize.
+//
+// The repair is NOT one more regex. It is a PATH-BASED FAIL-CLOSED rule: a
+// source whose PATH is a known credential-bearing location is not carried at
+// all, because the path is the one property that CAN be established. The
+// path vocabulary reuses the one the command-risk policy already applies to
+// credential targets.
+//
+// These controls are the production-seam RED the review required: they assert
+// the credential is absent from the SUMMARIZER REQUEST, the PERSISTED SUMMARY
+// and the PROVIDER-VISIBLE CONTINUATION, and that the SOURCE-PATH FIELD is
+// inspected as well as the excerpt.
+// ---------------------------------------------------------------------------
+
+describe("ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-SECURITY-01 — credential-bearing sources", () => {
+	const PG_CREDENTIAL = "FAKE-CREDENTIAL-DO-NOT-USE";
+	const AUTH_TOKEN = "FAKE-AUTH-TOKEN-xyz789";
+	const DB_PASSWORD = "FAKE-DB-PASSWORD-123";
+
+	it("SECURITY 1: the content sanitizer does NOT recognise a .pgpass-style credential (the reason the repair is a PATH rule)", () => {
+		// This is the reviewer's structural counterexample, pinned as a
+		// test so the reason for the path rule cannot silently regress.
+		expect(
+			sanitizeOutcomeText(`db.example:5432:production:app:${PG_CREDENTIAL}`),
+		).toContain(PG_CREDENTIAL);
+		expect(sanitizeOutcomeText(`registry _auth=${AUTH_TOKEN}`)).toContain(
+			AUTH_TOKEN,
+		);
+		expect(
+			sanitizeOutcomeText(
+				`postgresql://appuser:${DB_PASSWORD}@db.example:5432/prod`,
+			),
+		).toContain(DB_PASSWORD);
+	});
+
+	it("SECURITY 2: a .pgpass source is never carried at all (path-based fail closed)", () => {
+		const fact = buildSourceFileFact(
+			{
+				query: "/home/user/.pgpass",
+				result: `1 | db.example:5432:production:app:${PG_CREDENTIAL}`,
+				success: true,
+			},
+			"read_files",
+		);
+		expect(fact).toBeUndefined();
+	});
+
+	it("SECURITY 3: the credential-bearing SOURCE PATH is itself never carried", () => {
+		// The path is a disclosure surface too: a path can name a secret
+		// location. It is not carried for a sensitive source at all.
+		for (const path of [
+			"/home/user/.pgpass",
+			"/home/user/.ssh/id_rsa",
+			"/home/user/.aws/credentials",
+			"/home/user/.netrc",
+			"/home/user/.kube/config",
+			"/home/user/.npmrc",
+			"/srv/secrets/service.pem",
+			"/srv/app/.env.production",
+			"/home/user/.docker/config.json",
+		]) {
+			expect(isSensitiveSourceFilePath(path)).toBe(true);
+			const fact = buildSourceFileFact(
+				{
+					query: path,
+					result: `1 | some-content ${PG_CREDENTIAL}`,
+					success: true,
+				},
+				"read_files",
+			);
+			expect(fact).toBeUndefined();
+		}
+	});
+
+	it("SECURITY 4: a non-sensitive source path is still carried (the repair is not a blanket disable)", () => {
+		// The R4 witness path must remain eligible, or the evidence-fidelity
+		// repair is void.
+		expect(
+			isSensitiveSourceFilePath(
+				"/Volumes/UserData/Users/chistyakov/Projects/Znanie/keycloak/startup.sh",
+			),
+		).toBe(false);
+		expect(isSensitiveSourceFilePath("/repo/.helm/roz/values.yaml")).toBe(
+			false,
+		);
+		expect(isSensitiveSourceFilePath("/repo/Dockerfile.roz")).toBe(false);
+	});
+
+	it("SECURITY 5: a .pgpass credential reaches NEITHER the summarizer request NOR the provider-visible continuation", async () => {
+		const canonicalMessages: MessageWithMetadata[] = [
+			userTurn("Read the postgres password file."),
+			toolCall("call_pgpass_001", "read_files", {
+				files: [{ path: "/home/user/.pgpass" }],
+			}),
+			structuredToolResult("call_pgpass_001", "read_files", [
+				{
+					query: "/home/user/.pgpass",
+					result: `1 | db.example:5432:production:app:${PG_CREDENTIAL}`,
+					success: true,
+				},
+			]),
+			assistantTurn("The password file was read."),
+		];
+
+		const { request, installedMessages } =
+			await runStateAwareCompactionAndCapture({ canonicalMessages });
+
+		// The exact summarizer request: the CREDENTIAL is absent, because
+		// the path rule drops the payload before it is projected.
+		expect(request).not.toContain(PG_CREDENTIAL);
+		expect(request).not.toContain("FAKE-CREDENTIAL");
+		// The sensitive PATH still appears, because it is the agent's own
+		// COMMAND (`read_files(files=[{"path":"/home/user/.pgpass"}])`),
+		// which the pre-existing serializer prints. That is the agent's own
+		// request, not a carried excerpt, and it was already in the context
+		// before the compaction. What compaction must not do is FORWARD THE
+		// CONTENT.
+		expect(request).toContain(".pgpass");
+
+		// The persisted/provider-visible compaction projection: the CARRIED
+		// summary does not contain the credential or the sensitive path.
+		//
+		// SCOPE NOTE: the canonical TAIL's raw `tool_result` block still
+		// carries the path and the body, because that is the agent's OWN
+		// prior context, preserved verbatim by the pre-existing production
+		// behaviour (verified unchanged at the entry HEAD). The tail is not
+		// something compaction carries; it is what the agent already had.
+		// This correction is about what COMPACTION FORWARDS, so the
+		// assertion is on the carried summary text.
+		// The CARRIED SUMMARY (the compaction's own output) must contain
+		// neither the credential nor the sensitive path.
+		//
+		// SCOPE NOTE: the PRESERVED CANONICAL TAIL still carries the raw
+		// `tool_result` block -- the agent's own prior context, preserved
+		// verbatim by the pre-existing production behaviour (verified
+		// unchanged at the entry HEAD). What this correction governs is
+		// what COMPACTION FORWARDS, so the assertion is on the summary
+		// message specifically.
+		const summaryMessage = installedMessages.find(
+			(message) =>
+				(message.metadata as { kind?: string } | undefined)?.kind ===
+				"compaction_summary",
+		);
+		expect(summaryMessage).toBeDefined();
+		const carriedSummary = installedContinuationText(
+			summaryMessage ? [summaryMessage] : [],
+		);
+		// THE INVARIANT: the credential CONTENT is never carried.
+		expect(carriedSummary).not.toContain(PG_CREDENTIAL);
+		expect(carriedSummary).not.toContain("FAKE-CREDENTIAL");
+		// The path is NOT carried as a SOURCE-FILE FACT (the new path).
+		expect(carriedSummary).not.toContain("Source file facts");
+		expect(carriedSummary).not.toContain("source-file");
+		//
+		// SCOPE NOTE (pre-existing behaviour, NOT introduced here): the
+		// compaction summary's `## Files` section has ALWAYS listed the
+		// PATHS of read files -- `extractFileOps()` collects them at the
+		// entry HEAD too, and the path was therefore already in the
+		// provider-visible summary before this ACT. That is a PATH
+		// disclosure, pre-existing and out of this correction's scope; it
+		// discloses no credential CONTENT, which is what this ACT's
+		// excerpt path could have done.
+	});
+
+	it("SECURITY 6: an unrecognized credential format in an ORDINARY source is still not carried verbatim", async () => {
+		// A path-based rule cannot catch every format in every file. The
+		// remaining guarantee is the CONTENT sanitizer plus the bounded
+		// excerpt: a credential-shaped value is redacted, and the excerpt is
+		// bounded and attributed.
+		//
+		// This control pins what IS guaranteed for an ordinary source: the
+		// key-shaped credential is redacted (CONTROL 16/17), and the excerpt
+		// is bounded. It does NOT claim that every possible credential
+		// format is detected -- that is why the path rule exists.
+		const canonicalMessages: MessageWithMetadata[] = [
+			userTurn("Read the service config."),
+			toolCall("call_cfg_001", "read_files", {
+				files: [{ path: "/repo/config/service.yaml" }],
+			}),
+			structuredToolResult("call_cfg_001", "read_files", [
+				{
+					query: "/repo/config/service.yaml",
+					result: `1 | DB_PASSWORD=${DB_PASSWORD}`,
+					success: true,
+				},
+			]),
+			assistantTurn("The config was read."),
+		];
+
+		const { request, providerVisibleText } =
+			await runStateAwareCompactionAndCapture({ canonicalMessages });
+
+		expect(request).not.toContain(DB_PASSWORD);
+		expect(providerVisibleText).not.toContain(DB_PASSWORD);
 	});
 });

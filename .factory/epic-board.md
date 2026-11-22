@@ -38483,3 +38483,92 @@ fact was lost from the compacted summary at **all five**; the corrected projecti
 ## Evidence
 
 `.factory/evidence/ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01/` (see `correction-record.md`)
+
+# ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-SECURITY-01 — PASS_STRUCTURAL_ONLY — 2026-11-23
+
+## Verdict
+
+`PASS_STRUCTURAL_ONLY`, after the bounded security correction. The second review of
+`43b3c062b` returned `HALT_NEW_P0_CREDENTIAL_EXPOSURE` and found **one new P0**: a concrete
+redaction bypass in the `read_files` excerpt path.
+
+**The reviewer's counterexample was confirmed against the production code.** A `.pgpass`-style
+credential (`host:port:db:user:password`) survives `sanitizeOutcomeText()` verbatim, and so do a
+legacy `_auth=` token and a `scheme://user:password@host` URL.
+
+## Why the repair is a PATH rule and not one more regex
+
+The review was explicit: *"Do not attempt to solve arbitrary-secret detection by adding one more
+regex."* The module already states the governing rule — **no regex can be made safe for arbitrary
+output** — and the same rule applies to arbitrary file CONTENT: the set of credential formats is
+unbounded.
+
+What CAN be established is the **PATH**. A file at `~/.pgpass` or `~/.ssh/id_rsa` is a credential
+container **by construction**, whatever its content looks like.
+
+> A source whose PATH is a known credential-bearing location is not carried at all — neither its
+> content nor the path itself.
+
+The path vocabulary **reuses the one the codebase already applies** to credential targets
+(`runtime/command-policy/structured-command-risk.ts`: `.ssh/`, `.aws/`, `.gcloud/`, `.kube/`,
+`.docker/`, `.netrc`), extended with the credential-file names that same policy treats as sensitive
+but does not name (`.pgpass`, `.npmrc`, `.pypirc`, `.htpasswd`, `.env*`, key/keystore extensions,
+`id_rsa`-style names).
+
+## The layers
+
+1. **Path fail-closed** — a known credential-bearing source contributes neither content nor path.
+2. **Content sanitizer** — for an ordinary source, a key-shaped credential value is redacted.
+3. **Bound + attribution** — the excerpt is bounded (`SOURCE_FILE_FACT_CHAR_LIMIT = 2_000`) and
+   attributed to its source.
+4. **Delimiter escaping** — the carried body cannot forge a new authority.
+
+## The production-seam RED (SECURITY 1-6)
+
+| Control | Asserts | Result |
+|---|---|---|
+| SECURITY 1 | the content sanitizer does NOT recognise a `.pgpass`/`_auth=`/URL credential — pins WHY the repair is a path rule | PASS |
+| SECURITY 2 | a `.pgpass` source is never carried at all | PASS |
+| SECURITY 3 | the credential-bearing SOURCE PATH is itself never carried (9 path classes) | PASS |
+| SECURITY 4 | a non-sensitive source path IS still carried — **not** a blanket disable | PASS |
+| SECURITY 5 | a `.pgpass` credential reaches neither the summarizer request nor the persisted/provider-visible summary | PASS |
+| SECURITY 6 | an ordinary source's key-shaped credential is still redacted | PASS |
+
+**The gate is load-bearing:** against the pre-correction production code (`git checkout --` of
+`evidence-continuity.ts`), SECURITY 2, 3 and 5 **FAIL** — the credential IS carried.
+
+## The R4 evidence-fidelity tests are preserved
+
+All of them. The R4 witness path (`/Volumes/.../keycloak/startup.sh`) is NOT sensitive, and the
+whole evidence-fidelity suite — SCENARIO 1-3, PROOF 1-4, CONTROL 1-15, SCENARIO 16 — is unchanged
+and GREEN.
+
+## Executable evidence
+
+```
+RED    (production reverted)        SECURITY 2, 3, 5 FAIL        EXIT=1
+GREEN  (after the correction)       34 passed (34)               EXIT=0
+SWEP   src/extensions/context/      451 passed | 2 skipped (453)  EXIT=0
+TYPECHECK  43 diagnostics == entry-HEAD baseline; ACT-owned = 0
+FULL SUITE  failing file set IDENTICAL to the entry HEAD (31 files)
+BIOME  0 errors, 0 warnings
+```
+
+## Scope honesty — what this correction does NOT do
+
+- The compaction summary's `## Files` section has ALWAYS listed read-file PATHS
+  (`extractFileOps()` collects them at the entry HEAD too — verified). That is a pre-existing PATH
+  disclosure and is not widened here: a sensitive source contributes no file fact at all.
+- The preserved canonical tail keeps the agent's own raw `tool_result` block verbatim (verified
+  unchanged at the entry HEAD). That is the agent's own prior context, not what compaction
+  forwards.
+- The **residual limit** is stated, not hidden: an unrecognized credential format inside an
+  ORDINARY file is bounded, attributed and redacted for key-shaped values, but is not detected.
+  Closing that gap completely requires the broader trust mechanism the review flagged, which is a
+  **separate design ACT**. This correction does not claim it.
+- The compaction investigation is NOT reopened: the provenance corrections, the causal withdrawal
+  and the budget-boundary RED stand.
+
+## Evidence
+
+`.factory/evidence/ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01/` (see `security-record.md`)

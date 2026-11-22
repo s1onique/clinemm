@@ -341,6 +341,76 @@ export const SOURCE_FILE_FACT_CHAR_LIMIT = 2_000;
 const SOURCE_FILE_READ_TOOL_NAME = "read_files";
 
 /**
+ * ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-SECURITY-01
+ *
+ * The source paths whose CONTENT is never carried.
+ *
+ * WHY THIS IS A PATH RULE AND NOT A CONTENT RULE.
+ *
+ * The content-based sanitizer (`sanitizeOutcomeText`) recognizes
+ * credential-shaped SYNTAX: `key=value` assignments, bearer headers, PEM
+ * private-key blocks, provider-shaped key prefixes. It does NOT recognize a
+ * credential that has no such marker. A `.pgpass` line
+ * (`host:port:db:user:password`), a legacy `_auth=` token, or a
+ * `scheme://user:password@host` URL all carry a credential with no
+ * key-shaped syntax, and the sanitizer leaves them verbatim.
+ *
+ * Adding a regex per credential format is the wrong answer: the set of
+ * formats is unbounded and the sanitizer cannot be made safe for arbitrary
+ * content. That is exactly the rule this module already follows for
+ * arbitrary tool OUTPUT ("no regex can be made safe for arbitrary output").
+ *
+ * The rule applied here is therefore the one that CAN be established:
+ * a file whose PATH is a known credential-bearing location is not carried at
+ * all, and neither is any file whose content cannot be established safe.
+ * The path vocabulary is the one the codebase already uses for its
+ * sensitive-home / credential-target policy
+ * (`runtime/command-policy/structured-command-risk.ts`), extended with the
+ * credential-file names that policy does not name but that the same policy
+ * treats as sensitive targets.
+ *
+ * The rule is applied to the PATH, so it does not depend on being able to
+ * recognise a secret inside the content.
+ */
+const SENSITIVE_SOURCE_FILE_PATTERNS: readonly RegExp[] = [
+	// The credential-bearing home directories the command-risk policy
+	// already treats as sensitive targets.
+	/(?:^|\/)\.ssh\//i,
+	/(?:^|\/)\.aws\//i,
+	/(?:^|\/)\.gcloud\//i,
+	/(?:^|\/)\.kube\//i,
+	/(?:^|\/)\.docker\//i,
+	/(?:^|\/)\.gnupg\//i,
+	// The credential FILES the same policy treats as sensitive.
+	/(?:^|\/)\.netrc$/i,
+	/(?:^|\/)\.pgpass$/i,
+	/(?:^|\/)\.npmrc$/i,
+	/(?:^|\/)\.pypirc$/i,
+	/(?:^|\/)\.htpasswd$/i,
+	/(?:^|\/)\.env(?:\.[^/]*)?$/i,
+	/(?:^|\/)\.netrc\.d\//i,
+	// Private-key and credential material by extension.
+	/\.(?:pem|pfx|p12|jks|keystore|key|keyring|kdbx)$/i,
+	// A file literally named for credentials.
+	/(?:^|\/)(?:id_rsa|id_dsa|id_ecdsa|id_ed25519|credentials)$/i,
+];
+
+/**
+ * ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-SECURITY-01
+ *
+ * True when the source path is a known credential-bearing location.
+ *
+ * The PATH is normalized to forward slashes first, so a Windows-style path
+ * is matched the same way as a POSIX one.
+ */
+export function isSensitiveSourceFilePath(path: string): boolean {
+	const normalized = path.replace(/\\/g, "/");
+	return SENSITIVE_SOURCE_FILE_PATTERNS.some((pattern) =>
+		pattern.test(normalized),
+	);
+}
+
+/**
  * ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01
  *
  * Truncate a carried excerpt to a bounded length, marking the cut.
@@ -451,6 +521,14 @@ export function buildSourceFileFact(
 	}
 	const path = parseSourceFilePath(rawQuery);
 	if (!path) {
+		return undefined;
+	}
+	// ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-SECURITY-01: FAIL CLOSED on
+	// a known credential-bearing SOURCE. The path is checked BEFORE the
+	// content, because the path is the one property that CAN be
+	// established: a `.pgpass` or `.ssh/id_rsa` file is a credential
+	// container by construction, whatever its content looks like.
+	if (isSensitiveSourceFilePath(path)) {
 		return undefined;
 	}
 	const rawResult = payload.result;
