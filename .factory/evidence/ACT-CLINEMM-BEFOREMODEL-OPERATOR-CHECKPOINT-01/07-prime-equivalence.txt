@@ -1,8 +1,57 @@
-token-stream EQUAL: [33mfalse[39m ( [33m4829[39m vs [33m4837[39m )
-div at [33m4828[39m
-HEAD:n result } catch (error) { Logger.warn("[HooksAdapter] beforeModel prime injection failed:", error) return undefined } },
-NOW :n result } catch (error) { Logger.warn("[HooksAdapter] beforeModel prime injection failed:", error) return undefined } } return {
-HEAD sha256: 099ea60dc065115b424e2ade290e4a1c79e15c28043d73ba37f28c7a3f59943d
-NOW  sha256: d7fb0c3972eb87a527d1345120eaadbdc9fd25546de97a09ef9e5581accd85a3
-(node:84156) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
-(Use `node --trace-warnings ...` to show where the warning was created)
+# MYC prime equivalence — CORRECTED receipt
+
+Replaces the superseded receipt, which was produced by a checker that used
+hard-coded LINE-NUMBER SLICES and read the pre-ACT file from a temp path. That
+checker compared overlapping wrapper fragments rather than the two function
+bodies, printed 'token-stream EQUAL: false (4829 vs 4837)', and therefore did
+NOT establish the equivalence claim the ACT made.
+
+## The corrected checker
+
+`verify-prime-equivalence.mjs` now:
+  1. locates both bodies by STABLE STRING ANCHORS and extracts them by brace
+     matching (independent of formatting, line numbers, or surrounding code);
+  2. skips braces that belong to the RETURN TYPE (the HEAD signature is
+     `Promise<{ messages?: ... } | undefined>`, so a naive 'first { after the
+     anchor' lands inside the type and yields a FALSE PASS);
+  3. refuses to make any claim when the extracted body is implausibly small
+     (< 500 tokens) — the guard that would have caught the false pass;
+  4. EXITS NONZERO when the bodies differ, so the artifact cannot be read as
+     a proof of equivalence when it is not.
+
+## Result on the real pre-ACT source
+
+$ git show 0b6b3ba51:apps/vscode/src/sdk/hooks-adapter.ts > /tmp/hooks-HEAD.ts
+$ node verify-prime-equivalence.mjs /tmp/hooks-HEAD.ts apps/vscode/src/sdk/hooks-adapter.ts
+  HEAD prime body tokens: [33m4832[39m
+  NOW  prime body tokens: [33m4832[39m
+  token-stream EQUAL: [33mtrue[39m
+  RESULT: PASS - the extracted prime bodies are token-stream identical
+  EXIT=0
+
+The extracted prime bodies are TOKEN-STREAM IDENTICAL (4832 == 4832 tokens).
+Equivalence is PROVEN by the checker, not asserted by the ACT.
+
+## Negative controls (the checker must be able to fail)
+
+### Control 1 — a single mutated token in the prime body must be detected
+
+$ sed 's/const packetText =/const packetTextX =/' apps/vscode/src/sdk/hooks-adapter.ts > /tmp/mutated.ts
+$ node verify-prime-equivalence.mjs /tmp/hooks-HEAD.ts /tmp/mutated.ts
+  token-stream EQUAL: [33mfalse[39m
+  first divergence at token index [33m3021[39m
+  RESULT: FAIL - the extracted prime bodies are NOT equivalent
+  EXIT=1  <- detected, as required
+
+### Control 2 — an unreadable input must make NO claim
+
+$ node verify-prime-equivalence.mjs /tmp/nonexistent.ts apps/vscode/src/sdk/hooks-adapter.ts
+  RESULT: INPUT_ERROR (ENOENT: no such file or directory, open '/tmp/nonexistent.ts') - no claim is made
+  EXIT=2  <- no claim made, as required
+
+## Note on the earlier 4829-vs-4837 divergence
+
+That divergence was the OLD checker's boundary artifact: it compared the HEAD body
+(which ends with the object-property `},`) against the NOW closure body (which
+ends with `}` and is followed by the closure's own `return {`). The bodies
+themselves were always identical.

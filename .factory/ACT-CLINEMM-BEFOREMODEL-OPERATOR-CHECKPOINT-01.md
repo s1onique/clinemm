@@ -306,6 +306,84 @@ installer and the same VSIX bytes were used.
 
 ## G. Exit
 
+### Correction pass (review-driven)
+
+A review of this ACT raised one P0 and three P1 findings. All four were
+confirmed against the code and corrected in this pass. No new architecture, no SDK
+rewrite, no broad test-suite cleanup.
+
+| # | Finding | Correction |
+|---|---|---|
+| **P0** | the prime-equivalence receipt contradicted its own checker | the checker was rebuilt (stable anchors + brace matching + return-type brace skipping + a minimum-size guard + a nonzero exit on mismatch) and the receipt regenerated with negative controls |
+| **P1** | a multi-field settings request could partially persist | all supplied fields are now validated **before** any write; the values are applied only once every one of them is known-good |
+| **P1** | the UI displayed "Saved" before persistence succeeded | the Save action now sends ONE awaited `updateSettings` RPC and shows "Saved" only after the host acknowledges it; a rejected RPC shows an error instead |
+| **P1** | the budget test rejected the request *before* the checkpoint existed | a new RT4 measures the real request sizes and sets a ceiling that admits requests 1–4 and rejects request 5 **because the checkpoint enlarged it** |
+
+#### P0 — the prime equivalence is now PROVEN, not asserted
+
+The previous receipt reported `token-stream EQUAL: false (4829 vs 4837)` while the
+ACT claimed the bodies were identical. The checker was at fault: it used hard-coded
+line-number slices (`slice(251,516)`) and read the pre-ACT file from a temp path, so
+it compared overlapping *wrapper fragments* rather than the two function bodies.
+
+The corrected checker (`verify-prime-equivalence.mjs`):
+
+1. locates both bodies by **stable string anchors** (`async beforeModel(` /
+   `const runPrimeBeforeModel = async (`) and extracts them by **brace matching**;
+2. **skips braces that belong to the return type** — the pre-ACT signature is
+   `Promise<{ messages?: ... } | undefined>`, so a naive "first `{` after the anchor"
+   lands inside the type and yields a **false pass** (this was caught while building
+   the checker: an early version compared two 93-token type fragments and reported
+   `EQUAL: true`);
+3. **refuses to claim** when the extracted body is implausibly small (< 500 tokens);
+4. **exits nonzero** when the bodies differ, so the artifact cannot be read as a proof
+   of equivalence when it is not.
+
+Result on the real pre-ACT source: **4832 == 4832 tokens, token-stream identical,
+exit 0**. Negative controls: a single mutated token in the prime body is detected
+(exit 1, divergence pinpointed); an unreadable input produces no claim (exit 2).
+
+Receipt: `07-prime-equivalence.txt`.
+
+#### P1 — settings updates are atomic
+
+`updateSettings.ts` now collects every **supplied** field, validates all of them, and
+only then applies them. A request carrying a valid toggle with an invalid interval
+(or an over-length text) is rejected as a whole and **nothing** is persisted.
+
+Two new tests assert this ("is ATOMIC: a valid toggle with an invalid interval
+persists NEITHER", and the over-length-text counterpart). Both were verified as
+**real** tests by a negative control: reverting the fix to the original
+write-then-validate ordering makes exactly those two fail.
+
+#### P1 — the UI only claims success after the host acknowledges
+
+The Save action sends **ONE** `updateSettings` RPC carrying both the text and the
+interval (so the host applies them atomically) and **awaits** it. The `updateSetting`
+helper was not usable for this: it swallows asynchronous failures (it only logs
+them), so it cannot gate a success indicator. The button is disabled and shows
+"Saving…" while the RPC is in flight; a rejected RPC shows an error and **never**
+shows "Saved".
+
+Three new webview tests: the save is one atomic request; "Saved" appears only after
+acknowledgement; a rejected RPC does not produce "Saved".
+
+#### P1 — the budget guard is exercised AFTER injection
+
+RT3 set the ceiling to one token, which rejected the **first** request — before any
+checkpoint existed. The new RT4 measures the real size of every request **without**
+the checkpoint, computes the exact token cost the checkpoint adds to the
+checkpoint-bearing request, and sets a ceiling between the two. The result: requests
+1–4 are dispatched, and the request that carries the checkpoint is rejected by the
+guard **before** dispatch.
+
+The measurement uses the guard's own projection
+(`toProviderVisibleMessages` + system prompt + tools), because measuring only the raw
+messages yields a different number and therefore a ceiling the guard does not enforce.
+
+Verified as a **real** test by a negative control: neutering the injection in
+`before-model-checkpoint.ts` makes RT4 (and RT1) fail.
+
 ### Verdict: `PASS_STRUCTURAL_ONLY`
 
 Full `PASS` is **not** claimed, because the exit criteria that require a **live provider

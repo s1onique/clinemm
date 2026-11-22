@@ -38145,6 +38145,33 @@ feature exists precisely because they assert that nothing happens.
 
 The three bundle digests are **equal**, binding the source HEAD to the installed runtime.
 
+## Correction pass (review-driven)
+
+A review of this ACT raised one P0 and three P1 findings. All four were **confirmed
+against the code** and corrected in this pass. No new architecture, no SDK rewrite, no
+broad test-suite cleanup, no speculative convergence repair.
+
+| # | Finding | Correction |
+|---|---|---|
+| **P0** | the prime-equivalence receipt contradicted its own checker (`token-stream EQUAL: false (4829 vs 4837)` while the ACT claimed identity) | the checker was rebuilt: stable string anchors + brace matching, return-type brace skipping, a minimum-size guard, and a **nonzero exit on mismatch**; the receipt was regenerated with negative controls. Result: **4832 == 4832 tokens, identical, exit 0** |
+| **P1** | a multi-field settings request could partially persist (toggle written before the interval was validated) | all supplied fields are validated **before** any write; the values are applied only once every one of them is known-good |
+| **P1** | the UI displayed "Saved" before persistence succeeded (`updateSetting` swallows async failures) | the Save action sends **ONE awaited** `updateSettings` RPC and shows "Saved" only after the host acknowledges; a rejected RPC shows an error instead |
+| **P1** | the budget test rejected the **first** request (ceiling = 1 token), before any checkpoint existed | a new **RT4** measures the real request sizes and sets a ceiling that admits requests 1–4 and rejects request 5 **because the checkpoint enlarged it** |
+
+Each new test was verified as a **real** test by a negative control:
+
+* the prime checker detects a single mutated token (exit 1) and makes no claim on a
+  bad input (exit 2);
+* the two atomicity tests fail against the original write-then-validate ordering;
+* the two UI tests fail if "Saved" is shown before acknowledgement;
+* RT4 (and RT1) fail when the injection in `before-model-checkpoint.ts` is neutered.
+
+While building the P0 checker a **false pass** was caught and eliminated: the pre-ACT
+signature is `Promise<{ messages?: ... } | undefined>`, so a naive "first `{` after the
+anchor" lands inside the return TYPE and compares two 93-token type fragments. The
+checker now skips type-argument braces and refuses to claim on an implausibly small
+extraction.
+
 ## Decision
 
 **PASS_STRUCTURAL_ONLY** — full `PASS` is **not** claimed.

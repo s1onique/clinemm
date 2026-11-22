@@ -374,28 +374,47 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 		//   - beforeModelCheckpointInterval -> a positive integer. A
 		//     non-positive / non-integer value is REJECTED (typed error).
 		//
-		// Every rejection happens BEFORE any write, so an invalid request
-		// leaves the persisted settings untouched (no partial mutation).
-		if (request.beforeModelCheckpointEnabled !== undefined) {
-			controller.stateManager.setGlobalState("beforeModelCheckpointEnabled", !!request.beforeModelCheckpointEnabled)
-		}
-		if (request.beforeModelCheckpointText !== undefined) {
-			const text = normalizeBeforeModelCheckpointText(request.beforeModelCheckpointText)
-			if (text === undefined) {
+		// ATOMICITY: every SUPPLIED field is validated FIRST, and only
+		// then are the validated values applied. A request that carries a
+		// valid toggle together with an invalid interval (or an
+		// over-length text) must NOT leave the toggle persisted: the
+		// whole request is rejected and the persisted settings are left
+		// exactly as they were. Validating and writing field-by-field
+		// would let a later rejection happen after an earlier write and
+		// partially apply the request.
+		const checkpointEnabled = request.beforeModelCheckpointEnabled
+		const checkpointText = request.beforeModelCheckpointText
+		const checkpointInterval = request.beforeModelCheckpointInterval
+
+		// --- validate (no writes) -------------------------------------
+		let validatedText: string | undefined
+		if (checkpointText !== undefined) {
+			validatedText = normalizeBeforeModelCheckpointText(checkpointText)
+			if (validatedText === undefined) {
 				throw new Error(
 					`Invalid before model checkpoint text: expected a string of at most ${BEFORE_MODEL_CHECKPOINT_MAX_TEXT_LENGTH} characters`,
 				)
 			}
-			controller.stateManager.setGlobalState("beforeModelCheckpointText", text)
 		}
-		if (request.beforeModelCheckpointInterval !== undefined) {
-			const interval = normalizeBeforeModelCheckpointInterval(request.beforeModelCheckpointInterval)
-			if (interval === undefined) {
+		let validatedInterval: number | undefined
+		if (checkpointInterval !== undefined) {
+			validatedInterval = normalizeBeforeModelCheckpointInterval(checkpointInterval)
+			if (validatedInterval === undefined) {
 				throw new Error(
 					`Invalid before model checkpoint interval: expected a positive integer of at most ${BEFORE_MODEL_CHECKPOINT_MAX_INTERVAL}`,
 				)
 			}
-			controller.stateManager.setGlobalState("beforeModelCheckpointInterval", interval)
+		}
+
+		// --- apply (all values are known-good) ------------------------
+		if (checkpointEnabled !== undefined) {
+			controller.stateManager.setGlobalState("beforeModelCheckpointEnabled", !!checkpointEnabled)
+		}
+		if (validatedText !== undefined) {
+			controller.stateManager.setGlobalState("beforeModelCheckpointText", validatedText)
+		}
+		if (validatedInterval !== undefined) {
+			controller.stateManager.setGlobalState("beforeModelCheckpointInterval", validatedInterval)
 		}
 
 		// Post updated state to webview

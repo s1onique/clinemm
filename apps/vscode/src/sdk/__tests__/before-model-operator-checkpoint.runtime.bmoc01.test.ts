@@ -18,6 +18,7 @@
 
 import { AgentRuntime } from "@cline/agents"
 import type { AgentModel, AgentModelRequest, AgentTool } from "@cline/shared"
+import { estimateProviderRequestInputTokens, toProviderVisibleMessages } from "@cline/shared"
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 import { HostProvider } from "@/hosts/host-provider"
 import { __resetPrimeInjectionStateForTests } from "../hooks-adapter"
@@ -90,6 +91,24 @@ async function buildRealHooks(settings: Record<string, unknown>, sessionId: stri
 	})
 	const config = (await builder.build({ cwd: "/tmp" } as never)) as { hooks: Record<string, unknown> }
 	return config.hooks
+}
+
+/**
+ * Measure a provider request the SAME WAY the runtime's final budget
+ * guard measures it.
+ *
+ * The guard measures `toProviderVisibleMessages(request.messages)` together
+ * with the system prompt and the tool inventory, and the estimator
+ * serializes `{systemPrompt, messages, tools}`. Measuring only the raw
+ * messages would produce a different number, so the ceiling computed from
+ * it would not be the ceiling the guard enforces.
+ */
+function measureRequest(request: AgentModelRequest): number {
+	return estimateProviderRequestInputTokens({
+		systemPrompt: request.systemPrompt ?? "",
+		messages: toProviderVisibleMessages(request.messages),
+		tools: request.tools,
+	})
 }
 
 describe("ACT-CLINEMM-BEFOREMODEL-OPERATOR-CHECKPOINT-01 — real AgentRuntime", () => {
@@ -217,5 +236,117 @@ describe("ACT-CLINEMM-BEFOREMODEL-OPERATOR-CHECKPOINT-01 — real AgentRuntime",
 			maxRequestTokens: 1,
 		})
 		expect(requests).toHaveLength(0)
+	})
+
+	// RT4 — the guard must still be authoritative AFTER the checkpoint has
+	// been injected. RT3 proves the guard rejects an over-budget request,
+	// but it rejects the VERY FIRST request (ceiling = 1 token), i.e.
+	// before any checkpoint exists. That validates the ordinary guard, not
+	// its conservation across checkpoint injection.
+	//
+	// This test reaches the intended boundary: it measures the real size of
+	// every request WITHOUT the checkpoint, then re-runs with the
+	// checkpoint ENABLED and a ceiling that admits requests 1..4 but
+	// rejects request 5 SPECIFICALLY because the checkpoint enlarged it.
+	it("RT4: the budget guard still rejects the request AFTER checkpoint injection, not before it", async () => {
+		// --- measure the un-injected request sizes ---------------------
+		// Run once with the checkpoint DISABLED and record the estimated
+		// size of every provider request. This gives the "without
+		// checkpoint" baseline for the same conversation.
+		const measureHooks = await buildRealHooks(
+			{
+				hooksEnabled: true,
+				beforeModelCheckpointEnabled: false,
+				beforeModelCheckpointText: CHECKPOINT_TEXT,
+				beforeModelCheckpointInterval: 4,
+			},
+			"runtime-session-budget-baseline",
+		)
+		const baseline = makeScriptedModel(8)
+		const baselineRuntime = new AgentRuntime({
+			model: baseline.model,
+			tools: [echoTool],
+			hooks: measureHooks as never,
+			prepareTurn: async (ctx) => ({ messages: ctx.messages }) as never,
+		})
+		await baselineRuntime.run("please work")
+
+		expect(baseline.requests.length).toBeGreaterThanOrEqual(5)
+		const baselineSizes = baseline.requests.map((r) => measureRequest(r))
+		// The baseline requests must be strictly increasing (the
+		// conversation grows), so a ceiling can be placed between the
+		// checkpoint-bearing request and the one after it.
+		for (let i = 1; i < baselineSizes.length; i++) {
+			expect(baselineSizes[i]).toBeGreaterThan(baselineSizes[i - 1])
+		}
+
+		// The checkpoint lands in the request that FOLLOWS the fourth
+		// completed tool-using turn, i.e. provider request index 4 (the
+		// fifth request).
+		const CHECKPOINT_REQUEST_INDEX = 4
+		const baselineSizeAtCheckpoint = baselineSizes[CHECKPOINT_REQUEST_INDEX]
+
+		// How much the checkpoint enlarges that request. Measured by
+		// building the same request WITH the checkpoint message appended
+		// and measuring it the same way the guard does — so the delta is
+		// exactly what the guard will see.
+		const checkpointMessage = {
+			role: "user" as const,
+			content: [{ type: "text" as const, text: CHECKPOINT_TEXT }],
+		}
+		const baselineRequest = baseline.requests[CHECKPOINT_REQUEST_INDEX]
+		const sizeWithCheckpoint = measureRequest({
+			...baselineRequest,
+			messages: [...baselineRequest.messages, checkpointMessage],
+		} as AgentModelRequest)
+		const checkpointTokens = sizeWithCheckpoint - baselineSizeAtCheckpoint
+		expect(checkpointTokens).toBeGreaterThan(0)
+
+		// --- pick a ceiling that only bites once the checkpoint lands ---
+		// The ceiling admits the checkpoint-bearing request WITHOUT the
+		// checkpoint, but rejects it WITH the checkpoint.
+		const ceiling = baselineSizeAtCheckpoint + Math.floor(checkpointTokens / 2)
+		expect(ceiling).toBeGreaterThanOrEqual(baselineSizeAtCheckpoint)
+		expect(ceiling).toBeLessThan(sizeWithCheckpoint)
+
+		// --- re-run WITH the checkpoint enabled ------------------------
+		__resetPrimeInjectionStateForTests()
+		mocks.buildSessionConfig.mockReset()
+		const hooks = await buildRealHooks(
+			{
+				hooksEnabled: true,
+				beforeModelCheckpointEnabled: true,
+				beforeModelCheckpointText: CHECKPOINT_TEXT,
+				beforeModelCheckpointInterval: 4,
+			},
+			"runtime-session-budget-with-checkpoint",
+		)
+		const { model, requests } = makeScriptedModel(8)
+		const runtime = new AgentRuntime({
+			model,
+			tools: [echoTool],
+			hooks: hooks as never,
+			prepareTurn: async (ctx) => ({ messages: ctx.messages, maxRequestTokens: ceiling }) as never,
+		})
+
+		const result = await runtime.run("please work")
+
+		// The first FIVE requests (indices 0..4) were dispatched — the
+		// guard did not reject them — and the request that carries the
+		// checkpoint (index 4) was rejected BY the guard before dispatch.
+		expect(result.status).toBe("failed")
+		expect(result.error).toMatchObject({
+			name: "TaskContractBudgetError",
+			maxRequestTokens: ceiling,
+		})
+		// Exactly the requests BEFORE the checkpoint-bearing one were
+		// dispatched; the checkpoint-bearing request was rejected before
+		// it reached the provider.
+		expect(requests).toHaveLength(CHECKPOINT_REQUEST_INDEX)
+		// None of the dispatched requests carries the checkpoint — it only
+		// lands in the request the guard rejected.
+		for (const request of requests) {
+			expect(checkpointCountIn(request)).toBe(0)
+		}
 	})
 })

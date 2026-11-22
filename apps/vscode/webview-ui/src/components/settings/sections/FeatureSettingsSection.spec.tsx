@@ -1,10 +1,23 @@
-import { fireEvent, render, screen } from "@testing-library/react"
+import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import type { ChangeEventHandler } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import FeatureSettingsSection from "./FeatureSettingsSection"
 
 const mockUpdateSetting = vi.fn()
+const mockUpdateSettingsRpc = vi.fn()
+
+// ACT-CLINEMM-BEFOREMODEL-OPERATOR-CHECKPOINT-01: the checkpoint Save
+// action sends ONE atomic `updateSettings` RPC carrying both the text and
+// the interval, and AWAITS it. The success indicator is only shown after
+// the host acknowledges the write, so the RPC must be mockable as a
+// promise that can resolve or reject.
+vi.mock("@/services/grpc-client", () => ({
+	StateServiceClient: {
+		updateSettings: (...args: unknown[]) => mockUpdateSettingsRpc(...args),
+	},
+}))
+
 const mockExtensionState = vi.hoisted(() => ({
 	value: {
 		enableCheckpointsSetting: true,
@@ -69,6 +82,8 @@ vi.mock("@vscode/webview-ui-toolkit/react", () => ({
 describe("FeatureSettingsSection", () => {
 	beforeEach(() => {
 		mockUpdateSetting.mockClear()
+		mockUpdateSettingsRpc.mockReset()
+		mockUpdateSettingsRpc.mockResolvedValue({})
 		mockExtensionState.value = {
 			...mockExtensionState.value,
 			useAutoCondense: false,
@@ -275,8 +290,9 @@ describe("FeatureSettingsSection", () => {
 			expect(interval?.value).toBe("7")
 		})
 
-		it("persists the prompt text and interval through the Save action", async () => {
+		it("persists the prompt text and interval through ONE atomic Save action", async () => {
 			const user = userEvent.setup()
+			mockUpdateSettingsRpc.mockResolvedValue({})
 			const { container } = render(<FeatureSettingsSection renderSectionHeader={() => null} />)
 			const textarea = container.querySelector("#before-model-checkpoint-text") as HTMLTextAreaElement | null
 			expect(textarea).toBeTruthy()
@@ -288,8 +304,61 @@ describe("FeatureSettingsSection", () => {
 			const save = container.querySelector("#before-model-checkpoint-save-setting-control") as HTMLElement | null
 			expect(save).toBeTruthy()
 			await user.click(save as Element)
-			expect(mockUpdateSetting).toHaveBeenCalledWith("beforeModelCheckpointText", "CHECKPOINT BODY")
-			expect(mockUpdateSetting).toHaveBeenCalledWith("beforeModelCheckpointInterval", 4)
+
+			// ONE request carries BOTH values — the host applies them
+			// atomically, so a partial write is impossible.
+			expect(mockUpdateSettingsRpc).toHaveBeenCalledTimes(1)
+			const request = mockUpdateSettingsRpc.mock.calls[0][0] as {
+				beforeModelCheckpointText?: string
+				beforeModelCheckpointInterval?: number
+			}
+			expect(request.beforeModelCheckpointText).toBe("CHECKPOINT BODY")
+			expect(request.beforeModelCheckpointInterval).toBe(4)
+			// The old per-field helper must NOT be used for this save.
+			expect(mockUpdateSetting).not.toHaveBeenCalledWith("beforeModelCheckpointText", expect.anything())
+			expect(mockUpdateSetting).not.toHaveBeenCalledWith("beforeModelCheckpointInterval", expect.anything())
+		})
+
+		it("shows Saved only after the host acknowledges the write", async () => {
+			const user = userEvent.setup()
+			let release: (() => void) | undefined
+			mockUpdateSettingsRpc.mockImplementation(
+				() =>
+					new Promise<void>((resolve) => {
+						release = () => resolve()
+					}),
+			)
+			const { container } = render(<FeatureSettingsSection renderSectionHeader={() => null} />)
+			const textarea = container.querySelector("#before-model-checkpoint-text") as HTMLTextAreaElement | null
+			await user.type(textarea as Element, "PENDING")
+			const save = container.querySelector("#before-model-checkpoint-save-setting-control") as HTMLElement | null
+			await user.click(save as Element)
+
+			// The RPC is still in flight: the success indicator must NOT be
+			// shown, and the button must be disabled.
+			expect(container.textContent).not.toContain("Saved.")
+			expect((save as HTMLButtonElement).disabled).toBe(true)
+
+			release?.()
+			await waitFor(() => {
+				expect(container.textContent).toContain("Saved.")
+			})
+		})
+
+		it("does NOT show Saved when the persistence RPC rejects", async () => {
+			const user = userEvent.setup()
+			mockUpdateSettingsRpc.mockRejectedValue(new Error("host refused the write"))
+			const { container } = render(<FeatureSettingsSection renderSectionHeader={() => null} />)
+			const textarea = container.querySelector("#before-model-checkpoint-text") as HTMLTextAreaElement | null
+			await user.type(textarea as Element, "DOOMED")
+			const save = container.querySelector("#before-model-checkpoint-save-setting-control") as HTMLElement | null
+			await user.click(save as Element)
+
+			await waitFor(() => {
+				expect(container.querySelector("#before-model-checkpoint-error")).toBeTruthy()
+			})
+			// The write did not happen, so the UI must not claim it did.
+			expect(container.textContent).not.toContain("Saved.")
 		})
 
 		it("rejects an invalid interval without persisting it", async () => {
@@ -301,7 +370,7 @@ describe("FeatureSettingsSection", () => {
 			await user.type(interval as Element, "0")
 			const save = container.querySelector("#before-model-checkpoint-save-setting-control") as HTMLElement | null
 			await user.click(save as Element)
-			expect(mockUpdateSetting).not.toHaveBeenCalledWith("beforeModelCheckpointInterval", 0)
+			expect(mockUpdateSettingsRpc).not.toHaveBeenCalled()
 			expect(container.querySelector("#before-model-checkpoint-error")).toBeTruthy()
 		})
 

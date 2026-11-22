@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useExtensionState } from "@/context/ExtensionStateContext"
+import { StateServiceClient } from "@/services/grpc-client"
 import Section from "../Section"
 import { featureSettingControlId, featureSettingElementId } from "../settingsTargets"
 import { updateSetting } from "../utils/settingsHandlers"
@@ -220,6 +221,7 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 	)
 	const [checkpointError, setCheckpointError] = useState<string | null>(null)
 	const [checkpointSaved, setCheckpointSaved] = useState(false)
+	const [checkpointSaving, setCheckpointSaving] = useState(false)
 
 	// Re-sync the inputs when the persisted state changes (first mount,
 	// a reload, or an explicit revert elsewhere). The saved prompt text is
@@ -247,12 +249,13 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 		setCheckpointSaved(false)
 	}
 
-	const handleCheckpointSave = () => {
+	const handleCheckpointSave = async () => {
 		const text = checkpointTextInput
 		if (text.length > BEFORE_MODEL_CHECKPOINT_MAX_TEXT_LENGTH) {
 			setCheckpointError(
 				`The checkpoint text must be at most ${BEFORE_MODEL_CHECKPOINT_MAX_TEXT_LENGTH} characters (currently ${text.length}).`,
 			)
+			setCheckpointSaved(false)
 			return
 		}
 		const trimmedInterval = checkpointIntervalInput.trim()
@@ -260,12 +263,42 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 		const normalizedInterval = normalizeBeforeModelCheckpointInterval(parsedInterval)
 		if (trimmedInterval === "" || normalizedInterval === undefined) {
 			setCheckpointError("Enter a positive whole number of completed tool-using turns.")
+			setCheckpointSaved(false)
 			return
 		}
 		setCheckpointError(null)
-		updateSetting("beforeModelCheckpointText", text)
-		updateSetting("beforeModelCheckpointInterval", normalizedInterval)
-		setCheckpointSaved(true)
+		setCheckpointSaving(true)
+		try {
+			// ONE request carrying BOTH values.
+			//
+			// The host validates every supplied field before applying any of
+			// them, so a single request is atomic: the text and the interval
+			// are persisted together or not at all. Two separate requests
+			// would not be atomic.
+			//
+			// The RPC is AWAITED and the "Saved" indicator is only shown
+			// after the host acknowledges the write. The `updateSetting`
+			// helper swallows asynchronous failures (it only logs them), so
+			// it cannot be used to gate a success indicator.
+			await StateServiceClient.updateSettings(
+				UpdateSettingsRequest.create({
+					beforeModelCheckpointText: text,
+					beforeModelCheckpointInterval: normalizedInterval,
+				}),
+			)
+			setCheckpointSaved(true)
+		} catch (error) {
+			// The write did NOT happen. Do not claim it did.
+			console.error("Failed to save the before model checkpoint:", error)
+			setCheckpointSaved(false)
+			setCheckpointError(
+				error instanceof Error && error.message
+					? `Could not save the checkpoint: ${error.message}`
+					: "Could not save the checkpoint.",
+			)
+		} finally {
+			setCheckpointSaving(false)
+		}
 	}
 
 	// State lookup for mapped features
@@ -457,11 +490,12 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 								</div>
 								<div className="flex items-center gap-3">
 									<Button
+										disabled={checkpointSaving}
 										id={featureSettingControlId("before-model-checkpoint-save")}
 										onClick={handleCheckpointSave}
 										size="sm"
 										variant="secondary">
-										Save
+										{checkpointSaving ? "Saving…" : "Save"}
 									</Button>
 									{checkpointSaved && !checkpointError && (
 										<span className="text-xs text-description">Saved.</span>

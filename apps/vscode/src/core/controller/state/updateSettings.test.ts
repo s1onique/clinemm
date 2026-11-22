@@ -27,7 +27,10 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { UpdateSettingsRequest } from "@shared/proto/cline/state"
-import { resolveEffectiveBeforeModelCheckpoint } from "@shared/storage/beforeModelCheckpoint"
+import {
+	BEFORE_MODEL_CHECKPOINT_MAX_TEXT_LENGTH,
+	resolveEffectiveBeforeModelCheckpoint,
+} from "@shared/storage/beforeModelCheckpoint"
 import { ClineFileStorage } from "@shared/storage/ClineFileStorage"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { Controller } from ".."
@@ -288,6 +291,54 @@ describe("updateSettings — before model operator checkpoint wire/persistence",
 		expect(reloaded.get("beforeModelCheckpointEnabled")).toBe(true)
 		expect(reloaded.get("beforeModelCheckpointText")).toBe("CHECKPOINT BODY")
 		expect(reloaded.get("beforeModelCheckpointInterval")).toBe(4)
+	})
+
+	it("is ATOMIC: a valid toggle with an invalid interval persists NEITHER", async () => {
+		const { controller, storage } = makeControllerWithBackingStore(filePath)
+
+		// The request carries a VALID toggle and an INVALID interval. The whole
+		// request must be rejected: the toggle must NOT be persisted, because
+		// a partially applied request would leave the feature enabled with a
+		// stale (or missing) interval.
+		await expect(
+			updateSettings(
+				controller,
+				UpdateSettingsRequest.create({
+					beforeModelCheckpointEnabled: true,
+					beforeModelCheckpointText: "CHECKPOINT BODY",
+					beforeModelCheckpointInterval: 0,
+				}),
+			),
+		).rejects.toThrow(/Invalid before model checkpoint interval/)
+
+		expect(storage.get("beforeModelCheckpointEnabled")).toBeUndefined()
+		expect(storage.get("beforeModelCheckpointText")).toBeUndefined()
+		expect(storage.get("beforeModelCheckpointInterval")).toBeUndefined()
+
+		// And nothing reached the disk either.
+		const reloaded = new ClineFileStorage(filePath)
+		expect(reloaded.get("beforeModelCheckpointEnabled")).toBeUndefined()
+		expect(reloaded.get("beforeModelCheckpointText")).toBeUndefined()
+		expect(reloaded.get("beforeModelCheckpointInterval")).toBeUndefined()
+	})
+
+	it("is ATOMIC: a valid toggle with an over-length text persists NEITHER", async () => {
+		const { controller, storage } = makeControllerWithBackingStore(filePath)
+
+		await expect(
+			updateSettings(
+				controller,
+				UpdateSettingsRequest.create({
+					beforeModelCheckpointEnabled: true,
+					beforeModelCheckpointText: "x".repeat(BEFORE_MODEL_CHECKPOINT_MAX_TEXT_LENGTH + 1),
+					beforeModelCheckpointInterval: 4,
+				}),
+			),
+		).rejects.toThrow(/Invalid before model checkpoint text/)
+
+		expect(storage.get("beforeModelCheckpointEnabled")).toBeUndefined()
+		expect(storage.get("beforeModelCheckpointText")).toBeUndefined()
+		expect(storage.get("beforeModelCheckpointInterval")).toBeUndefined()
 	})
 
 	it("preserves the saved prompt text and interval when the toggle is turned off", async () => {

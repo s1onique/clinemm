@@ -1,0 +1,79 @@
+# Correction pass — review-driven fixes (P0 + 3x P1)
+
+## P0 — the prime-equivalence receipt contradicted its own checker
+
+### The defect
+
+The committed receipt recorded:
+  token-stream EQUAL: false (4829 vs 4837)
+  div at 4828
+
+while the ACT claimed the bodies were byte-identical. The checker was at fault:
+it used hard-coded line-number slices (slice(251,516)) and read the pre-ACT file from
+a temp path, so it compared overlapping WRAPPER FRAGMENTS rather than the two
+function bodies. It could not reproduce for anyone else and did not establish
+the claim.
+
+### The corrected checker
+
+  1. stable STRING ANCHORS + brace matching (no line numbers, no temp paths)
+  2. skips braces inside the RETURN TYPE
+  3. refuses to claim on an implausibly small extraction (< 500 tokens)
+  4. EXITS NONZERO when the bodies differ
+
+### A false pass caught while building it
+
+The pre-ACT signature is:
+  ): Promise<
+    { messages?: readonly import("@cline/shared").AgentMessage[]; options?: Record<string, unknown> } | undefined
+  > {
+
+so 'the first { after the anchor' lands INSIDE the return type. An early version
+of the checker compared two 93-token TYPE fragments and reported 'EQUAL: true'.
+The size guard now makes that impossible to mistake for a proof.
+
+### Result on the real pre-ACT source
+
+$ node verify-prime-equivalence.mjs /tmp/hooks-HEAD.ts apps/vscode/src/sdk/hooks-adapter.ts
+  HEAD prime body tokens: [33m4832[39m
+  NOW  prime body tokens: [33m4832[39m
+  token-stream EQUAL: [33mtrue[39m
+  RESULT: PASS - the extracted prime bodies are token-stream identical
+
+### Negative controls
+
+  - single mutated token -> detected, exit 1
+  - unreadable input    -> no claim, exit 2
+
+## P1 — settings updates are atomic
+
+All supplied fields are validated BEFORE any write. Two new tests:
+  - 'is ATOMIC: a valid toggle with an invalid interval persists NEITHER'
+  - 'is ATOMIC: a valid toggle with an over-length text persists NEITHER'
+
+Negative control: restoring the original write-then-validate ordering makes
+EXACTLY those two tests fail (2 failed | 14 passed).
+
+## P1 — the UI only claims success after acknowledgement
+
+ONE awaited updateSettings RPC carries both values; the button is disabled
+and shows 'Saving...' while in flight; a rejected RPC shows an error and never
+shows 'Saved'. Three new webview tests:
+  - persists the prompt text and interval through ONE atomic Save action
+  - shows Saved only after the host acknowledges the write
+  - does NOT show Saved when the persistence RPC rejects
+
+## P1 — the budget guard is exercised AFTER injection
+
+New RT4 measures the real request sizes WITHOUT the checkpoint, computes the
+exact token cost the checkpoint adds to the checkpoint-bearing request, and
+sets a ceiling between the two. Requests 1-4 are dispatched; the request
+carrying the checkpoint is rejected by the guard before dispatch.
+
+Measurement uses the guard's OWN projection (toProviderVisibleMessages +
+system prompt + tools). Measuring only the raw messages yields a different
+number and therefore a ceiling the guard does not enforce — which is why the
+first attempt at this test failed.
+
+Negative control: neutering the injection in before-model-checkpoint.ts makes
+RT4 (and RT1) fail (2 failed | 2 passed).
