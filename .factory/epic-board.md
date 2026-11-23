@@ -1,3 +1,104 @@
+# ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01-CORRECTION02 — PASS_SECURITY_BOUNDARY_STRUCTURAL — 2026-11-23
+
+```text
+ACT_ID: ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01-CORRECTION02
+TYPE: bounded security correction (one P0 trust-boundary defect)
+VERDICT: PASS_SECURITY_BOUNDARY_STRUCTURAL
+PREVIOUS_VERDICT: HALT_ADJUDICATION_SECRET_WEBVIEW_EXPOSURE (one P0)
+ENTRY_HEAD: dbed460e7c964a6bbbc29e41686d6ee492a7e2fc
+BRANCH: main
+EVIDENCE: .factory/evidence/ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01/
+  14-correction02-webview-secret-boundary.md
+```
+
+**The P0 — confirmed by independent inspection, reproduced, and closed.**
+
+The reviewer's chain was re-derived from the source, not assumed:
+`SECRETS_KEYS` -> `SecretKeys` -> `StateManager.constructApiConfigurationFromCache()`
+(`Object.fromEntries(SecretKeys.map(...))`) -> `getApiConfiguration()` ->
+`getStateToPostToWebview()` -> `ExtensionState.apiConfiguration` ->
+`getLatestState()` -> `JSON.stringify` -> the webview.
+
+Both committed keys are host authority — the per-session evidence-handle
+SECRET and the per-session authorized VOCABULARY — and both entered the
+webview-facing payload.
+
+**A SECOND, deeper exposure was found that the review did not list.** The
+`apiConfiguration` object ORIGINATES IN THE WEBVIEW (it arrives through
+`updateSettings`), and `setApiConfiguration()` categorized keys with
+`isSecretKey(key)` — which matched the adjudication keys. A webview-supplied
+payload could therefore **OVERWRITE** the host's per-session evidence secret.
+Closing the read boundary alone would NOT have closed this; both boundaries
+are now closed.
+
+**The fix — a CLOSED export list, not a per-key filter.**
+`state-keys.ts` gains `HOST_PRIVATE_SECRET_KEYS` (with a `satisfies` clause so
+the compiler rejects an entry that is not a real `SECRETS_KEYS` member) and
+`ExportedSecretKeys = SecretKeys.filter(...)`. Export boundaries enumerate the
+CLOSED list, so a future host-private key cannot leak merely by being added
+to `SECRETS_KEYS` — the failure mode is now opt-in and explicit.
+`constructApiConfigurationFromCache()` enumerates `ExportedSecretKeys`;
+`setApiConfiguration()` refuses a host-private key outright.
+
+**ONE source closes EVERY downstream boundary.** Every webview-facing
+consumer reads the same `getApiConfiguration()` result, so there is no second
+enumeration to keep in sync. No logging path dumps `apiConfiguration`.
+
+**Everything else is preserved.** The records remain fully readable/writable
+by the trusted host, persisted to `secrets.json` (mode 0o600), migrated and
+reset as before. Provider API keys deliberately stay OUT of the host-private
+set, so normal provider credential behavior — export AND webview write — is
+unchanged. Proto fields 51/52 are RETAINED, so field-number compatibility is
+exact.
+
+**RED / GREEN.** The RED payload, captured verbatim from the real
+`getApiConfiguration()`:
+
+```json
+{"apiKey":"SYNTHETIC-PROVIDER-KEY-MUST-STILL-WORK",
+ "adjudicationSessionSecrets":"SYNTHETIC-CORRECTION02-SECRET-DO-NOT-LEAK",
+ "adjudicationSessionVocabularies":"SYNTHETIC-CORRECTION02-VOCAB-DO-NOT-LEAK", ...}
+```
+
+Reverting BOTH boundaries to their pre-correction form: **4 failed | 5
+passed (9)** — the 4 failures are exactly the boundary witnesses, including
+the write-boundary refusal. Restored: **9/9 PASS**. The 5 that passed in
+both states are the controls (provider credential export, trusted read,
+trusted write, provider write, aggregate content).
+
+**Gates.** `tsc --noEmit` 0 diagnostics; CORRECTION02 suite 9/9;
+CORRECTION01 lifecycle suite 20/20 (restoration, one-shot authorization and
+missing-secret fail-closed all preserved); biome clean (0 errors).
+
+**Regression — per-test identity, ZERO ACT-owned.** The extractor was
+validated by reproducing CORRECTION01's preserved 187-identity file
+byte-for-byte. Baseline 199 identities; corrected run 1: 201; corrected
+run 2: 200. **The identity set is not stable across runs of the SAME code**
+(run 1 vs run 2 differ by `natural-exit-pgid-causal-repro01` C1), so the
+suite is order/timing dependent. The two identities that appeared "new" were
+each proven PRE-EXISTING: `natural-exit-pgid-causal-repro01` C1 is already in
+CORRECTION01's preserved baseline; `background-completion-barrier01.bcb01`
+BCB-INT-01 fails identically at the baseline and with the correction when its
+file is run ALONE (`2 failed | 12 passed` both ways) and that file **mocks
+out `@/core/storage/StateManager` entirely**, so it never executes the
+changed code.
+
+```text
+ZERO ACT-owned regressions.  ACT_OWNED_DIAGNOSTICS: 0.
+```
+
+**What is NOT claimed.**
+
+```text
+INSTALLED-LIVE QUALIFICATION:  NOT EXECUTED. The corrected VSIX has not been
+                              packaged, installed or run live.
+NEXT_ACTION:                  rebuild and repackage the VSIX from the exact
+                              committed HEAD, verify the embedded bundle
+                              SHA-256, then the debug-only arming seam and
+                              the installed-live qualification.
+ROUND C:                      unchanged and NOT re-litigated.
+```
+
 # ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01-CORRECTION01 — PASS_STRUCTURAL_ONLY — 2026-11-23
 
 ```text

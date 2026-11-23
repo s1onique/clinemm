@@ -1,16 +1,17 @@
 import type { ApiConfiguration } from "@shared/api"
 import {
 	ApiHandlerSettingsKeys,
+	ExportedSecretKeys,
 	type GlobalState,
 	type GlobalStateAndSettings,
 	type GlobalStateAndSettingsKey,
+	isHostPrivateSecretKey,
 	isSecretKey,
 	isSettingsKey,
 	type LocalState,
 	type LocalStateKey,
 	type RemoteConfigFields,
 	type SecretKey,
-	SecretKeys,
 	type Secrets,
 	type Settings,
 	type SettingsKey,
@@ -499,6 +500,18 @@ export class StateManager {
 	/**
 	 * Convenience method for setting API configuration
 	 * Automatically categorizes keys based on STATE_DEFINITION and SecretKeys
+	 *
+	 * ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01-CORRECTION02
+	 * (`HALT_ADJUDICATION_SECRET_WEBVIEW_EXPOSURE`): the `apiConfiguration`
+	 * object originates in the WEBVIEW (it arrives through
+	 * `updateSettings`), so this is a WRITE boundary from an untrusted
+	 * execution context.
+	 *
+	 * HOST-PRIVATE keys are refused here. Without this, a webview-supplied
+	 * `apiConfiguration` could OVERWRITE the host's per-session evidence
+	 * secret — destroying the session's evidence identity, and letting the
+	 * webview choose a value it would later observe. Exclusion at the READ
+	 * boundary alone is not sufficient: the write must be closed too.
 	 */
 	setApiConfiguration(apiConfiguration: ApiConfiguration): void {
 		if (!this.isInitialized) {
@@ -513,6 +526,12 @@ export class StateManager {
 				}
 
 				if (isSecretKey(key)) {
+					// ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01-CORRECTION02:
+					// A host-private record is NEVER writable from the webview.
+					// The trusted host owns it exclusively.
+					if (isHostPrivateSecretKey(key)) {
+						return acc
+					}
 					// This is a secret key
 					acc.secretsUpdates[key as keyof Secrets] = value as any
 				} else if (isSettingsKey(key)) {
@@ -868,10 +887,22 @@ export class StateManager {
 
 	/**
 	 * Construct API configuration from cached component keys
+	 *
+	 * ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01-CORRECTION02
+	 * (`HALT_ADJUDICATION_SECRET_WEBVIEW_EXPOSURE`): this object is published
+	 * to the WEBVIEW by `getStateToPostToWebview()` and serialized by
+	 * `getLatestState()`. The webview is a SEPARATE EXECUTION CONTEXT, so a
+	 * value included here is no longer host-private.
+	 *
+	 * The enumeration is therefore the CLOSED export list (`ExportedSecretKeys`)
+	 * rather than every stored secret (`SecretKeys`): host-private records —
+	 * the per-session adjudication evidence secret and the per-session
+	 * authorized vocabulary — are excluded here and remain fully readable by
+	 * the trusted host through `getSecretKey()`.
 	 */
 	private constructApiConfigurationFromCache(): ApiConfiguration {
-		// Build secrets object
-		const secrets = Object.fromEntries(SecretKeys.map((key) => [key, this.getSecret(key)])) as Secrets
+		// Build secrets object — EXPORT-SAFE KEYS ONLY.
+		const secrets = Object.fromEntries(ExportedSecretKeys.map((key) => [key, this.getSecret(key)])) as Secrets
 
 		// Preserve legacy fallback behavior for LiteLLM API key:
 		// if a remoteLiteLlmApiKey is set (via remote config), it should

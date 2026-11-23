@@ -489,6 +489,79 @@ export const LocalStateKeys = [
 ] as const
 
 // ============================================================================
+// HOST-PRIVATE SECRET KEYS - excluded from the webview-facing projection
+// ============================================================================
+
+/**
+ * ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01-CORRECTION02
+ * (`HALT_ADJUDICATION_SECRET_WEBVIEW_EXPOSURE`).
+ *
+ * The secret keys in this set are HOST-PRIVATE. They are readable and
+ * writable ONLY by trusted extension-host code, and they must NEVER appear
+ * in any projection that leaves the host — in particular not in the
+ * `apiConfiguration` object that `getStateToPostToWebview()` publishes and
+ * that `getLatestState()` serializes to the webview.
+ *
+ * WHY A SEPARATE SET
+ * ------------------
+ *
+ * `SECRETS_KEYS` answers "which keys live in the trusted secret store".
+ * It is ALSO the enumeration used to build the webview-facing API
+ * configuration:
+ *
+ *   const secrets = Object.fromEntries(SecretKeys.map((key) => [key, this.getSecret(key)]))
+ *
+ * so a key added to `SECRETS_KEYS` for a host-private purpose silently
+ * becomes webview-visible. That is how `adjudicationSessionSecrets` and
+ * `adjudicationSessionVocabularies` reached the webview: they are the
+ * per-session evidence-handle secret and the per-session authorized
+ * vocabulary, and both are host authority that must not cross the boundary.
+ *
+ * The webview is a SEPARATE EXECUTION CONTEXT from the extension host. A
+ * value that crosses into it is no longer host-private, regardless of what
+ * the UI happens to render.
+ *
+ * THE RULE
+ * --------
+ *
+ * A secret belongs in THIS set when it is:
+ *
+ *   - a host-authority record (a per-session secret, an authorization, a
+ *     capability grant), and
+ *   - not a provider credential the UI legitimately needs.
+ *
+ * Provider API keys deliberately stay OUT of this set: they are part of the
+ * `apiConfiguration` the settings UI and provider surfaces operate on, and
+ * removing them would break normal provider credential behavior.
+ *
+ * A key listed here is EXCLUDED from the exported API configuration only.
+ * It remains a fully functional member of the trusted store: it is read by
+ * `StateManager.getSecretKey()`, written by `StateManager.setSecret()`,
+ * persisted to `secrets.json` (mode 0o600), migrated by the VS Code
+ * migration, and reset by `resetGlobalState()`.
+ */
+const HOST_PRIVATE_SECRET_KEYS = [
+	// ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01: the per-session
+	// evidence-handle secret. The opaque evidence handle is MODEL-VISIBLE;
+	// this secret is NOT. It must never leave the host.
+	"adjudicationSessionSecrets",
+	// ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01-CORRECTION01: the
+	// per-session authorized adjudication vocabulary — a host-authority
+	// authorization record, never a webview-visible value.
+	"adjudicationSessionVocabularies",
+] as const satisfies readonly (typeof SECRETS_KEYS)[number][]
+
+export type HostPrivateSecretKey = (typeof HOST_PRIVATE_SECRET_KEYS)[number]
+
+const HostPrivateSecretKeySet = new Set<string>(HOST_PRIVATE_SECRET_KEYS)
+
+/**
+ * Whether a secret key is HOST-PRIVATE and therefore excluded from the
+ * webview-facing API configuration.
+ */
+export const isHostPrivateSecretKey = (key: string): key is HostPrivateSecretKey => HostPrivateSecretKeySet.has(key)
+
+// ============================================================================
 // GENERATED TYPES - Auto-generated from property definitions
 // ============================================================================
 
@@ -525,6 +598,17 @@ const GlobalStateAndSettingsKeySet = new Set(Object.keys(GLOBAL_STATE_AND_SETTIN
 const ApiHandlerSettingsKeysSet = new Set(Object.keys(API_HANDLER_SETTINGS_FIELDS))
 
 export const SecretKeys = Array.from(SECRETS_KEYS)
+
+/**
+ * The secret keys that ARE exported in the webview-facing API
+ * configuration.
+ *
+ * This is the CLOSED export list: `SecretKeys` minus the host-private
+ * keys. Export boundaries enumerate THIS list rather than `SecretKeys`, so
+ * a new host-private key cannot leak by being added to `SECRETS_KEYS`.
+ */
+export const ExportedSecretKeys = SecretKeys.filter((key) => !HostPrivateSecretKeySet.has(key))
+
 export const SettingsKeys = Array.from(SettingsKeysSet) as (keyof Settings)[]
 export const ApiHandlerSettingsKeys = Array.from(ApiHandlerSettingsKeysSet) as (keyof ApiHandlerOptionSettings)[]
 export const GlobalStateAndSettingKeys = Array.from(GlobalStateAndSettingsKeySet) as GlobalStateAndSettingsKey[]
