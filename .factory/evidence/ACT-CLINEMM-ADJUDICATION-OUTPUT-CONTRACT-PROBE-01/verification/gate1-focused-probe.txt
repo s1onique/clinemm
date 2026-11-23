@@ -1,0 +1,14 @@
+(node:6594) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core
+
+(node:6609) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/extensions/context/compaction.adjudication-output-contract.probe01.test.ts (55 tests) 31ms
+
+ Test Files  1 passed (1)
+      Tests  55 passed (55)
+   Start at  11:45:20
+   Duration  614ms (transform 366ms, setup 0ms, import 481ms, tests 31ms, environment 0ms)
+

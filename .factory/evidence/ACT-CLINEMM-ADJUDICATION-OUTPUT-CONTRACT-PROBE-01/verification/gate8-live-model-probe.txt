@@ -1,0 +1,62 @@
+
+=== G6 live probe: minimax (minimax/MiniMax-M3) ===
+{
+  "provider": "minimax",
+  "model": "MiniMax-M3",
+  "emittedAssistantText": true,
+  "assistantTextChunkCount": 19,
+  "turnCarrierCount": 2,
+  "emittedReasoning": false,
+  "publishedValidCandidate": true,
+  "emittedToolUse": true,
+  "toolCallCount": 1,
+  "turns": 2,
+  "publishedAfterToolResult": true,
+  "firstToolCallId": "call_01a20794edda73718c196864",
+  "decision": "narrowed",
+  "qualificationCodes": [
+    "manual_enforcement_only"
+  ],
+  "evidenceToolUseIds": [
+    "call_1"
+  ],
+  "remainingQuestionIds": [
+    "S1.automated_enforcement"
+  ],
+  "publishedCarrierIndex": 1,
+  "publishedTurnAlsoCarriedToolUse": false
+}
+
+=== G6 live probe report ===
+{
+  "execution_class": "REAL_MODEL_RESPONSE",
+  "observation_count": 1,
+  "observations": [
+    {
+      "provider": "minimax",
+      "model": "MiniMax-M3",
+      "emittedAssistantText": true,
+      "assistantTextChunkCount": 19,
+      "turnCarrierCount": 2,
+      "emittedReasoning": false,
+      "publishedValidCandidate": true,
+      "emittedToolUse": true,
+      "toolCallCount": 1,
+      "turns": 2,
+      "publishedAfterToolResult": true,
+      "firstToolCallId": "call_01a20794edda73718c196864",
+      "decision": "narrowed",
+      "qualificationCodes": [
+        "manual_enforcement_only"
+      ],
+      "evidenceToolUseIds": [
+        "call_1"
+      ],
+      "remainingQuestionIds": [
+        "S1.automated_enforcement"
+      ],
+      "publishedCarrierIndex": 1,
+      "publishedTurnAlsoCarriedToolUse": false
+    }
+  ]
+}

@@ -1,0 +1,140 @@
+{
+  "act": "ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01",
+  "entry_head": "97c2659c8552a9b78ed87c56d2bbe7d31dc74900",
+  "production_baseline_head": "a493eff078ec5c8f2b6c874ad8f4a85009d1b64f",
+  "red_artifact_head": "d69cfb9befe957ec87a034050bb7b4c72f1a0851",
+  "evidence_commit_head_at_entry": "97c2659c8552a9b78ed87c56d2bbe7d31dc74900",
+  "note": "The final evidence commit's own SHA is intentionally NOT recorded here: this file is committed BY that commit, and a self-referential SHA is not a stable identity. The final HEAD is recorded in the epic-board entry and in the operator report.",
+  "test_commands": [
+    "cd sdk/packages/core && bun x vitest run src/extensions/context/compaction.adjudication-output-contract.probe01.test.ts --config vitest.config.ts",
+    "cd sdk/packages/core && bun x vitest run src/extensions/context/compaction.adjudication-continuity.discriminator01.test.ts --config vitest.config.ts",
+    "cd sdk/packages/core && bun x vitest run src/extensions/context/compaction.evidence-fidelity01.test.ts --config vitest.config.ts",
+    "cd sdk/packages/core && bun x vitest run src/extensions/context/ --config vitest.config.ts",
+    "cd sdk/packages/core && bun tsc -p tsconfig.dev.json --noEmit",
+    "cd sdk/packages/core && bun x vitest run --config vitest.red.adjudication-continuity-red01.config.ts",
+    "bunx biome check --diagnostic-level=error sdk/packages/core/src/extensions/context/compaction.adjudication-output-contract.probe01.test.ts sdk/packages/core/scripts/adjudication-output-contract.live-probe.ts",
+    "cd sdk/packages/core && CORE_LIVE_ADJUDICATION_PROBE=1 CORE_LIVE_ADJUDICATION_PROVIDER_KEY=<provider> bun scripts/adjudication-output-contract.live-probe.ts"
+  ],
+  "exit_codes": {
+    "gate1_focused_contract_probe": 0,
+    "gate2_historical_discriminator": 0,
+    "gate3_evidence_fidelity": 0,
+    "gate4_context_directory": 0,
+    "gate5_typecheck": 2,
+    "gate6_historical_red_on_demand": 1,
+    "gate7_biome": 0,
+    "gate8_live_model_probe": 0
+  },
+  "test_counts": {
+    "gate1_focused_contract_probe": "55 passed (55)",
+    "gate2_historical_discriminator": "24 passed (24)",
+    "gate3_evidence_fidelity": "39 passed (39)",
+    "gate4_context_directory": "551 passed | 2 skipped (553); baseline 496 passed | 2 skipped (498)",
+    "gate6_historical_red_on_demand": "5 failed (5) -- EXPECTED, the RED is preserved",
+    "gate5_typecheck": "44 diagnostics; identical identities to the entry baseline; 0 ACT-owned"
+  },
+  "verdict": "PASS_PROBE_CONTINUITY_STRUCTURAL",
+  "production_delta": "ZERO",
+  "file_sha256": [
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01/00-entry-identity.md",
+      "sha256": "e96274a7c8f92ae17c438735af99099ff7ea6e8d8b2650c148342126bc0e0943",
+      "bytes": 4975
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01/01-existing-carrier-inventory.md",
+      "sha256": "76b7f84d049eeb79074761b0526518a9125ea93943c5cc5b49a29c6a00fd5bd5",
+      "bytes": 9697
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01/02-output-contract.md",
+      "sha256": "3964ffef11b29bdf6801aa5fc4e0b38727ccb9f8328e3d1b89dab6901543e24d",
+      "bytes": 6380
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01/03-producer-probe.md",
+      "sha256": "cbc103f0b2672b299f3455593309ef91ebc24e20aa384c129f7061f32fc4475c",
+      "bytes": 3035
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01/04-canonical-persistence.md",
+      "sha256": "71924a4a94afecdb266ead649234fdaf43873ab087df2d2c90f0d8a17acb4b42",
+      "bytes": 3167
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01/05-compaction-consumer-probe.md",
+      "sha256": "78b4d30043c00bbc93d45ff52ffdd3350367c911891123299facffe881624480",
+      "bytes": 6138
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01/06-adversarial-controls.md",
+      "sha256": "3df19773c6dc89226eb04500e52a22f7b4c2a0a6a587f48091fce7f6a52f071a",
+      "bytes": 8392
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01/07-contract-decision.md",
+      "sha256": "968a37f9908ee12b26cdb471d2568bf59ed082a0ed6f0235323c1549805e37b1",
+      "bytes": 5180
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01/08-executable-gates.md",
+      "sha256": "5ee51a3b3ba9d84c113cc4e3a3ea6d9885028671c83264b09e29eddd330f866b",
+      "bytes": 6113
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01/09-exit-report.md",
+      "sha256": "95564982d9f5fb221ac734e0fb84d950e4fd44e1b98868345997ea027f66f2e9",
+      "bytes": 13794
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01/verification/gate1-focused-probe.txt",
+      "sha256": "1169da1dc655f69982fecb97264b3950c285c517fb0fe3db9f128db56c0d4ba6",
+      "bytes": 688
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01/verification/gate2-historical-discriminator.txt",
+      "sha256": "1388e02703a04cb149021ac5915f1502546dcea4ee831913b4cb68a8f3b6dacc",
+      "bytes": 689
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01/verification/gate3-evidence-fidelity.txt",
+      "sha256": "be1b989c13d522a3e08b41cfe8d7aaf6f8c6f3330b996fb5d7a8267a08e6d98b",
+      "bytes": 671
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01/verification/gate4-context-directory.txt",
+      "sha256": "9618a7537d56a6be40ba86ac6cac1806cd70a5970d553bacca6b361597c3d640",
+      "bytes": 9056
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01/verification/gate5-typecheck.txt",
+      "sha256": "d1f259b3799d79cb49696c51a2e50a6730c2378a9ded4e2ad4142d52e25a4f7f",
+      "bytes": 12702
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01/verification/gate6-red-preserved.txt",
+      "sha256": "c7a80971b0a570527a97ae81f351208c3196295f39927ba7ba44aadc34078e0c",
+      "bytes": 11259
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01/verification/gate7-biome.txt",
+      "sha256": "44561ed90d24765672f9e947c42b101f0835c3986a236e0cb5341cb79a73ae27",
+      "bytes": 43
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01/verification/gate8-live-model-probe.txt",
+      "sha256": "efb1d363dde95337883a7b6e5cf26e1f6f0aed39c3a59ba8bda4e16b63d10efb",
+      "bytes": 1541
+    },
+    {
+      "path": "sdk/packages/core/scripts/adjudication-output-contract.live-probe.ts",
+      "sha256": "4fb1c109c6c76bf677f967fb17d6f3871c8b2682abd49417139204b5ab48708a",
+      "bytes": 19947
+    },
+    {
+      "path": "sdk/packages/core/src/extensions/context/compaction.adjudication-output-contract.probe01.test.ts",
+      "sha256": "986f03813d6a5c92b36e7c6477ed9986279e56f7b11e9966bd2e0d6ce7c14a96",
+      "bytes": 59771
+    }
+  ]
+}

@@ -38953,3 +38953,164 @@ artifact** in the canonical record. That is outside this bounded M1 repair
 No production repair was made. No live model was executed. No VSIX was built.
 No new persistent adjudication ledger was created. The source-file excerpt
 carry-forward stays `false`; `MAX_CARRIED_OUTCOMES` stays `12`.
+
+# ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01 — PASS_PROBE_CONTINUITY_STRUCTURAL — 2026-11-23
+
+```text
+ACT_ID: ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01
+TYPE: contract feasibility / executable prototype (no production implementation)
+VERDICT: PASS_PROBE_CONTINUITY_STRUCTURAL
+ENTRY_HEAD: 97c2659c8552a9b78ed87c56d2bbe7d31dc74900   (== ACT-expected ENTRY_HEAD)
+PRODUCTION_BASELINE_HEAD: a493eff078ec5c8f2b6c874ad8f4a85009d1b64f
+RED_ARTIFACT_HEAD: d69cfb9befe957ec87a034050bb7b4c72f1a0851
+EVIDENCE_COMMIT_HEAD (at entry): 97c2659c8552a9b78ed87c56d2bbe7d31dc74900
+BRANCH: main (no ACT branch created)
+WORKTREE: /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+PRODUCTION_CODE_CHANGES: 0   (shipped src/ diff vs ENTRY_HEAD = 0 bytes)
+RED_WITNESS_MODIFIED_BY_THIS_ACT: NO   (byte-identical to d69cfb9be)
+PREDECESSOR: ACT-CLINEMM-ADJUDICATION-CONTINUITY-REPAIR-01 (HALT_TRUST_BOUNDARY_UNRESOLVED)
+EVIDENCE: .factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01/
+  00-entry-identity.md
+  01-existing-carrier-inventory.md
+  02-output-contract.md
+  03-producer-probe.md
+  04-canonical-persistence.md
+  05-compaction-consumer-probe.md
+  06-adversarial-controls.md
+  07-contract-decision.md
+  08-executable-gates.md
+  09-exit-report.md
+  artifact-hashes.json
+  verification/
+```
+
+## Why this ACT did NOT halt
+
+The predecessor halted because the HISTORICAL witnesses (R3/R7/R8) carried
+their qualified adjudication ONLY inside free-form private reasoning, so
+every mechanism that could reach them had to SEARCH private reasoning.
+
+This ACT asked a DIFFERENT, explicitly FUTURE-FACING question, and the
+existing runtime already answers it.
+
+## The carrier inventory (G1) — measured against the real source
+
+```text
+EXISTING_TEXT_CARRIER:           YES
+TEXT_AND_TOOL_USE:                YES
+CANONICAL_PERSISTENCE:            YES
+COMPACTION_INPUT_VISIBILITY:      YES
+EXISTING_STRUCTURED_CARRIER:      NO  (for model-authored adjudication state)
+NO_EXISTING_CARRIER:              NOT TRIGGERED
+```
+
+The assistant `text` block is a first-class canonical `ContentBlock`. The
+real provider adapter (`ai-sdk.ts` -> `agent-runtime.ts` ->
+`agent-message-codec.ts`) creates it, and it survives canonical
+persistence byte-identically. The `agentic_summary` budget policy drops
+`thinking` blocks and NOTHING ELSE, so a published `text` envelope reaches
+the summarizer input.
+
+## The central structural discriminator (G4.1)
+
+```text
+assistant text (published envelope): eligible for summarizer input  -- SURVIVES M1
+thinking only (the historical shape): dropped                        -- DROPPED by M1
+same thinking content under normal_provider_request: kept            -- isolation control
+```
+
+The published candidate survives the exact boundary that destroyed the
+historical witnesses, WITHOUT changing that boundary.
+
+## The live model result (G6)
+
+```text
+EXECUTED: YES   MODEL: minimax / MiniMax-M3   EXECUTION CLASS: REAL_MODEL_RESPONSE
+10 measured runs, 9 published a schema-valid candidate.
+In every published run:
+  decision                = "narrowed"
+  qualification_codes     = ["manual_enforcement_only"]   <- the qualification SURVIVED
+  remaining_question_ids  = ["S1.automated_enforcement"]
+  publishedTurnAlsoCarriedToolUse = true
+  publishedAfterToolResult         = true
+ONE run did not publish: publication is reliable but NOT guaranteed.
+NEGATIVE FINDING: the model's evidence_tool_use_ids were NOT canonical ids
+(tool names, synthetic labels, invented ids). Every one would be REJECTED by
+the contract -- correctly -- and this becomes design constraint C1.
+```
+
+The evidence categories were kept distinct: a SYNTHETIC CANONICAL FIXTURE
+was not promoted to a MOCKED PROVIDER RESPONSE, and a REAL MODEL RESPONSE
+was not promoted to a LIVE INSTALLED RUN.
+
+## The measured boundary that is NOT filled
+
+```text
+PUBLICATION into the summarizer input:  GUARANTEED (structural)
+PRESENCE in the persisted summary:       NOT GUARANTEED (model-dependent)
+PRESENCE in the provider continuation:   NOT GUARANTEED (model-dependent)
+```
+
+The mandatory G4.3-B negative control shows that a summarizer which omits
+the candidate loses it DESPITE surviving M1. This boundary is MEASURED and
+CLASSIFIED (L3-class summarizer omission). It is NOT implemented away: this
+ACT created no new persistence layer, no new carrier and no prompt change.
+
+## Gates
+
+```text
+GATE 1  focused contract probe          55 passed (55)          EXIT=0
+GATE 2  historical discriminator        24 passed (24)          EXIT=0
+GATE 3  evidence fidelity               39 passed (39)          EXIT=0
+GATE 4  context directory              551 passed | 2 skipped   EXIT=0
+                                                (498 baseline + 55)
+GATE 5  typecheck                       44 diagnostics           EXIT=2
+                                               identical identities to the entry
+                                               baseline; 0 ACT-owned
+GATE 6  historical RED (on demand)        5 failed (5)           EXIT=1
+                                               EXPECTED -- the RED is preserved
+GATE 7  biome                            clean                   EXIT=0
+GATE 8  live model probe                 publishedValidCandidate EXIT=0
+PRODUCTION DELTA                        ZERO
+```
+
+No intentionally failing probe was left in the default suite. The only
+intentionally failing test in the repository remains the predecessor's RED,
+which is excluded from `vitest.config.ts` by configuration.
+
+## Conservation
+
+```text
+SOURCE_FILE_FACT_CARRY_FORWARD_ENABLED = false
+MAX_CARRIED_OUTCOMES                   = 12
+dropThinkingBlocks for agentic_summary = true
+Canonical history outside fixtures     unchanged
+Task-contract behaviour                unchanged
+Provider tool schemas                  unchanged
+Sidecar schema                         unchanged
+New default-on diagnostics             none
+Cross-session state                    none
+Additional model call in preparation    none
+React updater semantics                unaffected
+Stable-prefix behaviour                unchanged
+Previous RED                           isolated and byte-identical
+```
+
+## Next action (recommended, NOT executed)
+
+**A -- `ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01`.**
+
+Authorized because existing-carrier feasibility AND the trust contract are
+both supported by executable evidence. The implementation must stay
+future-facing, bounded, provisional, and must use the existing assistant
+`text` carrier -- no new public content-block type, no new protocol, no new
+persistence subsystem -- and must carry the five design constraints C1..C5
+recorded in `07-contract-decision.md`.
+
+**B -- `ACT-CLINEMM-ADJUDICATION-OUTPUT-PROTOCOL-DESIGN-01`** is NOT
+recommended: the recon demonstrated a suitable existing carrier exists.
+
+No production implementation was made. No new public API was added. No new
+persistent ledger was created. The historical R3/R7/R8 thinking-only
+messages were NOT recovered -- the new contract applies only to future
+model outputs.
