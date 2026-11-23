@@ -78,13 +78,18 @@
     },
     {
       "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01/08-executable-gates.md",
-      "sha256": "5ee51a3b3ba9d84c113cc4e3a3ea6d9885028671c83264b09e29eddd330f866b",
-      "bytes": 6113
+      "sha256": "e799a1ea31623decae4958917c9add96b3d61f9512c88a2ae144870c3a26e719",
+      "bytes": 8224
     },
     {
       "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01/09-exit-report.md",
       "sha256": "95564982d9f5fb221ac734e0fb84d950e4fd44e1b98868345997ea027f66f2e9",
       "bytes": 13794
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01/verification/README.md",
+      "sha256": "db09ffdba42c6052c1d2145498470f7853ff1d65b3ffed582345a115e8c670fc",
+      "bytes": 1875
     },
     {
       "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01/verification/gate1-focused-probe.txt",
@@ -136,5 +141,12 @@
       "sha256": "986f03813d6a5c92b36e7c6477ed9986279e56f7b11e9966bd2e0d6ce7c14a96",
       "bytes": 59771
     }
-  ]
+  ],
+  "full_suite_regression_check": {
+    "note": "The full @cline/core unit suite was compared between the FINAL HEAD and the ENTRY commit in a temporary worktree. The failing file set and the failing test count are IDENTICAL, so every one of those failures is pre-existing and environment-dependent, and none is owned by this ACT.",
+    "at_final_head": "17 failed files | 113 failed | 5658 passed | 162 skipped (5933)",
+    "at_entry_head": "17 failed files | 113 failed | 188 passed | 16 skipped (317)",
+    "delta_attributable_to_this_act": "+55 passing tests, 0 new failures",
+    "temporary_baseline_worktree": "removed after the comparison"
+  }
 }

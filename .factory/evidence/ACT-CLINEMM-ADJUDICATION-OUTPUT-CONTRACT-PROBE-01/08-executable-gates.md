@@ -111,3 +111,60 @@ not narrow a discriminated union through `expect(...).toBe(...)`). All 16
 were removed by adding an explicit `rejectionReason(outcome)` narrowing
 helper and by not passing out-of-enum literals through the typed override
 parameters. The final typecheck is at the entry baseline.
+
+## Full-suite regression check (beyond the ACT's required gates)
+
+The ACT's required gates cover the context directory. As an additional
+regression check, the FULL `@cline/core` unit suite was run at the FINAL
+HEAD and at the ENTRY commit, in a temporary worktree, to prove that the
+ACT introduced no regression outside the context directory.
+
+```text
+AT FINAL HEAD (2b4280d2e):
+  Test Files  17 failed | 351 passed | 3 skipped (371)
+  Tests      113 failed | 5658 passed | 162 skipped (5933)
+
+AT ENTRY HEAD (97c2659c8), the SAME 17 files:
+  Test Files  17 failed (17)
+  Tests      113 failed | 188 passed | 16 skipped (317)
+```
+
+The failing file set and the failing test count are IDENTICAL at both
+commits:
+
+```text
+src/extensions/composio/composio-tools-extension.test.ts
+src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts
+src/hooks/checkpoint-hooks.test.ts
+src/hub/runtime-host/hub-runtime-host.test.ts
+src/hub/server/boundary.test.ts
+src/hub/server/cloud-session-service.test.ts
+src/hub/server/fetch-wiring.test.ts
+src/hub/server/hub-plugins.test.ts
+src/hub/server/index.test.ts
+src/hub/server/replay-wire.test.ts
+src/hub/server/ui-events.test.ts
+src/hub/settings.test.ts
+src/runtime/command-policy/path-authority.temporary-external.test.ts
+src/runtime/sandbox/macos/seatbelt-availability.test.ts
+src/runtime/sandbox/sandbox-backend.test.ts
+src/session/checkpoint-restore.test.ts
+src/session/services/persistence-service.test.ts
+```
+
+**These 17 files / 113 tests are PRE-EXISTING failures at the entry
+commit.** They are environment-dependent (hub server, sandbox/seatbelt,
+macOS path authority, checkpoint restore, persistence service) and are
+NOT owned by this ACT. The temporary baseline worktree was removed after
+the comparison and the protected worktrees were left untouched.
+
+The delta attributable to this ACT is therefore exactly:
+
+```text
++55 passing tests (the new probe)
+ 0 new failures
+ 0 modified, skipped or deleted pre-existing tests
+```
+
+The same 5 typecheck diagnostics in `src/extensions/context/` are also
+pre-existing at the entry commit and were left unchanged.
