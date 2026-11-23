@@ -1803,3 +1803,152 @@ function attachEvidenceHandleToAgentToolResult(
 		output: `${trailer}`,
 	};
 }
+
+// ===========================================================================
+// SECTION 10 — THE PUBLICATION INSTRUCTION
+// ===========================================================================
+
+/**
+ * The section heading of the publication instruction.
+ *
+ * A stable, greppable marker so the instruction can be located and
+ * REPLACED deterministically on a later turn instead of accumulating
+ * copies.
+ */
+export const ADJUDICATION_INSTRUCTION_HEADING =
+	"## Adjudication publication contract";
+
+const ADJUDICATION_INSTRUCTION_BEGIN_MARKER =
+	"<!-- cline-adjudication-instruction:begin -->";
+const ADJUDICATION_INSTRUCTION_END_MARKER =
+	"<!-- cline-adjudication-instruction:end -->";
+
+/**
+ * Render the publication instruction for a task-scoped vocabulary.
+ *
+ * THE INSTRUCTION IS DERIVED FROM THE AUTHORIZED VOCABULARY.
+ *
+ * It names ONLY the values the runtime is willing to accept, so the
+ * instruction and the validator cannot disagree: a value the instruction
+ * never mentions is rejected by the parser, and a value the parser accepts
+ * is one the instruction named.
+ *
+ * It does NOT require the model to disclose its reasoning, and it does NOT
+ * promise that publishing is required for the task to proceed. A missing
+ * envelope is a NORMAL outcome.
+ *
+ * Returns `undefined` when there is no authorized vocabulary, because
+ * without one there is nothing to publish.
+ */
+export function renderAdjudicationPublicationInstruction(
+	vocabulary: AdjudicationVocabulary | undefined,
+): string | undefined {
+	if (!hasAuthorizedVocabulary(vocabulary)) {
+		return undefined;
+	}
+	const lines: string[] = [
+		ADJUDICATION_INSTRUCTION_HEADING,
+		ADJUDICATION_INSTRUCTION_BEGIN_MARKER,
+		"",
+		"When — and ONLY when — the task has given you an authorized",
+		"adjudication contract, you MAY publish a structured adjudication",
+		"candidate once you have sufficient evidence.",
+		"",
+		"Publication means: emit EXACTLY ONE JSON object as your own",
+		"assistant text output. NOT inside a tool call. NOT inside your",
+		"reasoning.",
+		"",
+		"The JSON object must have EXACTLY these fields:",
+		'  kind                   = "adjudication_candidate"',
+		"  schema_version         = 1",
+		"  finding_id             = one of the authorized finding ids",
+		"  decision               = one of the authorized decisions",
+		"  qualification_codes    = a list of authorized qualification codes",
+		"  evidence_tool_use_ids  = the evidence handles you were given",
+		"  counterevidence_tool_use_ids = the evidence handles against you",
+		"  remaining_question_ids = a list of authorized question ids",
+		"",
+		"Authorized finding ids:",
+		...vocabulary.findingIds.map((id) => `  - ${id}`),
+		"",
+		"Authorized decisions:",
+		...vocabulary.decisions.map((value) => `  - ${value}`),
+		"",
+		"Authorized qualification codes:",
+		...vocabulary.qualificationCodes.map((value) => `  - ${value}`),
+		"",
+		"Authorized remaining-question ids:",
+		...Object.keys(vocabulary.remainingQuestions).map((id) => `  - ${id}`),
+		"",
+		"Rules:",
+		"- Do NOT add any field other than the eight listed above.",
+		"- Do NOT include file contents, excerpts, prose or explanations in",
+		"  the JSON.",
+		"- Cite evidence by the EVIDENCE HANDLE shown on the tool result.",
+		"  Do NOT invent a handle, and do NOT cite a tool name.",
+		"- Publish only when you have at least one evidence handle.",
+		"- Publishing is OPTIONAL. If you are not confident, do not publish.",
+		"  A missing candidate is a normal outcome.",
+		"- After publishing, continue working normally.",
+		ADJUDICATION_INSTRUCTION_END_MARKER,
+	];
+	return lines.join("\n");
+}
+
+/**
+ * Remove any previously rendered publication instruction from a prompt.
+ *
+ * This makes the instruction application IDEMPOTENT: a later turn replaces
+ * the instruction instead of appending a second copy.
+ */
+export function stripAdjudicationPublicationInstruction(
+	prompt: string,
+): string {
+	const begin = prompt.indexOf(ADJUDICATION_INSTRUCTION_BEGIN_MARKER);
+	if (begin === -1) {
+		return prompt;
+	}
+	const end = prompt.indexOf(ADJUDICATION_INSTRUCTION_END_MARKER, begin);
+	if (end === -1) {
+		return prompt.slice(0, begin).trimEnd();
+	}
+	const before = prompt.slice(0, begin).trimEnd();
+	const after = prompt
+		.slice(end + ADJUDICATION_INSTRUCTION_END_MARKER.length)
+		.trimStart();
+	// The heading is part of the instruction, so it is removed with it.
+	const withoutHeading = before
+		.split("\n")
+		.filter((line) => line.trim() !== ADJUDICATION_INSTRUCTION_HEADING)
+		.join("\n")
+		.trim();
+	if (!withoutHeading) {
+		return after;
+	}
+	if (!after) {
+		return withoutHeading;
+	}
+	return `${withoutHeading}\n\n${after}`;
+}
+
+/**
+ * Apply the publication instruction to a system prompt.
+ *
+ * The instruction is appended to the prompt, and any PREVIOUS copy is
+ * stripped first, so the result is a pure function of (prompt,
+ * vocabulary).
+ */
+export function applyAdjudicationPublicationInstruction(
+	prompt: string,
+	vocabulary: AdjudicationVocabulary | undefined,
+): string {
+	const instruction = renderAdjudicationPublicationInstruction(vocabulary);
+	const stripped = stripAdjudicationPublicationInstruction(prompt).trimEnd();
+	if (!instruction) {
+		return stripped;
+	}
+	if (!stripped) {
+		return instruction;
+	}
+	return `${stripped}\n\n${instruction}`;
+}

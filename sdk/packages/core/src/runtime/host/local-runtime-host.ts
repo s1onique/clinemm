@@ -22,6 +22,7 @@ import { isOAuthProvider } from "../../auth/provider-auth-registry";
 import type { ConnectorsRequest } from "../../extensions/composio/composio-meta-tools";
 import {
 	AdjudicationEvidenceRegistry,
+	applyAdjudicationPublicationInstruction,
 	attachEvidenceHandlesToAgentMessages,
 } from "../../extensions/context/adjudication-continuity";
 import {
@@ -1216,7 +1217,22 @@ export class LocalRuntimeHost implements RuntimeHost {
 			thinkingBudgetTokens: configWithProvider.thinkingBudgetTokens,
 			maxTokensPerTurn: configWithProvider.maxTokensPerTurn,
 			temperature: configWithProvider.temperature,
-			systemPrompt: configWithProvider.systemPrompt,
+			// ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01: the
+			// PUBLICATION INSTRUCTION.
+			//
+			// Where an authorized task-scoped adjudication contract exists, the
+			// model is told HOW to publish a candidate. The instruction names
+			// ONLY the values the runtime is willing to accept, so the
+			// instruction and the validator cannot disagree.
+			//
+			// The instruction does NOT require disclosure of private reasoning,
+			// does NOT promise that publishing is required, and is applied ONLY
+			// when the host enabled the adjudication contract. Without a
+			// vocabulary the prompt is byte-identical to the pre-ACT behaviour.
+			systemPrompt: applyAdjudicationPublicationInstruction(
+				configWithProvider.systemPrompt,
+				configWithProvider.adjudication?.vocabulary,
+			),
 			maxIterations: configWithProvider.maxIterations,
 			execution: configWithProvider.execution,
 			prepareTurn,

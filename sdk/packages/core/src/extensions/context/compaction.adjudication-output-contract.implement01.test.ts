@@ -58,11 +58,13 @@ import {
 	AdjudicationEvidenceRegistry,
 	type AdjudicationVocabulary,
 	applyAdjudicationContinuityToCompactedMessages,
+	applyAdjudicationPublicationInstruction,
 	attachEvidenceHandlesToAgentMessages,
 	attachEvidenceHandlesToMessages,
 	deriveAcceptedAdjudications,
 	EVIDENCE_HANDLE_MARKER,
 	parseAdjudicationEnvelope,
+	renderAdjudicationPublicationInstruction,
 	resolveAdjudicationCandidate,
 	type SourceRevision,
 	type SourceRevisionResolver,
@@ -1403,5 +1405,92 @@ describe("the evidence handle — the model can cite its evidence", () => {
 			JSON.stringify(withHandles).split(`${EVIDENCE_HANDLE_MARKER} ${handle}`)
 				.length - 1,
 		).toBe(0);
+	});
+});
+
+// ===========================================================================
+// G5 — THE PUBLICATION INTEGRATION
+// ===========================================================================
+
+describe("G5 — the publication integration", () => {
+	it("the instruction names EXACTLY the authorized vocabulary", () => {
+		const instruction = renderAdjudicationPublicationInstruction(VOCABULARY);
+		expect(instruction).toBeDefined();
+		if (!instruction) {
+			return;
+		}
+		// The authorized values are named.
+		expect(instruction).toContain("S1");
+		expect(instruction).toContain("narrowed");
+		expect(instruction).toContain("manual_enforcement_only");
+		expect(instruction).toContain("S1.automated_enforcement");
+		// An UNAUTHORIZED value is NOT named, so the instruction and the
+		// validator cannot disagree.
+		expect(instruction).not.toContain("S9");
+		expect(instruction).not.toContain("independently_observed_contradiction");
+	});
+
+	it("the instruction does NOT require disclosure of private reasoning", () => {
+		const instruction = renderAdjudicationPublicationInstruction(VOCABULARY);
+		expect(instruction).toBeDefined();
+		if (!instruction) {
+			return;
+		}
+		expect(instruction).toContain("NOT inside your");
+		expect(instruction).toContain("reasoning");
+		// It says publishing is OPTIONAL: a missing envelope is normal.
+		expect(instruction).toContain("OPTIONAL");
+		expect(instruction).toContain("normal outcome");
+	});
+
+	it("WITHOUT an authorized vocabulary, NO instruction is rendered", () => {
+		expect(renderAdjudicationPublicationInstruction(undefined)).toBeUndefined();
+		expect(
+			renderAdjudicationPublicationInstruction({
+				findingIds: [],
+				decisions: [],
+				qualificationCodes: [],
+				remainingQuestions: {},
+			}),
+		).toBeUndefined();
+	});
+
+	it("the instruction application is IDEMPOTENT", () => {
+		const base = "You are a careful engineering agent.";
+		const first = applyAdjudicationPublicationInstruction(base, VOCABULARY);
+		const second = applyAdjudicationPublicationInstruction(first, VOCABULARY);
+		expect(second).toBe(first);
+		const occurrences =
+			first.split("## Adjudication publication contract").length - 1;
+		expect(occurrences).toBe(1);
+	});
+
+	it("WITHOUT a vocabulary, the prompt is byte-identical", () => {
+		const base = "You are a careful engineering agent.";
+		expect(applyAdjudicationPublicationInstruction(base, undefined)).toBe(base);
+	});
+
+	it("a PREVIOUS instruction is REPLACED, not accumulated", () => {
+		const base = "You are a careful engineering agent.";
+		const first = applyAdjudicationPublicationInstruction(base, VOCABULARY);
+		const withOther = applyAdjudicationPublicationInstruction(first, {
+			...VOCABULARY,
+			findingIds: ["S7"],
+			decisions: ["refuted"],
+			qualificationCodes: ["other_code"],
+			remainingQuestions: { "S7.q": "S7" },
+		});
+		const occurrences =
+			withOther.split("## Adjudication publication contract").length - 1;
+		expect(occurrences).toBe(1);
+		expect(withOther).toContain("S7");
+		expect(withOther).not.toContain("S1.automated_enforcement");
+	});
+
+	it("the instruction is REMOVED when the vocabulary is withdrawn", () => {
+		const base = "You are a careful engineering agent.";
+		const first = applyAdjudicationPublicationInstruction(base, VOCABULARY);
+		const withdrawn = applyAdjudicationPublicationInstruction(first, undefined);
+		expect(withdrawn).toBe(base);
 	});
 });
