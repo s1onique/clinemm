@@ -1,0 +1,87 @@
+{
+  "act": "ACT-CLINEMM-PRECOMPACTION-KNOWLEDGE-CHECKPOINT-PROBE-01",
+  "session_id": "1795466566666_uzla2",
+  "capture_run": "cap_run_Nw2dRTjG",
+  "entry_head": "502d31c5821492147ff1019773d3b5e30fedbbb8",
+  "branch": "main",
+  "production_delta": "NONE",
+  "frozen_private_artifacts_verified": {
+    "pre.json": "53161e6b3b4190951442dc37e89016a7d1b7e67898a01bc29d2bd250fe83efe1",
+    "post.json": "c938f0e2174a3edf74ddb0580bc1918d25acd722d6d4e73c6c45c00c8463e191",
+    "second-pre.json": "40a60baf6ca1fadf0cfe2d6bcfc2538b6e653dcf948af7c4bc98f91dfd3070e2",
+    "second-post.json": "666c87977416a08fc54cffe7563b012866e40d790d1c57c227d6a76ecd05a807",
+    "first-compaction.json": "49bff441c6cbcb0aa904aae8a80dcb567e6897a878986834764322b072fd845d",
+    "second-compaction.json": "6bc0f6f9dfab122229dc52bc3954144db403ae234c63e26233dcbb02cd43b069"
+  },
+  "frozen_private_artifacts_note": "Operator-local and NEVER committed. Verified by sha256 against the ACT's recorded identities.",
+  "act_owned_source_files": {
+    "sdk/packages/core/src/extensions/context/knowledge-checkpoint-probe/checkpoint-binding.ts": "f231690d9e2cbd66859d4d6e51d6d92aacb95da8a7f25878a7f33ce3b03290f8",
+    "sdk/packages/core/src/extensions/context/knowledge-checkpoint-probe/checkpoint-historical-baseline.test.ts": "31335097735791f480f6e89f9933b6c3bb5914b8a8400c4c36e79385a76d1d0b",
+    "sdk/packages/core/src/extensions/context/knowledge-checkpoint-probe/checkpoint-model-treatment.test.ts": "45b44261f6dff0e81ad260e1851173650f324ca73efa817b902d7f845dc0348f",
+    "sdk/packages/core/src/extensions/context/knowledge-checkpoint-probe/checkpoint-probe.fixture.ts": "d20fa76b0892e22e21795c4223e81a56b598bc22e9eb8ed095ca41ccaf5c90d7",
+    "sdk/packages/core/src/extensions/context/knowledge-checkpoint-probe/checkpoint-projection.test.ts": "07211fcd9ad76096d3097ec000de741c49828c317f4b3a9dcbe2cc9606b07327",
+    "sdk/packages/core/src/extensions/context/knowledge-checkpoint-probe/checkpoint-projection.ts": "9ce0df50acaab5e97f2106bb552940e3d844c78ce250dbf6a055157b08e422c0",
+    "sdk/packages/core/src/extensions/context/knowledge-checkpoint-probe/checkpoint-request.ts": "6bc68bca3c68e7f7aa987bd684dd6301239f4d14d69244cb9461ea035fb03c0a",
+    "sdk/packages/core/src/extensions/context/knowledge-checkpoint-probe/checkpoint-schema.ts": "14f4f0d9502265f9c549ab0aaa9ee7ec7859d79e1af76456c51989354382fe8e",
+    "sdk/packages/core/src/extensions/context/knowledge-checkpoint-probe/checkpoint-seam.ts": "4cbf4a1bab57389b4da1b8e3855c4f092a340618743ea90ebb2ce3a34c27ccbd",
+    "sdk/packages/core/src/extensions/context/knowledge-checkpoint-probe/checkpoint-security-controls.test.ts": "d583bb3c2f817ef60c4f34e6aeec4fab345c71f9d866d40d2baa4767fd3dc4fc",
+    "sdk/packages/core/src/extensions/context/knowledge-checkpoint-probe/checkpoint-validation.ts": "b793653152d09f6b02efa27bb8eb328a162fe134403efcba0f6c143628db61ae",
+    "sdk/packages/core/scripts/knowledge-checkpoint-probe.generate.ts": "4458f22d49bcafb18e4a415ffbffec11341a91d7252abf26eebe479b51be80b6"
+  },
+  "evidence_files": {
+    ".factory/evidence/ACT-CLINEMM-PRECOMPACTION-KNOWLEDGE-CHECKPOINT-PROBE-01/00-entry-and-artifact-identity.md": "a52666de073fce9987227a25d2e31aa43d8fd565b327beb1986a1a74277cb895",
+    ".factory/evidence/ACT-CLINEMM-PRECOMPACTION-KNOWLEDGE-CHECKPOINT-PROBE-01/01-production-seam-map.md": "222b3b76140210c06c705a1f07e6070df71bbece44d38f75a2cd5d03a6445b5e",
+    ".factory/evidence/ACT-CLINEMM-PRECOMPACTION-KNOWLEDGE-CHECKPOINT-PROBE-01/02-historical-knowledge-baseline.md": "d71af1d6d93f29a4e07f107ff1ed1b30dc9a9c011ac423ef11fcd8f606892476",
+    ".factory/evidence/ACT-CLINEMM-PRECOMPACTION-KNOWLEDGE-CHECKPOINT-PROBE-01/03-checkpoint-schema-and-trust.md": "9780016067b835bc1dc52c9b0aaf07356af7a16c718dd056a125d96633ca69fb",
+    ".factory/evidence/ACT-CLINEMM-PRECOMPACTION-KNOWLEDGE-CHECKPOINT-PROBE-01/04-model-publication-results.md": "cc7fb4d18d3efba31e98b5a3723b4538cc2a8275fc4be451d0d836110c15a66f",
+    ".factory/evidence/ACT-CLINEMM-PRECOMPACTION-KNOWLEDGE-CHECKPOINT-PROBE-01/05-deterministic-projection.md": "e986c821a4c6a58b488ddd164f30fe3333ea3c79cb85af5b0273f7d58e567d7e",
+    ".factory/evidence/ACT-CLINEMM-PRECOMPACTION-KNOWLEDGE-CHECKPOINT-PROBE-01/06-causal-ablation.md": "bd398577881003e02958638beded1827007f7dd0efdd2490b71b03459a6079d5",
+    ".factory/evidence/ACT-CLINEMM-PRECOMPACTION-KNOWLEDGE-CHECKPOINT-PROBE-01/07-semantic-evaluation.md": "af2759fcef1023d73897bd2e021053b5feb115ef7be0c2e807a9cebba032e0ae",
+    ".factory/evidence/ACT-CLINEMM-PRECOMPACTION-KNOWLEDGE-CHECKPOINT-PROBE-01/08-executable-gates.md": "83f2327caf38b75ba3796989cc773f7a58cd87bf034ced1ecdf6dabbc1f7de11",
+    ".factory/evidence/ACT-CLINEMM-PRECOMPACTION-KNOWLEDGE-CHECKPOINT-PROBE-01/09-implementation-feasibility.md": "2d18dfe5e25f7cda61b1ceca7e838b24f6b97aa406028124c08370f916bc7362",
+    ".factory/evidence/ACT-CLINEMM-PRECOMPACTION-KNOWLEDGE-CHECKPOINT-PROBE-01/10-exit-report.md": "30074b76a9d031ba1dcd6d0d793309f89645523a78ef0292a60cb622af04c6b7",
+    ".factory/evidence/ACT-CLINEMM-PRECOMPACTION-KNOWLEDGE-CHECKPOINT-PROBE-01/verification/act-owned-tests.txt": "af79d3d242297bbf2b7bff2001df909e3efab0ef8b3278e8232bed1ad3b67e20",
+    ".factory/evidence/ACT-CLINEMM-PRECOMPACTION-KNOWLEDGE-CHECKPOINT-PROBE-01/verification/biome.txt": "9afbe1abf8de166adb2af6d848af60c1c4a06f24d449c3ccb1e345b3cebf8a06",
+    ".factory/evidence/ACT-CLINEMM-PRECOMPACTION-KNOWLEDGE-CHECKPOINT-PROBE-01/verification/context-suite-regression.txt": "e0fa82bb78ead4f9bb6f2488a4ef644103e15ab488c12c6bd29cce732758e7b8",
+    ".factory/evidence/ACT-CLINEMM-PRECOMPACTION-KNOWLEDGE-CHECKPOINT-PROBE-01/verification/production-delta.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    ".factory/evidence/ACT-CLINEMM-PRECOMPACTION-KNOWLEDGE-CHECKPOINT-PROBE-01/verification/typecheck.txt": "d1f259b3799d79cb49696c51a2e50a6730c2378a9ded4e2ad4142d52e25a4f7f",
+    ".factory/evidence/ACT-CLINEMM-PRECOMPACTION-KNOWLEDGE-CHECKPOINT-PROBE-01/verification/worktree-status.txt": "879cb4d3ae813df2a0daae5b0d3caf15d62e0fa7d3db218a55fb2b98a3fd8eaf"
+  },
+  "canonical_prefix_correlation": {
+    "boundary-1": {
+      "source_message_count": 47,
+      "source_prefix_hash": "sha256:54936f46c7034de73268c085d551d227e1bbced8225e41757d42a22b90a3dbf9",
+      "recomputed_prefix_hash_match": true,
+      "source_last_message_key": "id:msg_ApSB6S4t"
+    },
+    "boundary-2": {
+      "source_message_count": 101,
+      "source_prefix_hash": "sha256:df3d0a481febff3f3c8d5581e930faed80112c9bef8c7e4b609da7136d4c5409",
+      "recomputed_prefix_hash_match": true,
+      "source_last_message_key": "id:msg_3d6nueiy"
+    }
+  },
+  "generated_checkpoints_operator_local": {
+    "root": "<repo>/tmp/pck-probe-private/1795466566666_uzla2 (gitignored, mode 0600)",
+    "note": "Raw model output and checkpoint free text NEVER committed.",
+    "boundary-1": {
+      "provider": "openai-compatible",
+      "model": "MiniMax-M3",
+      "latency_ms": 66496,
+      "model_records": 13,
+      "accepted": 10,
+      "rejected": 2,
+      "projected_section_est_tokens": 1010
+    },
+    "boundary-2": {
+      "provider": "openai-compatible",
+      "model": "MiniMax-M3",
+      "latency_ms": 80654,
+      "model_records": 20,
+      "accepted": 12,
+      "rejected": 0,
+      "projected_section_est_tokens": 1117
+    }
+  },
+  "verdict": "HALT_SOURCE_VISIBILITY"
+}

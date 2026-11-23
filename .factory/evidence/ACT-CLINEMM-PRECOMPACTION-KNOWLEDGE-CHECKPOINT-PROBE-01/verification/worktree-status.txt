@@ -1,0 +1,3 @@
+?? .factory/evidence/ACT-CLINEMM-PRECOMPACTION-KNOWLEDGE-CHECKPOINT-PROBE-01/
+?? sdk/packages/core/scripts/knowledge-checkpoint-probe.generate.ts
+?? sdk/packages/core/src/extensions/context/knowledge-checkpoint-probe/
