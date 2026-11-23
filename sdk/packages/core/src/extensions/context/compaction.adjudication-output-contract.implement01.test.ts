@@ -63,6 +63,7 @@ import {
 	attachEvidenceHandlesToMessages,
 	deriveAcceptedAdjudications,
 	EVIDENCE_HANDLE_MARKER,
+	extractSourcePath,
 	parseAdjudicationEnvelope,
 	renderAdjudicationPublicationInstruction,
 	resolveAdjudicationCandidate,
@@ -1492,5 +1493,88 @@ describe("G5 — the publication integration", () => {
 		const first = applyAdjudicationPublicationInstruction(base, VOCABULARY);
 		const withdrawn = applyAdjudicationPublicationInstruction(first, undefined);
 		expect(withdrawn).toBe(base);
+	});
+});
+
+// ===========================================================================
+// THE INDEPENDENT-GATE REPORTING
+// ===========================================================================
+
+describe("the acceptance gates report INDEPENDENTLY", () => {
+	it("a candidate whose references resolve but whose revision cannot bind reports BOTH truthfully", async () => {
+		const history = s1CanonicalHistory();
+		const parsed = parseAdjudicationEnvelope(envelopeJson());
+		expect(parsed.status).toBe("ok");
+		if (parsed.status !== "ok") {
+			return;
+		}
+		// No revision resolver: the references resolve, the revision does
+		// not. The report must say EXACTLY that — a short-circuit would
+		// report "the references did not resolve", which is FALSE.
+		const decision = await resolveAdjudicationCandidate(parsed.candidate, {
+			canonicalMessages: history,
+			registry: EVIDENCE_HANDLE_REGISTRY,
+			vocabulary: VOCABULARY,
+		});
+		expect(decision.schema_valid).toBe(true);
+		expect(decision.canonical_refs_resolved).toBe(true);
+		expect(decision.source_revision_bound).toBe(false);
+		expect(decision.candidate_accepted).toBe(false);
+	});
+
+	it("a candidate whose references do NOT resolve reports the reference failure", async () => {
+		const history = s1CanonicalHistory({ evidence: ["call_1"] });
+		const parsed = parseAdjudicationEnvelope(
+			envelopeJson({ evidence_tool_use_ids: ["call_1"] }),
+		);
+		expect(parsed.status).toBe("ok");
+		if (parsed.status !== "ok") {
+			return;
+		}
+		const decision = await resolveAdjudicationCandidate(parsed.candidate, {
+			canonicalMessages: history,
+			registry: EVIDENCE_HANDLE_REGISTRY,
+			vocabulary: VOCABULARY,
+			revisionResolver: REVISION_RESOLVER,
+		});
+		expect(decision.schema_valid).toBe(true);
+		expect(decision.canonical_refs_resolved).toBe(false);
+		expect(decision.candidate_accepted).toBe(false);
+		expect(decision.reason).toBe("unresolvable_tool_reference:call_1");
+	});
+
+	it("an accepted candidate reports EVERY gate as passing", async () => {
+		const history = s1CanonicalHistory();
+		const parsed = parseAdjudicationEnvelope(envelopeJson());
+		expect(parsed.status).toBe("ok");
+		if (parsed.status !== "ok") {
+			return;
+		}
+		const decision = await resolveAdjudicationCandidate(parsed.candidate, {
+			canonicalMessages: history,
+			registry: EVIDENCE_HANDLE_REGISTRY,
+			vocabulary: VOCABULARY,
+			revisionResolver: REVISION_RESOLVER,
+		});
+		expect(decision.schema_valid).toBe(true);
+		expect(decision.canonical_refs_resolved).toBe(true);
+		expect(decision.source_revision_bound).toBe(true);
+		expect(decision.candidate_accepted).toBe(true);
+		expect(decision.reason).toBeUndefined();
+	});
+
+	it("the source path is read from EVERY real read_files input shape", () => {
+		// The real `read_files` tool accepts `path`, `files` and
+		// `file_paths`. A candidate whose evidence was read through any of
+		// them must still bind a source revision.
+		expect(extractSourcePath({ path: "a.yaml" })).toBe("a.yaml");
+		expect(extractSourcePath({ file_path: "b.yaml" })).toBe("b.yaml");
+		expect(extractSourcePath({ files: ["c.yaml"] })).toBe("c.yaml");
+		expect(extractSourcePath({ file_paths: ["d.yaml"] })).toBe("d.yaml");
+		expect(extractSourcePath({ paths: ["e.yaml"] })).toBe("e.yaml");
+		expect(extractSourcePath({ files: [{ path: "f.yaml" }] })).toBe("f.yaml");
+		// A call that reads NO source file yields no source identity: a
+		// command's stdout is never reinterpreted as a file read.
+		expect(extractSourcePath({ commands: "grep x" })).toBeUndefined();
 	});
 });

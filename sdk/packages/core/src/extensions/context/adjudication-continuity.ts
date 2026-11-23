@@ -1039,24 +1039,33 @@ export async function resolveAdjudicationCandidate(
 	}
 
 	// --- GATE 4: CANONICAL REFERENCE RESOLUTION --------------------
+	// The resolution is evaluated INDEPENDENTLY of the revision gate, so
+	// each gate reports its OWN truth. A short-circuit here would report
+	// "the references did not resolve" for a candidate whose references
+	// DID resolve but whose revision could not be bound — the exact
+	// conflation the predecessor's correction was created to remove.
 	const resolvedEvidence: string[] = [];
+	const unresolvedReferences: string[] = [];
+	let unpairedReference: string | undefined;
 	for (const reference of [
 		...candidate.evidence_tool_use_ids,
 		...candidate.counterevidence_tool_use_ids,
 	]) {
 		const resolved = resolveReference(reference);
 		if (!resolved.ok) {
-			return rejected(resolved.reason);
+			unresolvedReferences.push(reference);
+			continue;
 		}
 		if (!ledger.pairedToolUseIds.has(resolved.toolUseId)) {
-			return rejected(
-				`unpaired_or_failed_tool_reference:${resolved.toolUseId}`,
-			);
+			unpairedReference ??= resolved.toolUseId;
+			continue;
 		}
 		if (!resolvedEvidence.includes(resolved.toolUseId)) {
 			resolvedEvidence.push(resolved.toolUseId);
 		}
 	}
+	const canonicalRefsResolved =
+		unresolvedReferences.length === 0 && unpairedReference === undefined;
 
 	// --- GATE 5: SOURCE REVISION BINDING ---------------------------
 	// The revision is bound by the RUNTIME. The model's claim is never
@@ -1073,7 +1082,29 @@ export async function resolveAdjudicationCandidate(
 			resolver: options.revisionResolver,
 		});
 	}
-	if (binding.state !== "BOUND" || !binding.revision) {
+	const sourceRevisionBound =
+		binding.state === "BOUND" && binding.revision !== undefined;
+
+	// --- THE COMPOSED DECISION -------------------------------------
+	// Every gate reports its OWN truth. The candidate is accepted only
+	// when EVERY gate passed; a failure in one gate never misreports
+	// another.
+	if (!canonicalRefsResolved) {
+		return {
+			...baseAcceptance(),
+			schema_valid: true,
+			canonical_refs_resolved: false,
+			source_revision_bound: sourceRevisionBound,
+			candidate_accepted: false,
+			reason:
+				unresolvedReferences.length > 0
+					? `unresolvable_tool_reference:${unresolvedReferences[0]}`
+					: `unpaired_or_failed_tool_reference:${unpairedReference ?? "unknown"}`,
+			resolvedEvidenceToolUseIds: resolvedEvidence,
+			...(binding.revision ? { sourceRevision: binding.revision } : {}),
+		};
+	}
+	if (!sourceRevisionBound) {
 		return {
 			...baseAcceptance(),
 			schema_valid: true,
@@ -1180,17 +1211,29 @@ async function bindSourceRevision(input: {
 export function extractSourcePath(
 	input: Record<string, unknown>,
 ): string | undefined {
-	const candidates = [input.path, input.file_path, input.filePath];
+	const candidates = [input.path, input.file_path, input.filePath, input.file];
 	for (const candidate of candidates) {
 		if (typeof candidate === "string" && candidate.trim().length > 0) {
 			return candidate.trim();
 		}
 	}
-	const paths = input.paths;
-	if (Array.isArray(paths)) {
-		for (const candidate of paths) {
+	// The real `read_files` tool accepts several shapes: a single `path`,
+	// a `files` list, a `file_paths` list, and a `paths` list. Every entry
+	// of every list is a source path, so the FIRST one names the source.
+	for (const key of ["paths", "files", "file_paths"] as const) {
+		const value = input[key];
+		if (!Array.isArray(value)) {
+			continue;
+		}
+		for (const candidate of value) {
 			if (typeof candidate === "string" && candidate.trim().length > 0) {
 				return candidate.trim();
+			}
+			if (candidate && typeof candidate === "object") {
+				const path = (candidate as { path?: unknown }).path;
+				if (typeof path === "string" && path.trim().length > 0) {
+					return path.trim();
+				}
 			}
 		}
 	}
@@ -1880,10 +1923,41 @@ export function renderAdjudicationPublicationInstruction(
 		"Authorized remaining-question ids:",
 		...Object.keys(vocabulary.remainingQuestions).map((id) => `  - ${id}`),
 		"",
+	];
+
+	// The PER-FINDING rules are named explicitly, because a decision that
+	// is authorized IN GENERAL can still be forbidden FOR A FINDING. A
+	// candidate that uses a forbidden decision is rejected, and the model
+	// can only avoid that if the rule is stated.
+	const perFindingDecisions = Object.entries(
+		vocabulary.allowedDecisionsByFinding ?? {},
+	);
+	if (perFindingDecisions.length > 0) {
+		lines.push("Permitted decisions, per finding:");
+		for (const [findingId, decisions] of perFindingDecisions) {
+			lines.push(`  ${findingId}: ${decisions.join(", ")}`);
+		}
+		lines.push("");
+	}
+	const perFindingQualifications = Object.entries(
+		vocabulary.requiredQualificationsByFinding ?? {},
+	);
+	if (perFindingQualifications.length > 0) {
+		lines.push("Required qualification codes, per finding:");
+		for (const [findingId, codes] of perFindingQualifications) {
+			lines.push(`  ${findingId}: ${codes.join(", ")}`);
+		}
+		lines.push("");
+	}
+
+	lines.push(
 		"Rules:",
 		"- Do NOT add any field other than the eight listed above.",
 		"- Do NOT include file contents, excerpts, prose or explanations in",
 		"  the JSON.",
+		"- Use a decision that is PERMITTED for the finding you are",
+		"  adjudicating, and include every REQUIRED qualification code for",
+		"  that finding.",
 		"- Cite evidence by the EVIDENCE HANDLE shown on the tool result.",
 		"  Do NOT invent a handle, and do NOT cite a tool name.",
 		"- Publish only when you have at least one evidence handle.",
@@ -1891,7 +1965,7 @@ export function renderAdjudicationPublicationInstruction(
 		"  A missing candidate is a normal outcome.",
 		"- After publishing, continue working normally.",
 		ADJUDICATION_INSTRUCTION_END_MARKER,
-	];
+	);
 	return lines.join("\n");
 }
 
