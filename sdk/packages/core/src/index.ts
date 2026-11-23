@@ -1103,6 +1103,57 @@ export {
 } from "./artifacts/publish";
 export type { ConnectorsRequest } from "./extensions/composio/composio-meta-tools";
 export { resolveComposioConnectionStatePath } from "./extensions/composio/composio-tools-extension";
+// ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01: the
+// adjudication candidate continuity contract.
+//
+// The module is a PRODUCTION seam for a HOST-SUPPLIED, TASK-SCOPED
+// vocabulary: without a supplied vocabulary no candidate is accepted, and
+// without a supplied revision resolver no source revision can be bound.
+//
+// The accepted candidate remains MODEL-AUTHORED and PROVISIONAL. It is
+// never promoted above its canonical evidence, and it never gains
+// authority the canonical tool-call/result record does not give it.
+export {
+	type AcceptedAdjudication,
+	ADJUDICATION_ENVELOPE_KIND,
+	ADJUDICATION_ENVELOPE_SCHEMA_VERSION,
+	ADJUDICATION_SECTION_HEADING,
+	type AdjudicationAcceptance,
+	type AdjudicationApplicationResult,
+	type AdjudicationCandidate,
+	AdjudicationEvidenceRegistry,
+	type AdjudicationParseOutcome,
+	type AdjudicationVocabulary,
+	applyAdjudicationContinuityToCompactedMessages,
+	applyAdjudicationSectionToSummary,
+	attachEvidenceHandlesToAgentMessages,
+	attachEvidenceHandlesToMessages,
+	buildCanonicalEvidenceLedger,
+	type CanonicalEvidenceLedger,
+	collectPublishedAdjudicationCandidates,
+	deriveAcceptedAdjudications,
+	EVIDENCE_HANDLE_HEX_LENGTH,
+	EVIDENCE_HANDLE_MARKER,
+	EVIDENCE_HANDLE_PREFIX,
+	extractSourcePath,
+	hasAuthorizedVocabulary,
+	MAX_ADJUDICATION_ENVELOPE_CHARS,
+	MAX_ADJUDICATION_ENVELOPE_ENTRIES,
+	MAX_CARRIED_ADJUDICATION_CHARS,
+	MAX_CARRIED_ADJUDICATIONS,
+	parseAdjudicationEnvelope,
+	type ResolveAdjudicationCandidateOptions,
+	type RevisionBinding,
+	renderAdjudicationSection,
+	renderEvidenceHandleTrailer,
+	renderSourceRevisionIdentity,
+	resolveAdjudicationCandidate,
+	type SourceRevision,
+	type SourceRevisionBinding,
+	type SourceRevisionResolver,
+	stripAdjudicationSection,
+	stripEvidenceHandleTrailers,
+} from "./extensions/context/adjudication-continuity";
 export {
 	createCompactionStateAwarePrepareTurn,
 	createContextCompactionPrepareTurn,

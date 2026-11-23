@@ -2,6 +2,7 @@ import { join } from "node:path";
 import {
 	computeCandidateContentFingerprint,
 	estimateRequestInputTokens,
+	type MessageWithMetadata,
 } from "@cline/shared";
 import {
 	CompactionCandidateCaptureStore,
@@ -33,6 +34,11 @@ import type {
 	CoreSessionConfig,
 } from "../../types/config";
 import type { ProviderConfig } from "../../types/provider-settings";
+import {
+	type AdjudicationEvidenceRegistry,
+	applyAdjudicationContinuityToCompactedMessages,
+	deriveAcceptedAdjudications,
+} from "./adjudication-continuity";
 import { runAgenticCompaction } from "./agentic-compaction";
 import { runBasicCompaction } from "./basic-compaction";
 import {
@@ -1420,6 +1426,58 @@ export function createImportedHistoryCompactionPrepareTurn(input: {
 	};
 }
 
+/**
+ * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01.
+ *
+ * The DETERMINISTIC adjudication carry-forward.
+ *
+ * It derives the ACCEPTED candidates from the CANONICAL history — never
+ * from a previous summary, never from thinking, never from tool-result
+ * contents — and attaches them to the existing `compaction_summary`
+ * message.
+ *
+ * The derivation is bounded by the SOURCE BOUNDARY: only the canonical
+ * prefix that existed at the boundary is considered, so the provider-visible
+ * prefix stays byte-stable across every continuation.
+ *
+ * When the adjudication seam is absent, or when no candidate is accepted,
+ * the compacted messages are returned UNCHANGED: an absent section is the
+ * truthful representation of "nothing accepted".
+ */
+async function applyAdjudicationCarryForward(
+	compactedMessages: readonly MessageWithMetadata[],
+	canonicalMessages: readonly MessageWithMetadata[],
+	adjudication:
+		| {
+				registry: AdjudicationEvidenceRegistry;
+				vocabulary?: import("./adjudication-continuity").AdjudicationVocabulary;
+				revisionResolver?: import("./adjudication-continuity").SourceRevisionResolver;
+		  }
+		| undefined,
+	sourceMessageCount: number,
+): Promise<{ messages: MessageWithMetadata[] }> {
+	if (!adjudication) {
+		return { messages: [...compactedMessages] };
+	}
+	const boundary = Math.max(
+		0,
+		Math.min(sourceMessageCount, canonicalMessages.length),
+	);
+	const boundaryPrefix = canonicalMessages.slice(0, boundary);
+	const accepted = await deriveAcceptedAdjudications(boundaryPrefix, {
+		registry: adjudication.registry,
+		...(adjudication.vocabulary ? { vocabulary: adjudication.vocabulary } : {}),
+		...(adjudication.revisionResolver
+			? { revisionResolver: adjudication.revisionResolver }
+			: {}),
+	});
+	const applied = applyAdjudicationContinuityToCompactedMessages(
+		compactedMessages,
+		accepted,
+	);
+	return { messages: applied.messages };
+}
+
 export function createCompactionStateAwarePrepareTurn(input: {
 	compact?: ContextPipelinePrepareTurn;
 	getState?: () => SessionCompactionState | undefined;
@@ -1471,6 +1529,27 @@ export function createCompactionStateAwarePrepareTurn(input: {
 	 * operating capacity, never expand it.
 	 */
 	maxRequestTokens?: number;
+	/**
+	 * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01.
+	 *
+	 * The OPT-IN adjudication continuity seam.
+	 *
+	 * When it is absent, the adjudication carry-forward is NOT applied and
+	 * the compaction output is byte-identical to the pre-ACT behaviour.
+	 *
+	 * When it is present, the accepted adjudication candidates are derived
+	 * from the CANONICAL history and carried into the compaction summary as
+	 * a DETERMINISTIC section, independently of whether the summarizer
+	 * chose to repeat the candidate in its prose.
+	 */
+	adjudication?: {
+		/** The session-scoped evidence-handle registry. */
+		registry: AdjudicationEvidenceRegistry;
+		/** The host-supplied task-scoped vocabulary. */
+		vocabulary?: import("./adjudication-continuity").AdjudicationVocabulary;
+		/** The runtime's source-revision resolver. */
+		revisionResolver?: import("./adjudication-continuity").SourceRevisionResolver;
+	};
 }): ContextPipelinePrepareTurn {
 	return async (context) => {
 		const existingState = input.getState?.();
@@ -1608,7 +1687,21 @@ export function createCompactionStateAwarePrepareTurn(input: {
 						sourceMessageCount: countCanonicalSourceMessages(context.messages),
 					},
 				);
-				const contractedMessages = evidenced.messages;
+				// ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01:
+				// carry an ACCEPTED adjudication candidate forward from the
+				// CANONICAL history into the freshly produced compaction
+				// summary, before persistence and before provider preparation.
+				//
+				// The section is DETERMINISTIC: it does not depend on whether
+				// the summarizer chose to repeat the candidate in its prose. A
+				// summarizer that omits the candidate loses nothing.
+				const adjudicated = await applyAdjudicationCarryForward(
+					evidenced.messages,
+					context.messages,
+					input.adjudication,
+					countCanonicalSourceMessages(context.messages),
+				);
+				const contractedMessages = adjudicated.messages;
 				const nextState = createSessionCompactionState({
 					sourceMessages: context.messages,
 					compactedMessages: contractedMessages,
@@ -1665,8 +1758,22 @@ export function createCompactionStateAwarePrepareTurn(input: {
 				context.messages,
 				{ sourceMessageCount: existingState.source_message_count },
 			);
-			return publishWorkingContextEstimate(
+			// ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01:
+			// carry an ACCEPTED adjudication candidate forward from the
+			// CANONICAL history, independently of the summarizer's prose.
+			//
+			// The boundary is the sidecar's OWN source_message_count, the
+			// same boundary the verified-outcome section uses, so the
+			// provider-visible prefix stays byte-stable across every
+			// continuation.
+			const restoredWithAdjudication = await applyAdjudicationCarryForward(
 				restoredWithEvidence.messages,
+				context.messages,
+				input.adjudication,
+				existingState.source_message_count,
+			);
+			return publishWorkingContextEstimate(
+				restoredWithAdjudication.messages,
 				projectedSystemPrompt ?? context.systemPrompt,
 				context.tools,
 				contractMaxRequestTokens,
@@ -1705,7 +1812,16 @@ export function createCompactionStateAwarePrepareTurn(input: {
 					sourceMessageCount: countCanonicalSourceMessages(context.messages),
 				},
 			);
-			const contractedMessages = evidenced.messages;
+			// ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01:
+			// the same deterministic adjudication carry-forward, applied on
+			// the FIRST compaction of a session.
+			const adjudicated = await applyAdjudicationCarryForward(
+				evidenced.messages,
+				context.messages,
+				input.adjudication,
+				countCanonicalSourceMessages(context.messages),
+			);
+			const contractedMessages = adjudicated.messages;
 			const nextState = createSessionCompactionState({
 				sourceMessages: context.messages,
 				compactedMessages: contractedMessages,

@@ -17,6 +17,7 @@ import type {
 } from "@cline/shared";
 import type { ToolRoutingRule } from "../extensions/tools/model-tool-routing";
 import type { TeamEvent } from "../extensions/tools/team";
+import type { CoreAdjudicationConfig } from "./adjudication-config";
 import type { ProviderConfig } from "./provider-settings";
 
 export type CoreAgentMode = AgentMode;
@@ -297,6 +298,30 @@ export interface CoreSessionConfig
 	extensions?: AgentConfig["extensions"];
 	execution?: AgentConfig["execution"];
 	compaction?: CoreCompactionConfig;
+	/**
+	 * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01.
+	 *
+	 * The OPT-IN, HOST-SUPPLIED adjudication contract.
+	 *
+	 * When it is absent (the default), the runtime behaves EXACTLY as
+	 * before: no adjudication candidate is parsed into continuity state, no
+	 * adjudication section is ever added to a compaction summary, and the
+	 * model is never asked to publish one.
+	 *
+	 * When it is present AND enabled, the runtime:
+	 *
+	 *   - exposes a bounded, opaque, session-scoped evidence handle on each
+	 *     source-reading tool result, so the model can cite evidence
+	 *     without having to reproduce a provider-issued identifier;
+	 *   - validates a published candidate against the supplied vocabulary
+	 *     and the canonical tool-call/result record; and
+	 *   - carries an ACCEPTED candidate forward across compaction
+	 *     independently of the summarizer's choice of wording.
+	 *
+	 * The accepted candidate remains MODEL-AUTHORED and PROVISIONAL. It is
+	 * never promoted above its canonical evidence.
+	 */
+	adjudication?: CoreAdjudicationConfig;
 	checkpoint?: CoreCheckpointConfig;
 	onTeamEvent?: (event: TeamEvent) => void;
 	onConsecutiveMistakeLimitReached?: (

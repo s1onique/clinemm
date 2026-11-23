@@ -21,6 +21,10 @@ import { setHomeDirIfUnset } from "@cline/shared/storage";
 import { isOAuthProvider } from "../../auth/provider-auth-registry";
 import type { ConnectorsRequest } from "../../extensions/composio/composio-meta-tools";
 import {
+	AdjudicationEvidenceRegistry,
+	attachEvidenceHandlesToAgentMessages,
+} from "../../extensions/context/adjudication-continuity";
+import {
 	createCompactionStateAwarePrepareTurn,
 	createContextCompactionPrepareTurn,
 	createImportedHistoryCompactionPrepareTurn,
@@ -1052,9 +1056,42 @@ export class LocalRuntimeHost implements RuntimeHost {
 						rawInitialCompactionState.conversation_id?.trim() || sessionId,
 				}
 			: undefined;
+		// ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01:
+		// the SESSION-SCOPED evidence-handle registry.
+		//
+		// The registry is created ONCE per session and lives for the session.
+		// Its secret is what makes a handle unguessable and session-scoped:
+		// a handle minted here never resolves in another session, and the
+		// same canonical tool call always yields the same handle.
+		//
+		// It is created ONLY when the host supplied an enabled adjudication
+		// contract, so the default path allocates nothing.
+		const adjudicationRegistry = configWithProvider.adjudication?.enabled
+			? new AdjudicationEvidenceRegistry({ sessionId })
+			: undefined;
 		const prepareTurn = createCompactionStateAwarePrepareTurn({
 			compact,
 			getState: () => activeSessionRef?.compactionState,
+			// ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01: the
+			// adjudication seam is present ONLY when the host supplied an
+			// enabled contract. Without it the compaction output is
+			// byte-identical to the pre-ACT behaviour.
+			...(adjudicationRegistry
+				? {
+					adjudication: {
+						registry: adjudicationRegistry,
+						...(configWithProvider.adjudication?.vocabulary
+							? { vocabulary: configWithProvider.adjudication.vocabulary }
+							: {}),
+						...(configWithProvider.adjudication?.revisionResolver
+							? {
+								revisionResolver:
+									configWithProvider.adjudication.revisionResolver,
+							}
+							: {}),
+					},
+				}
+				: {}),
 			// ACT-CLINEMM-COMPACTION-TASK-CONTRACT-CONSERVATION-REPAIR01:
 			// use the SAME configured operating ceiling as the compaction
 			// policy. The contract guard must never see a larger capacity than
@@ -1185,7 +1222,41 @@ export class LocalRuntimeHost implements RuntimeHost {
 			prepareTurn,
 			tools,
 			modelTools: runtime.modelTools,
-			hooks: bootstrap.hooks,
+			// ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01: the
+			// EVIDENCE-HANDLE projection.
+			//
+			// The `beforeModel` hook is the EXISTING, sanctioned extension point
+			// for shaping the model-visible request. The hook attaches the
+			// opaque, session-scoped evidence handle to each source-reading
+			// tool result, so the model can cite its evidence without having to
+			// reproduce a provider-issued identifier (which the live receipts
+			// show it cannot do reliably).
+			//
+			// The hook is installed ONLY when the host enabled the adjudication
+			// contract, so the default request is byte-identical to the
+			// pre-ACT behaviour.
+			//
+			// The host's own hooks are preserved: the adjudication hook runs FIRST
+			// and the host hook runs on its RESULT, so a host that replaces the
+			// messages still wins.
+			hooks: adjudicationRegistry
+				? {
+					...bootstrap.hooks,
+					beforeModel: async (ctx) => {
+						const withHandles = attachEvidenceHandlesToAgentMessages(
+							ctx.request.messages,
+							adjudicationRegistry,
+						);
+						const control = await bootstrap.hooks?.beforeModel?.({
+							...ctx,
+							request: { ...ctx.request, messages: withHandles },
+						});
+						return control
+							? { ...control, messages: control.messages ?? withHandles }
+							: { messages: withHandles };
+					},
+				}
+				: bootstrap.hooks,
 			extensions,
 			hookErrorMode: configWithProvider.hookErrorMode,
 			initialMessages: bootstrap.effectiveInput.initialMessages,
