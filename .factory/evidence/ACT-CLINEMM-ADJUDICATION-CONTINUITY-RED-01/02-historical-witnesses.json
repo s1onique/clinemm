@@ -1,0 +1,120 @@
+{
+  "act": "ACT-CLINEMM-ADJUDICATION-CONTINUITY-RED-01",
+  "entry_head": "a493eff078ec5c8f2b6c874ad8f4a85009d1b64f",
+  "session_id": "1795394987994_fpu77",
+  "canonical_snapshot_sha256": "9ca5309aa18e43c97343d87171de20f2a198f6ccfe8f266c1f1c33557afa5dcd",
+  "subject_repository": {
+    "name": "Keycloak",
+    "revision": "42de653b59708e712d694aeb9732f822b7f8fe5b",
+    "branch": "optimize-ftls"
+  },
+  "evidence_label": "REAL",
+  "note": "Short sanitized witness statements only. No credential, no raw transcript, no provider payload body.",
+  "witnesses": {
+    "R8": {
+      "finding_id": "R8",
+      "canonical_message_index": 28,
+      "canonical_message_id": "msg_6ttuJ879",
+      "block_type": "thinking",
+      "block_types_in_message": [
+        "thinking",
+        "tool_use"
+      ],
+      "statement_kind": "ADJUDICATED_WITH_QUALIFICATIONS",
+      "verdict": "CONFIRMED",
+      "qualification": "CONFIRMED for EXPOSURE only (the credential is committed in the chart). Whether the credential is CURRENTLY VALID or USABLE is CONDITIONAL and was never established (NOT_EXECUTED - requires production access).",
+      "source_evidence_ids": [
+        "call_e5cb680973cb413f83d0dd07"
+      ],
+      "source_evidence_kind": "run_commands tool result (chart inspection) in the canonical record",
+      "source_revision": "42de653b59708e712d694aeb9732f822b7f8fe5b",
+      "evidence_sufficiency": "SUFFICIENT_FOR_EXPOSURE_ONLY",
+      "contradictions_known_at_that_time": "none recorded",
+      "compaction_prefix_membership": "36->37 covered prefix 0..73 - ELIGIBLE",
+      "thinking_char_len": 1231,
+      "within_2000_char_serializer_window": true,
+      "has_text_block": false,
+      "sanitized_statement": "The committed bootstrap-admin credential exposure is CONFIRMED as an observation; the credential's current validity/usability remains conditional.",
+      "credential_values_reproduced": false
+    },
+    "R7": {
+      "finding_id": "R7",
+      "canonical_message_index": 40,
+      "canonical_message_id": "msg_2TMSPY6J",
+      "block_type": "thinking",
+      "block_types_in_message": [
+        "thinking",
+        "tool_use"
+      ],
+      "statement_kind": "ADJUDICATED_WITH_QUALIFICATIONS",
+      "verdict": "CONFIRMED",
+      "qualification": "CONFIRMED at the OBSERVATION level only (no Maven test jobs in CI; Docker build skips tests). The SEVERITY may be narrowed. The Java-test COUNT established AT THIS INDEX is 43; the later corrected count must not be retroactively attached to this witness.",
+      "source_evidence_ids": [
+        "call_d61ae0ee65a744cb826a9d46"
+      ],
+      "source_evidence_kind": "run_commands tool result (CI file inspection) in the canonical record",
+      "source_revision": "42de653b59708e712d694aeb9732f822b7f8fe5b",
+      "evidence_sufficiency": "SUFFICIENT_FOR_OBSERVATION_LEVEL_ONLY",
+      "contradictions_known_at_that_time": "none recorded at idx 40",
+      "compaction_prefix_membership": "36->37 covered prefix 0..73 - ELIGIBLE",
+      "thinking_char_len": 981,
+      "within_2000_char_serializer_window": true,
+      "has_text_block": false,
+      "sanitized_statement": "The Java test-execution deficiency is CONFIRMED as an observation, but the severity may be narrowed.",
+      "later_corrected_count_attached": false
+    },
+    "R3": {
+      "finding_id": "R3",
+      "canonical_message_index": 64,
+      "canonical_message_id": "msg_b7kphE6s",
+      "block_type": "thinking",
+      "block_types_in_message": [
+        "thinking",
+        "tool_use"
+      ],
+      "statement_kind": "ADJUDICATED_WITH_QUALIFICATIONS",
+      "verdict": "NARROWED",
+      "qualification": "The specific configuration is within budget: 36 workers x 11 replicas = 396 <= the documented budget of 400. The REMAINING risk is that the pool adjustment is a MANUAL process (a comment in git history) with NO AUTOMATED enforcement. Manual adjustment and automated enforcement are DISTINCT and must not be merged.",
+      "source_evidence_ids": [
+        "call_f52d99c7ca85432da97abed3"
+      ],
+      "source_evidence_kind": "run_commands tool result (git history inspection) in the canonical record",
+      "source_revision": "42de653b59708e712d694aeb9732f822b7f8fe5b",
+      "evidence_sufficiency": "SUFFICIENT",
+      "arithmetic_verified": "36 x 11 = 396 <= 400 - VERIFIED ARITHMETIC",
+      "contradictions_known_at_that_time": "none recorded",
+      "compaction_prefix_membership": "36->37 covered prefix 0..73 - ELIGIBLE",
+      "thinking_char_len": 1387,
+      "within_2000_char_serializer_window": true,
+      "has_text_block": false,
+      "sanitized_statement": "The pool-budget risk is NARROWED: the configuration fits the budget; the residual risk is manual, unenforced pool adjustment."
+    },
+    "R4_PROGRESS": {
+      "finding_id": "R4",
+      "canonical_message_index": 124,
+      "canonical_message_id": "msg_r8qDJLKQ",
+      "block_type": "thinking",
+      "block_types_in_message": [
+        "thinking",
+        "tool_use"
+      ],
+      "statement_kind": "IN_PROGRESS_NARROWING",
+      "verdict": null,
+      "qualification": "NOT a terminal verdict. The model narrowed the startup-build drift mechanism (falsified the mixed-build/drift mechanism at least for the freemarker case; revised severity approximately 2/5; described as redundant work but not drift-prone). The model had NOT reached a terminal R4 verdict.",
+      "source_evidence_ids": [
+        "call_8f7c2f095db04a1a9c09b9c0"
+      ],
+      "source_evidence_kind": "run_commands tool result (startup script inspection) in the canonical record",
+      "source_revision": "42de653b59708e712d694aeb9732f822b7f8fe5b",
+      "evidence_sufficiency": "SUFFICIENT_FOR_NARROWING_ONLY",
+      "contradictions_known_at_that_time": "none recorded",
+      "compaction_prefix_membership": "62->63 covered prefix 0..125 - ELIGIBLE",
+      "thinking_char_len": 13068,
+      "within_2000_char_serializer_window": false,
+      "has_text_block": false,
+      "sanitized_statement": "In-progress narrowing of the startup-build drift mechanism; no terminal verdict was reached.",
+      "preservation_requirement_established": false,
+      "preservation_requirement_note": "An in-progress narrowing is not an ADJUDICATION. No preservation requirement is derived from this witness."
+    }
+  }
+}

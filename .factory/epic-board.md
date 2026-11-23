@@ -38671,3 +38671,185 @@ investigation is NOT reopened: the provenance corrections, the causal withdrawal
 ## Evidence
 
 `.factory/evidence/ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01/` (see `containment-record.md`)
+
+# ACT-CLINEMM-ADJUDICATION-CONTINUITY-RED-01 — RED_REPRODUCED_BOUNDARY_CLASSIFIED — 2026-11-23
+
+```text
+ACT_ID: ACT-CLINEMM-ADJUDICATION-CONTINUITY-RED-01
+TYPE: reproduction and causal discrimination (no production repair authorized)
+VERDICT: RED_REPRODUCED_BOUNDARY_CLASSIFIED
+ENTRY_HEAD: a493eff078ec5c8f2b6c874ad8f4a85009d1b64f   (== EXPECTED ENTRY_HEAD)
+FINAL_HEAD: a493eff078ec5c8f2b6c874ad8f4a85009d1b64f   (unchanged)
+BRANCH: main (no ACT branch created)
+PRODUCTION_CODE_CHANGES: 0
+SESSION_ID: 1795394987994_fpu77
+SUBJECT_REVISION: Keycloak 42de653b59708e712d694aeb9732f822b7f8fe5b (optimize-ftls)
+CANONICAL_SNAPSHOT_SHA256: 9ca5309aa18e43c97343d87171de20f2a198f6ccfe8f266c1f1c33557afa5dcd
+EVIDENCE: .factory/evidence/ACT-CLINEMM-ADJUDICATION-CONTINUITY-RED-01/
+  00-entry-identity.md
+  01-source-and-test-map.md
+  02-historical-witnesses.json
+  03-summarizer-correlation.md
+  04-transformation-boundary-matrix.md
+  05-red-reproduction.md
+  06-causal-discriminator.md
+  07-ablation-and-necessity.md
+  08-security-negative-controls.md
+  09-executable-gates.md
+  10-qualification-and-next-action.md
+  artifact-hashes.json
+  verification/
+```
+
+## The question and the answer
+
+> *At what exact production boundary does ClineMM lose a previously established, qualified
+> adjudication, and what is the minimum safe contract necessary to prevent that loss?*
+
+**Boundary: the compaction SOURCE SELECTION (stage M1), inside `buildBudgetProjection()`.**
+
+```ts
+// sdk/packages/core/src/extensions/context/budget-projection/project.ts:25-43
+case "agentic_summary":
+case "basic_compaction_projection":
+    return {
+        protectLatestTypedUser: true,
+        protectLiveTailFromDrop: true,
+        dropUnsafeOutsideLiveTail: true,
+        dropThinkingBlocks: true,          // ◄── THE BOUNDARY
+    };
+```
+
+`dropThinkingBlocks()` is invoked at `project.ts:506-515` — **before** the
+`estimatedTokens <= options.targetTokens` early return at `project.ts:539`. The removal is therefore
+**unconditional**, not a budget-pressure artefact.
+
+**Loss classification: L1 — Budget loss.**
+
+## The RED hypothesis was WRONG, and the measurement corrected it
+
+The ACT hypothesized that the loss was the **2 000-character thinking truncation**
+(`truncateText(block.thinking, 2_000)`). It is not.
+
+| Witness | canonical idx | `thinking` length | Inside the 2000-char window? | Lost? |
+|---|---|---|---|---|
+| R8 | 28 | 1231 | **YES** | **YES** |
+| R7 | 40 | 981 | **YES** | **YES** |
+| R3 | 64 | 1387 | **YES** | **YES** |
+| R4 (progress) | 124 | 13068 | no | YES |
+
+**All three adjudications that matter fit inside the truncation window and are lost anyway.**
+The serializer is demonstrably capable of carrying them (Discriminator B: the same canonical input
+serializes with the adjudication and its `[Bot thinking]` marker intact).
+
+All four historical witnesses carry the block shape `[thinking, tool_use]` with **NO `text` block**,
+so the adjudication has **no other carrier**. A verdict stated in ordinary assistant text survives
+(RED-3's control).
+
+## The decisive historical measurement
+
+Every captured summarizer request contains **ZERO** `[Bot thinking]` markers and **ZERO**
+adjudication phrases — the adjudications were removed **before** the summarizer request was built.
+
+| Capture (by the capture's own `timestamp`) | Joins to | `[Bot thinking]` | adjudication phrases |
+|---|---|---|---|
+| `cap_41f75c5386d5db78…1` 2026-11-23T01:02:12.706Z | **36→37** (prefix 0..73) | **0** | **0** |
+| `cap_41f75c5386d5db78…2` 2026-11-23T01:14:57.428Z | **62→63** (prefix 0..125) | **0** | **0** |
+| `cap_41f75c5386d5db78…3` 2026-11-23T01:32:30.273Z | a later boundary | **0** | **0** |
+
+**CORRECTION to the previous ACT's P1 statement.** The subject-session captures are **#1/#2/#3**,
+**not #5/#6/#7** — the prior numbering used the FILESYSTEM MTIME, while the authoritative field is
+the capture's own `timestamp`. The join is **exact on payload identity** (the captured tool-name
+sequence matches canonical `tool_use` index 0..33 for 36→37 and 34..57 for 62→63), so
+`SUMMARIZER_CAPTURE_UNBOUND` does **NOT** apply. The prior ACT's *conclusion* is unaffected and is
+re-derived from the correct captures.
+
+## The stage matrix
+
+| Finding | M0 | M1 | M2 | M3 | M4 | M5 | M6 | Earliest loss | Class |
+|---|---|---|---|---|---|---|---|---|---|
+| R8 | PRESENT_EXACT | **ABSENT** | ABSENT | ABSENT | ABSENT | ABSENT | ABSENT | **M1 source selection** | **L1** |
+| R7 | PRESENT_EXACT | **ABSENT** | ABSENT | ABSENT | ABSENT | ABSENT | ABSENT | **M1 source selection** | **L1** |
+| R3 | PRESENT_EXACT | **ABSENT** | ABSENT | ABSENT | ABSENT | ABSENT | ABSENT | **M1 source selection** | **L1** |
+| R4 (progress) | PRESENT_EXACT | **ABSENT** | ABSENT (+L2) | ABSENT | ABSENT | ABSENT | ABSENT | **M1 source selection** | **L1** |
+
+**All four fail at the SAME stage for the SAME mechanism.** One bounded defect, one bounded repair
+surface — not a "compaction memory bug".
+
+## Discriminators (controlled: identical canonical input, budget, model config, cutoff)
+
+| # | Question | Answer | Excludes |
+|---|---|---|---|
+| A | does the verdict reach the budgeted summarizer input? | **NO** | — (this IS the boundary) |
+| B | does the serializer drop/truncate it? | **NO** | **L2** |
+| C | did the summarizer select it out? | **NO** | **L3** |
+| D | did the provider projection drop it? | **NO** | **L4** |
+
+Discriminator A is decisive: the SAME canonical input under
+`policyIntent: "normal_provider_request"` **keeps** the thinking block; only the compaction-specific
+policy removes it.
+
+## The RED
+
+`sdk/packages/core/src/extensions/context/compaction.adjudication-continuity.red01.test.ts` — 5
+scenarios, driven through the REAL production seam
+(`createCompactionStateAwarePrepareTurn` → `createContextCompactionPrepareTurn(agentic)` →
+`runAgenticCompaction` → `buildBudgetProjection` → `serializeConversation` →
+`buildSummaryRequest` → `generateSummary` (mocked at the existing `createHandlerAsync` boundary,
+with the EXACT request string captured) → `applyTaskContractToCompactedMessages` →
+`applyVerifiedEvidenceToCompactedMessages` → `MessageBuilder.buildForApi`).
+
+RED-3 and RED-4 are internally discriminating: the CONTROL assertion on the preceding line
+**passes** while the RED assertion fails.
+
+**Necessity ablation** (test-local only; A/B byte-identical once the restored block is removed):
+A = RED, B = adjudication visible, C = RED restored. This is **structural necessity** — it is
+**NOT** live-model convergence and is not labelled LIVE.
+
+**Security**: 8 negative controls PASSING — a synthetic secret in a verdict, a copied instruction, a
+tool result falsely claiming to be a system instruction, an unsupported assertion, a later
+contradiction, a credential-bearing path, a failed/truncated/ambiguous source, and a SHORT
+secret-bearing verdict (size is not a safety property). Refusal predicates, **not** a blanket regex
+sanitizer; the production `isSensitiveSourceFilePath()` is reused.
+
+**Conservation**: `MAX_CARRIED_OUTCOMES = 12` unchanged; `SOURCE_FILE_FACT_CARRY_FORWARD_ENABLED =
+false` unchanged; canonical history unchanged; tool pairing preserved; sidecar schema unchanged;
+stable prefix unchanged; no extra no-op model request; no cross-session contamination; no stale
+verdict authority.
+
+## Gates
+
+```text
+RED    (focused, dedicated config)   5 failed | 5                     EXIT=1   <- the required failure
+EVIDENCE FIDELITY                    39 passed (39)                   EXIT=0
+CONTEXT DIR (default suite)          479 passed | 2 skipped (481)     EXIT=0
+DISCRIMINATOR + CONTROLS             23 passed (23)                   EXIT=0
+TYPECHECK                             44 diagnostics == entry-HEAD baseline (44 -> 44 by stash check);
+                                       ACT-owned = 0
+PRODUCTION DELTA                      ZERO (2 test-harness config files only)
+```
+
+The RED is **excluded from the default suite** (dedicated
+`vitest.red.adjudication-continuity-red01.config.ts` + `bun run test:red:adjudication-continuity-red01`),
+following the existing `compaction.summary-churn01.red.test.ts` precedent. The RED reproduces
+**three times** with identical assertion lines and exit code.
+
+## Next action (proposed, NOT authorized, NOT executed)
+
+`ACT-CLINEMM-ADJUDICATION-CONTINUITY-REPAIR-01`, restricted to the **M1** boundary, with the eight
+recorded preconditions (source-grounded; carries the qualification; not promotable from untrusted
+source instructions; does not expose secrets or private reasoning; fits the existing budget;
+survives multiple compactions without stale authority; does not disrupt the stable provider prefix;
+removal restores RED).
+
+**Design note the successor must confront:** re-enabling thinking blocks wholesale (surface S1) is a
+strictly **larger disclosure surface** than carrying a bounded qualified verdict (surface S2) — S1
+carries *all* reasoning, including unadjudicated reasoning and anything the model echoed. S1 must not
+be presented as "simply carrying the verdict".
+
+No live model was executed. No production repair was made. No new persistent adjudication ledger was
+created.
+
+## Evidence
+
+`.factory/evidence/ACT-CLINEMM-ADJUDICATION-CONTINUITY-RED-01/` (see `10-qualification-and-next-action.md`)

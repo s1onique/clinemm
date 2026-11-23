@@ -1,0 +1,235 @@
+{
+  "act": "ACT-CLINEMM-ADJUDICATION-CONTINUITY-RED-01",
+  "entry_head": "a493eff078ec5c8f2b6c874ad8f4a85009d1b64f",
+  "final_head": "a493eff078ec5c8f2b6c874ad8f4a85009d1b64f",
+  "branch": "main",
+  "session_id": "1795394987994_fpu77",
+  "subject_repository_revision": "42de653b59708e712d694aeb9732f822b7f8fe5b",
+  "canonical_snapshot_sha256": "9ca5309aa18e43c97343d87171de20f2a198f6ccfe8f266c1f1c33557afa5dcd",
+  "production_delta": "ZERO",
+  "verdict": "RED_REPRODUCED_BOUNDARY_CLASSIFIED",
+  "earliest_loss_boundary": "M1_compaction_source_selection (buildBudgetProjection / dropThinkingBlocks, agentic_summary policy)",
+  "loss_classification": "L1_budget_loss",
+  "committed_artifacts": [
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-CONTINUITY-RED-01/00-entry-identity.md",
+      "sha256": "d609ca7581e6e91b27ce1b4d43bac9c7c82e288eda9c5521a4470cf93f2a8bc9",
+      "bytes": 9685,
+      "label": "committed_evidence"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-CONTINUITY-RED-01/01-source-and-test-map.md",
+      "sha256": "613fa7fb3b43e7574434d9bcf27f6eda7eeac9585b5727ae2ed2fc4931000f66",
+      "bytes": 12038,
+      "label": "committed_evidence"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-CONTINUITY-RED-01/03-summarizer-correlation.md",
+      "sha256": "1d5ae77c7b0941cc750ddd49c0342b880292700a0422f28e740cf8aa4138ffe0",
+      "bytes": 6905,
+      "label": "committed_evidence"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-CONTINUITY-RED-01/04-transformation-boundary-matrix.md",
+      "sha256": "c6a0db92100d55ff8a9899850da2a18e518c2ad8d0d902345a1a85eafb6a997d",
+      "bytes": 11780,
+      "label": "committed_evidence"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-CONTINUITY-RED-01/05-red-reproduction.md",
+      "sha256": "3d410baf2368a5931ebe83eea769f75b9f87f96ca408d5a6688f0878aa53ef7b",
+      "bytes": 9373,
+      "label": "committed_evidence"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-CONTINUITY-RED-01/06-causal-discriminator.md",
+      "sha256": "b2f8e5527d5357abc320bfc97f337ca5ba6cc99c5ec8b61395800878f1b6c269",
+      "bytes": 6880,
+      "label": "committed_evidence"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-CONTINUITY-RED-01/07-ablation-and-necessity.md",
+      "sha256": "d99e08fd79f7f1f7f802391db8de28b489831ffa889b6833606f2db1d71f8749",
+      "bytes": 5484,
+      "label": "committed_evidence"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-CONTINUITY-RED-01/08-security-negative-controls.md",
+      "sha256": "956b2849b93d6ccb28540a21fbc3c1aee7ec55e09a8f5c118467890bbf757369",
+      "bytes": 8177,
+      "label": "committed_evidence"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-CONTINUITY-RED-01/09-executable-gates.md",
+      "sha256": "77eef649934f7774b9a48cc33050d63cb60a8b75e320d3dcbb25ead592bf6940",
+      "bytes": 5984,
+      "label": "committed_evidence"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-CONTINUITY-RED-01/10-qualification-and-next-action.md",
+      "sha256": "84286521c7216a1ff4f02ae4e192980d07e96bcc596bb247171e977241923542",
+      "bytes": 9775,
+      "label": "committed_evidence"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-CONTINUITY-RED-01/02-historical-witnesses.json",
+      "sha256": "1a5176d6635563393760f9de78656bb20fa39eee06720b041acce1fdac152e23",
+      "bytes": 6297,
+      "label": "committed_evidence"
+    },
+    {
+      "path": "sdk/packages/core/src/extensions/context/compaction.adjudication-continuity.red01.test.ts",
+      "sha256": "8479ac262f0396a504a75893386c3031f8bf0350e6aa2a86abab0dbf5017c8d9",
+      "bytes": 28121,
+      "label": "act_source_artifact"
+    },
+    {
+      "path": "sdk/packages/core/src/extensions/context/compaction.adjudication-continuity.discriminator01.test.ts",
+      "sha256": "13bdd2745538fbb6862b426b4e190311c35a86447988ba977df2b7728c134e39",
+      "bytes": 30205,
+      "label": "act_source_artifact"
+    },
+    {
+      "path": "sdk/packages/core/vitest.red.adjudication-continuity-red01.config.ts",
+      "sha256": "29c6663dc356c51278f57837c1eafb64c5a5b8332fc8af268502bafc70bb4e07",
+      "bytes": 1815,
+      "label": "act_source_artifact"
+    }
+  ],
+  "private_input_artifacts": [
+    {
+      "path": "~/.vscodium-roz/cline-data/sessions/1795394987994_fpu77/1795394987994_fpu77.messages.json",
+      "sha256": "9ca5309aa18e43c97343d87171de20f2a198f6ccfe8f266c1f1c33557afa5dcd",
+      "bytes": 827899,
+      "label": "private_input_artifact"
+    },
+    {
+      "path": "~/.vscodium-roz/cline-data/sessions/1795394987994_fpu77/1795394987994_fpu77.compaction.json",
+      "sha256": "27984ab03e56d66cba54f2b66475fd8a4f8a803becdcb18dca4c5a34d5570091",
+      "bytes": 94713,
+      "label": "private_input_artifact"
+    },
+    {
+      "path": "~/.vscodium-roz/cline-data/sessions/1795394987994_fpu77/1795394987994_fpu77.json",
+      "sha256": "2220739301afdb8c1609befa02653fc0fbb6355a5c5ead55fa9cd336155429da",
+      "bytes": 2304,
+      "label": "private_input_artifact"
+    },
+    {
+      "path": "~/.vscodium-roz/cline-data/private/compaction-candidates/1795394987994_fpu77_37_36-ee8075901728--985b23ca0f7536fa576f74b4756985aaab7938fa6b615d0d7594b15523f0ab53.json",
+      "sha256": "85bfffaf869fcbee9b8d91d94d3a60c77610fc5d71f232941809291bf1f41da1",
+      "bytes": 360707,
+      "label": "private_input_artifact"
+    },
+    {
+      "path": "~/.vscodium-roz/cline-data/private/compaction-candidates/1795394987994_fpu77_63_62-4e1cd3c1082b--c7c79aef22b45ef75c6a605d69f7a9c5cb8e1f24de8fb492129c9ae6038f2a18.json",
+      "sha256": "dcdd4c73e00443bbc91b11971c868ae0b972547565055713a24703bc537f45ee",
+      "bytes": 342791,
+      "label": "private_input_artifact"
+    },
+    {
+      "path": "~/.vscodium-roz/cline-data/private/compaction-candidates/1795394987994_fpu77_97_96-95b48fc0e5e6--0999ae43e6b762a797355e04ff69796efde55914bc833b90fa292a18288f2c3d.json",
+      "sha256": "e4dc3675f979afd93da60f445f4b6ae946e1b7ec0884798907331737aa9da34b",
+      "bytes": 326991,
+      "label": "private_input_artifact"
+    },
+    {
+      "path": "~/.vscodium-roz/cline-data/private/compaction-candidates/1795394987994_fpu77_98_97-8aeddaef5256--1c8a8a4f4953e3bf2d9612c0d244407e0060f73ca74ccb6798da8fae3d4c5814.json",
+      "sha256": "cde8cdbc7d714c29e611b69914126aaa17550dd9d0bef8f0c6375e8fbbb89429",
+      "bytes": 345142,
+      "label": "private_input_artifact"
+    },
+    {
+      "path": "~/.vscodium-roz/cline-data/provider-request-captures/cap_41f75c5386d5db78.ai_sdk_prompt.1.provider-request.json",
+      "sha256": "f8c4f998840618825e234ea6dcdb67463ef6f92f5a54a586980886d52d52b3bb",
+      "bytes": 29055,
+      "label": "private_summarizer_capture"
+    },
+    {
+      "path": "~/.vscodium-roz/cline-data/provider-request-captures/cap_41f75c5386d5db78.ai_sdk_prompt.2.provider-request.json",
+      "sha256": "e731913590fb7b6637ff89ef692956bf49c1d2a7d0a17f9db983cd3c0a237ef3",
+      "bytes": 31533,
+      "label": "private_summarizer_capture"
+    },
+    {
+      "path": "~/.vscodium-roz/cline-data/provider-request-captures/cap_41f75c5386d5db78.ai_sdk_prompt.3.provider-request.json",
+      "sha256": "123454c4ed8e352416884cb7c560784150a5bc231c74728d01a43832a1d06e9e",
+      "bytes": 33661,
+      "label": "private_summarizer_capture"
+    },
+    {
+      "path": "~/.vscodium-roz/cline-data/provider-request-captures/cap_41f75c5386d5db78.ai_sdk_prompt.4.provider-request.json",
+      "sha256": "3f86b04e8bd12e73ec86925b251ed4740cc0bed36595e42350a1057feb84201b",
+      "bytes": 38384,
+      "label": "private_summarizer_capture"
+    },
+    {
+      "path": "~/.vscodium-roz/cline-data/provider-request-captures/cap_41f75c5386d5db78.ai_sdk_prompt.5.provider-request.json",
+      "sha256": "d1bdad1cb7189adb31abb9fa0ff4526b50e0ec1f70491eb3784b00a64889a94c",
+      "bytes": 32713,
+      "label": "private_summarizer_capture"
+    },
+    {
+      "path": "~/.vscodium-roz/cline-data/provider-request-captures/cap_41f75c5386d5db78.ai_sdk_prompt.6.provider-request.json",
+      "sha256": "78ddc4f81bf6b32d6f92fb62aac0325c2a3a89194cfef6994a042535b581ab1f",
+      "bytes": 28152,
+      "label": "private_summarizer_capture"
+    },
+    {
+      "path": "~/.vscodium-roz/cline-data/provider-request-captures/cap_41f75c5386d5db78.ai_sdk_prompt.7.provider-request.json",
+      "sha256": "6cb7e0f3ef52a060e6e931da64a6e09503be8ed7cc3ac7c3a9b69e5721173b99",
+      "bytes": 33940,
+      "label": "private_summarizer_capture"
+    }
+  ],
+  "private_note": "All private_input_artifacts remain OUTSIDE Git in their original locations. No raw transcript, provider payload, summarizer capture body or credential is committed.",
+  "previous_act_artifacts_verified_unchanged": {
+    "directory": ".factory/evidence/ACT-CLINEMM-ROUND-C-ADJUDICATION-CONVERGENCE-RECON-01",
+    "count": 8,
+    "result": "ALL_UNCHANGED"
+  },
+  "verification_artifacts": [
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-CONTINUITY-RED-01/verification/README.md",
+      "sha256": "ad81fa747fd8c6e5b58943d2a8e9019206642d1a1158209141952390fc27a789",
+      "bytes": 1491,
+      "label": "verification_artifact"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-CONTINUITY-RED-01/verification/gate1-focused-red.txt",
+      "sha256": "3afbfeb40c22b4d77da940e48e3fefabf6da6ac61e25d76ddd1c006687d75abd",
+      "bytes": 11305,
+      "label": "verification_artifact"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-CONTINUITY-RED-01/verification/gate2-evidence-fidelity.txt",
+      "sha256": "30e472df65d721637bb1926f8053e0f2198cea19ec777294fb63aa7ead0009e1",
+      "bytes": 509,
+      "label": "verification_artifact"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-CONTINUITY-RED-01/verification/gate3-context-directory.txt",
+      "sha256": "1be17633bf877a09170697534f91365b861c3922c0452fec62739caf439bec52",
+      "bytes": 3787,
+      "label": "verification_artifact"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-CONTINUITY-RED-01/verification/gate4-discriminator-controls.txt",
+      "sha256": "0528915413785e361f87defd46c234fc39998773b465de2060e9d49d3a6d3067",
+      "bytes": 527,
+      "label": "verification_artifact"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-CONTINUITY-RED-01/verification/gate5-typecheck.txt",
+      "sha256": "d1f259b3799d79cb49696c51a2e50a6730c2378a9ded4e2ad4142d52e25a4f7f",
+      "bytes": 12702,
+      "label": "verification_artifact"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-CONTINUITY-RED-01/verification/red01-first-reproduction.txt",
+      "sha256": "1e19b59b582b078d83ed846179c5a437611547a4a80cc95711edb3d6e3c932b5",
+      "bytes": 11095,
+      "label": "verification_artifact"
+    }
+  ]
+}

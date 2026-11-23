@@ -1,0 +1,12 @@
+(node:43620) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core
+
+ ✓ src/extensions/context/compaction.evidence-fidelity01.test.ts (39 tests) 17ms
+
+ Test Files  1 passed (1)
+      Tests  39 passed (39)
+   Start at  05:55:15
+   Duration  411ms (transform 263ms, setup 0ms, import 354ms, tests 17ms, environment 0ms)
+

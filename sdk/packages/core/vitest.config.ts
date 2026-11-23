@@ -39,6 +39,30 @@ export default defineConfig({
 			// The PASSING witness for the same mechanism and for the causal
 			// ablation is `compaction.summary-churn01.test.ts`.
 			"src/extensions/context/compaction.summary-churn01.red.test.ts",
+			// ACT-CLINEMM-ADJUDICATION-CONTINUITY-RED-01: the RED witness.
+			//
+			// This file asserts the ADJUDICATION-CONTINUITY invariant — that a
+			// previously established, source-grounded, QUALIFIED adjudication
+			// remains available in the provider-visible continuation after
+			// compaction. It FAILS against the current production behaviour,
+			// because `buildBudgetProjection()` with the `agentic_summary`
+			// policy drops EVERY `thinking` block from the summarizer input
+			// (see `resolveProjectionPolicy()` in
+			// `budget-projection/project.ts`), so a verdict that lives only in
+			// a thinking block is removed BEFORE the summarizer request is
+			// built.
+			//
+			// It is deliberately EXCLUDED from the default suite and retained
+			// as an isolated receipt of the observed defect. It must not be
+			// flipped to GREEN by weakening the assertion; the repair is a
+			// SEPARATE, later ACT
+			// (ACT-CLINEMM-ADJUDICATION-CONTINUITY-REPAIR-01).
+			//
+			// The PASSING companion for the same mechanism, for the causal
+			// discriminators, the necessity ablation and the security
+			// negative controls, is
+			// `compaction.adjudication-continuity.discriminator01.test.ts`.
+			"src/extensions/context/compaction.adjudication-continuity.red01.test.ts",
 		],
 		// Process, Git, and SQLite integration coverage shares this suite with
 		// pure unit tests. Windows hosted runners regularly exceed Vitest's 5s

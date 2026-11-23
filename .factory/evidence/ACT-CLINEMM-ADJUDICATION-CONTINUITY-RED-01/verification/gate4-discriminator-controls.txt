@@ -1,0 +1,12 @@
+(node:43840) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core
+
+ ✓ src/extensions/context/compaction.adjudication-continuity.discriminator01.test.ts (23 tests) 6ms
+
+ Test Files  1 passed (1)
+      Tests  23 passed (23)
+   Start at  05:55:17
+   Duration  351ms (transform 223ms, setup 0ms, import 305ms, tests 6ms, environment 0ms)
+
