@@ -1,0 +1,4 @@
+ sdk/packages/core/package.json                     |  1 +
+ sdk/packages/core/vitest.config.ts                 | 24 +++++++++++
+ ...est.red.adjudication-continuity-red01.config.ts | 50 ++++++++++++++++++++++
+ 3 files changed, 75 insertions(+)

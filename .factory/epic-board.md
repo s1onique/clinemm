@@ -38853,3 +38853,103 @@ created.
 ## Evidence
 
 `.factory/evidence/ACT-CLINEMM-ADJUDICATION-CONTINUITY-RED-01/` (see `10-qualification-and-next-action.md`)
+
+# ACT-CLINEMM-ADJUDICATION-CONTINUITY-REPAIR-01 — HALT_TRUST_BOUNDARY_UNRESOLVED — 2026-11-23
+
+```text
+ACT_ID: ACT-CLINEMM-ADJUDICATION-CONTINUITY-REPAIR-01
+TYPE: repair with a mandatory trust and feasibility gate (no repair authorized until G2 passes)
+VERDICT: HALT_TRUST_BOUNDARY_UNRESOLVED
+ENTRY_HEAD: a493eff078ec5c8f2b6c874ad8f4a85009d1b64f   (== ACT-expected ENTRY_HEAD)
+RED_ARTIFACT_HEAD: d69cfb9befe957ec87a034050bb7b4c72f1a0851   (discovered, not predicted)
+FINAL_HEAD: 172efa60faa74ec6431b93a1810eb279d8c1add3
+BRANCH: main (no ACT branch created)
+PRODUCTION_CODE_CHANGES: 0   (shipped src/ diff vs ENTRY_HEAD = 0 bytes)
+RED_WITNESS_MODIFIED_BY_THIS_ACT: NO   (byte-identical to d69cfb9be)
+SESSION_ID: 1795394987994_fpu77
+SUBJECT_REVISION: Keycloak 42de653b59708e712d694aeb9732f822b7f8fe5b (optimize-ftls)
+CANONICAL_SNAPSHOT_SHA256: 9ca5309aa18e43c97343d87171de20f2a198f6ccfe8f266c1f1c33557afa5dcd  (exact match)
+EVIDENCE: .factory/evidence/ACT-CLINEMM-ADJUDICATION-CONTINUITY-REPAIR-01/
+  00-entry-and-red-identity.md
+  01-red-ablation-correction.md
+  02-trust-feasibility-probe.md
+  03-mechanism-selection.md
+  04-minimum-implementation-contract.md
+  05-red-green-and-ablation.md
+  06-security-adversarial-tests.md
+  07-conservation-tests.md
+  08-executable-gates.md
+  09-build-and-live-qualification.md
+  10-exit-report.md
+  artifact-hashes.json
+  verification/
+```
+
+## Why this ACT halted
+
+The G2 trust-feasibility gate was **mandatory** and it did **not** pass. The
+decisive measurements, taken against the frozen canonical snapshot:
+
+```text
+BLOCK SHAPE (idx 28 R8, 40 R7, 64 R3, 124 R4)   [thinking, tool_use]  — NO text block, all four
+ADJUDICATION PHRASE OCCURRENCES (whole 196-message record)
+  R8 phrase   1 occurrence   -> thinking @ 28
+  R7 phrase   1 occurrence   -> thinking @ 40
+  R3 phrase   1 occurrence   -> thinking @ 64
+NON-THINKING VERDICT-KEYWORD OCCURRENCES
+  text         1 CONFIRMED + 1 NARROWED  -> the USER's task-prompt RUBRIC (the allegation)
+  tool_result  4 CONFIRMED                -> Java source @Column(name = "CONFIRMED")  (lexical noise)
+STRUCTURED VERDICT FIELDS across ALL 97 thinking blocks
+  labelled fields (verdict:/finding:/decision:/evidence:/qualification:)   0
+  JSON block in R8/R7/R3                                                    0
+  markdown heading in R8/R7/R3                                              0
+```
+
+The historical adjudications exist **only** inside free-form private reasoning
+prose with **no field boundary**. Every mechanism that reaches them must
+therefore *search* private reasoning, which is the ACT's explicit trust-gate
+failure condition ("If eligibility requires inspecting arbitrary private
+reasoning or unrestricted file-result text, the trust gate fails").
+
+## Candidate outcomes (executable, 16 probe tests)
+
+```text
+S1  raw thinking into the summarizer    REJECT — delivers the verdict AND leaks the model's
+                                                 unrelated private reasoning AND its speculative
+                                                 severity numbers; unbounded disclosure surface
+S2  assistant_text carrier               REJECT (historical) — witness has no text block;
+                                                 extraction -> no_verdict_token
+S2  tool_result carrier                 REJECT — carries the EVIDENCE, not the ADJUDICATION;
+                                                 can carry copied untrusted instructions
+S2  thinking carrier                    REJECT — would succeed, but ONLY by reading
+                                                 free-form private reasoning prose
+S3  authored non-reasoning statement    FUTURE-FACING ONLY — does not recover R3/R7/R8
+```
+
+## Gates
+
+```text
+RED    (dedicated config)                5 failed | 5                  EXIT=1   <- RED preserved
+DISCRIMINATOR + CONTROLS (G0.2)        24 passed (24)                EXIT=0   (predecessor 23 +1)
+TRUST-FEASIBILITY PROBE (G2, new)      16 passed (16)                EXIT=0
+EVIDENCE FIDELITY                      39 passed (39)                EXIT=0
+CONTEXT DIR (default suite)            496 passed | 2 skipped (498)  EXIT=0   (predecessor 479 +17)
+TYPECHECK                               44 diagnostics == baseline (44); ACT-owned = 0
+BIOME                                   clean (1 pre-existing info in the predecessor's CONTROL 7)
+PRODUCTION DELTA                        ZERO (shipped src/ diff = 0 bytes)
+```
+
+The RED is **excluded from the default suite** and remains runnable on demand
+via `bun run test:red:adjudication-continuity-red01`. No intentionally failing
+test was left in the default suite.
+
+## Next action (NOT authorized, NOT executed)
+
+Authorize (or decline) a **new model-output contract** that lets a model publish a
+qualified adjudication as a **structured, source-revision-bound, non-reasoning
+artifact** in the canonical record. That is outside this bounded M1 repair
+(G2.2's HALT_SCOPE_EXPANSION condition) and requires a separate ACT.
+
+No production repair was made. No live model was executed. No VSIX was built.
+No new persistent adjudication ledger was created. The source-file excerpt
+carry-forward stays `false`; `MAX_CARRIED_OUTCOMES` stays `12`.

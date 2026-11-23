@@ -1,0 +1,216 @@
+{
+  "act": "ACT-CLINEMM-ADJUDICATION-CONTINUITY-REPAIR-01",
+  "verdict": "HALT_TRUST_BOUNDARY_UNRESOLVED",
+  "entry_head": "a493eff078ec5c8f2b6c874ad8f4a85009d1b64f",
+  "red_artifact_head": "d69cfb9befe957ec87a034050bb7b4c72f1a0851",
+  "final_head": "172efa60faa74ec6431b93a1810eb279d8c1add3",
+  "subject_revision": "42de653b59708e712d694aeb9732f822b7f8fe5b (Keycloak, read-only subject under audit)",
+  "historical_session": "1795394987994_fpu77",
+  "historical_canonical_snapshot_sha256": "9ca5309aa18e43c97343d87171de20f2a198f6ccfe8f266c1f1c33557afa5dcd",
+  "production_delta_bytes": 0,
+  "red_witness_modified_by_this_act": false,
+  "evidence_labels": [
+    "REAL",
+    "LIVE",
+    "REAL_PRODUCTION_SEAM",
+    "SYNTHETIC_REAL",
+    "SYNTHETIC",
+    "STRUCTURAL",
+    "INFERRED",
+    "NOT_EXECUTED",
+    "UNAVAILABLE_FROM_TRACE",
+    "LIVE_UNOBSERVABLE"
+  ],
+  "artifacts": [
+    {
+      "path": "sdk/packages/core/src/extensions/context/compaction.adjudication-continuity.feasibility01.test.ts",
+      "byte_size": 32584,
+      "sha256": "282affe4c1344da42d34b57e918c113236d85c46fe6d7d1c05d8e7f2a2326b53",
+      "evidence_classification": "REAL_PRODUCTION_SEAM",
+      "note": "G2 trust-feasibility probe (16 tests). Exercises the real production seam. No test-written safety flags.",
+      "command": "cd sdk/packages/core && bun x vitest run src/extensions/context/compaction.adjudication-continuity.feasibility01.test.ts --config vitest.config.ts",
+      "exit_code": 0,
+      "source_head": "d69cfb9befe957ec87a034050bb7b4c72f1a0851"
+    },
+    {
+      "path": "sdk/packages/core/src/extensions/context/compaction.adjudication-continuity.discriminator01.test.ts",
+      "byte_size": 36481,
+      "sha256": "c2d3055c73622b87b0ca35b213854a50ada3d457dc750162fd1808904d705b67",
+      "evidence_classification": "REAL_PRODUCTION_SEAM",
+      "note": "Predecessor discriminator with the G0.2 bounded P1 correction: the ablation now restores exactly one adjudication into one explicitly identified message.",
+      "command": "cd sdk/packages/core && bun x vitest run src/extensions/context/compaction.adjudication-continuity.discriminator01.test.ts --config vitest.config.ts",
+      "exit_code": 0,
+      "source_head": "d69cfb9befe957ec87a034050bb7b4c72f1a0851"
+    },
+    {
+      "path": "sdk/packages/core/src/extensions/context/compaction.adjudication-continuity.red01.test.ts",
+      "byte_size": 28121,
+      "sha256": "8479ac262f0396a504a75893386c3031f8bf0350e6aa2a86abab0dbf5017c8d9",
+      "evidence_classification": "REAL_PRODUCTION_SEAM",
+      "note": "The predecessor's RED witness. BYTE-IDENTICAL to d69cfb9be - NOT modified by this ACT. Intentionally failing (5/5).",
+      "command": "cd sdk/packages/core && bun run test:red:adjudication-continuity-red01",
+      "exit_code": 1,
+      "source_head": "d69cfb9befe957ec87a034050bb7b4c72f1a0851"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-CONTINUITY-REPAIR-01/00-entry-and-red-identity.md",
+      "byte_size": 7307,
+      "sha256": "78bfe2e45f52caff5d9d0cd7f9b9e38f4648407ccadcbc549d3462da36daf9e8",
+      "evidence_classification": "REAL",
+      "note": "Entry identity, RED preservation, repository conservation.",
+      "source_head": "172efa60faa74ec6431b93a1810eb279d8c1add3"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-CONTINUITY-REPAIR-01/01-red-ablation-correction.md",
+      "byte_size": 6663,
+      "sha256": "9cd71759c48e2ef700401b3a63c630f82e965d4f01053af12b668efe452339d0",
+      "evidence_classification": "REAL",
+      "note": "G0.2 bounded P1 correction of the ablation helper.",
+      "source_head": "172efa60faa74ec6431b93a1810eb279d8c1add3"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-CONTINUITY-REPAIR-01/02-trust-feasibility-probe.md",
+      "byte_size": 12041,
+      "sha256": "fbf6820b251bcbb4bd64879f4ef7a20102086ed492d2c9c36273144ac409870f",
+      "evidence_classification": "REAL_PRODUCTION_SEAM",
+      "note": "The G2 trust-feasibility gate and the historical measurements.",
+      "source_head": "172efa60faa74ec6431b93a1810eb279d8c1add3"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-CONTINUITY-REPAIR-01/03-mechanism-selection.md",
+      "byte_size": 7101,
+      "sha256": "b8cf4bc47f2b0b78151c0f79e1e4eb3bc2024b32d2f2ef91f9f4fc3b812c7f73",
+      "evidence_classification": "STRUCTURAL",
+      "note": "Candidate S1/S2/S3 evaluation and the G2.4 exit decision.",
+      "source_head": "172efa60faa74ec6431b93a1810eb279d8c1add3"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-CONTINUITY-REPAIR-01/04-minimum-implementation-contract.md",
+      "byte_size": 6548,
+      "sha256": "9de49431b5bb1015a06a1566959808bdaaff0950eb0db17b1b5184ae55a332fb",
+      "evidence_classification": "STRUCTURAL",
+      "note": "The contract a successor implementation must satisfy. NOT EXECUTED.",
+      "source_head": "172efa60faa74ec6431b93a1810eb279d8c1add3"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-CONTINUITY-REPAIR-01/05-red-green-and-ablation.md",
+      "byte_size": 4982,
+      "sha256": "b62adcd169cea110e54054a284515f1dc89e3da1795e1e512677e7f06391ace8",
+      "evidence_classification": "REAL_PRODUCTION_SEAM",
+      "note": "RED status per assertion, the A/B/C ablation, and why RED-3 is unsatisfiable in-bounds.",
+      "source_head": "172efa60faa74ec6431b93a1810eb279d8c1add3"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-CONTINUITY-REPAIR-01/06-security-adversarial-tests.md",
+      "byte_size": 6039,
+      "sha256": "47c797ba7ca36fcd3f3ccd12a444096ffe2ca3c7a7b9814d9b4e8f39d62eb120",
+      "evidence_classification": "REAL_PRODUCTION_SEAM",
+      "note": "The predecessor's eight controls re-run, the G2.3 A-G contract, and the explicit non-claim.",
+      "source_head": "172efa60faa74ec6431b93a1810eb279d8c1add3"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-CONTINUITY-REPAIR-01/07-conservation-tests.md",
+      "byte_size": 5204,
+      "sha256": "e3c637ffba1ddc8fee28401731cb8088fcad0ac49b5a3e86b4dc276e53cf4420",
+      "evidence_classification": "REAL_PRODUCTION_SEAM",
+      "note": "The G7 conservation matrix.",
+      "source_head": "172efa60faa74ec6431b93a1810eb279d8c1add3"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-CONTINUITY-REPAIR-01/08-executable-gates.md",
+      "byte_size": 6767,
+      "sha256": "5ebb0e3b3c9a14b6fe806341d1a7c4e4c8096e23df437235e6a9601cee469376",
+      "evidence_classification": "REAL",
+      "note": "Gates 1-6 with observed results and exit codes.",
+      "source_head": "172efa60faa74ec6431b93a1810eb279d8c1add3"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-CONTINUITY-REPAIR-01/09-build-and-live-qualification.md",
+      "byte_size": 5026,
+      "sha256": "193be51e722eab28b7aa6e626613c60f270a1630292858b6f18f4b035c1ef715",
+      "evidence_classification": "NOT_EXECUTED",
+      "note": "G9 is conditional on a safe GREEN; none exists.",
+      "source_head": "172efa60faa74ec6431b93a1810eb279d8c1add3"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-CONTINUITY-REPAIR-01/10-exit-report.md",
+      "byte_size": 8539,
+      "sha256": "4358a66625285cf63952ddab75fbda114f72130b6182ac1dfb1899343aad5c91",
+      "evidence_classification": "REAL",
+      "note": "The exit report and reopen condition.",
+      "source_head": "172efa60faa74ec6431b93a1810eb279d8c1add3"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-CONTINUITY-REPAIR-01/verification/README.md",
+      "byte_size": 2171,
+      "sha256": "9c750aa2ed364e49ed45d5d4c5d0433dcb69b1323a88f9d7c7adb88787204223",
+      "evidence_classification": "REAL",
+      "note": "Raw gate output.",
+      "source_head": "172efa60faa74ec6431b93a1810eb279d8c1add3"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-CONTINUITY-REPAIR-01/verification/gate1-red.txt",
+      "byte_size": 11470,
+      "sha256": "7504ef8ad00f64cb56b384e8b5fd53c5ab196f4051ae771226404b6eb3ff2836",
+      "evidence_classification": "REAL",
+      "note": "Raw gate output.",
+      "source_head": "172efa60faa74ec6431b93a1810eb279d8c1add3"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-CONTINUITY-REPAIR-01/verification/gate2-discriminator.txt",
+      "byte_size": 691,
+      "sha256": "bba1e8cf6e7dee3266f7c368b3aba42324f69f9450cbce5011f57e4d349fb7a9",
+      "evidence_classification": "REAL",
+      "note": "Raw gate output.",
+      "source_head": "172efa60faa74ec6431b93a1810eb279d8c1add3"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-CONTINUITY-REPAIR-01/verification/gate2-evidence-fidelity.txt",
+      "byte_size": 673,
+      "sha256": "e7b964ee4667f6ce48161b7e934a0d2d42fbb795098eb2873414c2dc44602722",
+      "evidence_classification": "REAL",
+      "note": "Raw gate output.",
+      "source_head": "172efa60faa74ec6431b93a1810eb279d8c1add3"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-CONTINUITY-REPAIR-01/verification/gate2b-feasibility-probe.txt",
+      "byte_size": 689,
+      "sha256": "43ee42702439f00b63cb21a56082452dca8ff15535a964e2990e80972699ef67",
+      "evidence_classification": "REAL",
+      "note": "Raw gate output.",
+      "source_head": "172efa60faa74ec6431b93a1810eb279d8c1add3"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-CONTINUITY-REPAIR-01/verification/gate3-context-directory.txt",
+      "byte_size": 8738,
+      "sha256": "9c13795d03ce7e5548616cded1b8fdfdf66f4a54c0c9682e6388115e85577776",
+      "evidence_classification": "REAL",
+      "note": "Raw gate output.",
+      "source_head": "172efa60faa74ec6431b93a1810eb279d8c1add3"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-CONTINUITY-REPAIR-01/verification/gate4-typecheck.txt",
+      "byte_size": 12702,
+      "sha256": "d1f259b3799d79cb49696c51a2e50a6730c2378a9ded4e2ad4142d52e25a4f7f",
+      "evidence_classification": "REAL",
+      "note": "Raw gate output.",
+      "source_head": "172efa60faa74ec6431b93a1810eb279d8c1add3"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-CONTINUITY-REPAIR-01/verification/gate5-biome.txt",
+      "byte_size": 902,
+      "sha256": "8107ffd6859a511d3851dbc6d7823c2eeb441fd4a5c218af1675db2f0e0b0c91",
+      "evidence_classification": "REAL",
+      "note": "Raw gate output.",
+      "source_head": "172efa60faa74ec6431b93a1810eb279d8c1add3"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-CONTINUITY-REPAIR-01/verification/production-diff.txt",
+      "byte_size": 243,
+      "sha256": "3b34f79cb22da31b9137aede6e2827c3b261bd695375dcc9f589cd561123c45a",
+      "evidence_classification": "REAL",
+      "note": "Raw gate output.",
+      "source_head": "172efa60faa74ec6431b93a1810eb279d8c1add3"
+    }
+  ]
+}

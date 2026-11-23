@@ -1,0 +1,14 @@
+(node:39764) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core
+
+(node:39781) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/extensions/context/compaction.adjudication-continuity.feasibility01.test.ts (16 tests) 5ms
+
+ Test Files  1 passed (1)
+      Tests  16 passed (16)
+   Start at  10:44:03
+   Duration  591ms (transform 351ms, setup 0ms, import 474ms, tests 5ms, environment 0ms)
+
