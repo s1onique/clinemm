@@ -465,15 +465,127 @@ function generateSecretsMessage(secretsKeys, fieldNumbers, reservedStatements) {
 }
 
 /**
+ * Settings fields that are NO LONGER backed by a `state-keys.ts` entry but
+ * MUST stay in the generated proto, because the wire-shape contract still
+ * depends on them.
+ *
+ * `auto_approve_all_toggled` (174) is read by the legacy VS Code migration
+ * at `src/hosts/vscode/vscode-to-file-migration.ts`, so dropping the proto
+ * field breaks that migration's wire shape. It was restored deliberately in
+ * commit c0cb2f679 ("fix(proto): repair corrupted state.proto schema").
+ *
+ * `clear_user_context_ceiling` (188) is the explicit Auto/reset signal that
+ * the webview blur handler sends alongside `user_context_ceiling`; the
+ * persistence seam rejects a request that carries both, so the field is part
+ * of the request contract even though the persisted setting itself is
+ * derived from `user_context_ceiling`.
+ *
+ * A field listed here is emitted verbatim, keeping its existing field number
+ * and proto type.
+ */
+const PRESERVED_SETTINGS_FIELDS = [
+	{ name: "autoApproveAllToggled", protoType: "bool" },
+	{ name: "clearUserContextCeiling", protoType: "bool" },
+]
+
+/**
+ * Find the byte range of a top-level `message <name> { ... }` block.
+ *
+ * This is a BRACE-COUNTING scan, not a regex, and it deliberately ignores
+ * braces that appear inside comments or string literals.
+ *
+ * WHY NOT A REGEX
+ * ---------------
+ * The previous implementation used
+ *   `message\s+<name>\s*\{[^}]*(?:\{[^}]*\}[^}]*)*\}`
+ * which matches a closing brace that lives inside a COMMENT. The `Settings`
+ * message carries the comment
+ *   // Wire format: serialized JSON array of { path, expiresAt }.
+ * so the regex stopped at that `}`, i.e. in the MIDDLE of the message. The
+ * replacement then spliced the regenerated message in at that point and left
+ * the tail of the original message dangling outside any message block —
+ * producing a syntactically invalid .proto file that `protoc` rejects.
+ *
+ * The scan below tracks nesting depth and skips line comments, block
+ * comments and quoted strings, so only REAL braces affect the depth.
+ *
+ * @param {string} protoContent The full proto file content.
+ * @param {string} messageName The message to locate.
+ * @returns {{start: number, end: number} | undefined} The inclusive-start,
+ * exclusive-end character range of the message block, or undefined when the
+ * message is absent.
+ */
+function findMessageBlockRange(protoContent, messageName) {
+	const headerRegex = new RegExp(String.raw`message\s+${messageName}\s*\{`)
+	const headerMatch = headerRegex.exec(protoContent)
+	if (!headerMatch) {
+		return undefined
+	}
+
+	const start = headerMatch.index
+	let depth = 0
+	let index = start + headerMatch[0].length - 1 // the opening brace
+
+	while (index < protoContent.length) {
+		const char = protoContent[index]
+		const next = protoContent[index + 1]
+
+		// Line comment: skip to end of line.
+		if (char === "/" && next === "/") {
+			const newline = protoContent.indexOf("\n", index + 2)
+			index = newline === -1 ? protoContent.length : newline + 1
+			continue
+		}
+
+		// Block comment: skip to the closing marker.
+		if (char === "/" && next === "*") {
+			const end = protoContent.indexOf("*/", index + 2)
+			index = end === -1 ? protoContent.length : end + 2
+			continue
+		}
+
+		// Quoted string: skip its contents (escapes included).
+		if (char === '"' || char === "'") {
+			index += 1
+			while (index < protoContent.length) {
+				if (protoContent[index] === "\\\\") {
+					index += 2
+					continue
+				}
+				if (protoContent[index] === char) {
+					index += 1
+					break
+				}
+				index += 1
+			}
+			continue
+		}
+
+		if (char === "{") {
+			depth += 1
+		} else if (char === "}") {
+			depth -= 1
+			if (depth === 0) {
+				return { start, end: index + 1 }
+			}
+		}
+
+		index += 1
+	}
+
+	return undefined
+}
+
+/**
  * Replace a message in the proto file content
  */
 function replaceMessage(protoContent, messageName, newMessageContent) {
-	// Match the message definition including nested braces
-	const messageRegex = new RegExp(`message\\s+${messageName}\\s*\\{[^}]*(?:\\{[^}]*\\}[^}]*)*\\}`, "g")
+	const range = findMessageBlockRange(protoContent, messageName)
 
-	if (messageRegex.test(protoContent)) {
-		return protoContent.replace(messageRegex, newMessageContent)
+	if (range) {
+		return protoContent.slice(0, range.start) + newMessageContent + protoContent.slice(range.end)
 	}
+
 	// Message doesn't exist, append before the first message or at end
 	console.warn(`Warning: ${messageName} message not found in proto file, appending`)
 	return protoContent + "\n\n" + newMessageContent
@@ -496,6 +608,18 @@ async function main() {
 	const userSettingsFields = parseFieldDefinitions(sourceFile, "USER_SETTINGS_FIELDS")
 	const settingsFields = [...apiHandlerFields, ...userSettingsFields]
 	console.log(`Found ${settingsFields.length} settings fields`)
+
+	// Append the explicitly preserved fields that `state-keys.ts` no longer
+	// declares. Without this, a regeneration silently DELETES wire fields
+	// that other parts of the system still depend on.
+	const declaredSettingNames = new Set(settingsFields.map((f) => f.name))
+	const preservedFields = PRESERVED_SETTINGS_FIELDS.filter((f) => !declaredSettingNames.has(f.name))
+	for (const field of preservedFields) {
+		settingsFields.push({ name: field.name, tsType: "boolean", protoType: field.protoType })
+	}
+	if (preservedFields.length > 0) {
+		console.log(`Preserved ${preservedFields.length} wire field(s): ${preservedFields.map((f) => f.name).join(", ")}`)
+	}
 
 	// Load existing field numbers from proto file
 	const existingFieldNumbers = await loadFieldNumbersFromProto()
