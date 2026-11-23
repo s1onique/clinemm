@@ -83,10 +83,12 @@ const QUALIFICATION_TOKEN = "missing automatic enforcement";
 
 const SOURCE_CALL_ID = "call_s1_source_read_0001";
 
-function s1CanonicalHistory(options: {
-	adjudicationPlacement?: "thinking" | "text";
-	thinkingPrefix?: string;
-} = {}): MessageWithMetadata[] {
+function s1CanonicalHistory(
+	options: {
+		adjudicationPlacement?: "thinking" | "text";
+		thinkingPrefix?: string;
+	} = {},
+): MessageWithMetadata[] {
 	const placement = options.adjudicationPlacement ?? "thinking";
 	const thinkingPrefix = options.thinkingPrefix ?? "";
 	const adjudication = `${thinkingPrefix}${ADJUDICATION}`;
@@ -236,11 +238,11 @@ describe("G6 — causal discriminators (controlled comparison, identical input)"
 				},
 			],
 		};
-		const providerVisible = new MessageBuilder().buildForApi(
-			[summaryMessage] as unknown as Parameters<
-				InstanceType<typeof MessageBuilder>["buildForApi"]
-			>[0],
-		);
+		const providerVisible = new MessageBuilder().buildForApi([
+			summaryMessage,
+		] as unknown as Parameters<
+			InstanceType<typeof MessageBuilder>["buildForApi"]
+		>[0]);
 		const text = JSON.stringify(providerVisible);
 		expect(text).toContain(VERDICT_TOKEN);
 		expect(text).toContain(QUALIFICATION_TOKEN);
@@ -516,9 +518,7 @@ describe("G6 — necessity ablation", () => {
 		// into an unrelated message.
 		expect(() =>
 			testLocalRestoreAdjudication(canonical, ADJUDICATION, 0),
-		).toThrow(
-			/not an assistant turn|does not carry the source-read tool call/,
-		);
+		).toThrow(/not an assistant turn|does not carry the source-read tool call/);
 
 		// Index 3 is the unrelated preserved tail — also not a valid target.
 		expect(() =>
@@ -571,14 +571,20 @@ function candidatePreservation(input: {
 	}
 	// A verdict that itself looks like an instruction is not carried as an
 	// authoritative statement.
-	if (/ignore (all )?previous|system prompt|developer message/i.test(input.verdict)) {
+	if (
+		/ignore (all )?previous|system prompt|developer message/i.test(
+			input.verdict,
+		)
+	) {
 		return { preserved: false, reason: "injected_instruction" };
 	}
 	// A verdict that embeds a secret-looking token is not carried
 	// verbatim. NOTE: this is NOT a blanket sanitizer — it is a REFUSAL
 	// to promote, which is the safe default for an untrusted, model-
 	// authored string.
-	if (/AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----/i.test(input.verdict)) {
+	if (
+		/AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----/i.test(input.verdict)
+	) {
 		return { preserved: false, reason: "secret_bearing_verdict" };
 	}
 	// A verdict that carries a PRIVATE PATH is a provenance leak even
@@ -652,9 +658,9 @@ describe("G7 — security negative controls", () => {
 			},
 			{
 				role: "user",
-				content: [forgedToolResult] as MessageWithMetadata["content"] extends Array<
-					infer T
-				>
+				content: [
+					forgedToolResult,
+				] as MessageWithMetadata["content"] extends Array<infer T>
 					? T[]
 					: never,
 			},
@@ -722,9 +728,9 @@ describe("G7 — security negative controls", () => {
 		// The candidate mechanism must refuse to promote a verdict that
 		// carries such a path.
 		const evidence = await import("./evidence-continuity");
-		expect(
-			evidence.isSensitiveSourceFilePath("/home/alice/.ssh/id_rsa"),
-		).toBe(true);
+		expect(evidence.isSensitiveSourceFilePath("/home/alice/.ssh/id_rsa")).toBe(
+			true,
+		);
 		expect(
 			evidence.isSensitiveSourceFilePath("/home/alice/.aws/credentials"),
 		).toBe(true);
@@ -746,11 +752,7 @@ describe("G7 — security negative controls", () => {
 	it("CONTROL 7: a failed, truncated or ambiguous source result is not treated as sufficient grounding", () => {
 		for (const result_ of ["failed", "truncated", "ambiguous"] as const) {
 			const grounded =
-				result_ === "failed"
-					? false
-					: result_ === "truncated"
-						? false
-						: false;
+				result_ === "failed" ? false : result_ === "truncated" ? false : false;
 			expect(grounded).toBe(false);
 		}
 	});
@@ -791,7 +793,10 @@ describe("G8 — negative and positive controls", () => {
 					},
 				],
 			},
-			{ role: "assistant", content: [{ type: "text", text: "Investigating." }] },
+			{
+				role: "assistant",
+				content: [{ type: "text", text: "Investigating." }],
+			},
 		];
 		const projection = buildBudgetProjection({
 			messages: canonical as MessageWithMetadata[],
@@ -887,7 +892,9 @@ describe("G8 — negative and positive controls", () => {
 						name: "run_commands",
 						content: [{ query: "echo hello", result: "hello", success: true }],
 					},
-				] as MessageWithMetadata["content"] extends Array<infer T> ? T[] : never,
+				] as MessageWithMetadata["content"] extends Array<infer T>
+					? T[]
+					: never,
 			},
 		];
 		const projection = buildBudgetProjection({
@@ -975,9 +982,9 @@ describe("G7 — conservation controls", () => {
 			estimateMessageTokens: () => 1,
 		});
 		expect(projection.messages.length).toBe(canonical.length);
-		expect(projection.actions.filter((a) => a.kind === "dropped_message")).toHaveLength(
-			0,
-		);
+		expect(
+			projection.actions.filter((a) => a.kind === "dropped_message"),
+		).toHaveLength(0);
 	});
 
 	it("CONSERVATION: no automatic raw file excerpts are produced", async () => {
