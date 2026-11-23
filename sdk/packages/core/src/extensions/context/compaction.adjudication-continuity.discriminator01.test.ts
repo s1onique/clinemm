@@ -257,28 +257,86 @@ describe("G6 — causal discriminators (controlled comparison, identical input)"
 // ---------------------------------------------------------------------------
 
 /**
+ * The EXACT index of the adjudication-bearing message in the canonical
+ * fixture.
+ *
+ * The fixture's canonical shape is:
+ *
+ *   [0] user turn            — the original finding
+ *   [1] assistant turn       — THINKING block + the source-read tool call
+ *   [2] user turn            — the matching source-read tool result
+ *   [3] assistant turn       — the preserved tail ("Continuing.")
+ *
+ * The adjudication is carried by message [1] ONLY. It is identified here by
+ * an explicit, test-local identity — the index of the message that carries
+ * the source-read tool call — so the ablation restores exactly ONE
+ * adjudication and never more.
+ *
+ * The previous revision of this helper restored the adjudication into EVERY
+ * assistant message that did not already carry it, which inserted it into
+ * two messages (the adjudication turn AND the unrelated preserved tail).
+ * That inflated the ablation's effect and made the A/B comparison
+ * unfaithful to "restore exactly the missing qualified adjudication".
+ */
+const ADJUDICATION_MESSAGE_INDEX = 1;
+
+/**
  * A TEST-LOCAL restoration of the missing qualified adjudication.
  *
  * It models the minimal safe contract: a bounded, source-grounded,
  * qualified adjudication is re-attached to the compaction input so that the
  * summarizer CAN see it. It deliberately restores ONLY the adjudication
  * string — no raw source excerpts, no untrusted instructions, no secrets.
+ *
+ * It restores EXACTLY ONE block, in EXACTLY ONE message:
+ *
+ *   - the target is identified by an explicit index (`targetIndex`), not by a
+ *     content scan over the whole history;
+ *   - the target is verified to actually BE the adjudication-bearing message
+ *     (it must carry the source-read tool call), so a mis-targeted restore
+ *     fails loudly instead of silently restoring into the wrong message;
+ *   - every other message is returned BYTE-IDENTICAL, in its original order.
  */
 function testLocalRestoreAdjudication(
 	messages: readonly MessageWithMetadata[],
 	adjudication: string,
+	targetIndex: number = ADJUDICATION_MESSAGE_INDEX,
 ): MessageWithMetadata[] {
-	return messages.map((message) => {
-		if (message.role !== "assistant" || !Array.isArray(message.content)) {
-			return message;
-		}
-		const hasAdjudication = message.content.some(
-			(block) =>
-				block.type === "text" &&
-				typeof (block as { text?: unknown }).text === "string" &&
-				(block as { text: string }).text.includes(adjudication),
+	const target = messages[targetIndex];
+	if (!target) {
+		throw new Error(
+			`ablation target message ${targetIndex} does not exist (history length ${messages.length})`,
 		);
-		if (hasAdjudication) {
+	}
+	if (target.role !== "assistant" || !Array.isArray(target.content)) {
+		throw new Error(
+			`ablation target message ${targetIndex} is not an assistant turn with content blocks`,
+		);
+	}
+	// The target must be the ADJUDICATION-BEARING message: it is the one that
+	// carries the source-read tool call whose result grounds the verdict.
+	const carriesSourceCall = target.content.some(
+		(block) =>
+			block.type === "tool_use" &&
+			(block as { id?: unknown }).id === SOURCE_CALL_ID,
+	);
+	if (!carriesSourceCall) {
+		throw new Error(
+			`ablation target message ${targetIndex} does not carry the source-read tool call ${SOURCE_CALL_ID}`,
+		);
+	}
+	const alreadyCarriesAdjudication = target.content.some(
+		(block) =>
+			block.type === "text" &&
+			typeof (block as { text?: unknown }).text === "string" &&
+			(block as { text: string }).text.includes(adjudication),
+	);
+	if (alreadyCarriesAdjudication) {
+		return [...messages];
+	}
+
+	return messages.map((message, index) => {
+		if (index !== targetIndex) {
 			return message;
 		}
 		return {
@@ -368,6 +426,109 @@ describe("G6 — necessity ablation", () => {
 				: message.content,
 		}));
 		expect(JSON.stringify(aMessages)).toBe(JSON.stringify(bMessages));
+
+		// -------------------------------------------------------------------
+		// G0.2 — the ablation restores EXACTLY ONE adjudication, in EXACTLY
+		// ONE identified message, and changes NOTHING else.
+		//
+		// The previous revision of this file restored the adjudication into
+		// EVERY assistant message that did not already carry it, which
+		// inserted it into TWO messages (the adjudication turn AND the
+		// unrelated preserved tail). These assertions pin the corrected
+		// contract.
+		// -------------------------------------------------------------------
+
+		// (1) The message COUNT and ORDER are unchanged between A and B.
+		expect(b.length).toBe(a.length);
+		expect(b.map((message) => message.role)).toEqual(
+			a.map((message) => message.role),
+		);
+
+		// (2) EXACTLY ONE text block carrying the adjudication was inserted,
+		//     across the WHOLE history.
+		let insertedBlocks = 0;
+		for (const message of b) {
+			if (!Array.isArray(message.content)) {
+				continue;
+			}
+			for (const block of message.content) {
+				if (
+					block.type === "text" &&
+					typeof (block as { text?: unknown }).text === "string" &&
+					(block as { text: string }).text.includes(ADJUDICATION)
+				) {
+					insertedBlocks += 1;
+				}
+			}
+		}
+		expect(insertedBlocks).toBe(1);
+
+		// (3) The insertion landed in the IDENTIFIED adjudication-bearing
+		//     message — the one that carries the source-read tool call.
+		const insertedInto: number[] = [];
+		b.forEach((message, index) => {
+			if (!Array.isArray(message.content)) {
+				return;
+			}
+			const carries = message.content.some(
+				(block) =>
+					block.type === "text" &&
+					typeof (block as { text?: unknown }).text === "string" &&
+					(block as { text: string }).text.includes(ADJUDICATION),
+			);
+			if (carries) {
+				insertedInto.push(index);
+			}
+		});
+		expect(insertedInto).toEqual([ADJUDICATION_MESSAGE_INDEX]);
+
+		// (4) The UNRELATED preserved tail is BYTE-IDENTICAL to A's.
+		expect(JSON.stringify(b[b.length - 1])).toBe(
+			JSON.stringify(a[a.length - 1]),
+		);
+		// ... and it does NOT carry the adjudication.
+		expect(JSON.stringify(b[b.length - 1])).not.toContain(ADJUDICATION);
+
+		// (5) The tool-call / tool-result IDENTITY is unchanged between A
+		//     and B, for every tool call in the history.
+		const toolIdsOf = (messages: MessageWithMetadata[]): string[] =>
+			messages.flatMap((message) =>
+				Array.isArray(message.content)
+					? message.content.flatMap((block) =>
+							block.type === "tool_use"
+								? [block.id]
+								: block.type === "tool_result"
+									? [block.tool_use_id]
+									: [],
+						)
+					: [],
+			);
+		expect(toolIdsOf(b)).toEqual(toolIdsOf(a));
+		expect(toolIdsOf(b)).toContain(SOURCE_CALL_ID);
+	});
+
+	it("ABLATION TARGETING: a mis-targeted restore fails loudly instead of restoring into the wrong message", () => {
+		const canonical = s1CanonicalHistory();
+
+		// Index 0 is the USER turn — it is not an assistant turn and does not
+		// carry the source-read tool call, so it is not a valid target. The
+		// helper must refuse rather than silently insert the adjudication
+		// into an unrelated message.
+		expect(() =>
+			testLocalRestoreAdjudication(canonical, ADJUDICATION, 0),
+		).toThrow(
+			/not an assistant turn|does not carry the source-read tool call/,
+		);
+
+		// Index 3 is the unrelated preserved tail — also not a valid target.
+		expect(() =>
+			testLocalRestoreAdjudication(canonical, ADJUDICATION, 3),
+		).toThrow(/does not carry the source-read tool call/);
+
+		// An out-of-range index is refused as well.
+		expect(() =>
+			testLocalRestoreAdjudication(canonical, ADJUDICATION, 99),
+		).toThrow(/does not exist/);
 	});
 });
 
