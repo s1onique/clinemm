@@ -64,7 +64,7 @@
  * is an obvious placeholder, not a real credential.
  */
 
-import type { MessageWithMetadata } from "@cline/shared";
+import type { ContentBlock, MessageWithMetadata } from "@cline/shared";
 import { describe, expect, it } from "vitest";
 import { MessageBuilder } from "../../session/services/message-builder";
 import { buildBudgetProjection } from "./budget-projection";
@@ -337,15 +337,17 @@ function testLocalRestoreAdjudication(
 		return [...messages];
 	}
 
-	return messages.map((message, index) => {
+	return messages.map((message, index): MessageWithMetadata => {
 		if (index !== targetIndex) {
 			return message;
 		}
+		// `target` is the SAME object as `message` at `targetIndex`, and it has
+		// already been verified to carry an ARRAY of content blocks.
 		return {
 			...message,
 			content: [
-				{ type: "text" as const, text: adjudication },
-				...message.content,
+				{ type: "text", text: adjudication },
+				...(target.content as ContentBlock[]),
 			],
 		};
 	});
