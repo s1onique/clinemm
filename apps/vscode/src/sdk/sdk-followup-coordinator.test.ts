@@ -284,7 +284,14 @@ describe("SdkFollowupCoordinator", () => {
 
 		await coordinator.askResponse("continue")
 
-		expect(options.sessionConfigBuilder.build).toHaveBeenCalledWith({ cwd: "/task-cwd", mode: "act" })
+		expect(options.sessionConfigBuilder.build).toHaveBeenCalledWith({
+			cwd: "/task-cwd",
+			mode: "act",
+			// ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01-CORRECTION01:
+			// a follow-up resume reconstructs the EXISTING session, so the
+			// producer must know which session it is building for.
+			sessionId: "task-1",
+		})
 		expect(options.createTempSessionHost).toHaveBeenCalledOnce()
 		expect(options.loadInitialMessages).toHaveBeenCalledWith(
 			expect.objectContaining({ readMessages: expect.any(Function) }),

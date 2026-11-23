@@ -9,6 +9,10 @@ import type { TurnStateWriterId } from "@shared/turn-state-writer-provenance"
 import type { StateManager } from "@/core/storage/StateManager"
 import { Logger } from "@/shared/services/Logger"
 import { isDirectory } from "@/utils/fs"
+// ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01: the host-owned store of
+// authorized, task-scoped adjudication contracts. The coordinator consumes
+// the armed contract at the authoritative session-id allocation point.
+import { getAdjudicationTaskContractStore } from "./adjudication-task-contract"
 // ACT-CLINEMM-MODEL-BEHAVIOR-COMPARABILITY-AUTHORITY-REPAIR01 (R4): bind
 // the build-time configuration snapshot to the allocated session id.
 import { bindModelBehaviorTraceConfigToSession, type ModelBehaviorTraceConfigSnapshot } from "./model-behavior-trace-runtime"
@@ -268,6 +272,22 @@ export class SdkTaskStartCoordinator {
 				)
 
 				taskSessionId = config.sessionId?.trim() || createSessionId()
+				// ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01: CONSUME the
+				// authorized, task-scoped adjudication contract at the
+				// authoritative session-id allocation point.
+				//
+				// This mirrors the existing `SessionAutoApprovalStore`
+				// discipline exactly: the contract is armed by an explicit user
+				// act, PEEKED by the config producer, and consumed EXACTLY ONCE
+				// here, so it binds to exactly ONE session id. An unrelated task
+				// can never inherit it, and a repository-controlled file can
+				// never authorize it.
+				//
+				// The consumption happens AFTER the config was built (the
+				// producer only peeked), so this call can only ever confirm
+				// the binding the producer already observed. When no contract
+				// was armed it returns `undefined` and nothing changes.
+				getAdjudicationTaskContractStore().consumeForSession(taskSessionId)
 				// ACT-CLINEMM-MODEL-BEHAVIOR-COMPARABILITY-AUTHORITY-REPAIR01 (R4):
 				// bind the build-time configuration snapshot to the session id that
 				// was JUST allocated.

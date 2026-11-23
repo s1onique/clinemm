@@ -46,6 +46,15 @@ import { HostProvider } from "@/hosts/host-provider"
 import { ExtensionRegistryInfo } from "@/registry"
 import { getDistinctId } from "@/services/logging/distinctId"
 import { fetch, fetchWithoutIdleTimeouts } from "@/shared/net"
+// ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01: the host-owned adapters
+// that turn a USER-AUTHORIZED, TASK-SCOPED contract into the SDK's
+// `CoreAdjudicationConfig`. The contract itself comes from the
+// `AdjudicationTaskContractStore` (armed by an explicit user act, consumed
+// exactly once at session-id allocation); the resolver and the secret
+// provider are HOST-SUPPLIED instruments that no user input can forge.
+import { createSessionSecretProviderForRestore, createSessionSecretProviderForStart } from "./adjudication-session-secret"
+import { createVscodeSourceRevisionResolver } from "./adjudication-source-revision-resolver"
+import { getAdjudicationTaskContractStore } from "./adjudication-task-contract"
 import { type BedrockProviderConfig, buildBedrockProviderConfig } from "./bedrock-config"
 // ACT-CLINEMM-MODEL-BEHAVIOR-COMPARABILITY-AUTHORITY-REPAIR01 (R2): the
 // canonical installed-bundle identity resolver. Reused as-is so the trace
@@ -92,6 +101,17 @@ export interface SessionConfigInput {
 	cwd: string
 	/** Workspace root */
 	workspaceRoot?: string
+	/**
+	 * ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01: the session id this
+	 * config is being built FOR, when it is already known.
+	 *
+	 * It is `undefined` for a NEW task (the id is allocated after the
+	 * config is built) and set for a RESUME or a REBUILD. The producer seam
+	 * uses it to look up the BOUND adjudication contract for this session,
+	 * so a model change or a provider change does not silently drop an
+	 * in-flight adjudication contract.
+	 */
+	sessionId?: string
 	/** Current mode (act/plan) */
 	mode?: Mode
 	/**
@@ -1399,6 +1419,54 @@ export async function buildSessionConfig(input: SessionConfigInput): Promise<Cor
 			seatbeltAvailable,
 		})
 
+	// ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01: PEEK the authorized,
+	// task-scoped adjudication contract.
+	//
+	// This is a PURE read: it never consumes the armed contract. The
+	// consumption happens at the authoritative session-id allocation point
+	// (`SdkTaskStartCoordinator.initTask`), exactly like the existing
+	// `SessionAutoApprovalStore.consumePendingOverride(sessionId)` seam, so
+	// the contract binds to EXACTLY ONE session id and an unrelated task can
+	// never inherit it.
+	//
+	// ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01-CORRECTION01 (P0-1 —
+	// `HALT_SESSION_AUTHORITY_LIFECYCLE`): the resolution is now SPLIT by
+	// the session's identity, because the two paths have DIFFERENT
+	// authorities:
+	//
+	//   - AN EXISTING session (a RESUME or a REBUILD — `input.sessionId` is
+	//     present) may use ONLY ITS OWN contract: the in-memory BOUND
+	//     contract, or the PERSISTED vocabulary that a recreated extension
+	//     host restored for that exact session id.
+	//
+	//     It must NEVER fall back to the ARMED slot. The armed slot is
+	//     PENDING INTENT for the NEXT task. Without this split, an
+	//     unrelated session that happened to be resumed or rebuilt while an
+	//     arm was pending inherited a vocabulary the user never authorized
+	//     for it — the exact "task-scoped authorization inherited by an
+	//     unrelated session" failure the correction closes.
+	//
+	//   - A NEW task (`input.sessionId` is absent — the id is allocated
+	//     AFTER the config is built) may observe the pending ARMED intent.
+	//     That is the authorized new-task path and the only path on which
+	//     the arm is consulted.
+	//
+	// ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01-CORRECTION01 (P0-2):
+	// an EXISTING session also uses RESTORE secret semantics, so a session
+	// whose historical evidence secret was lost NEVER has a replacement
+	// secret persisted in its place. Persisting a replacement would make
+	// the session's historical evidence handles resolve to nothing while
+	// LOOKING like a successful restoration — the fail-open the SDK
+	// contract forbids.
+	const adjudicationStore = getAdjudicationTaskContractStore()
+	const isExistingSession = Boolean(input.sessionId?.trim())
+	const adjudicationContract = isExistingSession
+		? adjudicationStore.getBoundOrPersisted(input.sessionId)
+		: adjudicationStore.peekArmed()
+	const adjudicationSecretProvider = isExistingSession
+		? createSessionSecretProviderForRestore()
+		: createSessionSecretProviderForStart()
+
 	const config: CoreSessionConfig = {
 		providerId: sdkProviderId,
 		modelId,
@@ -1435,6 +1503,41 @@ export async function buildSessionConfig(input: SessionConfigInput): Promise<Cor
 						// policy. Undefined = Auto (canonical model/provider
 						// effective input capacity).
 						...(userContextCeiling !== undefined ? { userContextCeiling } : {}),
+					},
+				}
+			: {}),
+		// ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01: the OPT-IN,
+		// TASK-SCOPED adjudication contract.
+		//
+		// DEFAULT OFF. The block is present ONLY when the host has an
+		// EXPLICITLY AUTHORIZED, TASK-SCOPED contract for this task. With
+		// no contract the whole `adjudication` key is ABSENT from the
+		// config, so the SDK's `configWithProvider.adjudication?.enabled`
+		// is `undefined` and NOTHING changes: no registry, no publication
+		// instruction, no evidence trailer, no carry-forward, no extra
+		// model call, no provider-prefix change, no persistent secret.
+		//
+		// The contract is NOT derived from the prompt, the workspace files,
+		// the repository content, the tool output or the model. It comes
+		// from the host-owned `AdjudicationTaskContractStore`, which is
+		// armed by an explicit user act and consumed exactly once at the
+		// session-id allocation point.
+		//
+		// The two TRUSTED INSTRUMENTS are host-supplied and can never be
+		// forged by user input:
+		//
+		//   revisionResolver - resolves the source revision from the
+		//     workspace at ACQUISITION time. It is bound to THIS session's
+		//     workspace root, and it fails closed for a path outside it.
+		//   secretProvider - the restorable per-session evidence-handle
+		//     secret, in the extension's trusted secret store.
+		...(adjudicationContract
+			? {
+					adjudication: {
+						enabled: true,
+						vocabulary: adjudicationContract.vocabulary,
+						revisionResolver: createVscodeSourceRevisionResolver({ workspaceRoot }),
+						secretProvider: adjudicationSecretProvider,
 					},
 				}
 			: {}),

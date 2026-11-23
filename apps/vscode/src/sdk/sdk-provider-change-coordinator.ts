@@ -124,6 +124,13 @@ export class SdkProviderChangeCoordinator {
 				cwd,
 				mode,
 				providerConfigurationInstance: next,
+				// ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01-CORRECTION01:
+				// the provider change RECONSTRUCTS the existing session, so
+				// the producer must know WHICH session it is building for.
+				// Without this the producer cannot distinguish an existing
+				// session from a new task, and a pending (unconsumed)
+				// adjudication arm could attach to this unrelated session.
+				sessionId: activeSession.sessionId,
 			})
 			config.sessionId = activeSession.sessionId
 
@@ -238,6 +245,14 @@ export class SdkProviderChangeCoordinator {
 				cwd,
 				mode,
 				providerConfigurationInstanceTyped: instance,
+				// ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01-CORRECTION01:
+				// the typed-instance change RECONSTRUCTS the existing
+				// session, so the producer must know WHICH session it is
+				// building for. Without this the producer cannot distinguish
+				// an existing session from a new task, and a pending
+				// (unconsumed) adjudication arm could attach to this
+				// unrelated session.
+				sessionId: activeSession.sessionId,
 			})
 			// The typed projector resolves the physical secret inside the
 			// builder via `getInstanceSecret` (read from `instance.credentialRef.name`).
@@ -338,7 +353,7 @@ export class SdkProviderChangeCoordinator {
 		Logger.log(`[SdkController] Restarting session ${oldSessionId} for provider change`)
 
 		try {
-			const config = await this.options.sessionConfigBuilder.build({ cwd, mode })
+			const config = await this.options.sessionConfigBuilder.build({ cwd, mode, sessionId: oldSessionId })
 			config.sessionId = oldSessionId
 
 			const initialMessages = await this.options.loadInitialMessages(oldManager, oldSessionId)

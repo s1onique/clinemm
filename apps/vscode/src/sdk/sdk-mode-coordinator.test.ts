@@ -133,7 +133,11 @@ describe("SdkModeCoordinator", () => {
 			// timestamp, and the writer id. (The fork's own
 			// `sdk-mode-coordinator` suite already asserts the 3-argument
 			// form for the same transition.)
-			expect(options.setTurnPhase).toHaveBeenCalledWith("resumable", expect.any(Number), "mode-coordinator-mode-switch-resumable")
+			expect(options.setTurnPhase).toHaveBeenCalledWith(
+				"resumable",
+				expect.any(Number),
+				"mode-coordinator-mode-switch-resumable",
+			)
 			expect(coordinator.consumeModeSwitchNotice("old-session")).toBeNull()
 		})
 
@@ -223,6 +227,10 @@ describe("SdkModeCoordinator", () => {
 			// into buildSessionConfig. The test's resolver returns "none"
 			// so the persisted-only case is exercised here.
 			sessionAutoApprovalOverride: "none",
+			// ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01-CORRECTION01:
+			// the mode rebuild reconstructs the EXISTING session, so the
+			// producer must know which session it is building for.
+			sessionId: "old-session",
 		})
 		expect(options.buildStartSessionInput).toHaveBeenCalledWith(expect.objectContaining({ sessionId: "old-session" }), {
 			cwd: "/workspace",

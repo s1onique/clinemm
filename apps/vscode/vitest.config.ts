@@ -422,6 +422,16 @@ export default defineConfig({
 			// under the bun runtime.
 			"src/sdk/__tests__/myc-prime-automation.lifecycle01.test.ts",
 			"src/sdk/__tests__/myc-prime-automation.lifecycle02.test.ts",
+			// ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01: the
+			// runtime-chain witnesses (acquisition -> handle -> acceptance
+			// -> compaction continuity -> session restoration) drive the
+			// REAL SDK adjudication continuity classes via the
+			// `@cline-internal/core/extensions/context/adjudication-continuity`
+			// deep alias, which the base config does not provide (the bare
+			// `@cline/core` alias points at the vitest stub, which does not
+			// export the adjudication classes). Runs under
+			// `vitest.config.c2-4-c-bridge.ts` instead.
+			"src/sdk/__tests__/adjudication-vscode-activation01.runtime-chain.c24-c-bridge.test.ts",
 			// ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01 / CCDS01:
 			// Real production-chain RED probe. Imports
 			// `@cline-internal/core/runtime/host/local-runtime-host`

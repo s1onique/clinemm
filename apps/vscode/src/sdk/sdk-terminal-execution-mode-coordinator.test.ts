@@ -99,6 +99,10 @@ describe("SdkTerminalExecutionModeCoordinator", () => {
 			// ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01:
 			// the new completion-authority seam threads the bound override.
 			sessionAutoApprovalOverride: "none",
+			// ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01-CORRECTION01:
+			// the terminal-mode rebuild reconstructs the EXISTING session,
+			// so the producer must know which session it is building for.
+			sessionId: "old-session",
 		})
 		expect(options.loadInitialMessages).toHaveBeenCalledWith(activeSession.sdkHost, "old-session")
 		expect(options.buildStartSessionInput).toHaveBeenCalledWith(expect.objectContaining({ sessionId: "old-session" }), {

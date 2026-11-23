@@ -1,0 +1,49 @@
+(node:46845) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode
+
+(node:46861) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ src/sdk/__tests__/adjudication-vscode-activation01.test.ts (5 tests | 2 failed) 20ms
+       ✓ does NOT supply an adjudication contract for an ordinary task 15ms
+       ✓ does not change the provider-visible system prompt for an ordinary task 1ms
+       × carries the authorized contract into the produced CoreSessionConfig 2ms
+       × supplies a revision resolver that fails closed outside the workspace 1ms
+       ✓ binds the contract to exactly ONE session and leaves an unrelated task off 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/sdk/__tests__/adjudication-vscode-activation01.test.ts > ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01 — VS Code runtime config producer > RED-2 — explicit opt-in reaches the runtime configuration > carries the authorized contract into the produced CoreSessionConfig
+AssertionError: expected undefined to be defined
+ ❯ src/sdk/__tests__/adjudication-vscode-activation01.test.ts:227:32
+    225|    // The POSITIVE assertion. Before the ACT's implementation this
+    226|    // failed: the producer never supplied an adjudication block.
+    227|    expect(config.adjudication).toBeDefined()
+       |                                ^
+    228|    expect(config.adjudication?.enabled).toBe(true)
+    229|    expect(config.adjudication?.vocabulary).toEqual(AUTHORIZED_VOCABULA…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/sdk/__tests__/adjudication-vscode-activation01.test.ts > ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01 — VS Code runtime config producer > RED-2 — explicit opt-in reaches the runtime configuration > supplies a revision resolver that fails closed outside the workspace
+AssertionError: expected undefined to be defined
+ ❯ src/sdk/__tests__/adjudication-vscode-activation01.test.ts:240:21
+    238|    const config = await buildSessionConfig({ cwd: workspaceRoot })
+    239|    const resolver = config.adjudication?.revisionResolver
+    240|    expect(resolver).toBeDefined()
+       |                     ^
+    241|
+    242|    // A path OUTSIDE the authorized workspace has no source identity.
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 3 passed (5)
+   Start at  20:39:24
+   Duration  2.64s (transform 1.64s, setup 1.91s, import 597ms, tests 20ms, environment 0ms)
+

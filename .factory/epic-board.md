@@ -1,3 +1,138 @@
+# ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01-CORRECTION01 — PASS_STRUCTURAL_ONLY — 2026-11-23
+
+```text
+ACT_ID: ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01-CORRECTION01
+TYPE: bounded structural correction (two P0s + one P1 evidence gap)
+VERDICT: PASS_STRUCTURAL_ONLY
+PREVIOUS_VERDICT: HALT_SESSION_AUTHORITY_LIFECYCLE (two P0s)
+ENTRY_HEAD: 7490a12a58fbec73800f97c4b2346bde6b394725
+BRANCH: main
+REVIEW_AUTHORIZATION: C1: GO
+EVIDENCE: .factory/evidence/ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01/
+  11-correction01-session-authority-lifecycle.md
+  12-p1-regression-reconciliation.md
+  artifact-hashes.json  (supersession + correction01 manifest)
+  verification/vitest-failing-test-identities-entry-head-baseline.txt
+  verification/vitest-failing-test-identities-final.txt
+```
+
+**The two P0s, and where they were closed.**
+
+- **P0-1 — a pending arm could attach to an unrelated EXISTING session.** The
+  producer resolved the contract as `getBound(sessionId) ?? peekArmed()`, so
+  the ARMED slot (PENDING INTENT for the NEXT task) was reachable from the
+  resume/rebuild path. The producer now SPLITS its resolution by session
+  identity: an EXISTING session resolves ONLY through
+  `getBoundOrPersisted(sessionId)` (never the armed slot, never another
+  session's record); a NEW task observes the armed intent.
+
+  The reviewer's counterexample was a SOURCE-LEVEL observation. Reading the
+  production call sites showed the defect was **worse than stated**: no
+  production caller ever supplied `sessionId` — every resume/rebuild path set
+  `config.sessionId` AFTER `build()`. The producer's session discrimination
+  was dead code in production. Fixing the lookup expression alone would NOT
+  have repaired production, so the correction ALSO supplies the session id
+  before configuration construction on all eight reconstruct paths (resume,
+  mode rebuild, provider rebuild x3, MCP tool restart, terminal-mode rebuild,
+  auto-approval rebuild, configuration rebuild).
+
+- **P0-2 — restored sessions did not restore the activation contract.** The
+  contract store is in-memory, so a recreated extension host lost the
+  session-bound vocabulary even when the evidence secret survived. The
+  correction separates the two lifetimes: the **ARMED** contract is INTENT
+  and is deliberately NOT persisted; the **BOUND** contract is a FACT about
+  one specific session and IS persisted, in the same file-backed
+  `secrets.json` (mode `0o600`) store the project already uses, under the
+  new key `adjudicationSessionVocabularies`, keyed by session id. Written at
+  the authoritative session-id allocation point (`consumeForSession`),
+  retired by the task-clear choke-point (`clearBound`).
+
+  The same split selects the secret semantics: a NEW task uses START
+  semantics (may mint and persist), an EXISTING session uses RESTORE
+  semantics — it recovers the stored secret or hands back an in-memory-only
+  secret and reports NOT-restorable. It NEVER persists a replacement for a
+  lost historical identity, which was the exact fail-open the SDK contract
+  forbids.
+
+**The storage protection model, stated accurately.** The trusted store is the
+file-backed `secrets.json` (mode `0o600`) behind `StateManager` — the same
+store already used for API keys and OAuth credentials. It is **NOT** VS
+Code's `ExtensionContext.secrets` and **NOT** platform-encrypted keychain
+storage; it is a distinct protection model (filesystem permissions on a local
+file). No storage-framework migration was performed or is required.
+
+**RED / GREEN.** The producer's resolution was temporarily reverted to the
+pre-correction form and the correction suite re-run: `5 failed | 10 passed
+(15)`. The 5 failures were exactly the P0 witnesses. The producer was
+restored and the suite returned to 15/15 PASS — the witnesses are
+load-bearing, not vacuous.
+
+**P1 — the regression comparison, tightened once.** The earlier digest
+compared FAILING FILES; identical file sets do not establish identical
+failing-TEST identities. The already-captured transcripts were re-derived into
+one canonical line per failing test and compared with `comm`:
+
+```text
+baseline identities: 190    corrected identities: 187
+=== FAILING-TEST IDENTITIES ONLY IN THE CORRECTED RUN (must be empty) ===
+=== END ===            <- EMPTY: ZERO new failing-test identities
+```
+
+The 3 removed identities are all ACT-owned RED witnesses (the runtime-chain
+bridge suite and the two `RED-2` producer witnesses). Every one of the 187
+remaining identities is present, unchanged, in the baseline. No new full-suite
+execution was needed or performed. See `12-p1-regression-reconciliation.md`.
+
+**Build gates (re-verified at the commit boundary).**
+
+| Gate | Result |
+|---|---|
+| `tsc --noEmit` (apps/vscode) | **0 diagnostics** |
+| correction + producer suites | **20/20 PASS** (5 producer + 15 correction) |
+| runtime-chain bridge suite | **13/13 PASS** |
+| coordinator + factory suites | **186/186 PASS** |
+| full-suite conservation | **ZERO new failing-test identities** |
+| biome lint + format (13 files) | **PASS** (0 errors) |
+| bridge typecheck | 5 **pre-existing** diagnostics, identical at entry HEAD and after; 0 ACT-owned |
+
+The bridge typecheck's 5 ADDED diagnostics were MEASURED, not assumed: the
+working tree was stashed and the same command re-run at entry HEAD, where it
+reported the identical 5 diagnostics with an EMPTY canonical diff. None of the
+5 files are in the ACT's delta.
+
+**Commit hygiene.** The unrelated generated timestamp-only change in
+`.factory/evidence/act-seatbelt-yolo-approval-friction-recon01/inventory.summary.md`
+was verified to be a one-line timestamp difference and **restored** — it is not
+part of this commit.
+
+**Artifact supersession.** `artifact-hashes.json` and `10-exit-report.md`
+describe the **pre-correction** VSIX (`7490a12a5` + uncommitted changes,
+bundle `ab9bb821...`). Those historical identities are PRESERVED and are now
+explicitly marked `SUPERSEDED_FOR_CORRECTION01`; the exit report carries a
+supersession banner. The corrected manifest lists the corrected source, the
+corrected tests and the corrected evidence. **The previously packaged VSIX
+must not be used as evidence for this correction.**
+
+**What is NOT claimed.**
+
+```text
+INSTALLED-LIVE QUALIFICATION:  NOT EXECUTED for the corrected source.
+VSIX FOR THE CORRECTED SOURCE: NOT YET REPACKAGED — must be rebuilt and
+                              repackaged from the exact committed HEAD, and
+                              the embedded bundle SHA-256 verified.
+ROUND C:                      the historical limitation is unchanged and NOT
+                              re-litigated: the six identified R4 candidate
+                              reads used `run_commands`, not the supported
+                              `read_files` acquisition class, and no
+                              authorized R1-R10 vocabulary exists.
+```
+
+**NEXT_ACTION.** Rebuild and repackage the VSIX from the exact committed HEAD,
+verify the embedded bundle SHA-256, then proceed to the separately scoped
+debug-only authorization hook and the installed-live qualification.
+
+
+
 EVIDENCE: `.factory/evidence/ACT-CLINEMM-DIAGNOSTIC-EXPORT-PRIVACY01/`
   `01-real-session-export-after.txt`,
   `02-red-tests.txt`, `03-green-tests.txt`,

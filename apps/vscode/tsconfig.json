@@ -346,6 +346,14 @@
 		// aliases that resolve under `tsconfig.c2-4-c-bridge.json` only.
 		// Excluded here so `bun run check-types` does not see the
 		// base-config-incompatible import paths.
-		"src/sdk/__tests__/completion-continuation-provider-boundary01.ccpb01.c24-c-bridge.test.ts"
+		"src/sdk/__tests__/completion-continuation-provider-boundary01.ccpb01.c24-c-bridge.test.ts",
+		// ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01: the runtime-chain
+		// witnesses. Requires the
+		// `@cline-internal/core/extensions/context/adjudication-continuity`
+		// and `@cline-internal/core/session/services/message-builder`
+		// aliases that resolve under `tsconfig.c2-4-c-bridge.json` only.
+		// Excluded here so `bun run check-types` does not see the
+		// base-config-incompatible import paths.
+		"src/sdk/__tests__/adjudication-vscode-activation01.runtime-chain.c24-c-bridge.test.ts"
 	]
 }

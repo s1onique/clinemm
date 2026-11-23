@@ -48,7 +48,14 @@ export async function prepareTaskResumeStartInput(
 
 	const modeValue = deps.stateManager.getGlobalSettingsKey("mode")
 	const mode: Mode = modeValue === "plan" || modeValue === "act" ? modeValue : "act"
-	const config = await deps.sessionConfigBuilder.build({ cwd, mode })
+	// ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01-CORRECTION01:
+	// a RESUME reconstructs an EXISTING session, so the producer must know
+	// WHICH session it is building for. Without this the producer cannot
+	// distinguish an existing session from a new task, and a pending
+	// (unconsumed) adjudication arm could attach to this unrelated
+	// session. It is also what lets the producer restore this session's
+	// OWN persisted adjudication contract after an extension-host restart.
+	const config = await deps.sessionConfigBuilder.build({ cwd, mode, sessionId: taskId })
 	config.sessionId = taskId
 
 	const isLegacyTask = await deps.taskHistory.isLegacyTask(taskId)

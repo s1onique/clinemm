@@ -139,7 +139,16 @@ describe("SdkSessionConfigChangeCoordinator", () => {
 		// `sdk-mode-coordinator`). Assert the override is present rather
 		// than pinning the whole argument object.
 		expect(options.sessionConfigBuilder.build).toHaveBeenCalledWith(
-			expect.objectContaining({ cwd: "/workspace", mode: "plan", sessionAutoApprovalOverride: "none" }),
+			expect.objectContaining({
+				cwd: "/workspace",
+				mode: "plan",
+				sessionAutoApprovalOverride: "none",
+				// ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01-CORRECTION01:
+				// the configuration rebuild reconstructs the EXISTING
+				// session, so the producer must know which session it is
+				// building for.
+				sessionId: "old-session",
+			}),
 		)
 		expect(options.loadInitialMessages).toHaveBeenCalledWith(activeSession.sdkHost, "old-session")
 		expect(options.buildStartSessionInput).toHaveBeenCalledWith(expect.objectContaining({ sessionId: "old-session" }), {

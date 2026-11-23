@@ -448,6 +448,33 @@ const SECRETS_KEYS = [
 	"mcpOAuthSecrets",
 	"openai-codex-oauth-credentials", // JSON blob containing OAuth tokens for OpenAI Codex (ChatGPT subscription)
 	"wandbApiKey",
+	// ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01: the per-session
+	// evidence-handle secret for the adjudication continuity contract.
+	//
+	// The opaque evidence handle is MODEL-VISIBLE; this secret is NOT. It
+	// is stored in the file-backed secrets store (mode 0o600), never in
+	// workspace settings, never in a repository file, never in a prompt and
+	// never in a provider request.
+	//
+	// It is stored as a JSON blob keyed by session id so a restored session
+	// re-derives the SAME secret and therefore the SAME evidence handles.
+	"adjudicationSessionSecrets",
+	// ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01-CORRECTION01: the
+	// per-session AUTHORIZED adjudication vocabulary.
+	//
+	// The armed intent is deliberately NOT persisted (it must never survive
+	// a restart into a task the user did not authorize). The BOUND
+	// contract, however, is a fact about a SPECIFIC session: once it has
+	// been consumed at the authoritative session-id allocation point it
+	// must survive an extension-host restart, or the restored host would
+	// silently disable the continuity feature for the very session the
+	// user authorized.
+	//
+	// It is stored as a JSON blob keyed by session id, in the same trusted
+	// file-backed secret store (mode 0o600) as the evidence secret — never
+	// in workspace settings, never in a repository file, never in a prompt
+	// and never in a provider request.
+	"adjudicationSessionVocabularies",
 ] as const
 
 // WARNING, these are not ALL of the local state keys in practice. For example, FileContextTracker

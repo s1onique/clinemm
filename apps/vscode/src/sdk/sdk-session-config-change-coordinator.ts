@@ -108,6 +108,14 @@ export class SdkSessionConfigChangeCoordinator {
 				// terminal-mode rebuild preserves the bound override for the
 				// active session id (same semantics as mode-coordinator).
 				sessionAutoApprovalOverride: this.options.resolveSessionAutoApprovalOverride(oldSessionId),
+				// ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01-CORRECTION01:
+				// the configuration rebuild RECONSTRUCTS the existing
+				// session, so the producer must know WHICH session it is
+				// building for. Without this the producer cannot distinguish
+				// an existing session from a new task, and a pending
+				// (unconsumed) adjudication arm could attach to this
+				// unrelated session.
+				sessionId: oldSessionId,
 			})
 			config.sessionId = oldSessionId
 

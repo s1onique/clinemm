@@ -38,6 +38,13 @@ const sdkCoreSessionRuntimeOrchestrator = path.resolve(sdkCoreRoot, "runtime/orc
 // the `@cline/core` bundle minifier name-collision or the
 // apps/vscode base-config `@cline/core` stub alias.
 const sdkCoreContextCompaction = path.resolve(sdkCoreRoot, "extensions/context/compaction")
+// ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01: the REAL adjudication
+// continuity module (the acquisition seam, the session-scoped
+// evidence-handle registry, the C1 acceptance gates and the C2 deterministic
+// carry-forward), and the REAL production `MessageBuilder` (the
+// provider-visible projection).
+const sdkCoreAdjudicationContinuity = path.resolve(sdkCoreRoot, "extensions/context/adjudication-continuity")
+const sdkCoreMessageBuilder = path.resolve(sdkCoreRoot, "session/services/message-builder")
 // ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION03-PROVIDER-BOUNDARY:
 // The closed Symbol-keyed brand that the trusted host seam attaches to
 // the runtime-control continuation envelope. Aliases the source path so
@@ -69,6 +76,13 @@ export default defineConfig({
 			"src/sdk/__tests__/myc-prime-automation.identity-join.red.c24-c-bridge.test.ts",
 			"src/sdk/__tests__/real-local-to-shadow-bridge.c24-c-correction01.test.ts",
 			"src/sdk/__tests__/acl02-runtime-seam.c24-c-bridge.test.ts",
+			// ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01: the
+			// runtime-chain witnesses (acquisition -> handle -> acceptance
+			// -> compaction continuity -> session restoration). Drives the
+			// REAL SDK adjudication continuity classes with the REAL VS
+			// Code host adapters. The bridge aliases below resolve the
+			// production SDK classes.
+			"src/sdk/__tests__/adjudication-vscode-activation01.runtime-chain.c24-c-bridge.test.ts",
 			"src/sdk/__tests__/async-command-ownership-discriminator.aco01.c24-c-bridge.test.ts",
 			"src/sdk/__tests__/async-command-ownership-discriminator.aco01-correction03.c24-c-bridge.test.ts",
 			"src/sdk/__tests__/application-ownership-projection-coherence.aopc01.c24-c-bridge.test.ts",
@@ -540,6 +554,11 @@ export default defineConfig({
 			// bypassing the `@cline/core` stub alias and the
 			// minifier name-collision in the bundled dist.
 			"@cline-internal/core/extensions/context/compaction": sdkCoreContextCompaction,
+			// ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01: the REAL
+			// adjudication continuity module and the REAL production
+			// `MessageBuilder`.
+			"@cline-internal/core/extensions/context/adjudication-continuity": sdkCoreAdjudicationContinuity,
+			"@cline-internal/core/session/services/message-builder": sdkCoreMessageBuilder,
 			// Apps/vscode alias surface needed by AOPC02 PHASE-A-CORRECTION01
 			// to construct a real Controller via vi.mock on the heavy deps.
 			// Same path resolution as the base apps/vscode/vitest.config.ts.

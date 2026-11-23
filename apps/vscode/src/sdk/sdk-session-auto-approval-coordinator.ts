@@ -144,6 +144,14 @@ export class SdkSessionAutoApprovalCoordinator {
 				// gap: the user's "ALL — this task" click now reaches the
 				// new runtime's tool registry.
 				sessionAutoApprovalOverride: boundOverride,
+				// ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01-CORRECTION01:
+				// the auto-approval toggle RECONSTRUCTS the existing
+				// session, so the producer must know WHICH session it is
+				// building for. Without this the producer cannot distinguish
+				// an existing session from a new task, and a pending
+				// (unconsumed) adjudication arm could attach to this
+				// unrelated session.
+				sessionId: currentSessionId,
 			})
 			config.sessionId = currentSessionId
 

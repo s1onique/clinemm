@@ -1,0 +1,325 @@
+{
+  "act": "ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01",
+  "verdict": "PASS_STRUCTURAL_ONLY",
+  "entryHead": "7490a12a58fbec73800f97c4b2346bde6b394725",
+  "finalHead": "7490a12a58fbec73800f97c4b2346bde6b394725",
+  "branch": "main",
+  "sourceVersion": "4.1.26",
+  "installedVersion": "4.1.26-613295a95",
+  "vsixPath": "dist/clinemm-4.1.26-7490a12a5-av01.vsix",
+  "vsixBytes": 65046373,
+  "vsixSha256": "5b5fc383649a067968cabf986ff5fa89af4d8dd990822b32ce9687efe8a96d1a",
+  "bundledExtensionSha256": "ab9bb821cf16a09c31b07447a72e4839719763bf75639a0c0b3e79dc5217c96d",
+  "installedBundleSha256": "0b0c5828b44a12928bc9e78c1f250c50c7166bc4e7415825cd0bd7f9bd9dcea5",
+  "actOwnedDiagnostics": 0,
+  "actOwnedWitnesses": 18,
+  "supersession": {
+    "note": "The top-level VSIX/bundle identity fields are the PRE-CORRECTION artifact (7490a12a5 plus uncommitted changes). They are PRESERVED for historical identity and are SUPERSEDED for CORRECTION01 purposes. The previously packaged VSIX must NOT be used as evidence for the correction. See the correction01 block below for the corrected source, tests and evidence.",
+    "preCorrectionArtifact": {
+      "sourceHead": "7490a12a58fbec73800f97c4b2346bde6b394725",
+      "vsixPath": "dist/clinemm-4.1.26-7490a12a5-av01.vsix",
+      "vsixSha256": "5b5fc383649a067968cabf986ff5fa89af4d8dd990822b32ce9687efe8a96d1a",
+      "bundledExtensionSha256": "ab9bb821cf16a09c31b07447a72e4839719763bf75639a0c0b3e79dc5217c96d",
+      "installedBundleSha256": "0b0c5828b44a12928bc9e78c1f250c50c7166bc4e7415825cd0bd7f9bd9dcea5",
+      "installedBundleNote": "The pre-ACT known-good build in the codium-roz profile. UNTOUCHED by this ACT; preserved as the rollback anchor. Unaffected by CORRECTION01.",
+      "status": "SUPERSEDED_FOR_CORRECTION01"
+    }
+  },
+  "correction01": {
+    "act": "ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01-CORRECTION01",
+    "classification": "STRUCTURAL",
+    "reviewVerdictClosed": "HALT_SESSION_AUTHORITY_LIFECYCLE",
+    "verdict": "PASS_STRUCTURAL_ONLY",
+    "p0Closed": [
+      "P0-1 — a pending (unconsumed) arm could attach to an unrelated EXISTING session via the peekArmed() fallback",
+      "P0-2 — a restored session did not restore its adjudication contract, and a lost secret was fail-openly replaced"
+    ],
+    "p1Closed": "the regression comparison was tightened to individual failing-TEST identities (190 baseline -> 187 corrected, ZERO new identities); see 12-p1-regression-reconciliation.md",
+    "sourceHead": "PENDING_COMMIT",
+    "vsixStatus": "NOT_YET_REPACKAGED — the VSIX must be rebuilt and repackaged from the exact committed HEAD before any live claim",
+    "installedLiveQualification": "NOT_EXECUTED for the corrected source",
+    "actOwnedDiagnostics": 0,
+    "actOwnedWitnesses": 33,
+    "gates": {
+      "typecheck": "0 diagnostics (tsc --noEmit, apps/vscode)",
+      "correctionAndProducerSuites": "20/20 PASS (5 producer + 15 correction)",
+      "runtimeChainBridgeSuite": "13/13 PASS",
+      "coordinatorAndFactorySuites": "186/186 PASS",
+      "fullSuiteConservation": "ZERO new failing-test identities; 3 ACT-owned RED identities removed",
+      "biomeLintAndFormat": "PASS (0 errors)",
+      "bridgeTypecheck": "5 pre-existing diagnostics, identical at entry HEAD and after the correction; 0 ACT-owned"
+    },
+    "artifacts": [
+      {
+        "path": "apps/vscode/src/sdk/adjudication-session-vocabulary.ts",
+        "sha256": "3153f0746020d971a8df08a0a83bb105cd736c8e358819e3670cfea48a0b6b7f",
+        "evidence_classification": "STRUCTURAL",
+        "note": "CORRECTION01 production source: the host-owned, PERSISTED per-session authorized vocabulary"
+      },
+      {
+        "path": "apps/vscode/src/sdk/adjudication-task-contract.ts",
+        "sha256": "cdbb6ddf082df840842ecfd2816841f7b06ae63dc5c6a9389292392c807d82c9",
+        "evidence_classification": "STRUCTURAL",
+        "note": "CORRECTION01 production source: persist on consume, getBoundOrPersisted, clearBound retires the persisted record"
+      },
+      {
+        "path": "apps/vscode/src/sdk/cline-session-factory.ts",
+        "sha256": "34bcfd092a35dbf6d0df172a420e09785857381f7137d556d6598e693111fa6e",
+        "evidence_classification": "STRUCTURAL",
+        "note": "CORRECTION01 production source: the session-identity split and RESTORE secret semantics at the producer"
+      },
+      {
+        "path": "apps/vscode/src/sdk/adjudication-session-secret.ts",
+        "sha256": "f2382bde18394ae76c9b986cd4fddaea8fa1000628524c1cc0801d718ca06005",
+        "evidence_classification": "STRUCTURAL",
+        "note": "Production source: the per-session evidence secret provider (START and RESTORE variants)"
+      },
+      {
+        "path": "apps/vscode/src/sdk/adjudication-source-revision-resolver.ts",
+        "sha256": "1fb35c9c5e9c64a848c582b108b0ffc1f292201ffe1f049a26beea65fd73ace5",
+        "evidence_classification": "STRUCTURAL",
+        "note": "Production source: the workspace-bound source revision resolver"
+      },
+      {
+        "path": "apps/vscode/src/sdk/__tests__/adjudication-vscode-activation01.correction01.session-authority-lifecycle.test.ts",
+        "sha256": "dc74d550fd7bf8bb07737d4513abd2bd9e78ff2f3341222dffa82ba68c83a9eb",
+        "evidence_classification": "STRUCTURAL",
+        "note": "CORRECTION01 test: the 15 session-authority-lifecycle witnesses (4 gates)"
+      },
+      {
+        "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01/11-correction01-session-authority-lifecycle.md",
+        "evidence_classification": "STRUCTURAL",
+        "note": "CORRECTION01 evidence: the correction report"
+      },
+      {
+        "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01/12-p1-regression-reconciliation.md",
+        "evidence_classification": "STRUCTURAL",
+        "note": "CORRECTION01 evidence: the P1 per-test-identity regression reconciliation"
+      },
+      {
+        "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01/verification/vitest-failing-test-identities-entry-head-baseline.txt",
+        "sha256": "4967c82def6aadfdc6988ade8e6663d6de8b30b6fb00215dbd0345e0386724dd",
+        "evidence_classification": "STRUCTURAL",
+        "note": "CORRECTION01 evidence: the 190 per-test failing identities at the entry HEAD baseline"
+      },
+      {
+        "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01/verification/vitest-failing-test-identities-final.txt",
+        "sha256": "235c003db76174bcc569dda54d5820922b96743e1e0509caab53e19f1dc5662d",
+        "evidence_classification": "STRUCTURAL",
+        "note": "CORRECTION01 evidence: the 187 per-test failing identities after the correction (ZERO new)"
+      }
+    ]
+  },
+  "artifacts": [
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01/00-entry-identity.md",
+      "bytes": 6555,
+      "sha256": "8aa5762341e901f86634b3511d3826b394864badfbaeeab7994e8e3b7f31e885",
+      "evidence_classification": "STRUCTURAL",
+      "note": "Evidence document"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01/01-vscode-runtime-ownership-map.md",
+      "bytes": 8306,
+      "sha256": "d8280fc3a0f2bfd6d27b5d9d5871ef5ffc494d87eb9e34448a210bbc4f9da5bf",
+      "evidence_classification": "STRUCTURAL",
+      "note": "Evidence document"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01/02-activation-state-and-red.md",
+      "bytes": 5244,
+      "sha256": "39b7ea1bc35b7e4594c240a312fdf1aa72953368af8843e3726215edcb508d64",
+      "evidence_classification": "STRUCTURAL",
+      "note": "Evidence document"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01/03-task-vocabulary-authority.md",
+      "bytes": 5512,
+      "sha256": "b570dba130549966b5b08eb7661fec6646ea4a745dff56d4ca5537fb0d45dd61",
+      "evidence_classification": "STRUCTURAL",
+      "note": "Evidence document"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01/04-source-revision-and-secret-storage.md",
+      "bytes": 6569,
+      "sha256": "190d79d840b2b04cd54b00d002fa69a03790082325a0bd8fa02d5b1ffe51694a",
+      "evidence_classification": "STRUCTURAL",
+      "note": "Evidence document"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01/05-vscode-integration-red-green.md",
+      "bytes": 8208,
+      "sha256": "3a6cbfd743c54617d3867476e562ad9019c86a4dfd6a1dd8bbd1ce66cf9953e2",
+      "evidence_classification": "STRUCTURAL",
+      "note": "Evidence document"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01/06-security-and-conservation.md",
+      "bytes": 7330,
+      "sha256": "003d453c2e23f99730b74d0dc162689219a7e00a4403a535838cff6f640e5c40",
+      "evidence_classification": "STRUCTURAL",
+      "note": "Evidence document"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01/07-build-and-vsix-identity.md",
+      "bytes": 7805,
+      "sha256": "2056062620dff65c3d6dd281674ebbe9fad91fadfaf56b802201c3532451aacd",
+      "evidence_classification": "STRUCTURAL",
+      "note": "Evidence document"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01/08-installed-live-qualification.md",
+      "bytes": 7928,
+      "sha256": "8d55d21fb0030bc085a8cdbde102d0d904f8445f904fb3e7e3d336d12238405e",
+      "evidence_classification": "STRUCTURAL",
+      "note": "Evidence document"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01/09-round-c-applicability.md",
+      "bytes": 6231,
+      "sha256": "05a2bbcea093d6e23133a01153ac9644a3adc12e273c6d1b03251aa17d71a361",
+      "evidence_classification": "STRUCTURAL",
+      "note": "Evidence document"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01/10-exit-report.md",
+      "bytes": 10103,
+      "sha256": "c1ef94e6fabafec4b24387bdc76ed62b91f1dd50aa4f024afb4ca384fcfc1ac2",
+      "evidence_classification": "STRUCTURAL",
+      "note": "Evidence document"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01/verification/build-esbuild.txt",
+      "bytes": 45,
+      "sha256": "6b64e42b4391ed9c096bd381c8cf6b1c126e5b6ff9e6354845bbdf37637b5629",
+      "evidence_classification": "STRUCTURAL",
+      "note": "Executable gate output"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01/verification/build-webview.txt",
+      "bytes": 2721,
+      "sha256": "a85424e7087436d1cc8d4ce598ba80d56dbc35b3e133816665857a35da7b6c39",
+      "evidence_classification": "STRUCTURAL",
+      "note": "Executable gate output"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01/verification/package-vsce.txt",
+      "bytes": 6926,
+      "sha256": "46c99a61bbd25faef5a04d0a3552260631d3855a57520676034e02c8ba8b5387",
+      "evidence_classification": "STRUCTURAL",
+      "note": "Executable gate output"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01/verification/red-ablation-entry-head.txt",
+      "bytes": 3206,
+      "sha256": "aa3e135b41e6b072b3d0e21947e1c3731f1f3636d093d23582d65270f84a9d91",
+      "evidence_classification": "STRUCTURAL",
+      "note": "Executable gate output"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01/verification/vitest-base-entry-head-baseline.txt",
+      "bytes": 719644,
+      "sha256": "6a5bf81dbf9f8f3678001c096834aa6de7379afaab026335169765e640dbc18c",
+      "evidence_classification": "STRUCTURAL",
+      "note": "Executable gate output"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01/verification/vitest-base-final.txt",
+      "bytes": 713247,
+      "sha256": "080815766e4945c03de0ac92045b513377c600058ab6d25bc5b4219f0a7c87ff",
+      "evidence_classification": "STRUCTURAL",
+      "note": "Executable gate output"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01/verification/vitest-failing-test-identities-entry-head-baseline.txt",
+      "bytes": 44911,
+      "sha256": "4967c82def6aadfdc6988ade8e6663d6de8b30b6fb00215dbd0345e0386724dd",
+      "evidence_classification": "STRUCTURAL",
+      "note": "Executable gate output"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01/verification/vitest-failing-test-identities-final.txt",
+      "bytes": 44184,
+      "sha256": "235c003db76174bcc569dda54d5820922b96743e1e0509caab53e19f1dc5662d",
+      "evidence_classification": "STRUCTURAL",
+      "note": "Executable gate output"
+    },
+    {
+      "path": "apps/vscode/src/sdk/adjudication-task-contract.ts",
+      "bytes": 7359,
+      "sha256": "10fff6dac31288d1332a2fb73b3a288b413286ed9061d928647236a1a6c2e3c0",
+      "evidence_classification": "STRUCTURAL",
+      "note": "ACT production source or test under qualification"
+    },
+    {
+      "path": "apps/vscode/src/sdk/adjudication-source-revision-resolver.ts",
+      "bytes": 9817,
+      "sha256": "1fb35c9c5e9c64a848c582b108b0ffc1f292201ffe1f049a26beea65fd73ace5",
+      "evidence_classification": "STRUCTURAL",
+      "note": "ACT production source or test under qualification"
+    },
+    {
+      "path": "apps/vscode/src/sdk/adjudication-session-secret.ts",
+      "bytes": 6741,
+      "sha256": "f2382bde18394ae76c9b986cd4fddaea8fa1000628524c1cc0801d718ca06005",
+      "evidence_classification": "STRUCTURAL",
+      "note": "ACT production source or test under qualification"
+    },
+    {
+      "path": "apps/vscode/src/sdk/cline-session-factory.ts",
+      "bytes": 75935,
+      "sha256": "dc13dbefb47ef339c3327a4a30658adb59932f654588589e8d3f6c18d6227a44",
+      "evidence_classification": "STRUCTURAL",
+      "note": "ACT production source or test under qualification"
+    },
+    {
+      "path": "apps/vscode/src/sdk/sdk-task-start-coordinator.ts",
+      "bytes": 29328,
+      "sha256": "a64a96f1bfbff0fe72e33dff61888301f35719a7fac567de0beb4b9e939bb60b",
+      "evidence_classification": "STRUCTURAL",
+      "note": "ACT production source or test under qualification"
+    },
+    {
+      "path": "apps/vscode/src/shared/storage/state-keys.ts",
+      "bytes": 31254,
+      "sha256": "7a2771884b673d11d6530f458488fe76187609a4be7779770acbfbf7b599af9d",
+      "evidence_classification": "STRUCTURAL",
+      "note": "ACT production source or test under qualification"
+    },
+    {
+      "path": "apps/vscode/src/sdk/__tests__/adjudication-vscode-activation01.test.ts",
+      "bytes": 10513,
+      "sha256": "9b22a80e83da2efadb6ce35c69b6eb6e051f94ca4f0e7c8f16faa6242e61f289",
+      "evidence_classification": "STRUCTURAL",
+      "note": "ACT production source or test under qualification"
+    },
+    {
+      "path": "apps/vscode/src/sdk/__tests__/adjudication-vscode-activation01.runtime-chain.c24-c-bridge.test.ts",
+      "bytes": 34689,
+      "sha256": "17871a6fdb89068c86fc7cc7366819166409c01e37915c60ac1341f96162be00",
+      "evidence_classification": "STRUCTURAL",
+      "note": "ACT production source or test under qualification"
+    },
+    {
+      "path": "dist/clinemm-4.1.26-7490a12a5-av01.vsix",
+      "bytes": 65046373,
+      "sha256": "5b5fc383649a067968cabf986ff5fa89af4d8dd990822b32ce9687efe8a96d1a",
+      "evidence_classification": "REAL",
+      "note": "The packaged VSIX produced by this ACT"
+    },
+    {
+      "path": "apps/vscode/dist/extension.js",
+      "bytes": 27304968,
+      "sha256": "ab9bb821cf16a09c31b07447a72e4839719763bf75639a0c0b3e79dc5217c96d",
+      "evidence_classification": "REAL",
+      "note": "The locally built extension bundle (byte-identical to the VSIX's embedded bundle)"
+    },
+    {
+      "path": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/extensions/s1onique.clinemm-4.1.26-613295a95/dist/extension.js",
+      "bytes": 27572445,
+      "sha256": "0b0c5828b44a12928bc9e78c1f250c50c7166bc4e7415825cd0bd7f9bd9dcea5",
+      "evidence_classification": "REAL",
+      "note": "The INSTALLED pre-ACT known-good build in the codium-roz profile. UNTOUCHED by this ACT; preserved as the rollback anchor."
+    }
+  ]
+}

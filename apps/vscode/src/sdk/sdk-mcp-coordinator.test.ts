@@ -54,7 +54,11 @@ describe("SdkMcpCoordinator", () => {
 
 		await coordinator.restartSessionForMcpTools()
 
-		expect(options.sessionConfigBuilder.build).toHaveBeenCalledWith({ cwd: "/workspace", mode: "plan" })
+		expect(options.sessionConfigBuilder.build).toHaveBeenCalledWith({
+			cwd: "/workspace",
+			mode: "plan",
+			sessionId: "old-session",
+		})
 		expect(options.loadInitialMessages).toHaveBeenCalledWith(activeSession.sdkHost, "old-session")
 		expect(options.buildStartSessionInput).toHaveBeenCalledWith(expect.objectContaining({ sessionId: "old-session" }), {
 			cwd: "/workspace",

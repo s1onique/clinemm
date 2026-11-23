@@ -56,6 +56,17 @@
 			],
 			"@cline-internal/core/extensions/context/compaction": [
 				"../../sdk/packages/core/src/extensions/context/compaction"
+			],
+			// ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01: the REAL
+			// adjudication continuity module (the acquisition seam, the
+			// evidence-handle registry, the C1 acceptance gates and the C2
+			// carry-forward), and the REAL production `MessageBuilder`
+			// (the provider-visible projection).
+			"@cline-internal/core/extensions/context/adjudication-continuity": [
+				"../../sdk/packages/core/src/extensions/context/adjudication-continuity"
+			],
+			"@cline-internal/core/session/services/message-builder": [
+				"../../sdk/packages/core/src/session/services/message-builder"
 			]
 		}
 	},
@@ -206,7 +217,14 @@
 		// LocalRuntimeHost + REAL SessionRuntime + REAL AgentRuntime +
 		// REAL canonical subscription + REAL Elm kernel. The bridge
 		// aliases resolve the production SDK classes for typecheck.
-		"src/sdk/__tests__/elm-pending-prompt-correlation-repair01.cpr01.c24-c-bridge.test.ts"
+		"src/sdk/__tests__/elm-pending-prompt-correlation-repair01.cpr01.c24-c-bridge.test.ts",
+		// ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01: the runtime-chain
+		// witnesses (acquisition -> handle -> acceptance -> compaction
+		// continuity -> session restoration). Drives the REAL SDK
+		// adjudication continuity classes with the REAL VS Code host
+		// adapters. The bridge aliases resolve the production SDK classes
+		// for typecheck.
+		"src/sdk/__tests__/adjudication-vscode-activation01.runtime-chain.c24-c-bridge.test.ts"
 	],
 	"exclude": [
 		"node_modules",

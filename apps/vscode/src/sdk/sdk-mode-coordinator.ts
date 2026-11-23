@@ -276,6 +276,14 @@ export class SdkModeCoordinator {
 				// session id (NOT the pre-arm intent — that's reserved for
 				// the next-task case in SdkTaskStartCoordinator.initTask).
 				sessionAutoApprovalOverride: this.options.resolveSessionAutoApprovalOverride(oldSessionId),
+				// ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01-CORRECTION01:
+				// the mode rebuild RECONSTRUCTS the existing session, so
+				// the producer must know WHICH session it is building
+				// for. Without this the producer cannot distinguish an
+				// existing session from a new task, and a pending
+				// (unconsumed) adjudication arm could attach to this
+				// unrelated session.
+				sessionId: oldSessionId,
 			})
 			Logger.log(
 				`[SdkController] Mode rebuild config: mode=${newMode}, provider=${config.providerId}, model=${config.modelId}, hasApiKey=${!!config.apiKey}`,

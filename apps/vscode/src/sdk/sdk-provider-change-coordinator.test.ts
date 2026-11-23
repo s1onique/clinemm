@@ -57,7 +57,11 @@ describe("SdkProviderChangeCoordinator", () => {
 		coordinator.handleApiConfigurationChanged({ actModeApiProvider: "anthropic" }, { actModeApiProvider: "deepseek" })
 
 		await vi.waitFor(() => expect(options.sessions.replaceActiveSession).toHaveBeenCalledOnce())
-		expect(options.sessionConfigBuilder.build).toHaveBeenCalledWith({ cwd: "/workspace", mode: "act" })
+		expect(options.sessionConfigBuilder.build).toHaveBeenCalledWith({
+			cwd: "/workspace",
+			mode: "act",
+			sessionId: "old-session",
+		})
 		expect(options.loadInitialMessages).toHaveBeenCalledWith(activeSession.sdkHost, "old-session")
 		expect(options.buildStartSessionInput).toHaveBeenCalledWith(expect.objectContaining({ sessionId: "old-session" }), {
 			cwd: "/workspace",
@@ -82,7 +86,11 @@ describe("SdkProviderChangeCoordinator", () => {
 		)
 
 		await vi.waitFor(() => expect(options.sessions.replaceActiveSession).toHaveBeenCalledOnce())
-		expect(options.sessionConfigBuilder.build).toHaveBeenCalledWith({ cwd: "/workspace", mode: "plan" })
+		expect(options.sessionConfigBuilder.build).toHaveBeenCalledWith({
+			cwd: "/workspace",
+			mode: "plan",
+			sessionId: "old-session",
+		})
 	})
 
 	it("schedules the restart while the active session is running", () => {
