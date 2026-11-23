@@ -1,0 +1,228 @@
+{
+  "act": "ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01",
+  "verdict": "PASS_STRUCTURAL_ONLY",
+  "entry_head": "b5e22c8347bddb8b0c991daa28b2bdc45b92c85f",
+  "final_head_at_generation": "95307eef1e9f898f1fde9869c4d1c5f3c7fdb73e",
+  "branch": "main",
+  "source_version": "4.1.26",
+  "act_owned_files": [
+    {
+      "path": "sdk/packages/core/src/extensions/context/adjudication-continuity.ts",
+      "bytes": 70026,
+      "sha256": "17abdc42c42383d9974b3734c757ad62b0450e967a8aad8e26727a449ed30b04"
+    },
+    {
+      "path": "sdk/packages/core/src/extensions/context/compaction.adjudication-output-contract.implement01.test.ts",
+      "bytes": 55016,
+      "sha256": "64f2f3c38f5692d00dd39672f179748e5af12aec65e8e8affd95e4bdc72ec277"
+    },
+    {
+      "path": "sdk/packages/core/src/types/adjudication-config.ts",
+      "bytes": 1862,
+      "sha256": "40e3b4960c0852a3197b04e35dabe8378b24383313ff9bf17a9241897225acf5"
+    },
+    {
+      "path": "sdk/packages/core/scripts/adjudication-output-contract.implement01.live-probe.ts",
+      "bytes": 26557,
+      "sha256": "34b995eb62f19dfd9f016fb7fce69ca0e9b7329f8a4e67e5d449ad2deea1a6f8"
+    },
+    {
+      "path": "sdk/packages/core/src/extensions/context/compaction.ts",
+      "bytes": 83549,
+      "sha256": "6c771a3fed6ecec1ed85b2f30d9033c2bc51af9f2eff5f53d3df932e0fca83fe"
+    },
+    {
+      "path": "sdk/packages/core/src/runtime/host/local-runtime-host.ts",
+      "bytes": 134165,
+      "sha256": "d88326c2b022626113ddf4614bb550a26ca9dd411a70aac11c51daea7fa6ea10"
+    },
+    {
+      "path": "sdk/packages/core/src/types/config.ts",
+      "bytes": 11462,
+      "sha256": "a9e2627619bf0c4e0104836ce31a89e0675de5cf7692b91be15400563ba81221"
+    },
+    {
+      "path": "sdk/packages/core/src/index.ts",
+      "bytes": 45314,
+      "sha256": "e792a3222d90117e4a613e870725b4f52f7b4af70f862320c361027ac3cc4ceb"
+    }
+  ],
+  "frozen_evidence_files": [
+    {
+      "path": "sdk/packages/core/src/extensions/context/compaction.adjudication-continuity.red01.test.ts",
+      "bytes": 28121,
+      "sha256": "8479ac262f0396a504a75893386c3031f8bf0350e6aa2a86abab0dbf5017c8d9"
+    },
+    {
+      "path": "sdk/packages/core/src/extensions/context/compaction.adjudication-output-contract.probe01.test.ts",
+      "bytes": 59771,
+      "sha256": "986f03813d6a5c92b36e7c6477ed9986279e56f7b11e9966bd2e0d6ce7c14a96"
+    },
+    {
+      "path": "sdk/packages/core/src/extensions/context/compaction.adjudication-output-contract.correction01.test.ts",
+      "bytes": 9927,
+      "sha256": "d3e8928d4ed999e0fbe2247c71219890b16d7d8cf4ecacf46e0bc63d3167b6f3"
+    },
+    {
+      "path": "sdk/packages/core/scripts/adjudication-output-contract.live-probe.ts",
+      "bytes": 25832,
+      "sha256": "48b85f1f9615f7d7949cd0b729c36a99e7df9343cc58d63cf84a4c3a699448ae"
+    },
+    {
+      "path": "sdk/packages/core/scripts/adjudication-output-contract.correlation.ts",
+      "bytes": 6243,
+      "sha256": "1f4237e07b8503aabd6b4337f0e9048d0103b253d314aad53fbf9b0af822ebf2"
+    }
+  ],
+  "evidence_files": [
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01/00-entry-identity.md",
+      "bytes": 3463,
+      "sha256": "d88cf8df3d2acb1f9b907450b7635ab649183d52af7eadf77b97393fc186c2a2"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01/01-production-ownership-map.md",
+      "bytes": 6999,
+      "sha256": "a89c86cb2c71a946cb52a6f7e813b8a456caf0576b206edc08e1ce88801cae4e"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01/02-c1-evidence-binding-red-green.md",
+      "bytes": 6842,
+      "sha256": "25b7a9ea8ffbf7752c31f5da9efae0ccba1ab6f7322ce00b20791977e5bae7e3"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01/03-source-revision-binding.md",
+      "bytes": 3862,
+      "sha256": "fc89db45b88d1a37c9c4512b82739eec6e37144890b217584ec4c4834d21a01d"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01/04-c2-deterministic-continuity.md",
+      "bytes": 5756,
+      "sha256": "4b4d36297e88d5d08a7237449c3e55e37a481ef89050d58fdeb3f83975ce9229"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01/05-publication-integration.md",
+      "bytes": 4003,
+      "sha256": "4580765917721a776a5889d24e06d33e189bf10c31de1f612c26e445b86097b5"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01/06-security-adversarial-controls.md",
+      "bytes": 4503,
+      "sha256": "e61d2cef66dc467d13b2226dff5d2521b897c2b1e061937d00a26e94896ebb2f"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01/07-conservation-and-ablation.md",
+      "bytes": 5764,
+      "sha256": "6817484d4fff94c9bb17f6b0dcb6e5a52be1ac70656be007ea884218502ebbdd"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01/08-executable-gates.md",
+      "bytes": 5713,
+      "sha256": "1363fb583a1ed9d520849560f1584049887412e19a0e7354963d2578303a580a"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01/09-build-and-live-qualification.md",
+      "bytes": 6611,
+      "sha256": "a01347414d9ba6a00fccd6612bcfa80ee8f66cece0f8b15d9eb8a04ecc8d6874"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01/10-exit-report.md",
+      "bytes": 5313,
+      "sha256": "32f52b7e04a77b19f3ebbee2c8ba7bce991a13f30473aae8c3c9ceae121f2bab"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01/verification/gate9-live-model-probe-implement01.txt",
+      "bytes": 20051,
+      "sha256": "eaae159a45597c73caabd9344e1c62a6c6bad82256bee396935c62328df305cb"
+    }
+  ],
+  "vsix": {
+    "path": "dist/clinemm-adj-implement01-95307eef1e9f898f1fde9869c4d1c5f3c7fdb73e.vsix",
+    "bytes": 66453643,
+    "sha256": "d20367753a5a4fd1f92b5390076d7b3eef26234ac246aaecc1d6fcde14b281db"
+  },
+  "executed_commands": [
+    {
+      "gate": "1+2",
+      "command": "bun x vitest run src/extensions/context/compaction.adjudication-output-contract.implement01.test.ts --config vitest.config.ts",
+      "exit_code": 0,
+      "tests": "54 passed"
+    },
+    {
+      "gate": "3",
+      "command": "bun x vitest run src/extensions/context/compaction.adjudication-output-contract.probe01.test.ts src/extensions/context/compaction.adjudication-output-contract.correction01.test.ts --config vitest.config.ts",
+      "exit_code": 0,
+      "tests": "64 passed"
+    },
+    {
+      "gate": "4",
+      "command": "bun x vitest run src/extensions/context/compaction.evidence-fidelity01.test.ts --config vitest.config.ts",
+      "exit_code": 0,
+      "tests": "39 passed"
+    },
+    {
+      "gate": "5",
+      "command": "bun x vitest run src/extensions/context/ --config vitest.config.ts",
+      "exit_code": 0,
+      "tests": "614 passed / 2 skipped"
+    },
+    {
+      "gate": "6",
+      "command": "bun tsc -p tsconfig.dev.json --noEmit",
+      "exit_code": 2,
+      "diagnostics": 44,
+      "act_owned_diagnostics": 0
+    },
+    {
+      "gate": "7",
+      "command": "bun x @biomejs/biome check <act-owned files>",
+      "exit_code": 0,
+      "notes": "local-runtime-host.ts retains its 2 pre-existing findings, verified identical to the baseline"
+    },
+    {
+      "gate": "8",
+      "command": "bun x vitest run --config vitest.red.adjudication-continuity-red01.config.ts",
+      "exit_code": 1,
+      "tests": "5 failed (intentionally preserved)"
+    },
+    {
+      "gate": "9",
+      "command": "cd sdk/packages/core && bun run build",
+      "exit_code": 0
+    },
+    {
+      "gate": "9",
+      "command": "cd apps/vscode && bun run package",
+      "exit_code": 0
+    },
+    {
+      "gate": "7.1c",
+      "command": "CLINE_ADJUDICATION_ABLATION=1 bun x vitest run src/extensions/context/compaction.adjudication-output-contract.implement01.test.ts --config vitest.config.ts",
+      "exit_code": 1,
+      "tests": "5 failed / 49 passed"
+    },
+    {
+      "gate": "9-live",
+      "command": "CORE_LIVE_ADJUDICATION_PROBE=1 CORE_LIVE_ADJUDICATION_PROVIDER_KEY=minimax CORE_LIVE_ADJUDICATION_RUNS=16 bun scripts/adjudication-output-contract.implement01.live-probe.ts",
+      "exit_code": 0,
+      "execution_class": "REAL_MODEL_RESPONSE",
+      "runs": 16,
+      "candidate_accepted": 4
+    }
+  ],
+  "live_measurement": {
+    "execution_class": "REAL_MODEL_RESPONSE",
+    "model_provider": "minimax / MiniMax-M3",
+    "runs": 16,
+    "schema_valid": 6,
+    "nonempty_evidence_refs": 6,
+    "canonical_refs_resolved": 6,
+    "source_revision_bound": 4,
+    "candidate_accepted": 4,
+    "semantic_support_verified": 0,
+    "compaction_boundary_observed": 4,
+    "installed_runtime": "NOT INSTALLED"
+  },
+  "baseline_diagnostics": 44,
+  "act_owned_diagnostics": 0
+}
