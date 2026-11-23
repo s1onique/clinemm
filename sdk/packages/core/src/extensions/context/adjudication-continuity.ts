@@ -114,10 +114,15 @@ import type {
 	MessageWithMetadata,
 	ToolResultAcquisition,
 } from "@cline/shared";
-import { classifyToolResultStatus } from "./evidence-continuity";
-import type { VerifiedOutcomeStatus } from "./evidence-continuity";
-import { EVIDENCE_HANDLE_TRAILER_MARKER } from "./evidence-continuity";
 import { sha256HexSync } from "@cline/shared";
+import type { VerifiedOutcomeStatus } from "./evidence-continuity";
+import {
+	classifyToolResultStatus,
+	EVIDENCE_HANDLE_HEX_LENGTH,
+	EVIDENCE_HANDLE_PREFIX,
+	EVIDENCE_HANDLE_TRAILER_MARKER,
+	isEvidenceHandleShape,
+} from "./evidence-continuity";
 
 // ===========================================================================
 // SECTION 1 — THE TASK-SCOPED VOCABULARY (HOST-SUPPLIED)
@@ -202,8 +207,14 @@ export function hasAuthorizedVocabulary(
  * The prefix makes a handle visually distinct from a provider-issued
  * tool-call id, so a model that cites one is never mistaken for the other
  * and a provider id can never be mistaken for a handle.
+ *
+ * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION02: the
+ * definition now lives in `evidence-continuity.ts`, because the PRODUCTION
+ * result classifier must be able to VALIDATE a trailer's handle token, and
+ * that classifier lives there. It is RE-EXPORTED here so there is exactly
+ * ONE definition in the codebase and the two modules cannot drift apart.
  */
-export const EVIDENCE_HANDLE_PREFIX = "cline-ev";
+export { EVIDENCE_HANDLE_PREFIX };
 
 /**
  * The number of hex characters in an evidence handle.
@@ -211,8 +222,11 @@ export const EVIDENCE_HANDLE_PREFIX = "cline-ev";
  * 16 hex characters is 64 bits of a per-session-secret-derived MAC. The
  * handle must be unguessable by a model that knows the canonical tool-call
  * id, and it must be short enough to carry in a bounded trailer line.
+ *
+ * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION02:
+ * re-exported from `evidence-continuity.ts` (single definition).
  */
-export const EVIDENCE_HANDLE_HEX_LENGTH = 16;
+export { EVIDENCE_HANDLE_HEX_LENGTH };
 
 /**
  * The maximum number of characters the handle trailer line may occupy.
@@ -383,11 +397,7 @@ export class AdjudicationEvidenceRegistry {
 	 * history".
 	 */
 	static isHandleShape(value: string): boolean {
-		return (
-			value.startsWith(`${EVIDENCE_HANDLE_PREFIX}-`) &&
-			value.length ===
-				EVIDENCE_HANDLE_PREFIX.length + 1 + EVIDENCE_HANDLE_HEX_LENGTH
-		);
+		return isEvidenceHandleShape(value);
 	}
 
 	/**
@@ -544,8 +554,27 @@ export function renderEvidenceHandleTrailer(input: {
  * only as a line inside another block) is what keeps the attachment
  * idempotent: otherwise the empty block would survive the second
  * application and the projection would not be byte-stable.
+ *
+ * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION05:
+ * the RUNTIME-OWNED test.
+ *
+ * The previous implementation recognised a trailer block by its SHAPE
+ * alone — a text block starting with the marker — and DELETED it. That was
+ * a second route around the trusted-origin check: a FORGED text block
+ * that merely resembles an annotation was removed from the result BEFORE
+ * the classifier ever saw it, so it never contributed to the aggregate.
+ *
+ * A block is the runtime's own annotation only when its handle is EXACTLY
+ * the handle the runtime recorded for this result. A block that merely
+ * RESEMBLES an annotation is SOURCE CONTENT, and the runtime has no
+ * authority to delete it: it stays in the operation-payload set, where
+ * its lack of an affirmative success signal leaves the batch unverified
+ * and its failure poisons the aggregate.
  */
-function isEvidenceHandleTrailerText(part: unknown): boolean {
+function isEvidenceHandleTrailerText(
+	part: unknown,
+	trustedHandle: string | undefined,
+): boolean {
 	if (!part || typeof part !== "object") {
 		return false;
 	}
@@ -553,7 +582,29 @@ function isEvidenceHandleTrailerText(part: unknown): boolean {
 	if (candidate.type !== "text" || typeof candidate.text !== "string") {
 		return false;
 	}
-	return candidate.text.trim().startsWith(`${EVIDENCE_HANDLE_MARKER} `);
+	// Without a RUNTIME-RECORDED handle there is no trusted origin, so
+	// nothing can be the runtime's own annotation. This is the
+	// fail-closed direction.
+	if (!trustedHandle) {
+		return false;
+	}
+	const trimmed = candidate.text.trim();
+	// The annotation is a SINGLE line: anything else in the block is
+	// source content, and the block is not the annotation.
+	if (!trimmed.startsWith(`${EVIDENCE_HANDLE_MARKER} `)) {
+		return false;
+	}
+	if (trimmed.includes("\n")) {
+		return false;
+	}
+	const rest = trimmed.slice(EVIDENCE_HANDLE_MARKER.length + 1);
+	const separator = rest.indexOf(" ");
+	if (separator === -1) {
+		return false;
+	}
+	// THE ORIGIN CHECK: the handle in the line must be EXACTLY the handle
+	// the runtime recorded for this result.
+	return rest.slice(0, separator) === trustedHandle;
 }
 
 /**
@@ -562,16 +613,60 @@ function isEvidenceHandleTrailerText(part: unknown): boolean {
  * The trailer is a DERIVED, runtime-owned annotation. Stripping it before
  * re-deriving keeps the projection idempotent: applying the enrichment
  * twice produces byte-identical output.
+ *
+ * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION05:
+ * only a RUNTIME-OWNED trailer is removed.
+ *
+ * The previous implementation removed every LINE that started with the
+ * marker, whatever it contained. That is a deletion authority the runtime
+ * does not have: tool output is UNTRUSTED source content, and a line of it
+ * that merely resembles an annotation is content, not an annotation.
+ *
+ * Removing such a line silently DROPPED source content from the result —
+ * and from the aggregate the classifier builds — which is the same
+ * promotion the classifier itself was hardened against: content that
+ * should have left the batch UNVERIFIED simply vanished.
+ *
+ * So a line is removed only when it is the EXACT runtime-generated
+ * annotation for the recorded handle. Every other line is left alone.
+ *
+ * With no recorded handle, nothing is removed: there is no runtime-owned
+ * annotation to identify.
  */
-export function stripEvidenceHandleTrailers(text: string): string {
-	if (!text.includes(EVIDENCE_HANDLE_MARKER)) {
+export function stripEvidenceHandleTrailers(
+	text: string,
+	trustedHandle?: string,
+): string {
+	if (!trustedHandle || !text.includes(EVIDENCE_HANDLE_MARKER)) {
 		return text;
 	}
-	return text
+	const kept = text
 		.split("\n")
-		.filter((line) => !line.trimStart().startsWith(EVIDENCE_HANDLE_MARKER))
-		.join("\n")
-		.trimEnd();
+		.filter((line) => !isRuntimeOwnedAnnotationLine(line, trustedHandle));
+	return kept.join("\n").trimEnd();
+}
+
+/**
+ * Whether a single LINE is the runtime's own annotation for the recorded
+ * handle.
+ *
+ * The line must carry the recorded handle — a line that merely starts
+ * with the marker is source content, not the runtime's annotation.
+ */
+function isRuntimeOwnedAnnotationLine(
+	line: string,
+	trustedHandle: string,
+): boolean {
+	const trimmed = line.trim();
+	if (!trimmed.startsWith(`${EVIDENCE_HANDLE_MARKER} `)) {
+		return false;
+	}
+	const rest = trimmed.slice(EVIDENCE_HANDLE_MARKER.length + 1);
+	const separator = rest.indexOf(" ");
+	if (separator === -1) {
+		return false;
+	}
+	return rest.slice(0, separator) === trustedHandle;
 }
 
 // ===========================================================================
@@ -941,6 +1036,12 @@ export function buildCanonicalEvidenceLedger(
 					status: classifyToolResultStatus({
 						is_error: block.is_error,
 						content: block.content,
+						// ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION03:
+						// the RUNTIME-RECORDED handle is the trusted ORIGIN of the
+						// evidence-handle trailer, so it must be forwarded here —
+						// without it the runtime's own trailer would be
+						// indistinguishable from a forged line in untrusted output.
+						evidenceHandle: block.evidenceHandle,
 					}),
 				});
 			}
@@ -1509,9 +1610,7 @@ function findCanonicalCall(
 	messages: readonly MessageWithMetadata[],
 	toolUseId: string,
 ): { name: string; input: Record<string, unknown> } | undefined {
-	let found:
-		| { name: string; input: Record<string, unknown> }
-		| undefined;
+	let found: { name: string; input: Record<string, unknown> } | undefined;
 	for (const message of messages) {
 		if (!Array.isArray(message.content)) {
 			continue;
@@ -2436,53 +2535,68 @@ export function attachEvidenceHandleToToolResult(
 	if (!trailer) {
 		return block;
 	}
+	// ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION03:
+	// the TRUSTED ORIGIN of the trailer.
+	//
+	// The trailer is a LINE OF TEXT, and text is the untrusted side of the
+	// boundary: a file the agent reads, a command's stdout or a tool's own
+	// error message can all END with a line that looks exactly like this
+	// one. So the handle is recorded in a DEDICATED FIELD on the block —
+	// a field only the runtime writes, and which travels with the block
+	// through the canonical history.
+	//
+	// The classifier then recognises the trailer by matching the line's
+	// handle against THIS recorded handle. A forged line carries some other
+	// handle, so it is not a trailer and it stays in the operation-payload
+	// set, where its failure poisons the aggregate and its lack of a
+	// success signal leaves the batch unverified.
 	const content = block.content;
 	if (typeof content === "string") {
-		const stripped = stripEvidenceHandleTrailers(content);
+		const stripped = stripEvidenceHandleTrailers(content, handle);
 		return {
 			...block,
 			content: `${stripped}\n${trailer}`,
+			evidenceHandle: handle,
 		};
 	}
 	if (!Array.isArray(content)) {
 		return block;
 	}
-	// The trailer is appended to the LAST text block, so the result's
-	// structure (and any image/file parts) is preserved exactly.
+	// ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION04:
+	// the annotation is a SEPARATE PAYLOAD, never coalesced with content.
+	//
+	// The previous implementation appended the trailer to the LAST EXISTING
+	// TEXT PAYLOAD, which COALESCED trusted metadata with untrusted source
+	// content. The classifier excludes the payload whose last line carries
+	// the recorded handle — so a payload that held unverified tool output
+	// became INVISIBLE to the success classifier merely because the
+	// runtime appended its own legitimate trailer to it. The unverified
+	// content was then promoted from "no signal" (batch UNVERIFIED) to
+	// "excluded" (batch carried as a verified SUCCESS).
+	//
+	// The annotation is now appended as a PAYLOAD OF ITS OWN. The source
+	// content is left byte-for-byte intact, so it stays in the
+	// operation-payload set where its lack of an affirmative success
+	// signal leaves the batch unverified, and its failure poisons the
+	// aggregate.
 	//
 	// A PREVIOUS trailer is removed FIRST — both the trailer LINE inside a
 	// text block and a trailer that was appended as its OWN text block.
 	// Removing only the line would leave the empty block behind, and the
 	// projection would not be idempotent.
 	const withoutTrailerBlocks = content.filter(
-		(part) => !isEvidenceHandleTrailerText(part),
+		(part) => !isEvidenceHandleTrailerText(part, handle),
 	);
 	const cleaned = withoutTrailerBlocks.map((part) =>
 		part.type === "text" && typeof part.text === "string"
-			? { ...part, text: stripEvidenceHandleTrailers(part.text) }
+			? { ...part, text: stripEvidenceHandleTrailers(part.text, handle) }
 			: part,
 	);
-	let lastTextIndex = -1;
-	for (let index = cleaned.length - 1; index >= 0; index -= 1) {
-		const part = cleaned[index];
-		if (part.type === "text" && typeof part.text === "string") {
-			lastTextIndex = index;
-			break;
-		}
-	}
-	if (lastTextIndex === -1) {
-		return {
-			...block,
-			content: [...cleaned, { type: "text", text: trailer }],
-		};
-	}
-	const next = [...cleaned];
-	const target = next[lastTextIndex] as { type: "text"; text: string };
-	next[lastTextIndex] = {
-		...target,
-		text: `${target.text}\n${trailer}`,
+	return {
+		...block,
+		content: [...cleaned, { type: "text", text: trailer }],
+		evidenceHandle: handle,
 	};
-	return { ...block, content: next };
 }
 
 /**
@@ -2586,39 +2700,47 @@ function attachEvidenceHandleToAgentToolResult(
 	if (!trailer) {
 		return part;
 	}
+	// ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION03: the
+	// TRUSTED ORIGIN of the trailer. The trailer is a line of TEXT, and
+	// text is untrusted, so the handle is recorded in a dedicated field
+	// the runtime owns. The codec persists it onto the canonical block.
 	const output = part.output;
 	if (typeof output === "string") {
 		return {
 			...part,
-			output: `${stripEvidenceHandleTrailers(output)}\n${trailer}`,
+			output: `${stripEvidenceHandleTrailers(output, handle)}\n${trailer}`,
+			evidenceHandle: handle,
 		};
 	}
 	if (Array.isArray(output)) {
-		let lastTextIndex = -1;
-		for (let index = output.length - 1; index >= 0; index -= 1) {
-			const entry = output[index] as { type?: string; text?: unknown };
-			if (entry?.type === "text" && typeof entry.text === "string") {
-				lastTextIndex = index;
-				break;
-			}
-		}
-		if (lastTextIndex === -1) {
-			return {
-				...part,
-				output: [...output, { type: "text", text: trailer }],
-			};
-		}
-		const next = [...output];
-		const target = next[lastTextIndex] as { type: "text"; text: string };
-		next[lastTextIndex] = {
-			...target,
-			text: `${stripEvidenceHandleTrailers(target.text)}\n${trailer}`,
-		};
-		return { ...part, output: next };
+		// ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION04:
+		// the annotation is a SEPARATE PART, never coalesced with content.
+		//
+		// The previous implementation appended the trailer to the LAST EXISTING
+		// TEXT PART, which coalesced trusted metadata with untrusted source
+		// content and let the classifier's exclusion discard the unverified
+		// content along with the annotation. The annotation is now appended
+		// as a PART OF ITS OWN, so the source content stays intact and
+		// visible to the success classifier.
+		//
+		// ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION05:
+		// a PREVIOUS annotation is removed FIRST, so the projection is
+		// IDEMPOTENT — applying it twice yields byte-identical output
+		// instead of accumulating a second annotation part.
+		//
+		// Only the runtime's OWN annotation is removed: a part that merely
+		// resembles one is source content and is left alone.
+		const withoutAnnotation = output.filter(
+			(entry) => !isEvidenceHandleTrailerText(entry, handle),
+		);
+		const next = [...withoutAnnotation];
+		next.push({ type: "text", text: trailer });
+		return { ...part, output: next, evidenceHandle: handle };
 	}
 	return {
 		...part,
 		output: `${trailer}`,
+		evidenceHandle: handle,
 	};
 }
 

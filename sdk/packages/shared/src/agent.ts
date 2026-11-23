@@ -10,8 +10,8 @@ import type {
 	ToolRuntimeOutcome,
 } from "./agents/recovery/types";
 import type { GeneratedMedia } from "./llms/media";
-import type { ModelInfo } from "./llms/model-info";
 import type { ToolResultAcquisition } from "./llms/messages";
+import type { ModelInfo } from "./llms/model-info";
 import type {
 	CommandExecutionPlan,
 	InternalExecutionCapability,
@@ -89,6 +89,25 @@ export interface AgentToolResultPart {
 	 * recreated session restores from.
 	 */
 	acquisition?: ToolResultAcquisition;
+	/**
+	 * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION03.
+	 *
+	 * The evidence handle the RUNTIME attached to this result.
+	 *
+	 * It is the TRUSTED ORIGIN of the evidence-handle trailer. The trailer
+	 * is a LINE OF TEXT inside the result's output, and text is UNTRUSTED:
+	 * a file the agent reads, a command's stdout or a tool's own error
+	 * message can all contain a line that LOOKS like a trailer.
+	 *
+	 * So the trailer is never recognised by its SHAPE. It is recognised by
+	 * this field, which only the runtime writes, and which the codec
+	 * persists onto the canonical tool-result block so the origin
+	 * survives the persistence boundary.
+	 *
+	 * It is ABSENT for every result the runtime did not annotate, which is
+	 * the fail-closed direction.
+	 */
+	evidenceHandle?: string;
 	/** Absent for ordinary AgentRuntime-executed tools. */
 	execution?: ModelToolExecution;
 }

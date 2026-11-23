@@ -140,6 +140,29 @@ export interface ToolResultContent {
 	 * record is `UNBOUND` downstream, which is the fail-closed direction.
 	 */
 	acquisition?: ToolResultAcquisition;
+	/**
+	 * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION03.
+	 *
+	 * The evidence handle the RUNTIME attached to this result, when it
+	 * attached one.
+	 *
+	 * It is the TRUSTED ORIGIN of the evidence-handle trailer. The trailer
+	 * itself is a LINE OF TEXT inside the result's content, and text is
+	 * UNTRUSTED: a file the agent reads, a command's stdout, or a tool's
+	 * own error message can all contain a line that LOOKS like a trailer.
+	 *
+	 * So the trailer is never recognised by its SHAPE. It is recognised by
+	 * this field: the runtime writes the trailer and writes this handle
+	 * together, and only the runtime can write this field. A forged
+	 * trailer in untrusted output has no matching handle here, so it is
+	 * not a trailer — it stays in the operation-payload set, where its
+	 * failure poisons the aggregate and its absence of a success signal
+	 * leaves the batch unverified.
+	 *
+	 * It is ABSENT for every result the runtime did not annotate, which
+	 * is the fail-closed direction.
+	 */
+	evidenceHandle?: string;
 }
 
 /**

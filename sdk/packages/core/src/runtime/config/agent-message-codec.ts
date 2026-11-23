@@ -298,6 +298,11 @@ function toolResultContentToAgentPart(
 		// the acquisition-time record rides WITH the result, so it survives
 		// the round-trip that persists the canonical history.
 		...(block.acquisition ? { acquisition: block.acquisition } : {}),
+		// ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION03:
+		// the trusted ORIGIN of the evidence-handle trailer rides WITH the
+		// result too, so the classifier can still tell the runtime's own
+		// annotation from a forged line in untrusted output.
+		...(block.evidenceHandle ? { evidenceHandle: block.evidenceHandle } : {}),
 	};
 }
 
@@ -377,6 +382,13 @@ function agentPartToContentBlock(
 				...(part.acquisition
 					? { acquisition: toPersistedAcquisition(part.acquisition) }
 					: {}),
+				// ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION03:
+				// the trusted ORIGIN of the evidence-handle trailer is
+				// PERSISTED onto the canonical tool-result block, so the
+				// origin survives the persistence boundary and a restored
+				// session still recognises the runtime's own annotation
+				// (and only that one) as a trailer.
+				...(part.evidenceHandle ? { evidenceHandle: part.evidenceHandle } : {}),
 			} satisfies ToolResultContent;
 		}
 	}

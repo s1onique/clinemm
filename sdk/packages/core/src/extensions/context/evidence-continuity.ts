@@ -691,6 +691,43 @@ export interface VerifiedOutcomeLedger {
 export const EVIDENCE_HANDLE_TRAILER_MARKER = "[cline-evidence-handle]";
 
 /**
+ * The prefix of every evidence handle.
+ *
+ * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION02:
+ *
+ * The definition lives HERE, in the base module, because the classifier
+ * below must be able to VALIDATE a trailer's handle token — and the
+ * classifier lives here too. The adjudication module re-exports it, so
+ * there is still exactly ONE definition in the codebase.
+ */
+export const EVIDENCE_HANDLE_PREFIX = "cline-ev";
+
+/**
+ * The number of hex characters in an evidence handle.
+ *
+ * 16 hex characters is 64 bits of a per-session-secret-derived MAC.
+ */
+export const EVIDENCE_HANDLE_HEX_LENGTH = 16;
+
+/**
+ * Whether a string has the SHAPE of an evidence handle.
+ *
+ * The shape test is a ROUTING decision, not an IDENTITY decision: the
+ * handle's shape is public and therefore GUESSABLE, so a token that has
+ * the right shape is NOT proof that the runtime minted it. It is used
+ * here only to decide whether a text line has the STRUCTURE of a trailer,
+ * never to decide whether the trailer is AUTHENTIC.
+ */
+export function isEvidenceHandleShape(value: string): boolean {
+	return (
+		value.startsWith(`${EVIDENCE_HANDLE_PREFIX}-`) &&
+		value.length ===
+			EVIDENCE_HANDLE_PREFIX.length + 1 + EVIDENCE_HANDLE_HEX_LENGTH &&
+		/^[0-9a-f]+$/.test(value.slice(EVIDENCE_HANDLE_PREFIX.length + 1))
+	);
+}
+
+/**
  * Whether a result payload is the runtime-added evidence-handle trailer
  * rather than a tool operation payload.
  *
@@ -698,15 +735,115 @@ export const EVIDENCE_HANDLE_TRAILER_MARKER = "[cline-evidence-handle]";
  * inside the result's content. A classifier that read it as an operation
  * payload would see a payload with no success signal and would refuse the
  * whole result — including results that DID succeed.
+ *
+ * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION02 —
+ * THE TRUST BOUNDARY:
+ *
+ * The first correction recognised the trailer by a SUBSTRING test over the
+ * payload's `text`:
+ *
+ *   typeof text === "string" && text.includes(EVIDENCE_HANDLE_TRAILER_MARKER)
+ *
+ * That test establishes NOTHING about the ORIGIN of the text. Tool output
+ * is UNTRUSTED, attacker-influenced content — a file the agent reads, a
+ * command's stdout, a web page, a tool's own error message — and any of
+ * it can contain the marker. Because the filter ran BEFORE the success /
+ * failure evaluation, a payload reporting `success: false` was DROPPED
+ * from the aggregate for no reason other than the presence of a substring,
+ * so a failed batch could be classified `succeeded` and carried into the
+ * provider request as verified evidence of success. That breaks the
+ * module's central invariant: one failed operation must POISON the
+ * aggregate.
+ *
+ * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION03 —
+ * SHAPE IS NOT ORIGIN:
+ *
+ * CORRECTION02 replaced the substring with a SHAPE test (marker at the
+ * start of the last line, handle-shaped token, `tool=` attribution, no
+ * operation signal on the payload). That closed the `failed → succeeded`
+ * laundering, but it left the OTHER direction open:
+ *
+ *   A payload that carries NO affirmative success evidence, whose text
+ *   merely ENDS with a well-formed trailer line, was excluded from the
+ *   aggregate, so an `unknown` result was PROMOTED to `succeeded`.
+ *
+ * The shape is public and therefore FORGEABLE: untrusted output can be
+ * crafted to end with a line that satisfies every shape rule. No
+ * elaboration of the text pattern can establish origin, because the text
+ * IS the untrusted side of the boundary.
+ *
+ * So the trailer is recognised by TRUSTED ORIGIN instead. The runtime
+ * writes the trailer and, together with it, the handle it used — in a
+ * dedicated field on the result block that only the runtime writes. The
+ * classifier compares the payload's text against THAT handle, so:
+ *
+ *   - a genuine trailer is recognised, because its handle is the one the
+ *     runtime recorded, and
+ *   - a forged trailer is NOT recognised, because it carries a handle the
+ *     runtime never recorded (or no handle at all), so it stays in the
+ *     operation-payload set — where its failure poisons the aggregate and
+ *     its lack of a success signal leaves the batch unverified.
  */
 function isEvidenceHandleTrailerPayload(
 	payload: Record<string, unknown>,
+	trustedHandle: string | undefined,
 ): boolean {
+	// Without a RUNTIME-RECORDED handle there is no trusted origin, so no
+	// text can be a trailer. This is the fail-closed direction.
+	if (!trustedHandle) {
+		return false;
+	}
 	const text = payload.text;
-	return (
-		typeof text === "string" &&
-		text.includes(EVIDENCE_HANDLE_TRAILER_MARKER)
-	);
+	if (typeof text !== "string") {
+		return false;
+	}
+	// A genuine trailer is an ANNOTATION: it reports nothing about the
+	// operation. A payload that also carries an operation signal is not
+	// the runtime's trailer, whatever its text looks like.
+	if (
+		payload.success !== undefined ||
+		payload.isError !== undefined ||
+		payload.error !== undefined ||
+		payload.result !== undefined
+	) {
+		return false;
+	}
+	// ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION04:
+	// the EXACT runtime-generated annotation, and nothing else.
+	//
+	// The runtime now writes the annotation as a PAYLOAD OF ITS OWN, so the
+	// payload that carries it holds NOTHING BUT the annotation. The
+	// classifier therefore requires the WHOLE text to BE the annotation
+	// line — not merely to END with it.
+	//
+	// The previous rule ("the last line matches the recorded handle")
+	// excluded the ENTIRE payload, so a payload holding unverified tool
+	// output became invisible to the success classifier just because the
+	// runtime had appended its legitimate trailer to it. That promoted
+	// unverified content from "no signal" (batch unverified) to
+	// "excluded" (batch carried as a verified success).
+	//
+	// A payload that merely CONTAINS the annotation, or ends with it while
+	// also holding other content, is NOT the annotation and must stay in
+	// the operation-payload set.
+	const trimmed = text.trim();
+	if (!trimmed.startsWith(`${EVIDENCE_HANDLE_TRAILER_MARKER} `)) {
+		return false;
+	}
+	// The annotation is a SINGLE line: anything else in the payload is
+	// source content, and the payload is not the annotation.
+	if (trimmed.includes("\n")) {
+		return false;
+	}
+	const rest = trimmed.slice(EVIDENCE_HANDLE_TRAILER_MARKER.length + 1);
+	const separator = rest.indexOf(" ");
+	if (separator === -1) {
+		return false;
+	}
+	// THE ORIGIN CHECK: the handle in the line must be EXACTLY the handle
+	// the runtime recorded for this result. A forged line carries some
+	// other handle — or none — and is therefore not a trailer.
+	return rest.slice(0, separator) === trustedHandle;
 }
 
 /**
@@ -730,6 +867,16 @@ function isEvidenceHandleTrailerPayload(
 export function classifyToolResultStatus(resultBlock: {
 	is_error?: boolean;
 	content: unknown;
+	/**
+	 * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION03.
+	 *
+	 * The evidence handle the RUNTIME recorded for this result.
+	 *
+	 * It is the trusted ORIGIN of the evidence-handle trailer. Without it,
+	 * no text in the result can be a runtime annotation, so no payload is
+	 * excluded from the aggregate and the classification fails closed.
+	 */
+	evidenceHandle?: string;
 }): VerifiedOutcomeStatus {
 	if (resultBlock.is_error === true) {
 		return "failed";
@@ -740,7 +887,8 @@ export function classifyToolResultStatus(resultBlock: {
 			? (resultBlock.content as Record<string, unknown>[])
 			: [];
 	const operationPayloads = payloads.filter(
-		(payload) => !isEvidenceHandleTrailerPayload(payload),
+		(payload) =>
+			!isEvidenceHandleTrailerPayload(payload, resultBlock.evidenceHandle),
 	);
 	let sawSuccess = false;
 	// ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-CORRECTION02: EVERY payload
