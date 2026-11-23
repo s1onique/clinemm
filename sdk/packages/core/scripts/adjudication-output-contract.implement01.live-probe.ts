@@ -65,16 +65,27 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { createHandler } from "@cline/llms";
-import type { Message, ProviderConfig } from "@cline/shared";
+import type {
+	Message,
+	MessageWithMetadata,
+	ProviderConfig,
+} from "@cline/shared";
 import {
+	ADJUDICATION_SECTION_HEADING,
 	AdjudicationEvidenceRegistry,
 	type AdjudicationVocabulary,
 	applyAdjudicationPublicationInstruction,
+	deriveAcceptedAdjudications,
 	parseAdjudicationEnvelope,
 	renderEvidenceHandleTrailer,
 	resolveAdjudicationCandidate,
 	type SourceRevision,
 } from "../src/extensions/context/adjudication-continuity";
+import {
+	createCompactionStateAwarePrepareTurn,
+	createContextCompactionPrepareTurn,
+} from "../src/extensions/context/compaction";
+import { MessageBuilder } from "../src/session/services/message-builder";
 
 const ENABLED = process.env.CORE_LIVE_ADJUDICATION_PROBE === "1";
 const PROVIDERS_FILE_ENV =
@@ -307,6 +318,8 @@ interface Observation {
 	turns: number;
 	/** The error, if the request failed. */
 	error?: string;
+	/** The compaction boundary observation, when the candidate was accepted. */
+	compaction?: CompactionObservation;
 }
 
 /**
@@ -536,6 +549,16 @@ async function runProbe(config: ProviderConfig): Promise<Observation> {
 						...parsed.candidate.evidence_tool_use_ids,
 					].filter((id) => id !== handle && !canonicalToolCallIds.has(id));
 				}
+				if (observation.candidate_accepted) {
+					// The COMPACTION BOUNDARY: the accepted candidate must
+					// survive into the provider-visible request even when
+					// the summarizer omits it.
+					observation.compaction = await observeCompactionBoundary({
+						canonicalMessages: canonicalMessages as MessageWithMetadata[],
+						registry,
+						providerConfig: config,
+					});
+				}
 				return observation;
 			}
 		}
@@ -588,3 +611,199 @@ async function main(): Promise<void> {
 }
 
 await main();
+
+// ---------------------------------------------------------------------------
+// THE COMPACTION BOUNDARY (G9.3)
+// ---------------------------------------------------------------------------
+
+/**
+ * The observation of the compaction boundary for one accepted candidate.
+ */
+interface CompactionObservation {
+	/** The candidate was ACCEPTED before the compaction. */
+	candidate_accepted: boolean;
+	/** The compaction was actually executed. */
+	compaction_executed: boolean;
+	/** The persisted sidecar carried the adjudication section. */
+	persisted_section_present: boolean;
+	/** The PROVIDER-VISIBLE request carried the adjudication section. */
+	provider_visible_candidate: boolean;
+	/** Whether the carried section names the finding. */
+	provider_visible_finding: boolean;
+	/** Whether the carried section names the opaque evidence handle. */
+	provider_visible_evidence_handle: boolean;
+	/** The number of adjudication sections in the provider-visible text. */
+	provider_visible_section_count: number;
+	/** The error, if the compaction failed. */
+	error?: string;
+	/** The metadata kinds of the installed continuation's messages. */
+	compaction_message_kinds?: string[];
+}
+
+/**
+ * Run the REAL agentic compaction over the accepted candidate and observe
+ * whether the candidate survives into the provider-visible request.
+ *
+ * The seam is the production one:
+ *
+ *   createCompactionStateAwarePrepareTurn
+ *     -> createContextCompactionPrepareTurn({ strategy: "agentic" })
+ *     -> runAgenticCompaction -> generateSummary (MOCKED)
+ *     -> applyTaskContractToCompactedMessages
+ *     -> applyVerifiedEvidenceToCompactedMessages
+ *     -> applyAdjudicationCarryForward
+ *     -> MessageBuilder.buildForApi
+ *
+ * The summarizer is a deterministic mock that deliberately OMITS the
+ * candidate, so the observation measures the DETERMINISTIC continuity and
+ * not the summarizer's cooperation.
+ */
+async function observeCompactionBoundary(input: {
+	canonicalMessages: MessageWithMetadata[];
+	registry: AdjudicationEvidenceRegistry;
+	providerConfig: ProviderConfig;
+}): Promise<CompactionObservation> {
+	const observation: CompactionObservation = {
+		candidate_accepted: false,
+		compaction_executed: false,
+		persisted_section_present: false,
+		provider_visible_candidate: false,
+		provider_visible_finding: false,
+		provider_visible_evidence_handle: false,
+		provider_visible_section_count: 0,
+	};
+
+	try {
+		const accepted = await deriveAcceptedAdjudications(
+			input.canonicalMessages,
+			{
+				registry: input.registry,
+				vocabulary: VOCABULARY,
+				revisionResolver: REVISION_RESOLVER,
+			},
+		);
+		observation.candidate_accepted = accepted.length > 0;
+
+		let persistedSummary = "";
+		const inner = createContextCompactionPrepareTurn({
+			providerId: "minimax",
+			modelId: "MiniMax-M3",
+			providerConfig: {
+				providerId: "minimax",
+				modelId: "MiniMax-M3",
+			} as ProviderConfig,
+			compaction: {
+				enabled: true,
+				strategy: "agentic",
+				preserveRecentTokens: 1,
+				// The REAL summarizer, with the REAL provider credentials:
+				// the compaction boundary is measured through the production
+				// agentic path, not through a mock.
+				summarizer: {
+					providerId: input.providerConfig.providerId,
+					modelId: input.providerConfig.modelId,
+					...(input.providerConfig.apiKey
+						? { apiKey: input.providerConfig.apiKey }
+						: {}),
+					...(input.providerConfig.baseUrl
+						? { baseUrl: input.providerConfig.baseUrl }
+						: {}),
+					providerConfig: input.providerConfig,
+				},
+			},
+			logger: undefined,
+		});
+
+		const prepareTurn = createCompactionStateAwarePrepareTurn({
+			compact: (context) =>
+				inner?.({
+					...context,
+					model: {
+						id: "MiniMax-M3",
+						provider: "minimax",
+						info: { id: "MiniMax-M3", maxInputTokens: 10 },
+					} as never,
+				}) ?? Promise.resolve(undefined),
+			getState: () => undefined,
+			prepareApiMessages: async (messages) => messages,
+			saveState: () => undefined,
+			adjudication: {
+				registry: input.registry,
+				vocabulary: VOCABULARY,
+				revisionResolver: REVISION_RESOLVER,
+			},
+		});
+
+		const result = await prepareTurn({
+			agentId: "live-probe-agent",
+			conversationId: "live-probe-conversation",
+			parentAgentId: null,
+			iteration: 1,
+			abortSignal: new AbortController().signal,
+			systemPrompt: "You are a careful engineering agent.",
+			tools: [],
+			messages: input.canonicalMessages,
+			apiMessages: input.canonicalMessages,
+			model: {
+				id: "MiniMax-M3",
+				provider: "minimax",
+				info: { id: "MiniMax-M3", maxInputTokens: 128_000 },
+			} as never,
+		});
+
+		const installedMessages = (result?.messages ?? []) as MessageWithMetadata[];
+		observation.compaction_executed = installedMessages.length > 0;
+		observation.compaction_message_kinds = installedMessages.map(
+			(message) =>
+				(message.metadata as { kind?: string } | undefined)?.kind ?? "(none)",
+		);
+
+		// The PERSISTED representation: the summary message's metadata.
+		for (const message of installedMessages) {
+			const summary = (message.metadata as { summary?: string } | undefined)
+				?.summary;
+			if (typeof summary === "string") {
+				persistedSummary = summary;
+			}
+		}
+		observation.persisted_section_present = persistedSummary.includes(
+			ADJUDICATION_SECTION_HEADING,
+		);
+
+		// The PROVIDER-VISIBLE representation: the last production
+		// transformation before dispatch.
+		const providerVisible = new MessageBuilder().buildForApi(
+			installedMessages as never,
+		);
+		const visibleText = providerVisible
+			.flatMap((message) =>
+				Array.isArray((message as { content?: unknown }).content)
+					? (message as { content: unknown[] }).content
+							.filter(
+								(block): block is { type: "text"; text: string } =>
+									typeof block === "object" &&
+									block !== null &&
+									(block as { type?: unknown }).type === "text" &&
+									typeof (block as { text?: unknown }).text === "string",
+							)
+							.map((block) => block.text)
+					: [],
+			)
+			.join("\n");
+
+		observation.provider_visible_section_count =
+			visibleText.split(ADJUDICATION_SECTION_HEADING).length - 1;
+		observation.provider_visible_candidate =
+			observation.provider_visible_section_count > 0;
+		observation.provider_visible_finding = visibleText.includes("S1:");
+		observation.provider_visible_evidence_handle = visibleText.includes(
+			input.registry.handleFor(
+				canonicalToolCallIds.values().next().value ?? "",
+			),
+		);
+	} catch (error) {
+		observation.error = error instanceof Error ? error.message : String(error);
+	}
+
+	return observation;
+}

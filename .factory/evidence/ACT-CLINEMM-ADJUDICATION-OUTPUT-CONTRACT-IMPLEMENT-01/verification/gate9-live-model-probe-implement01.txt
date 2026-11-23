@@ -1,0 +1,724 @@
+
+=== G9 live probe: minimax (minimax/MiniMax-M3) run 1/16 ===
+{
+  "provider": "minimax",
+  "model": "MiniMax-M3",
+  "emittedAssistantText": true,
+  "turnCarrierCount": 2,
+  "emittedReasoning": false,
+  "schema_valid": true,
+  "nonempty_evidence_refs": true,
+  "canonical_refs_resolved": true,
+  "source_revision_bound": true,
+  "candidate_accepted": true,
+  "semantic_support_verified": false,
+  "emittedToolUse": true,
+  "turns": 3,
+  "decision": "narrowed",
+  "qualificationCodes": [
+    "manual_enforcement_only"
+  ],
+  "remainingQuestionIds": [
+    "S1.automated_enforcement"
+  ],
+  "publishedTurnIndex": 3,
+  "compaction": {
+    "candidate_accepted": true,
+    "compaction_executed": true,
+    "persisted_section_present": true,
+    "provider_visible_candidate": true,
+    "provider_visible_finding": true,
+    "provider_visible_evidence_handle": true,
+    "provider_visible_section_count": 1,
+    "compaction_message_kinds": [
+      "compaction_summary",
+      "(none)"
+    ]
+  }
+}
+
+=== G9 live probe: minimax (minimax/MiniMax-M3) run 2/16 ===
+{
+  "provider": "minimax",
+  "model": "MiniMax-M3",
+  "emittedAssistantText": true,
+  "turnCarrierCount": 3,
+  "emittedReasoning": false,
+  "schema_valid": false,
+  "nonempty_evidence_refs": false,
+  "canonical_refs_resolved": false,
+  "source_revision_bound": false,
+  "candidate_accepted": false,
+  "semantic_support_verified": false,
+  "emittedToolUse": true,
+  "turns": 5
+}
+
+=== G9 live probe: minimax (minimax/MiniMax-M3) run 3/16 ===
+{
+  "provider": "minimax",
+  "model": "MiniMax-M3",
+  "emittedAssistantText": true,
+  "turnCarrierCount": 2,
+  "emittedReasoning": false,
+  "schema_valid": false,
+  "nonempty_evidence_refs": false,
+  "canonical_refs_resolved": false,
+  "source_revision_bound": false,
+  "candidate_accepted": false,
+  "semantic_support_verified": false,
+  "emittedToolUse": true,
+  "turns": 4
+}
+
+=== G9 live probe: minimax (minimax/MiniMax-M3) run 4/16 ===
+{
+  "provider": "minimax",
+  "model": "MiniMax-M3",
+  "emittedAssistantText": true,
+  "turnCarrierCount": 3,
+  "emittedReasoning": false,
+  "schema_valid": true,
+  "nonempty_evidence_refs": true,
+  "canonical_refs_resolved": true,
+  "source_revision_bound": true,
+  "candidate_accepted": true,
+  "semantic_support_verified": false,
+  "emittedToolUse": true,
+  "turns": 4,
+  "decision": "narrowed",
+  "qualificationCodes": [
+    "manual_enforcement_only"
+  ],
+  "remainingQuestionIds": [
+    "S1.automated_enforcement"
+  ],
+  "publishedTurnIndex": 4,
+  "compaction": {
+    "candidate_accepted": true,
+    "compaction_executed": true,
+    "persisted_section_present": true,
+    "provider_visible_candidate": true,
+    "provider_visible_finding": true,
+    "provider_visible_evidence_handle": true,
+    "provider_visible_section_count": 1,
+    "compaction_message_kinds": [
+      "compaction_summary",
+      "(none)"
+    ]
+  }
+}
+
+=== G9 live probe: minimax (minimax/MiniMax-M3) run 5/16 ===
+{
+  "provider": "minimax",
+  "model": "MiniMax-M3",
+  "emittedAssistantText": true,
+  "turnCarrierCount": 3,
+  "emittedReasoning": false,
+  "schema_valid": false,
+  "nonempty_evidence_refs": false,
+  "canonical_refs_resolved": false,
+  "source_revision_bound": false,
+  "candidate_accepted": false,
+  "semantic_support_verified": false,
+  "emittedToolUse": true,
+  "turns": 4
+}
+
+=== G9 live probe: minimax (minimax/MiniMax-M3) run 6/16 ===
+{
+  "provider": "minimax",
+  "model": "MiniMax-M3",
+  "emittedAssistantText": true,
+  "turnCarrierCount": 2,
+  "emittedReasoning": false,
+  "schema_valid": true,
+  "nonempty_evidence_refs": true,
+  "canonical_refs_resolved": true,
+  "source_revision_bound": false,
+  "candidate_accepted": false,
+  "semantic_support_verified": false,
+  "emittedToolUse": true,
+  "turns": 4,
+  "decision": "narrowed",
+  "qualificationCodes": [
+    "manual_enforcement_only"
+  ],
+  "remainingQuestionIds": [
+    "S1.automated_enforcement"
+  ],
+  "publishedTurnIndex": 4,
+  "acceptance_rejection_reason": "unbound_source_revision:call_01a208064e9372bb90b36065"
+}
+
+=== G9 live probe: minimax (minimax/MiniMax-M3) run 7/16 ===
+{
+  "provider": "minimax",
+  "model": "MiniMax-M3",
+  "emittedAssistantText": true,
+  "turnCarrierCount": 2,
+  "emittedReasoning": false,
+  "schema_valid": true,
+  "nonempty_evidence_refs": true,
+  "canonical_refs_resolved": true,
+  "source_revision_bound": true,
+  "candidate_accepted": true,
+  "semantic_support_verified": false,
+  "emittedToolUse": true,
+  "turns": 2,
+  "decision": "narrowed",
+  "qualificationCodes": [
+    "manual_enforcement_only"
+  ],
+  "remainingQuestionIds": [
+    "S1.automated_enforcement"
+  ],
+  "publishedTurnIndex": 2,
+  "compaction": {
+    "candidate_accepted": true,
+    "compaction_executed": true,
+    "persisted_section_present": true,
+    "provider_visible_candidate": true,
+    "provider_visible_finding": true,
+    "provider_visible_evidence_handle": true,
+    "provider_visible_section_count": 1,
+    "compaction_message_kinds": [
+      "compaction_summary",
+      "(none)"
+    ]
+  }
+}
+
+=== G9 live probe: minimax (minimax/MiniMax-M3) run 8/16 ===
+{
+  "provider": "minimax",
+  "model": "MiniMax-M3",
+  "emittedAssistantText": true,
+  "turnCarrierCount": 2,
+  "emittedReasoning": false,
+  "schema_valid": true,
+  "nonempty_evidence_refs": true,
+  "canonical_refs_resolved": true,
+  "source_revision_bound": false,
+  "candidate_accepted": false,
+  "semantic_support_verified": false,
+  "emittedToolUse": true,
+  "turns": 3,
+  "decision": "narrowed",
+  "qualificationCodes": [
+    "manual_enforcement_only"
+  ],
+  "remainingQuestionIds": [
+    "S1.automated_enforcement"
+  ],
+  "publishedTurnIndex": 3,
+  "acceptance_rejection_reason": "unbound_source_revision:call_01a208066ee576bf99947091"
+}
+
+=== G9 live probe: minimax (minimax/MiniMax-M3) run 9/16 ===
+{
+  "provider": "minimax",
+  "model": "MiniMax-M3",
+  "emittedAssistantText": true,
+  "turnCarrierCount": 3,
+  "emittedReasoning": false,
+  "schema_valid": false,
+  "nonempty_evidence_refs": false,
+  "canonical_refs_resolved": false,
+  "source_revision_bound": false,
+  "candidate_accepted": false,
+  "semantic_support_verified": false,
+  "emittedToolUse": true,
+  "turns": 4
+}
+
+=== G9 live probe: minimax (minimax/MiniMax-M3) run 10/16 ===
+{
+  "provider": "minimax",
+  "model": "MiniMax-M3",
+  "emittedAssistantText": true,
+  "turnCarrierCount": 2,
+  "emittedReasoning": false,
+  "schema_valid": false,
+  "nonempty_evidence_refs": false,
+  "canonical_refs_resolved": false,
+  "source_revision_bound": false,
+  "candidate_accepted": false,
+  "semantic_support_verified": false,
+  "emittedToolUse": true,
+  "turns": 5
+}
+
+=== G9 live probe: minimax (minimax/MiniMax-M3) run 11/16 ===
+{
+  "provider": "minimax",
+  "model": "MiniMax-M3",
+  "emittedAssistantText": true,
+  "turnCarrierCount": 2,
+  "emittedReasoning": false,
+  "schema_valid": false,
+  "nonempty_evidence_refs": false,
+  "canonical_refs_resolved": false,
+  "source_revision_bound": false,
+  "candidate_accepted": false,
+  "semantic_support_verified": false,
+  "emittedToolUse": true,
+  "turns": 3
+}
+
+=== G9 live probe: minimax (minimax/MiniMax-M3) run 12/16 ===
+{
+  "provider": "minimax",
+  "model": "MiniMax-M3",
+  "emittedAssistantText": true,
+  "turnCarrierCount": 2,
+  "emittedReasoning": false,
+  "schema_valid": false,
+  "nonempty_evidence_refs": false,
+  "canonical_refs_resolved": false,
+  "source_revision_bound": false,
+  "candidate_accepted": false,
+  "semantic_support_verified": false,
+  "emittedToolUse": true,
+  "turns": 3
+}
+
+=== G9 live probe: minimax (minimax/MiniMax-M3) run 13/16 ===
+{
+  "provider": "minimax",
+  "model": "MiniMax-M3",
+  "emittedAssistantText": true,
+  "turnCarrierCount": 1,
+  "emittedReasoning": false,
+  "schema_valid": false,
+  "nonempty_evidence_refs": false,
+  "canonical_refs_resolved": false,
+  "source_revision_bound": false,
+  "candidate_accepted": false,
+  "semantic_support_verified": false,
+  "emittedToolUse": true,
+  "turns": 5
+}
+
+=== G9 live probe: minimax (minimax/MiniMax-M3) run 14/16 ===
+{
+  "provider": "minimax",
+  "model": "MiniMax-M3",
+  "emittedAssistantText": true,
+  "turnCarrierCount": 2,
+  "emittedReasoning": false,
+  "schema_valid": false,
+  "nonempty_evidence_refs": false,
+  "canonical_refs_resolved": false,
+  "source_revision_bound": false,
+  "candidate_accepted": false,
+  "semantic_support_verified": false,
+  "emittedToolUse": true,
+  "turns": 3
+}
+
+=== G9 live probe: minimax (minimax/MiniMax-M3) run 15/16 ===
+{
+  "provider": "minimax",
+  "model": "MiniMax-M3",
+  "emittedAssistantText": true,
+  "turnCarrierCount": 3,
+  "emittedReasoning": false,
+  "schema_valid": false,
+  "nonempty_evidence_refs": false,
+  "canonical_refs_resolved": false,
+  "source_revision_bound": false,
+  "candidate_accepted": false,
+  "semantic_support_verified": false,
+  "emittedToolUse": true,
+  "turns": 4
+}
+
+=== G9 live probe: minimax (minimax/MiniMax-M3) run 16/16 ===
+{
+  "provider": "minimax",
+  "model": "MiniMax-M3",
+  "emittedAssistantText": true,
+  "turnCarrierCount": 2,
+  "emittedReasoning": false,
+  "schema_valid": true,
+  "nonempty_evidence_refs": true,
+  "canonical_refs_resolved": true,
+  "source_revision_bound": true,
+  "candidate_accepted": true,
+  "semantic_support_verified": false,
+  "emittedToolUse": true,
+  "turns": 3,
+  "decision": "narrowed",
+  "qualificationCodes": [
+    "manual_enforcement_only"
+  ],
+  "remainingQuestionIds": [
+    "S1.automated_enforcement"
+  ],
+  "publishedTurnIndex": 3,
+  "compaction": {
+    "candidate_accepted": true,
+    "compaction_executed": true,
+    "persisted_section_present": true,
+    "provider_visible_candidate": true,
+    "provider_visible_finding": true,
+    "provider_visible_evidence_handle": true,
+    "provider_visible_section_count": 1,
+    "compaction_message_kinds": [
+      "compaction_summary",
+      "(none)"
+    ]
+  }
+}
+
+=== G9 live probe report ===
+{
+  "execution_class": "REAL_MODEL_RESPONSE",
+  "observation_count": 16,
+  "observations": [
+    {
+      "provider": "minimax",
+      "model": "MiniMax-M3",
+      "emittedAssistantText": true,
+      "turnCarrierCount": 2,
+      "emittedReasoning": false,
+      "schema_valid": true,
+      "nonempty_evidence_refs": true,
+      "canonical_refs_resolved": true,
+      "source_revision_bound": true,
+      "candidate_accepted": true,
+      "semantic_support_verified": false,
+      "emittedToolUse": true,
+      "turns": 3,
+      "decision": "narrowed",
+      "qualificationCodes": [
+        "manual_enforcement_only"
+      ],
+      "remainingQuestionIds": [
+        "S1.automated_enforcement"
+      ],
+      "publishedTurnIndex": 3,
+      "compaction": {
+        "candidate_accepted": true,
+        "compaction_executed": true,
+        "persisted_section_present": true,
+        "provider_visible_candidate": true,
+        "provider_visible_finding": true,
+        "provider_visible_evidence_handle": true,
+        "provider_visible_section_count": 1,
+        "compaction_message_kinds": [
+          "compaction_summary",
+          "(none)"
+        ]
+      }
+    },
+    {
+      "provider": "minimax",
+      "model": "MiniMax-M3",
+      "emittedAssistantText": true,
+      "turnCarrierCount": 3,
+      "emittedReasoning": false,
+      "schema_valid": false,
+      "nonempty_evidence_refs": false,
+      "canonical_refs_resolved": false,
+      "source_revision_bound": false,
+      "candidate_accepted": false,
+      "semantic_support_verified": false,
+      "emittedToolUse": true,
+      "turns": 5
+    },
+    {
+      "provider": "minimax",
+      "model": "MiniMax-M3",
+      "emittedAssistantText": true,
+      "turnCarrierCount": 2,
+      "emittedReasoning": false,
+      "schema_valid": false,
+      "nonempty_evidence_refs": false,
+      "canonical_refs_resolved": false,
+      "source_revision_bound": false,
+      "candidate_accepted": false,
+      "semantic_support_verified": false,
+      "emittedToolUse": true,
+      "turns": 4
+    },
+    {
+      "provider": "minimax",
+      "model": "MiniMax-M3",
+      "emittedAssistantText": true,
+      "turnCarrierCount": 3,
+      "emittedReasoning": false,
+      "schema_valid": true,
+      "nonempty_evidence_refs": true,
+      "canonical_refs_resolved": true,
+      "source_revision_bound": true,
+      "candidate_accepted": true,
+      "semantic_support_verified": false,
+      "emittedToolUse": true,
+      "turns": 4,
+      "decision": "narrowed",
+      "qualificationCodes": [
+        "manual_enforcement_only"
+      ],
+      "remainingQuestionIds": [
+        "S1.automated_enforcement"
+      ],
+      "publishedTurnIndex": 4,
+      "compaction": {
+        "candidate_accepted": true,
+        "compaction_executed": true,
+        "persisted_section_present": true,
+        "provider_visible_candidate": true,
+        "provider_visible_finding": true,
+        "provider_visible_evidence_handle": true,
+        "provider_visible_section_count": 1,
+        "compaction_message_kinds": [
+          "compaction_summary",
+          "(none)"
+        ]
+      }
+    },
+    {
+      "provider": "minimax",
+      "model": "MiniMax-M3",
+      "emittedAssistantText": true,
+      "turnCarrierCount": 3,
+      "emittedReasoning": false,
+      "schema_valid": false,
+      "nonempty_evidence_refs": false,
+      "canonical_refs_resolved": false,
+      "source_revision_bound": false,
+      "candidate_accepted": false,
+      "semantic_support_verified": false,
+      "emittedToolUse": true,
+      "turns": 4
+    },
+    {
+      "provider": "minimax",
+      "model": "MiniMax-M3",
+      "emittedAssistantText": true,
+      "turnCarrierCount": 2,
+      "emittedReasoning": false,
+      "schema_valid": true,
+      "nonempty_evidence_refs": true,
+      "canonical_refs_resolved": true,
+      "source_revision_bound": false,
+      "candidate_accepted": false,
+      "semantic_support_verified": false,
+      "emittedToolUse": true,
+      "turns": 4,
+      "decision": "narrowed",
+      "qualificationCodes": [
+        "manual_enforcement_only"
+      ],
+      "remainingQuestionIds": [
+        "S1.automated_enforcement"
+      ],
+      "publishedTurnIndex": 4,
+      "acceptance_rejection_reason": "unbound_source_revision:call_01a208064e9372bb90b36065"
+    },
+    {
+      "provider": "minimax",
+      "model": "MiniMax-M3",
+      "emittedAssistantText": true,
+      "turnCarrierCount": 2,
+      "emittedReasoning": false,
+      "schema_valid": true,
+      "nonempty_evidence_refs": true,
+      "canonical_refs_resolved": true,
+      "source_revision_bound": true,
+      "candidate_accepted": true,
+      "semantic_support_verified": false,
+      "emittedToolUse": true,
+      "turns": 2,
+      "decision": "narrowed",
+      "qualificationCodes": [
+        "manual_enforcement_only"
+      ],
+      "remainingQuestionIds": [
+        "S1.automated_enforcement"
+      ],
+      "publishedTurnIndex": 2,
+      "compaction": {
+        "candidate_accepted": true,
+        "compaction_executed": true,
+        "persisted_section_present": true,
+        "provider_visible_candidate": true,
+        "provider_visible_finding": true,
+        "provider_visible_evidence_handle": true,
+        "provider_visible_section_count": 1,
+        "compaction_message_kinds": [
+          "compaction_summary",
+          "(none)"
+        ]
+      }
+    },
+    {
+      "provider": "minimax",
+      "model": "MiniMax-M3",
+      "emittedAssistantText": true,
+      "turnCarrierCount": 2,
+      "emittedReasoning": false,
+      "schema_valid": true,
+      "nonempty_evidence_refs": true,
+      "canonical_refs_resolved": true,
+      "source_revision_bound": false,
+      "candidate_accepted": false,
+      "semantic_support_verified": false,
+      "emittedToolUse": true,
+      "turns": 3,
+      "decision": "narrowed",
+      "qualificationCodes": [
+        "manual_enforcement_only"
+      ],
+      "remainingQuestionIds": [
+        "S1.automated_enforcement"
+      ],
+      "publishedTurnIndex": 3,
+      "acceptance_rejection_reason": "unbound_source_revision:call_01a208066ee576bf99947091"
+    },
+    {
+      "provider": "minimax",
+      "model": "MiniMax-M3",
+      "emittedAssistantText": true,
+      "turnCarrierCount": 3,
+      "emittedReasoning": false,
+      "schema_valid": false,
+      "nonempty_evidence_refs": false,
+      "canonical_refs_resolved": false,
+      "source_revision_bound": false,
+      "candidate_accepted": false,
+      "semantic_support_verified": false,
+      "emittedToolUse": true,
+      "turns": 4
+    },
+    {
+      "provider": "minimax",
+      "model": "MiniMax-M3",
+      "emittedAssistantText": true,
+      "turnCarrierCount": 2,
+      "emittedReasoning": false,
+      "schema_valid": false,
+      "nonempty_evidence_refs": false,
+      "canonical_refs_resolved": false,
+      "source_revision_bound": false,
+      "candidate_accepted": false,
+      "semantic_support_verified": false,
+      "emittedToolUse": true,
+      "turns": 5
+    },
+    {
+      "provider": "minimax",
+      "model": "MiniMax-M3",
+      "emittedAssistantText": true,
+      "turnCarrierCount": 2,
+      "emittedReasoning": false,
+      "schema_valid": false,
+      "nonempty_evidence_refs": false,
+      "canonical_refs_resolved": false,
+      "source_revision_bound": false,
+      "candidate_accepted": false,
+      "semantic_support_verified": false,
+      "emittedToolUse": true,
+      "turns": 3
+    },
+    {
+      "provider": "minimax",
+      "model": "MiniMax-M3",
+      "emittedAssistantText": true,
+      "turnCarrierCount": 2,
+      "emittedReasoning": false,
+      "schema_valid": false,
+      "nonempty_evidence_refs": false,
+      "canonical_refs_resolved": false,
+      "source_revision_bound": false,
+      "candidate_accepted": false,
+      "semantic_support_verified": false,
+      "emittedToolUse": true,
+      "turns": 3
+    },
+    {
+      "provider": "minimax",
+      "model": "MiniMax-M3",
+      "emittedAssistantText": true,
+      "turnCarrierCount": 1,
+      "emittedReasoning": false,
+      "schema_valid": false,
+      "nonempty_evidence_refs": false,
+      "canonical_refs_resolved": false,
+      "source_revision_bound": false,
+      "candidate_accepted": false,
+      "semantic_support_verified": false,
+      "emittedToolUse": true,
+      "turns": 5
+    },
+    {
+      "provider": "minimax",
+      "model": "MiniMax-M3",
+      "emittedAssistantText": true,
+      "turnCarrierCount": 2,
+      "emittedReasoning": false,
+      "schema_valid": false,
+      "nonempty_evidence_refs": false,
+      "canonical_refs_resolved": false,
+      "source_revision_bound": false,
+      "candidate_accepted": false,
+      "semantic_support_verified": false,
+      "emittedToolUse": true,
+      "turns": 3
+    },
+    {
+      "provider": "minimax",
+      "model": "MiniMax-M3",
+      "emittedAssistantText": true,
+      "turnCarrierCount": 3,
+      "emittedReasoning": false,
+      "schema_valid": false,
+      "nonempty_evidence_refs": false,
+      "canonical_refs_resolved": false,
+      "source_revision_bound": false,
+      "candidate_accepted": false,
+      "semantic_support_verified": false,
+      "emittedToolUse": true,
+      "turns": 4
+    },
+    {
+      "provider": "minimax",
+      "model": "MiniMax-M3",
+      "emittedAssistantText": true,
+      "turnCarrierCount": 2,
+      "emittedReasoning": false,
+      "schema_valid": true,
+      "nonempty_evidence_refs": true,
+      "canonical_refs_resolved": true,
+      "source_revision_bound": true,
+      "candidate_accepted": true,
+      "semantic_support_verified": false,
+      "emittedToolUse": true,
+      "turns": 3,
+      "decision": "narrowed",
+      "qualificationCodes": [
+        "manual_enforcement_only"
+      ],
+      "remainingQuestionIds": [
+        "S1.automated_enforcement"
+      ],
+      "publishedTurnIndex": 3,
+      "compaction": {
+        "candidate_accepted": true,
+        "compaction_executed": true,
+        "persisted_section_present": true,
+        "provider_visible_candidate": true,
+        "provider_visible_finding": true,
+        "provider_visible_evidence_handle": true,
+        "provider_visible_section_count": 1,
+        "compaction_message_kinds": [
+          "compaction_summary",
+          "(none)"
+        ]
+      }
+    }
+  ]
+}
