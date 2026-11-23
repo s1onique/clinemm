@@ -35,8 +35,8 @@
       "P0-2 — a restored session did not restore its adjudication contract, and a lost secret was fail-openly replaced"
     ],
     "p1Closed": "the regression comparison was tightened to individual failing-TEST identities (190 baseline -> 187 corrected, ZERO new identities); see 12-p1-regression-reconciliation.md",
-    "sourceHead": "5279ac923d3313c5c8f2d58e1440e10b071909ce",
-    "vsixStatus": "NOT_YET_REPACKAGED — the VSIX must be rebuilt and repackaged from the exact committed HEAD before any live claim",
+    "sourceHead": "1fac5c871d05287c64a7f7f83edfad4fc3c7b14e",
+    "vsixStatus": "REPACKAGED from the exact committed HEAD; embedded bundle SHA-256 verified",
     "installedLiveQualification": "NOT_EXECUTED for the corrected source",
     "actOwnedDiagnostics": 0,
     "actOwnedWitnesses": 33,
@@ -109,9 +109,37 @@
         "sha256": "235c003db76174bcc569dda54d5820922b96743e1e0509caab53e19f1dc5662d",
         "evidence_classification": "STRUCTURAL",
         "note": "CORRECTION01 evidence: the 187 per-test failing identities after the correction (ZERO new)"
+      },
+      {
+        "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01/13-correction01-packaging-and-bundle-identity.md",
+        "evidence_classification": "STRUCTURAL",
+        "note": "CORRECTION01 evidence: the packaging and embedded-bundle identity report"
+      },
+      {
+        "path": "apps/vscode/scripts/generate-state-proto.mjs",
+        "evidence_classification": "STRUCTURAL",
+        "note": "The state.proto generator, repaired: brace-aware message-boundary scan and wire-field preservation"
+      },
+      {
+        "path": "dist/clinemm-4.1.26-1fac5c871-corr01.vsix",
+        "evidence_classification": "REAL",
+        "note": "The CORRECTED VSIX, built from the exact committed HEAD 1fac5c871",
+        "sha256": "4fd0e7b2bb861bb1d3f6071b0e77ccfae5fcfacbc070ee0f6cd6b2e55231c899"
+      },
+      {
+        "path": "apps/vscode/dist/extension.js",
+        "evidence_classification": "REAL",
+        "note": "The locally built extension bundle for the CORRECTED source (byte-identical to the VSIX embedded bundle)",
+        "sha256": "ca970de4af3c14663d0540a1dd178125d78cf419a6d1b5455457b07758e3b6f3"
       }
     ],
-    "sourceHeadNote": "The exact committed HEAD that carries the CORRECTION01 source, tests and evidence. The VSIX must be rebuilt and repackaged from this HEAD."
+    "sourceHeadNote": "The exact committed HEAD that carries the CORRECTION01 source, tests and evidence, and from which the VSIX below was built.",
+    "vsixPath": "dist/clinemm-4.1.26-1fac5c871-corr01.vsix",
+    "vsixBytes": 65047022,
+    "vsixSha256": "4fd0e7b2bb861bb1d3f6071b0e77ccfae5fcfacbc070ee0f6cd6b2e55231c899",
+    "bundledExtensionSha256": "ca970de4af3c14663d0540a1dd178125d78cf419a6d1b5455457b07758e3b6f3",
+    "embeddedBundleSha256": "ca970de4af3c14663d0540a1dd178125d78cf419a6d1b5455457b07758e3b6f3",
+    "embeddedBundleNote": "Extracted from the packaged VSIX and hashed independently; MATCHES the local build byte-for-byte. The P0-1 session-identity split and the P0-2 RESTORE secret semantics were read back out of the MINIFIED packaged bundle."
   },
   "artifacts": [
     {
@@ -324,7 +352,9 @@
       "bytes": 27304968,
       "sha256": "ab9bb821cf16a09c31b07447a72e4839719763bf75639a0c0b3e79dc5217c96d",
       "evidence_classification": "REAL",
-      "note": "The locally built extension bundle (byte-identical to the VSIX's embedded bundle)"
+      "note": "The locally built extension bundle for the PRE-CORRECTION source (7490a12a5 + uncommitted changes), byte-identical to the pre-correction VSIX embedded bundle. This PATH now holds the CORRECTED bundle; the corrected identity is recorded under correction01.artifacts.",
+      "status": "SUPERSEDED_FOR_CORRECTION01",
+      "supersededBy": "correction01.artifacts[apps/vscode/dist/extension.js]"
     },
     {
       "path": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/extensions/s1onique.clinemm-4.1.26-613295a95/dist/extension.js",

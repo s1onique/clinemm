@@ -131,6 +131,66 @@ ROUND C:                      the historical limitation is unchanged and NOT
 verify the embedded bundle SHA-256, then proceed to the separately scoped
 debug-only authorization hook and the installed-live qualification.
 
+## CORRECTION01 — packaging and embedded-bundle identity (2026-11-23)
+
+```text
+SOURCE_HEAD:  1fac5c871d05287c64a7f7f83edfad4fc3c7b14e
+VSIX_PATH:    dist/clinemm-4.1.26-1fac5c871-corr01.vsix
+VSIX_BYTES:   65047022
+VSIX_SHA256:  4fd0e7b2bb861bb1d3f6071b0e77ccfae5fcfacbc070ee0f6cd6b2e55231c899
+BUNDLE_SHA256: ca970de4af3c14663d0540a1dd178125d78cf419a6d1b5455457b07758e3b6f3
+EMBEDDED_BUNDLE_SHA256:
+              ca970de4af3c14663d0540a1dd178125d78cf419a6d1b5455457b07758e3b6f3
+              (extracted FROM the VSIX — MATCHES the local build byte-for-byte)
+```
+
+The bundle was extracted from the packaged VSIX and hashed independently:
+**MATCH**. The artifact is genuinely bound to the committed source.
+
+**The two P0 fixes were read back out of the MINIFIED, PACKAGED bundle** — the
+strongest available evidence that the correction reached the shipped artifact:
+
+```js
+j = !!t.sessionId?.trim(),
+z = j ? H.getBoundOrPersisted(t.sessionId) : H.peekArmed(),
+$ = j ? Xxl() : Yxl(),          // RESTORE vs START secret semantics
+```
+
+**A pre-existing generator defect was found and fixed during packaging.** The
+prepublish chain re-ran `scripts/generate-state-proto.mjs` and the generator
+produced an INVALID `state.proto` that `protoc` rejects. This is the SAME
+corruption class the repo has already hit twice (`c0cb2f679`, `80c13886c`),
+previously repaired by hand each time. Two root causes were fixed in the
+generator itself (commit `1fac5c871`):
+
+1. The message-boundary regex matched a closing brace inside a COMMENT
+   (`// ... serialized JSON array of { path, expiresAt }.`), stopping mid-message
+   and leaving the tail dangling. It is now a brace-counting scan that skips
+   line comments, block comments and quoted strings.
+2. The generator derived `Settings` purely from `state-keys.ts`, so it
+   DELETED `auto_approve_all_toggled = 174` (still read by the legacy VS Code
+   migration) and `clear_user_context_ceiling = 188` (the webview's Auto/reset
+   signal). `PRESERVED_SETTINGS_FIELDS` now keeps them.
+
+The generator is now idempotent (second pass byte-identical) and its output is
+valid (`protoc` parses it cleanly). The resulting proto diff is exactly the
+intended change: `+adjudication_session_secrets = 51`,
+`+adjudication_session_vocabularies = 52`, with 174 and 188 preserved. No
+unrelated wire field was added, removed or renumbered.
+
+**What is NOT claimed.**
+
+```text
+INSTALLED-LIVE QUALIFICATION:  NOT EXECUTED. The VSIX is built and its
+                              embedded bundle verified, but it has NOT been
+                              installed into the codium-roz profile and no
+                              live model turn was observed against it.
+NEXT_ACTION:                  the separately scoped debug-only arming seam,
+                              then the installed-live qualification against
+                              THIS artifact.
+ROUND C:                      unchanged and NOT re-litigated.
+```
+
 
 
 EVIDENCE: `.factory/evidence/ACT-CLINEMM-DIAGNOSTIC-EXPORT-PRIVACY01/`
