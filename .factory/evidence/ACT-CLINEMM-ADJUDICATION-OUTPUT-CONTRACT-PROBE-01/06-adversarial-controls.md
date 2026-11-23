@@ -100,8 +100,31 @@ or any production state.
 
 ### Observations
 
-Nine runs were executed against the same model/provider. The published
-carrier is characterised by:
+> **CORRECTION — `ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01-CORRECTION01`**
+>
+> The observation block below was **WITHDRAWN**. The Factory runtime
+> reviewer found that the committed live transcript
+> (`verification/gate8-live-model-probe.txt`) contained **ONE** run, not
+> nine, and that two of the harness's correlation metrics were
+> implemented incorrectly. The block is preserved verbatim for the record
+> and is superseded by:
+>
+> `.factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01-CORRECTION01/02-live-receipts.md`
+>
+> The corrected measurement (10 runs, 10 committed receipts) is:
+>
+> ```text
+> schema_valid                  = true in 9 of 10 runs
+> canonical_refs_resolved       = true in 1 of 10 runs
+> source_revision_bound         = false in 10 of 10 runs
+> candidate_accepted            = false in 10 of 10 runs
+> publishedTurnAlsoCarriedToolUse = true in 0 of 9 schema-valid runs
+> publishedAfterToolResult      = true in 9 of 9 schema-valid runs
+> ```
+>
+> The **same-turn tool-use claim is REFUTED**, not merely unverified.
+
+The withdrawn observation block (PRESERVED VERBATIM, DO NOT RELY ON):
 
 ```text
 publishedValidCandidate      = true in 8 of 9 runs
@@ -124,13 +147,19 @@ reported as measured, not smoothed over.
 2. **The qualification SURVIVES in the live output.** Every successful run
    carried `manual_enforcement_only` alongside `narrowed`. The live model
    did not launder the qualification into an unqualified `supported`.
-3. **The publishing turn ALSO carried a tool call** in every successful
-   run. This is the live confirmation of the text+tool_use coexistence
-   (PROBE-2) on a real provider stream, and it shows that publication does
-   not end the task.
+3. ~~**The publishing turn ALSO carried a tool call** in every successful
+   run.~~ **WITHDRAWN BY CORRECTION01 — REFUTED.** The corrected
+   measurement records `publishedTurnAlsoCarriedToolUse = true` in **0 of
+   9** schema-valid runs. The text+tool_use coexistence (PROBE-2) remains
+   established **structurally** by the probe test file; it is NOT
+   established by the live stream. The corrected harness reports the
+   tool-call ids emitted in the publishing turn itself, so the property
+   is now directly auditable rather than inferred.
 4. **Publication happens AFTER the tool result**, in a separate assistant
    turn whose `text` carrier holds the envelope — the realistic ClineMM
-   shape.
+   shape. (CONFIRMED by CORRECTION01: 9 of 9 schema-valid runs, derived
+   from the conversation chronology rather than from the presence of text
+   in a tool-calling turn.)
 
 ### What this live run also exposes (an important negative finding)
 

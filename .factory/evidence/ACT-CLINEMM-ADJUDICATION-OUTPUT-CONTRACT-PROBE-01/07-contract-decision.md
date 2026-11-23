@@ -19,11 +19,18 @@ Evidence:
    by the `agentic_summary` budget policy.
 2. **Text and tool use coexist in the same canonical turn** — proven
    structurally by reading `agent-runtime.ts` and `ai-sdk.ts`, and proven
-   LIVE (the publishing turn also carried a tool call).
+   structurally by PROBE-2 in the probe test file.
+   ~~and proven LIVE (the publishing turn also carried a tool call).~~
+   **WITHDRAWN BY CORRECTION01:** the corrected live measurement records
+   `publishedTurnAlsoCarriedToolUse = true` in **0 of 9** schema-valid
+   runs. The LIVE claim is refuted; only the STRUCTURAL claim stands.
 3. **The envelope survives M1** — the central structural discriminator:
    `assistant text: eligible for summarizer input; thinking only: dropped`.
 4. **A REAL model publishes it** — 9 of 10 measured runs produced a
    schema-valid candidate with the qualification intact.
+   **CORRECTION01 CONFIRMS this figure** against 10 committed receipts.
+   Note that **schema validity is not contract acceptance**: the corrected
+   measurement records `candidate_accepted = false` in **10 of 10** runs.
 5. **The structural gates pass** — 55/55 probe tests, and every adversarial
    control has the required disposition.
 
@@ -35,11 +42,23 @@ compaction-continuity implementation using the existing message carrier.
 
 **PARTIALLY TRUE, and it is recorded, but it does NOT displace Option A.**
 
-The live measurement is 9 of 10 successful publications, so publication is
-reliable but **not guaranteed**. The ACT's own instruction for Option B is
-"a bounded model-output instruction/contract experiment" — and that is
-exactly what the live probe itself IS: a bounded contract experiment that
-demonstrated 90% compliance with a deliberately requested output.
+> **CORRECTION — `ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01-CORRECTION01`**
+>
+> The `9 of 10` figure below is **CONFIRMED** by 10 committed receipts.
+> The live measurement is 9 of 10 successful **schema-valid**
+> publications, so publication is reliable but **not guaranteed**. The
+> ACT's own instruction for Option B is "a bounded model-output
+> instruction/contract experiment" — and that is exactly what the live
+> probe itself IS: a bounded contract experiment that demonstrated 90%
+> compliance with a deliberately requested output.
+>
+> The successor must additionally distinguish this from **acceptance**:
+> the corrected receipts record `candidate_accepted = false` in 10 of 10
+> runs. A compliance figure about *publication* is not a compliance figure
+> about *acceptance*.
+>
+> Superseded detail:
+> `.factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01-CORRECTION01/02-live-receipts.md`
 
 The two options are not exclusive here: the carrier is sufficient
 (Option A), and the residual unreliability is an instruction-compliance
@@ -100,12 +119,28 @@ C1  The canonical tool-call id must be made AVAILABLE to the model
     contract correctly rejects. Without this, evidence binding cannot be
     satisfied in practice.
 
+    **CORRECTION01 — C1 REMAINS OPEN AND IS NOW HARDER.** The corrected
+    10-run measurement resolves canonical references in only **1 of 10**
+    runs, and that single run still failed the source-revision gate, so
+    **0 of 10** candidates were accepted. C1 is NOT solved and may NOT
+    be treated as solved by the successor.
+
 C2  The summarizer's retention of the candidate is NOT guaranteed
     (G4.3-B). Any continuity implementation must address this boundary
     explicitly and must not claim continuity from the M1 result alone.
 
+    **CORRECTION01 — C2 REMAINS OPEN AND UNCHANGED.** This ACT did not
+    touch the summarizer-omission boundary and does not claim to have
+    moved it. The successor must establish DETERMINISTIC continuity and
+    must re-measure the G4.3-B omission negative control.
+
 C3  Publication is reliable but not guaranteed (9/10 live). The successor
     must treat a missing envelope as a normal, expected outcome.
+
+    **CORRECTION01 — the 9/10 figure is CONFIRMED against 10 committed
+    receipts, but it is a PUBLICATION figure, not an ACCEPTANCE figure.**
+    Acceptance was 0/10. The successor's acceptance criterion must be
+    stated in terms of `candidate_accepted`, never `schema_valid`.
 
 C4  The candidate remains PROVISIONAL. An implementation that would let a
     model-authored candidate become a system/developer instruction, or that

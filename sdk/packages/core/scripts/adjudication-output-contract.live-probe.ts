@@ -47,6 +47,12 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { createHandler } from "@cline/llms";
 import type { Message, ProviderConfig } from "@cline/shared";
+import {
+	anchorCarriers,
+	correlateCarrier,
+	resolveCanonicalReferences,
+	type TurnObservation,
+} from "./adjudication-output-contract.correlation";
 
 const ENABLED = process.env.CORE_LIVE_ADJUDICATION_PROBE === "1";
 const PROVIDERS_FILE_ENV =
@@ -56,6 +62,16 @@ const PROVIDER_TIMEOUT_MS = Number(
 	process.env.CORE_LIVE_ADJUDICATION_TIMEOUT_MS ?? "120000",
 );
 const PROVIDER_KEY_ENV = process.env.CORE_LIVE_ADJUDICATION_PROVIDER_KEY;
+/**
+ * CORRECTION01: how many DISTINCT runs to perform per provider target.
+ *
+ * Every run is emitted as its own sanitized observation, so the committed
+ * transcript contains one receipt per run and every aggregate statistic can
+ * be re-derived from the receipts alone.
+ */
+const RUNS_PER_PROVIDER = Number(
+	process.env.CORE_LIVE_ADJUDICATION_RUNS ?? "1",
+);
 
 // ---------------------------------------------------------------------------
 // The test-local contract, MIRRORED from the probe test file.
@@ -348,14 +364,70 @@ interface Observation {
 	assistantTextChunkCount: number;
 	/** The number of DISTINCT assistant text carriers (one per turn). */
 	turnCarrierCount: number;
-	/** The index of the turn whose carrier held the published candidate. */
+	/**
+	 * The CANONICAL turn index whose carrier held the published candidate.
+	 *
+	 * CORRECTION01: this is the turn index, not the carrier-array index.
+	 */
+	publishedTurnIndex?: number;
+	/**
+	 * The index of the publishing carrier WITHIN the carrier array.
+	 *
+	 * CORRECTION01: kept only as a diagnostic locator. It is NOT used to
+	 * derive any correlation fact.
+	 */
 	publishedCarrierIndex?: number;
 	/** Whether the PUBLISHING turn ALSO carried a tool call. */
 	publishedTurnAlsoCarriedToolUse?: boolean;
+	/** The tool-call ids emitted in the PUBLISHING turn itself. */
+	publishedTurnToolCallIds?: string[];
+	/**
+	 * Whether the publishing carrier was emitted in a turn that began
+	 * AFTER at least one tool result had been appended.
+	 */
+	publishedAfterToolResult?: boolean;
 	/** Whether the model emitted reasoning (never read by the contract). */
 	emittedReasoning: boolean;
-	/** Whether any assistant text parsed as a schema-valid candidate. */
-	publishedValidCandidate: boolean;
+	// ------------------------------------------------------------------
+	// THE FOUR INDEPENDENT ACCEPTANCE GATES.
+	//
+	// CORRECTION01: schema validity and contract acceptance are REPORTED
+	// SEPARATELY. A publication attempt is NOT an accepted, source-bound
+	// adjudication. The previous report conflated the two and used the
+	// conflation to claim live compliance.
+	// ------------------------------------------------------------------
+	/**
+	 * GATE 1 — SCHEMA VALIDITY. The published carrier parsed under the
+	 * strict envelope schema. This says NOTHING about whether the
+	 * candidate is acceptable.
+	 */
+	schema_valid: boolean;
+	/**
+	 * GATE 2 — CANONICAL REFERENCE RESOLUTION. Every evidence reference
+	 * the model published resolves to a canonical tool call observed in
+	 * THIS conversation.
+	 */
+	canonical_refs_resolved: boolean;
+	/** The evidence references that did NOT resolve to a canonical call. */
+	unresolvedEvidenceIds?: string[];
+	/**
+	 * GATE 3 — SOURCE REVISION BINDING. Whether the runtime independently
+	 * bound a source revision for the candidate.
+	 *
+	 * The published envelope schema carries NO source revision field, so
+	 * this is structurally FALSE for every envelope this harness can
+	 * observe. It is reported explicitly rather than inferred.
+	 */
+	source_revision_bound: boolean;
+	/**
+	 * GATE 4 — CANDIDATE ACCEPTANCE. The candidate passed ALL of gates
+	 * 1..3 and is therefore an accepted adjudication.
+	 */
+	candidate_accepted: boolean;
+	/**
+	 * The reason the candidate was NOT accepted, when it was not.
+	 */
+	acceptance_rejection_reason?: string;
 	/** The parse failure reason, when the candidate did not parse. */
 	parseRejectionReason?: string;
 	/** The candidate's decision, when it parsed. */
@@ -372,8 +444,6 @@ interface Observation {
 	toolCallCount: number;
 	/** The number of provider turns the probe ran. */
 	turns: number;
-	/** Whether assistant text was emitted AFTER a tool result. */
-	publishedAfterToolResult: boolean;
 	/** The tool-call id the model produced (the first one), if any. */
 	firstToolCallId?: string;
 	/** The error, if the request failed. */
@@ -388,11 +458,13 @@ async function runProbe(config: ProviderConfig): Promise<Observation> {
 		assistantTextChunkCount: 0,
 		turnCarrierCount: 0,
 		emittedReasoning: false,
-		publishedValidCandidate: false,
+		schema_valid: false,
+		canonical_refs_resolved: false,
+		source_revision_bound: false,
+		candidate_accepted: false,
 		emittedToolUse: false,
 		toolCallCount: 0,
 		turns: 0,
-		publishedAfterToolResult: false,
 	};
 
 	try {
@@ -408,15 +480,26 @@ async function runProbe(config: ProviderConfig): Promise<Observation> {
 			},
 		];
 
-		// Each assistant turn's text is a SEPARATE carrier. The contract
-		// parses ONE carrier at a time; concatenating turns would fabricate
-		// a carrier that never existed in the canonical record.
-		const turnCarriers: string[] = [];
-		const turnToolCallCounts: number[] = [];
+		// CORRECTION01: each assistant turn's text is a SEPARATE carrier.
+		// The contract parses ONE carrier at a time; concatenating turns
+		// would fabricate a carrier that never existed in the canonical
+		// record.
+		//
+		// The observed turns are recorded as a SINGLE, turn-indexed array.
+		// The previous implementation kept TWO parallel arrays
+		// (`turnToolCallCounts` per turn, `turnCarriers` per text-bearing
+		// turn) and later indexed one with the other's position, which
+		// misattributed the metric whenever a tool-only turn preceded the
+		// publishing turn. The turn index now travels WITH the carrier.
+		const turnObservations: TurnObservation[] = [];
+		const canonicalToolCallIds: string[] = [];
 		let firstToolCallId: string | undefined;
 		let toolCallCount = 0;
 		let turns = 0;
-		let sawTextAfterToolResult = false;
+		// The CHRONOLOGY anchor: how many tool results have been appended
+		// to the conversation so far. A turn records the count as it was
+		// BEFORE the turn began.
+		let toolResultsAppended = 0;
 
 		const deadline = Date.now() + PROVIDER_TIMEOUT_MS;
 
@@ -455,6 +538,7 @@ async function runProbe(config: ProviderConfig): Promise<Observation> {
 					if (!firstToolCallId) {
 						firstToolCallId = id;
 					}
+					canonicalToolCallIds.push(id);
 					turnToolCalls.push({
 						id,
 						name: call.function.name ?? SYNTHETIC_TOOL_NAME,
@@ -467,10 +551,14 @@ async function runProbe(config: ProviderConfig): Promise<Observation> {
 				}
 			}
 
-			turnToolCallCounts.push(turnToolCalls.length);
-			if (turnText) {
-				turnCarriers.push(turnText);
-			}
+			// CORRECTION01: record the turn as ONE observation, anchored to
+			// its canonical turn index. A tool-only turn is recorded with an
+			// EMPTY text and still advances the canonical turn index.
+			turnObservations.push({
+				text: turnText,
+				toolCallIds: turnToolCalls.map((call) => call.id),
+				toolResultsBefore: toolResultsAppended,
+			});
 
 			// The assistant turn: a `text` block AND a `tool_use` block in the
 			// SAME canonical turn.
@@ -511,41 +599,88 @@ async function runProbe(config: ProviderConfig): Promise<Observation> {
 				})),
 			});
 
-			// A text block emitted AFTER the tool result is the publication
-			// the contract cares about.
-			if (turnText) {
-				sawTextAfterToolResult = true;
-			}
+			// CORRECTION01: the CHRONOLOGY advances ONLY when a tool result
+			// is actually appended. The previous implementation set
+			// `sawTextAfterToolResult` from the text of a tool-calling turn
+			// — text emitted BEFORE this result was appended — which
+			// misattributed post-result publication.
+			toolResultsAppended += turnToolCalls.length;
 		}
 
 		observation.turns = turns;
 		observation.toolCallCount = toolCallCount;
-		observation.publishedAfterToolResult = sawTextAfterToolResult;
 		observation.firstToolCallId = firstToolCallId;
 
-		observation.turnCarrierCount = turnCarriers.length;
+		// CORRECTION01: the carriers are anchored to their canonical turn
+		// index. No downstream metric indexes one array with another's
+		// position.
+		const anchoredCarriers = anchorCarriers(turnObservations);
+		observation.turnCarrierCount = anchoredCarriers.length;
 
 		// The STRICT parse over EACH assistant text carrier, one at a time.
 		// A carrier that is not an envelope is a NORMAL carrier (a preamble
 		// or an explanation); it is simply not a published adjudication.
 		const rejectionReasons: string[] = [];
-		for (let index = 0; index < turnCarriers.length; index += 1) {
-			const parsed = parseAdjudicationEnvelope(turnCarriers[index].trim());
-			if (parsed.ok) {
-				observation.publishedValidCandidate = true;
-				observation.decision = parsed.candidate.decision;
-				observation.qualificationCodes = parsed.candidate.qualification_codes;
-				observation.evidenceToolUseIds = parsed.candidate.evidence_tool_use_ids;
-				observation.remainingQuestionIds =
-					parsed.candidate.remaining_question_ids;
-				observation.publishedCarrierIndex = index;
-				observation.publishedTurnAlsoCarriedToolUse =
-					(turnToolCallCounts[index] ?? 0) > 0;
-				break;
+		for (
+			let carrierIndex = 0;
+			carrierIndex < anchoredCarriers.length;
+			carrierIndex += 1
+		) {
+			const carrier = anchoredCarriers[carrierIndex];
+			const parsed = parseAdjudicationEnvelope(carrier.text.trim());
+			if (!parsed.ok) {
+				rejectionReasons.push(parsed.reason);
+				continue;
 			}
-			rejectionReasons.push(parsed.reason);
+
+			// --- GATE 1: SCHEMA VALIDITY -------------------------------
+			observation.schema_valid = true;
+			observation.decision = parsed.candidate.decision;
+			observation.qualificationCodes = parsed.candidate.qualification_codes;
+			observation.evidenceToolUseIds = parsed.candidate.evidence_tool_use_ids;
+			observation.remainingQuestionIds =
+				parsed.candidate.remaining_question_ids;
+
+			// --- The TURN-ANCHORED correlation --------------------------
+			const correlation = correlateCarrier(carrier);
+			observation.publishedTurnIndex = correlation.publishedTurnIndex;
+			observation.publishedCarrierIndex = carrierIndex;
+			observation.publishedTurnAlsoCarriedToolUse =
+				correlation.publishedTurnAlsoCarriedToolUse;
+			observation.publishedTurnToolCallIds =
+				correlation.publishedTurnToolCallIds;
+			observation.publishedAfterToolResult =
+				correlation.publishedAfterToolResult;
+
+			// --- GATE 2: CANONICAL REFERENCE RESOLUTION -----------------
+			const resolution = resolveCanonicalReferences(
+				parsed.candidate,
+				canonicalToolCallIds,
+			);
+			observation.canonical_refs_resolved = resolution.canonical_refs_resolved;
+			if (resolution.unresolvedIds.length > 0) {
+				observation.unresolvedEvidenceIds = resolution.unresolvedIds;
+			}
+
+			// --- GATE 3: SOURCE REVISION BINDING ------------------------
+			// The published envelope schema carries NO source revision
+			// field. The runtime therefore has nothing to bind, and this
+			// gate is STRUCTURALLY FALSE for every envelope this harness
+			// can observe. It is reported explicitly rather than inferred
+			// from the schema-valid result.
+			observation.source_revision_bound = false;
+
+			// --- GATE 4: CANDIDATE ACCEPTANCE ---------------------------
+			if (!resolution.canonical_refs_resolved) {
+				observation.acceptance_rejection_reason = `unresolvable_tool_reference:${resolution.unresolvedIds[0]}`;
+			} else if (!observation.source_revision_bound) {
+				observation.acceptance_rejection_reason = "unbound_source_revision";
+			} else {
+				observation.candidate_accepted = true;
+			}
+			break;
 		}
-		if (!observation.publishedValidCandidate && rejectionReasons.length > 0) {
+		if (!observation.schema_valid && rejectionReasons.length > 0) {
 			observation.parseRejectionReason = rejectionReasons.join(",");
 		}
 	} catch (error) {
@@ -573,13 +708,20 @@ async function main(): Promise<void> {
 		observations: [],
 	};
 	for (const target of targets) {
-		console.log(
-			`\n=== G6 live probe: ${target.label} (${target.config.providerId}/${target.config.modelId}) ===`,
-		);
-		const observation = await runProbe(target.config);
-		report.observations.push(observation);
-		report.observation_count += 1;
-		console.log(JSON.stringify(observation, null, 2));
+		// CORRECTION01: each run is a DISTINCT, independently recorded
+		// observation. The previous report claimed "10 measured runs" while
+		// the committed transcript contained ONE; every run is now emitted
+		// as its own sanitized observation so that any aggregate statistic
+		// can be re-derived from the committed receipts.
+		for (let runIndex = 0; runIndex < RUNS_PER_PROVIDER; runIndex += 1) {
+			console.log(
+				`\n=== G6 live probe: ${target.label} (${target.config.providerId}/${target.config.modelId}) run ${runIndex + 1}/${RUNS_PER_PROVIDER} ===`,
+			);
+			const observation = await runProbe(target.config);
+			report.observations.push(observation);
+			report.observation_count += 1;
+			console.log(JSON.stringify(observation, null, 2));
+		}
 	}
 	console.log("\n=== G6 live probe report ===");
 	console.log(JSON.stringify(report, null, 2));

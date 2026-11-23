@@ -1,0 +1,122 @@
+{
+  "act": "ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01-CORRECTION01",
+  "predecessor_act": "ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01",
+  "entry_head": "df2be7a34",
+  "entry_head_full": "df2be7a34ca86be45a55172373fa71f48ac3a9c6",
+  "predecessor_verdict": "PASS_PROBE_CONTINUITY_STRUCTURAL (PRESERVED)",
+  "reviewer_verdict": "HALT_LIVE_EVIDENCE_CONTRADICTION",
+  "verdict": "PASS_CORRECTION_EVIDENCE_RECONCILED",
+  "production_delta": "ZERO (no src/ production module changed)",
+  "red_witness_modified_by_this_act": "NO (byte-identical to d69cfb9be)",
+  "note": "The final evidence commit's own SHA is intentionally NOT recorded here: this file is committed BY that commit, and a self-referential SHA is not a stable identity. The final HEAD is recorded in the epic-board entry and in the operator report.",
+  "test_commands": [
+    "cd sdk/packages/core && bun x vitest run src/extensions/context/compaction.adjudication-output-contract.probe01.test.ts src/extensions/context/compaction.adjudication-output-contract.correction01.test.ts --config vitest.config.ts",
+    "cd sdk/packages/core && bun x vitest run src/extensions/context/ --config vitest.config.ts",
+    "cd sdk/packages/core && bun tsc -p tsconfig.dev.json --noEmit",
+    "cd sdk/packages/core && bun x vitest run --config vitest.red.adjudication-continuity-red01.config.ts",
+    "bunx biome check --diagnostic-level=error sdk/packages/core/src/extensions/context/compaction.adjudication-output-contract.correction01.test.ts sdk/packages/core/scripts/adjudication-output-contract.correlation.ts sdk/packages/core/scripts/adjudication-output-contract.live-probe.ts",
+    "cd sdk/packages/core && CORE_LIVE_ADJUDICATION_PROBE=1 CORE_LIVE_ADJUDICATION_PROVIDER_KEY=minimax CORE_LIVE_ADJUDICATION_RUNS=10 bun scripts/adjudication-output-contract.live-probe.ts"
+  ],
+  "exit_codes": {
+    "gate1_focused_contract_probe_correction01": 0,
+    "gate4_context_directory_correction01": 0,
+    "gate5_typecheck": 2,
+    "gate6_historical_red_on_demand": 1,
+    "gate7_biome": 0,
+    "gate8_live_model_probe_correction01": 0
+  },
+  "test_counts": {
+    "gate1_focused_contract_probe_correction01": "64 passed (64) -- 55 predecessor probe + 9 correction01",
+    "gate4_context_directory_correction01": "560 passed | 2 skipped (562); predecessor baseline 551 passed | 2 skipped (553)",
+    "gate6_historical_red_on_demand": "5 failed (5) -- EXPECTED, the RED is preserved",
+    "gate5_typecheck": "44 diagnostics; identical to the predecessor baseline; 0 ACT-owned"
+  },
+  "live_measurement_derivable_from_committed_receipts": {
+    "runs": 10,
+    "schema_valid": 9,
+    "canonical_refs_resolved": 1,
+    "source_revision_bound": 0,
+    "candidate_accepted": 0,
+    "publishedTurnAlsoCarriedToolUse_true": 0,
+    "publishedAfterToolResult_true": 9,
+    "turnIndex_diverged_from_carrierIndex": 6,
+    "note": "Every figure is computed from verification/gate8-live-model-probe-correction01.txt alone."
+  },
+  "file_sha256": [
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01-CORRECTION01/00-entry-identity.md",
+      "sha256": "3e0dcc2c1b3b75085498cd0fb3399cefb6f8f093be3fec283407c1b97feef44d",
+      "bytes": 4700
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01-CORRECTION01/01-harness-correction.md",
+      "sha256": "55e9c26844448e84db73e5d1e1d9fb35b135b74a5c38ada84b1ec64a290251d8",
+      "bytes": 4838
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01-CORRECTION01/02-live-receipts.md",
+      "sha256": "ba3deec4dab3487b29d656908a7be13f22f2f87f3bb4148f385c1abc740be477",
+      "bytes": 6516
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01-CORRECTION01/03-acceptance-gates.md",
+      "sha256": "816813c162e84eca3e9250b8305b573fce79b8dd4989f3eaaa53265c7e3c16bf",
+      "bytes": 5078
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01-CORRECTION01/04-constraints-and-verdict.md",
+      "sha256": "ed0d3fbee19db71eac86cb221b5b91d83ff6a0e7c78655a91f9c479d4f250c95",
+      "bytes": 6279
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01-CORRECTION01/verification/README.md",
+      "sha256": "e5d58e2f13d2e58c491b35200ddca8fb7838a734d859b3e0342c4ec0f0cf3b42",
+      "bytes": 2973
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01-CORRECTION01/verification/gate1-focused-probe-correction01.txt",
+      "sha256": "5c5f865804bb6ecbe0eb8bc5d2d6600052ad42f50b35078ef0934ef2e8639411",
+      "bytes": 957
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01-CORRECTION01/verification/gate4-context-directory-correction01.txt",
+      "sha256": "38c485a40f20a836a23c99c6ad068f8cef7684caba24254cb0a4da4912c12e92",
+      "bytes": 9181
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01-CORRECTION01/verification/gate5-typecheck-correction01.txt",
+      "sha256": "d1f259b3799d79cb49696c51a2e50a6730c2378a9ded4e2ad4142d52e25a4f7f",
+      "bytes": 12702
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01-CORRECTION01/verification/gate6-red-preserved-correction01.txt",
+      "sha256": "215007b8121270a3069bbbb065aa924f9d0e888360da6e47a148a40bc3a85a29",
+      "bytes": 11261
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01-CORRECTION01/verification/gate7-biome-correction01.txt",
+      "sha256": "6c44618d684a26d64d13aeb5709e6e37428adf165cf9f24071722f6cdfc19fb5",
+      "bytes": 43
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01-CORRECTION01/verification/gate8-live-model-probe-correction01.txt",
+      "sha256": "93c1c6e55364f924d48371a0a36ab12cf33a7c270dcdbf7a59050febdac7414f",
+      "bytes": 19853
+    },
+    {
+      "path": "sdk/packages/core/scripts/adjudication-output-contract.correlation.ts",
+      "sha256": "1f4237e07b8503aabd6b4337f0e9048d0103b253d314aad53fbf9b0af822ebf2",
+      "bytes": 6243
+    },
+    {
+      "path": "sdk/packages/core/scripts/adjudication-output-contract.live-probe.ts",
+      "sha256": "48b85f1f9615f7d7949cd0b729c36a99e7df9343cc58d63cf84a4c3a699448ae",
+      "bytes": 25832
+    },
+    {
+      "path": "sdk/packages/core/src/extensions/context/compaction.adjudication-output-contract.correction01.test.ts",
+      "sha256": "d3e8928d4ed999e0fbe2247c71219890b16d7d8cf4ecacf46e0bc63d3167b6f3",
+      "bytes": 9927
+    }
+  ]
+}

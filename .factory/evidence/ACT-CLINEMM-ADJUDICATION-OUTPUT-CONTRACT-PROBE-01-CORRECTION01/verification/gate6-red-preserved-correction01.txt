@@ -1,0 +1,267 @@
+(node:88008) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core
+
+(node:88024) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ src/extensions/context/compaction.adjudication-continuity.red01.test.ts (5 tests | 5 failed) 23ms
+     × RED-1 (RED): the source-grounded qualified adjudication is present in canonical history and absent from the provider-visible continuation 13ms
+     × RED-2 (RED): the qualified adjudication is absent from the provider-visible continuation once more than 12 later verified outcomes exist 4ms
+     × RED-3 (RED): a thinking-block adjudication at any position cannot reach the summarizer, while the same adjudication in assistant text can 3ms
+     × RED-4 (RED): the original finding survives in the task contract while its later qualified decision does not 1ms
+     × RED-5 (RED): the historical shape loses the adjudication at the source-selection boundary, upstream of serialization 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/extensions/context/compaction.adjudication-continuity.red01.test.ts > ACT-CLINEMM-ADJUDICATION-CONTINUITY-RED-01 — production-seam RED > RED-1 (RED): the source-grounded qualified adjudication is present in canonical history and absent from the provider-visible continuation
+AssertionError: expected 'Summarize this session for continuati…' to contain 'NARROWED'
+
+- Expected
++ Received
+
+- NARROWED
++ Summarize this session for continuation. Be concise and factual.
++
++ ## Goal
++ One sentence: what is being built or fixed.
++
++ ## State
++ - Done: completed steps
++ - In Progress: current work
++ - Blocked: blockers or open questions
++
++ ## Highlights
++ Key technical choices or notable findings (omit if none).
++
++ ## Next
++ Immediate next steps.
++
++ ## Files
++ Read: none
++ Edited: none
++
++ Conversation:
++ [User]: Finding S1: No automated limit protects a configured resource budget. Source observation: The configuration contains a per-worker limit of 36. Counterevidence: With 11 workers, total capacity is 396, which is below the documented budget of 400.
++
++ [Bot tool calls]: run_commands(commands="grep -n 'maxWorkers' synthetic-pool-config.yaml")
++
++ [Tool result]: [succeeded] grep: [result omitted]
+
+ ❯ src/extensions/context/compaction.adjudication-continuity.red01.test.ts:547:19
+    545|   // request. The request string is captured from the mocked provider
+    546|   // handler, so this is the real production request.
+    547|   expect(request).toContain(VERDICT_TOKEN);
+       |                   ^
+    548|   expect(request).toContain(QUALIFICATION_TOKEN);
+    549|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  src/extensions/context/compaction.adjudication-continuity.red01.test.ts > ACT-CLINEMM-ADJUDICATION-CONTINUITY-RED-01 — production-seam RED > RED-2 (RED): the qualified adjudication is absent from the provider-visible continuation once more than 12 later verified outcomes exist
+AssertionError: expected 'Context summary:\n\n## Goal\nAdversar…' to contain 'NARROWED'
+
+- Expected
++ Received
+
+- NARROWED
++ Context summary:
++
++ ## Goal
++ Adversarially falsify the synthetic findings S1-S3.
++
++ ## State
++ - **Done:** Ran targeted read-only inspection of the synthetic repository.
++ - **In Progress:** Mapping collected evidence to S1-S3.
++ - **Blocked:** Some outputs were omitted from the transcript, so final verdicts cannot yet be made.
++
++ ## Files
++ Read:
++ - none
++ Modified:
++ - none
++
++ ## Active task contract (authoritative)
++ <!-- cline-task-contract:begin -->
++ ### User-authored objective (user authority)
++ Finding S1: No automated limit protects a configured resource budget. Source observation: The configuration contains a per-worker limit of 36. Counterevidence: With 11 workers, total capacity is 396, which is below the documented budget of 400.
++ <!-- cline-task-contract:end -->
++
++ ## Verified tool outcomes (canonical record)
++ <!-- cline-evidence:begin -->
++ - run_commands (call_later_8): succeeded
++ - run_commands (call_later_9): succeeded
++ - run_commands (call_later_10): succeeded
++ - run_commands (call_later_11): succeeded
++ - run_commands (call_later_12): succeeded
++ - run_commands (call_later_13): succeeded
++ - run_commands (call_later_14): succeeded
++ - run_commands (call_later_15): succeeded
++ - run_commands (call_later_16): succeeded
++ - run_commands (call_later_17): succeeded
++ - run_commands (call_later_18): succeeded
++ - run_commands (call_later_19): succeeded
++ <!-- cline-evidence:end -->
++ Continuing the synthetic investigation.
+
+ ❯ src/extensions/context/compaction.adjudication-continuity.red01.test.ts:580:25
+    578|
+    579|   // The verdict AND its qualification must both be present.
+    580|   expect(installedText).toContain(VERDICT_TOKEN);
+       |                         ^
+    581|   expect(installedText).toContain(QUALIFICATION_TOKEN);
+    582|   expect(providerVisibleText).toContain(VERDICT_TOKEN);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  src/extensions/context/compaction.adjudication-continuity.red01.test.ts > ACT-CLINEMM-ADJUDICATION-CONTINUITY-RED-01 — production-seam RED > RED-3 (RED): a thinking-block adjudication at any position cannot reach the summarizer, while the same adjudication in assistant text can
+AssertionError: expected 'Summarize this session for continuati…' to contain 'NARROWED — the specific configuration…'
+
+- Expected
++ Received
+
+- NARROWED — the specific configuration is within budget; the remaining risk is missing automatic enforcement when scaling.
++ Summarize this session for continuation. Be concise and factual.
++
++ ## Goal
++ One sentence: what is being built or fixed.
++
++ ## State
++ - Done: completed steps
++ - In Progress: current work
++ - Blocked: blockers or open questions
++
++ ## Highlights
++ Key technical choices or notable findings (omit if none).
++
++ ## Next
++ Immediate next steps.
++
++ ## Files
++ Read: none
++ Edited: none
++
++ Conversation:
++ [User]: Finding S1: No automated limit protects a configured resource budget. Source observation: The configuration contains a per-worker limit of 36. Counterevidence: With 11 workers, total capacity is 396, which is below the documented budget of 400.
++
++ [Bot tool calls]: run_commands(commands="grep -n 'maxWorkers' synthetic-pool-config.yaml")
++
++ [Tool result]: [succeeded] grep: [result omitted]
+
+ ❯ src/extensions/context/compaction.adjudication-continuity.red01.test.ts:634:26
+    632|   // truncation window — because position (a), which is INSIDE the
+    633|   // window, is lost exactly like position (b).
+    634|   expect(inside.request).toContain(ADJUDICATION);
+       |                          ^
+    635|   expect(beyond.request).toContain(ADJUDICATION);
+    636|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  src/extensions/context/compaction.adjudication-continuity.red01.test.ts > ACT-CLINEMM-ADJUDICATION-CONTINUITY-RED-01 — production-seam RED > RED-4 (RED): the original finding survives in the task contract while its later qualified decision does not
+AssertionError: expected 'Context summary:\n\n## Goal\nAdversar…' to contain 'NARROWED'
+
+- Expected
++ Received
+
+- NARROWED
++ Context summary:
++
++ ## Goal
++ Adversarially falsify the synthetic findings S1-S3.
++
++ ## State
++ - **Done:** Ran targeted read-only inspection of the synthetic repository.
++ - **In Progress:** Mapping collected evidence to S1-S3.
++ - **Blocked:** Some outputs were omitted from the transcript, so final verdicts cannot yet be made.
++
++ ## Files
++ Read:
++ - none
++ Modified:
++ - none
++
++ ## Active task contract (authoritative)
++ <!-- cline-task-contract:begin -->
++ ### User-authored objective (user authority)
++ Finding S1: No automated limit protects a configured resource budget. Source observation: The configuration contains a per-worker limit of 36. Counterevidence: With 11 workers, total capacity is 396, which is below the documented budget of 400.
++ <!-- cline-task-contract:end -->
++
++ ## Verified tool outcomes (canonical record)
++ <!-- cline-evidence:begin -->
++ - run_commands (call_s1_source_read_0001): succeeded — grep
++ <!-- cline-evidence:end -->
++ Continuing the synthetic investigation.
+
+ ❯ src/extensions/context/compaction.adjudication-continuity.red01.test.ts:671:25
+    669|   // The LATER QUALIFIED DECISION must also be present, with its
+    670|   // qualification.
+    671|   expect(installedText).toContain(VERDICT_TOKEN);
+       |                         ^
+    672|   expect(installedText).toContain(QUALIFICATION_TOKEN);
+    673|   expect(providerVisibleText).toContain(VERDICT_TOKEN);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+ FAIL  src/extensions/context/compaction.adjudication-continuity.red01.test.ts > ACT-CLINEMM-ADJUDICATION-CONTINUITY-RED-01 — production-seam RED > RED-5 (RED): the historical shape loses the adjudication at the source-selection boundary, upstream of serialization
+AssertionError: expected 'Summarize this session for continuati…' to contain 'NARROWED'
+
+- Expected
++ Received
+
+- NARROWED
++ Summarize this session for continuation. Be concise and factual.
++
++ ## Goal
++ One sentence: what is being built or fixed.
++
++ ## State
++ - Done: completed steps
++ - In Progress: current work
++ - Blocked: blockers or open questions
++
++ ## Highlights
++ Key technical choices or notable findings (omit if none).
++
++ ## Next
++ Immediate next steps.
++
++ ## Files
++ Read: none
++ Edited: none
++
++ Conversation:
++ [User]: Finding S1: No automated limit protects a configured resource budget. Source observation: The configuration contains a per-worker limit of 36. Counterevidence: With 11 workers, total capacity is 396, which is below the documented budget of 400.
++
++ [Bot tool calls]: run_commands(commands="grep -n 'maxWorkers' synthetic-pool-config.yaml")
++
++ [Tool result]: [succeeded] grep: [result omitted]
++
++ [Bot tool calls]: run_commands(commands="synthetic-probe-0")
++
++ [Tool result]: [succeeded] #1: [result omitted]
++
++ [Bot tool calls]: run_commands(commands="synthetic-probe-1")
++
++ [Tool result]: [succeeded] #1: [result omitted]
++
++ [Bot tool calls]: run_commands(commands="synthetic-probe-2")
++
++ [Tool result]: [succeeded] #1: [result omitted]
+
+ ❯ src/extensions/context/compaction.adjudication-continuity.red01.test.ts:737:19
+    735|   const { request, installedMessages } =
+    736|    await runStateAwareCompactionAndCapture({ canonicalMessages });
+    737|   expect(request).toContain(VERDICT_TOKEN);
+       |                   ^
+    738|   expect(installedContinuationText(installedMessages)).toContain(
+    739|    QUALIFICATION_TOKEN,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  5 failed (5)
+   Start at  12:05:16
+   Duration  708ms (transform 423ms, setup 0ms, import 572ms, tests 23ms, environment 0ms)
+

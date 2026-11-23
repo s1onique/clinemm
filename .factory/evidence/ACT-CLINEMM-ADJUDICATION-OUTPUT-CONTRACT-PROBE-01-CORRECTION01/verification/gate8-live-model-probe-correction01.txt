@@ -1,0 +1,698 @@
+
+=== G6 live probe: minimax (minimax/MiniMax-M3) run 1/10 ===
+{
+  "provider": "minimax",
+  "model": "MiniMax-M3",
+  "emittedAssistantText": true,
+  "assistantTextChunkCount": 15,
+  "turnCarrierCount": 2,
+  "emittedReasoning": false,
+  "schema_valid": true,
+  "canonical_refs_resolved": false,
+  "source_revision_bound": false,
+  "candidate_accepted": false,
+  "emittedToolUse": true,
+  "toolCallCount": 3,
+  "turns": 4,
+  "firstToolCallId": "call_2d60cad05ede0402c84e6a91",
+  "decision": "narrowed",
+  "qualificationCodes": [
+    "manual_enforcement_only"
+  ],
+  "evidenceToolUseIds": [
+    "read_files_synthetic-pool-config.yaml"
+  ],
+  "remainingQuestionIds": [
+    "S1.automated_enforcement"
+  ],
+  "publishedTurnIndex": 3,
+  "publishedCarrierIndex": 1,
+  "publishedTurnAlsoCarriedToolUse": false,
+  "publishedTurnToolCallIds": [],
+  "publishedAfterToolResult": true,
+  "unresolvedEvidenceIds": [
+    "read_files_synthetic-pool-config.yaml"
+  ],
+  "acceptance_rejection_reason": "unresolvable_tool_reference:read_files_synthetic-pool-config.yaml"
+}
+
+=== G6 live probe: minimax (minimax/MiniMax-M3) run 2/10 ===
+{
+  "provider": "minimax",
+  "model": "MiniMax-M3",
+  "emittedAssistantText": true,
+  "assistantTextChunkCount": 15,
+  "turnCarrierCount": 2,
+  "emittedReasoning": false,
+  "schema_valid": false,
+  "canonical_refs_resolved": false,
+  "source_revision_bound": false,
+  "candidate_accepted": false,
+  "emittedToolUse": true,
+  "toolCallCount": 1,
+  "turns": 2,
+  "firstToolCallId": "call_91c7214914b0cf0f271a3908",
+  "parseRejectionReason": "malformed_json,malformed_json"
+}
+
+=== G6 live probe: minimax (minimax/MiniMax-M3) run 3/10 ===
+{
+  "provider": "minimax",
+  "model": "MiniMax-M3",
+  "emittedAssistantText": true,
+  "assistantTextChunkCount": 20,
+  "turnCarrierCount": 2,
+  "emittedReasoning": false,
+  "schema_valid": true,
+  "canonical_refs_resolved": false,
+  "source_revision_bound": false,
+  "candidate_accepted": false,
+  "emittedToolUse": true,
+  "toolCallCount": 2,
+  "turns": 3,
+  "firstToolCallId": "call_01a207a61146709b978edea9",
+  "decision": "narrowed",
+  "qualificationCodes": [
+    "manual_enforcement_only"
+  ],
+  "evidenceToolUseIds": [
+    "read_files_1",
+    "read_files_2"
+  ],
+  "remainingQuestionIds": [
+    "S1.automated_enforcement"
+  ],
+  "publishedTurnIndex": 2,
+  "publishedCarrierIndex": 1,
+  "publishedTurnAlsoCarriedToolUse": false,
+  "publishedTurnToolCallIds": [],
+  "publishedAfterToolResult": true,
+  "unresolvedEvidenceIds": [
+    "read_files_1",
+    "read_files_2"
+  ],
+  "acceptance_rejection_reason": "unresolvable_tool_reference:read_files_1"
+}
+
+=== G6 live probe: minimax (minimax/MiniMax-M3) run 4/10 ===
+{
+  "provider": "minimax",
+  "model": "MiniMax-M3",
+  "emittedAssistantText": true,
+  "assistantTextChunkCount": 18,
+  "turnCarrierCount": 2,
+  "emittedReasoning": false,
+  "schema_valid": true,
+  "canonical_refs_resolved": true,
+  "source_revision_bound": false,
+  "candidate_accepted": false,
+  "emittedToolUse": true,
+  "toolCallCount": 1,
+  "turns": 2,
+  "firstToolCallId": "call_01a207a61b3677a9a6917275",
+  "decision": "narrowed",
+  "qualificationCodes": [
+    "manual_enforcement_only"
+  ],
+  "evidenceToolUseIds": [],
+  "remainingQuestionIds": [
+    "S1.automated_enforcement"
+  ],
+  "publishedTurnIndex": 1,
+  "publishedCarrierIndex": 1,
+  "publishedTurnAlsoCarriedToolUse": false,
+  "publishedTurnToolCallIds": [],
+  "publishedAfterToolResult": true,
+  "acceptance_rejection_reason": "unbound_source_revision"
+}
+
+=== G6 live probe: minimax (minimax/MiniMax-M3) run 5/10 ===
+{
+  "provider": "minimax",
+  "model": "MiniMax-M3",
+  "emittedAssistantText": true,
+  "assistantTextChunkCount": 14,
+  "turnCarrierCount": 2,
+  "emittedReasoning": false,
+  "schema_valid": true,
+  "canonical_refs_resolved": false,
+  "source_revision_bound": false,
+  "candidate_accepted": false,
+  "emittedToolUse": true,
+  "toolCallCount": 2,
+  "turns": 3,
+  "firstToolCallId": "call_ad4c913affa750901910a066",
+  "decision": "narrowed",
+  "qualificationCodes": [
+    "manual_enforcement_only"
+  ],
+  "evidenceToolUseIds": [
+    "read_files_1",
+    "read_files_2"
+  ],
+  "remainingQuestionIds": [
+    "S1.automated_enforcement"
+  ],
+  "publishedTurnIndex": 2,
+  "publishedCarrierIndex": 1,
+  "publishedTurnAlsoCarriedToolUse": false,
+  "publishedTurnToolCallIds": [],
+  "publishedAfterToolResult": true,
+  "unresolvedEvidenceIds": [
+    "read_files_1",
+    "read_files_2"
+  ],
+  "acceptance_rejection_reason": "unresolvable_tool_reference:read_files_1"
+}
+
+=== G6 live probe: minimax (minimax/MiniMax-M3) run 6/10 ===
+{
+  "provider": "minimax",
+  "model": "MiniMax-M3",
+  "emittedAssistantText": true,
+  "assistantTextChunkCount": 10,
+  "turnCarrierCount": 1,
+  "emittedReasoning": false,
+  "schema_valid": true,
+  "canonical_refs_resolved": false,
+  "source_revision_bound": false,
+  "candidate_accepted": false,
+  "emittedToolUse": true,
+  "toolCallCount": 2,
+  "turns": 3,
+  "firstToolCallId": "call_8ff7038e46720b79108f78b1",
+  "decision": "narrowed",
+  "qualificationCodes": [
+    "manual_enforcement_only"
+  ],
+  "evidenceToolUseIds": [
+    "read_files_1",
+    "read_files_2"
+  ],
+  "remainingQuestionIds": [
+    "S1.automated_enforcement"
+  ],
+  "publishedTurnIndex": 2,
+  "publishedCarrierIndex": 0,
+  "publishedTurnAlsoCarriedToolUse": false,
+  "publishedTurnToolCallIds": [],
+  "publishedAfterToolResult": true,
+  "unresolvedEvidenceIds": [
+    "read_files_1",
+    "read_files_2"
+  ],
+  "acceptance_rejection_reason": "unresolvable_tool_reference:read_files_1"
+}
+
+=== G6 live probe: minimax (minimax/MiniMax-M3) run 7/10 ===
+{
+  "provider": "minimax",
+  "model": "MiniMax-M3",
+  "emittedAssistantText": true,
+  "assistantTextChunkCount": 13,
+  "turnCarrierCount": 2,
+  "emittedReasoning": false,
+  "schema_valid": true,
+  "canonical_refs_resolved": false,
+  "source_revision_bound": false,
+  "candidate_accepted": false,
+  "emittedToolUse": true,
+  "toolCallCount": 1,
+  "turns": 2,
+  "firstToolCallId": "call_60ecb8b077abf0f5001ccec8",
+  "decision": "narrowed",
+  "qualificationCodes": [
+    "manual_enforcement_only"
+  ],
+  "evidenceToolUseIds": [
+    "call_1"
+  ],
+  "remainingQuestionIds": [
+    "S1.automated_enforcement"
+  ],
+  "publishedTurnIndex": 1,
+  "publishedCarrierIndex": 1,
+  "publishedTurnAlsoCarriedToolUse": false,
+  "publishedTurnToolCallIds": [],
+  "publishedAfterToolResult": true,
+  "unresolvedEvidenceIds": [
+    "call_1"
+  ],
+  "acceptance_rejection_reason": "unresolvable_tool_reference:call_1"
+}
+
+=== G6 live probe: minimax (minimax/MiniMax-M3) run 8/10 ===
+{
+  "provider": "minimax",
+  "model": "MiniMax-M3",
+  "emittedAssistantText": true,
+  "assistantTextChunkCount": 11,
+  "turnCarrierCount": 2,
+  "emittedReasoning": false,
+  "schema_valid": true,
+  "canonical_refs_resolved": false,
+  "source_revision_bound": false,
+  "candidate_accepted": false,
+  "emittedToolUse": true,
+  "toolCallCount": 2,
+  "turns": 3,
+  "firstToolCallId": "call_7df9ee4a9772c85c099e0447",
+  "decision": "narrowed",
+  "qualificationCodes": [
+    "manual_enforcement_only"
+  ],
+  "evidenceToolUseIds": [
+    "read_files_1"
+  ],
+  "remainingQuestionIds": [
+    "S1.automated_enforcement"
+  ],
+  "publishedTurnIndex": 2,
+  "publishedCarrierIndex": 1,
+  "publishedTurnAlsoCarriedToolUse": false,
+  "publishedTurnToolCallIds": [],
+  "publishedAfterToolResult": true,
+  "unresolvedEvidenceIds": [
+    "read_files_1"
+  ],
+  "acceptance_rejection_reason": "unresolvable_tool_reference:read_files_1"
+}
+
+=== G6 live probe: minimax (minimax/MiniMax-M3) run 9/10 ===
+{
+  "provider": "minimax",
+  "model": "MiniMax-M3",
+  "emittedAssistantText": true,
+  "assistantTextChunkCount": 13,
+  "turnCarrierCount": 2,
+  "emittedReasoning": false,
+  "schema_valid": true,
+  "canonical_refs_resolved": false,
+  "source_revision_bound": false,
+  "candidate_accepted": false,
+  "emittedToolUse": true,
+  "toolCallCount": 2,
+  "turns": 3,
+  "firstToolCallId": "call_6358be9fd02fd4c25d77dd70",
+  "decision": "narrowed",
+  "qualificationCodes": [
+    "manual_enforcement_only"
+  ],
+  "evidenceToolUseIds": [
+    "call_1",
+    "call_2"
+  ],
+  "remainingQuestionIds": [
+    "S1.automated_enforcement"
+  ],
+  "publishedTurnIndex": 2,
+  "publishedCarrierIndex": 1,
+  "publishedTurnAlsoCarriedToolUse": false,
+  "publishedTurnToolCallIds": [],
+  "publishedAfterToolResult": true,
+  "unresolvedEvidenceIds": [
+    "call_1",
+    "call_2"
+  ],
+  "acceptance_rejection_reason": "unresolvable_tool_reference:call_1"
+}
+
+=== G6 live probe: minimax (minimax/MiniMax-M3) run 10/10 ===
+{
+  "provider": "minimax",
+  "model": "MiniMax-M3",
+  "emittedAssistantText": true,
+  "assistantTextChunkCount": 13,
+  "turnCarrierCount": 2,
+  "emittedReasoning": false,
+  "schema_valid": true,
+  "canonical_refs_resolved": false,
+  "source_revision_bound": false,
+  "candidate_accepted": false,
+  "emittedToolUse": true,
+  "toolCallCount": 1,
+  "turns": 2,
+  "firstToolCallId": "call_9cf108ac6aec4ed092d5f3e0",
+  "decision": "narrowed",
+  "qualificationCodes": [
+    "manual_enforcement_only"
+  ],
+  "evidenceToolUseIds": [
+    "read_files_synthetic-pool-config.yaml"
+  ],
+  "remainingQuestionIds": [
+    "S1.automated_enforcement"
+  ],
+  "publishedTurnIndex": 1,
+  "publishedCarrierIndex": 1,
+  "publishedTurnAlsoCarriedToolUse": false,
+  "publishedTurnToolCallIds": [],
+  "publishedAfterToolResult": true,
+  "unresolvedEvidenceIds": [
+    "read_files_synthetic-pool-config.yaml"
+  ],
+  "acceptance_rejection_reason": "unresolvable_tool_reference:read_files_synthetic-pool-config.yaml"
+}
+
+=== G6 live probe report ===
+{
+  "execution_class": "REAL_MODEL_RESPONSE",
+  "observation_count": 10,
+  "observations": [
+    {
+      "provider": "minimax",
+      "model": "MiniMax-M3",
+      "emittedAssistantText": true,
+      "assistantTextChunkCount": 15,
+      "turnCarrierCount": 2,
+      "emittedReasoning": false,
+      "schema_valid": true,
+      "canonical_refs_resolved": false,
+      "source_revision_bound": false,
+      "candidate_accepted": false,
+      "emittedToolUse": true,
+      "toolCallCount": 3,
+      "turns": 4,
+      "firstToolCallId": "call_2d60cad05ede0402c84e6a91",
+      "decision": "narrowed",
+      "qualificationCodes": [
+        "manual_enforcement_only"
+      ],
+      "evidenceToolUseIds": [
+        "read_files_synthetic-pool-config.yaml"
+      ],
+      "remainingQuestionIds": [
+        "S1.automated_enforcement"
+      ],
+      "publishedTurnIndex": 3,
+      "publishedCarrierIndex": 1,
+      "publishedTurnAlsoCarriedToolUse": false,
+      "publishedTurnToolCallIds": [],
+      "publishedAfterToolResult": true,
+      "unresolvedEvidenceIds": [
+        "read_files_synthetic-pool-config.yaml"
+      ],
+      "acceptance_rejection_reason": "unresolvable_tool_reference:read_files_synthetic-pool-config.yaml"
+    },
+    {
+      "provider": "minimax",
+      "model": "MiniMax-M3",
+      "emittedAssistantText": true,
+      "assistantTextChunkCount": 15,
+      "turnCarrierCount": 2,
+      "emittedReasoning": false,
+      "schema_valid": false,
+      "canonical_refs_resolved": false,
+      "source_revision_bound": false,
+      "candidate_accepted": false,
+      "emittedToolUse": true,
+      "toolCallCount": 1,
+      "turns": 2,
+      "firstToolCallId": "call_91c7214914b0cf0f271a3908",
+      "parseRejectionReason": "malformed_json,malformed_json"
+    },
+    {
+      "provider": "minimax",
+      "model": "MiniMax-M3",
+      "emittedAssistantText": true,
+      "assistantTextChunkCount": 20,
+      "turnCarrierCount": 2,
+      "emittedReasoning": false,
+      "schema_valid": true,
+      "canonical_refs_resolved": false,
+      "source_revision_bound": false,
+      "candidate_accepted": false,
+      "emittedToolUse": true,
+      "toolCallCount": 2,
+      "turns": 3,
+      "firstToolCallId": "call_01a207a61146709b978edea9",
+      "decision": "narrowed",
+      "qualificationCodes": [
+        "manual_enforcement_only"
+      ],
+      "evidenceToolUseIds": [
+        "read_files_1",
+        "read_files_2"
+      ],
+      "remainingQuestionIds": [
+        "S1.automated_enforcement"
+      ],
+      "publishedTurnIndex": 2,
+      "publishedCarrierIndex": 1,
+      "publishedTurnAlsoCarriedToolUse": false,
+      "publishedTurnToolCallIds": [],
+      "publishedAfterToolResult": true,
+      "unresolvedEvidenceIds": [
+        "read_files_1",
+        "read_files_2"
+      ],
+      "acceptance_rejection_reason": "unresolvable_tool_reference:read_files_1"
+    },
+    {
+      "provider": "minimax",
+      "model": "MiniMax-M3",
+      "emittedAssistantText": true,
+      "assistantTextChunkCount": 18,
+      "turnCarrierCount": 2,
+      "emittedReasoning": false,
+      "schema_valid": true,
+      "canonical_refs_resolved": true,
+      "source_revision_bound": false,
+      "candidate_accepted": false,
+      "emittedToolUse": true,
+      "toolCallCount": 1,
+      "turns": 2,
+      "firstToolCallId": "call_01a207a61b3677a9a6917275",
+      "decision": "narrowed",
+      "qualificationCodes": [
+        "manual_enforcement_only"
+      ],
+      "evidenceToolUseIds": [],
+      "remainingQuestionIds": [
+        "S1.automated_enforcement"
+      ],
+      "publishedTurnIndex": 1,
+      "publishedCarrierIndex": 1,
+      "publishedTurnAlsoCarriedToolUse": false,
+      "publishedTurnToolCallIds": [],
+      "publishedAfterToolResult": true,
+      "acceptance_rejection_reason": "unbound_source_revision"
+    },
+    {
+      "provider": "minimax",
+      "model": "MiniMax-M3",
+      "emittedAssistantText": true,
+      "assistantTextChunkCount": 14,
+      "turnCarrierCount": 2,
+      "emittedReasoning": false,
+      "schema_valid": true,
+      "canonical_refs_resolved": false,
+      "source_revision_bound": false,
+      "candidate_accepted": false,
+      "emittedToolUse": true,
+      "toolCallCount": 2,
+      "turns": 3,
+      "firstToolCallId": "call_ad4c913affa750901910a066",
+      "decision": "narrowed",
+      "qualificationCodes": [
+        "manual_enforcement_only"
+      ],
+      "evidenceToolUseIds": [
+        "read_files_1",
+        "read_files_2"
+      ],
+      "remainingQuestionIds": [
+        "S1.automated_enforcement"
+      ],
+      "publishedTurnIndex": 2,
+      "publishedCarrierIndex": 1,
+      "publishedTurnAlsoCarriedToolUse": false,
+      "publishedTurnToolCallIds": [],
+      "publishedAfterToolResult": true,
+      "unresolvedEvidenceIds": [
+        "read_files_1",
+        "read_files_2"
+      ],
+      "acceptance_rejection_reason": "unresolvable_tool_reference:read_files_1"
+    },
+    {
+      "provider": "minimax",
+      "model": "MiniMax-M3",
+      "emittedAssistantText": true,
+      "assistantTextChunkCount": 10,
+      "turnCarrierCount": 1,
+      "emittedReasoning": false,
+      "schema_valid": true,
+      "canonical_refs_resolved": false,
+      "source_revision_bound": false,
+      "candidate_accepted": false,
+      "emittedToolUse": true,
+      "toolCallCount": 2,
+      "turns": 3,
+      "firstToolCallId": "call_8ff7038e46720b79108f78b1",
+      "decision": "narrowed",
+      "qualificationCodes": [
+        "manual_enforcement_only"
+      ],
+      "evidenceToolUseIds": [
+        "read_files_1",
+        "read_files_2"
+      ],
+      "remainingQuestionIds": [
+        "S1.automated_enforcement"
+      ],
+      "publishedTurnIndex": 2,
+      "publishedCarrierIndex": 0,
+      "publishedTurnAlsoCarriedToolUse": false,
+      "publishedTurnToolCallIds": [],
+      "publishedAfterToolResult": true,
+      "unresolvedEvidenceIds": [
+        "read_files_1",
+        "read_files_2"
+      ],
+      "acceptance_rejection_reason": "unresolvable_tool_reference:read_files_1"
+    },
+    {
+      "provider": "minimax",
+      "model": "MiniMax-M3",
+      "emittedAssistantText": true,
+      "assistantTextChunkCount": 13,
+      "turnCarrierCount": 2,
+      "emittedReasoning": false,
+      "schema_valid": true,
+      "canonical_refs_resolved": false,
+      "source_revision_bound": false,
+      "candidate_accepted": false,
+      "emittedToolUse": true,
+      "toolCallCount": 1,
+      "turns": 2,
+      "firstToolCallId": "call_60ecb8b077abf0f5001ccec8",
+      "decision": "narrowed",
+      "qualificationCodes": [
+        "manual_enforcement_only"
+      ],
+      "evidenceToolUseIds": [
+        "call_1"
+      ],
+      "remainingQuestionIds": [
+        "S1.automated_enforcement"
+      ],
+      "publishedTurnIndex": 1,
+      "publishedCarrierIndex": 1,
+      "publishedTurnAlsoCarriedToolUse": false,
+      "publishedTurnToolCallIds": [],
+      "publishedAfterToolResult": true,
+      "unresolvedEvidenceIds": [
+        "call_1"
+      ],
+      "acceptance_rejection_reason": "unresolvable_tool_reference:call_1"
+    },
+    {
+      "provider": "minimax",
+      "model": "MiniMax-M3",
+      "emittedAssistantText": true,
+      "assistantTextChunkCount": 11,
+      "turnCarrierCount": 2,
+      "emittedReasoning": false,
+      "schema_valid": true,
+      "canonical_refs_resolved": false,
+      "source_revision_bound": false,
+      "candidate_accepted": false,
+      "emittedToolUse": true,
+      "toolCallCount": 2,
+      "turns": 3,
+      "firstToolCallId": "call_7df9ee4a9772c85c099e0447",
+      "decision": "narrowed",
+      "qualificationCodes": [
+        "manual_enforcement_only"
+      ],
+      "evidenceToolUseIds": [
+        "read_files_1"
+      ],
+      "remainingQuestionIds": [
+        "S1.automated_enforcement"
+      ],
+      "publishedTurnIndex": 2,
+      "publishedCarrierIndex": 1,
+      "publishedTurnAlsoCarriedToolUse": false,
+      "publishedTurnToolCallIds": [],
+      "publishedAfterToolResult": true,
+      "unresolvedEvidenceIds": [
+        "read_files_1"
+      ],
+      "acceptance_rejection_reason": "unresolvable_tool_reference:read_files_1"
+    },
+    {
+      "provider": "minimax",
+      "model": "MiniMax-M3",
+      "emittedAssistantText": true,
+      "assistantTextChunkCount": 13,
+      "turnCarrierCount": 2,
+      "emittedReasoning": false,
+      "schema_valid": true,
+      "canonical_refs_resolved": false,
+      "source_revision_bound": false,
+      "candidate_accepted": false,
+      "emittedToolUse": true,
+      "toolCallCount": 2,
+      "turns": 3,
+      "firstToolCallId": "call_6358be9fd02fd4c25d77dd70",
+      "decision": "narrowed",
+      "qualificationCodes": [
+        "manual_enforcement_only"
+      ],
+      "evidenceToolUseIds": [
+        "call_1",
+        "call_2"
+      ],
+      "remainingQuestionIds": [
+        "S1.automated_enforcement"
+      ],
+      "publishedTurnIndex": 2,
+      "publishedCarrierIndex": 1,
+      "publishedTurnAlsoCarriedToolUse": false,
+      "publishedTurnToolCallIds": [],
+      "publishedAfterToolResult": true,
+      "unresolvedEvidenceIds": [
+        "call_1",
+        "call_2"
+      ],
+      "acceptance_rejection_reason": "unresolvable_tool_reference:call_1"
+    },
+    {
+      "provider": "minimax",
+      "model": "MiniMax-M3",
+      "emittedAssistantText": true,
+      "assistantTextChunkCount": 13,
+      "turnCarrierCount": 2,
+      "emittedReasoning": false,
+      "schema_valid": true,
+      "canonical_refs_resolved": false,
+      "source_revision_bound": false,
+      "candidate_accepted": false,
+      "emittedToolUse": true,
+      "toolCallCount": 1,
+      "turns": 2,
+      "firstToolCallId": "call_9cf108ac6aec4ed092d5f3e0",
+      "decision": "narrowed",
+      "qualificationCodes": [
+        "manual_enforcement_only"
+      ],
+      "evidenceToolUseIds": [
+        "read_files_synthetic-pool-config.yaml"
+      ],
+      "remainingQuestionIds": [
+        "S1.automated_enforcement"
+      ],
+      "publishedTurnIndex": 1,
+      "publishedCarrierIndex": 1,
+      "publishedTurnAlsoCarriedToolUse": false,
+      "publishedTurnToolCallIds": [],
+      "publishedAfterToolResult": true,
+      "unresolvedEvidenceIds": [
+        "read_files_synthetic-pool-config.yaml"
+      ],
+      "acceptance_rejection_reason": "unresolvable_tool_reference:read_files_synthetic-pool-config.yaml"
+    }
+  ]
+}

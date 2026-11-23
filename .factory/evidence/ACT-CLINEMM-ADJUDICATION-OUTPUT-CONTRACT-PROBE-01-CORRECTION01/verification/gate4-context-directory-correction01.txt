@@ -1,0 +1,130 @@
+(node:87323) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core
+
+(node:87346) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:87345) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:87343) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:87339) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:87340) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:87347) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:87342) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:87348) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:87350) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:87344) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:87341) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:87353) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:87351) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:87349) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:87352) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/extensions/context/compact-session-script.test.ts (2 tests) 519ms
+(node:87440) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/extensions/context/compaction.roundc-fidelity-recon02.test.ts (20 tests | 1 skipped) 32ms
+ ✓ src/extensions/context/compaction.adjudication-output-contract.probe01.test.ts (55 tests) 84ms
+ ✓ src/extensions/context/compaction.tool-result-shape-red.test.ts (15 tests) 23ms
+ ✓ src/extensions/context/compaction.token-evidence-capture01.test.ts (5 tests) 52ms
+ ✓ src/extensions/context/compaction.estimator-parity01.test.ts (19 tests) 43ms
+ ✓ src/extensions/context/compaction.evidence-fidelity01.test.ts (39 tests) 47ms
+ ✓ src/extensions/context/compaction.test.ts (112 tests) 73ms
+(node:87504) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:87502) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:87505) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:87507) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:87503) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:87506) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:87516) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/extensions/context/compaction.long-session-discriminator.test.ts (7 tests) 19ms
+ ✓ src/extensions/context/compaction.summary-churn01.test.ts (20 tests) 23ms
+ ✓ src/extensions/context/compaction.adjudication-continuity.discriminator01.test.ts (24 tests) 10ms
+ ✓ src/extensions/context/compaction.latency-span-lifecycle.red01.test.ts (6 tests) 34ms
+ ✓ src/extensions/context/evidence-continuity.test.ts (62 tests) 44ms
+ ✓ src/extensions/context/task-contract-budget-authority.test.ts (9 tests) 23ms
+ ✓ src/extensions/context/compaction.trigger-accounting-representation.test.ts (6 tests) 14ms
+(node:87546) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:87542) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:87550) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:87548) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:87547) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:87549) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:87556) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/extensions/context/compaction.adjudication-output-contract.correction01.test.ts (9 tests) 4ms
+stdout | src/extensions/context/compaction.working-context-ratio.test.ts > working-context ratio discriminator > GREEN: in the truncation-not-engaged case, manual-compaction ratio DOES transfer to working-context shrink
+[discriminator] {
+  "manualRatio": 0.0071774423241241815,
+  "workingContextRatio": 0.0071774423241241815,
+  "verdict": "S3_RATIO_TRANSFER_NOT_REPRODUCED",
+  "HBefore": 17555,
+  "HAfter": 126,
+  "WBefore": 17555,
+  "WAfter": 126,
+  "preparedBefore": 7,
+  "preparedAfter": 2
+}
+
+ ✓ src/extensions/context/compaction.adjudication-continuity.feasibility01.test.ts (16 tests) 12ms
+ ✓ src/extensions/context/summarize-conversation.test.ts (23 tests) 55ms
+stdout | src/extensions/context/compaction.working-context-ratio.test.ts > working-context ratio discriminator > DEFECT-WITNESS: cross-scale compaction ratio diverges once provider-message truncation engages
+[discriminator: realistic] {
+  "manualRatio": 0.00020993002332555814,
+  "workingContextRatio": 0.0006294146443807259,
+  "verdict": "S3_REPRODUCED",
+  "HBefore": 600200,
+  "HAfter": 126,
+  "WBefore": 200186,
+  "WAfter": 126,
+  "preparedBefore": 7,
+  "preparedAfter": 2
+}
+
+ ✓ src/extensions/context/compaction.working-context-ratio.test.ts (3 tests) 57ms
+ ✓ src/extensions/context/task-contract-conservation.historical.test.ts (3 tests) 100ms
+ ✓ src/extensions/context/task-contract-conservation.test.ts (29 tests) 20ms
+(node:87567) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/extensions/context/budget-projection/project.test.ts (14 tests) 6ms
+ ✓ src/extensions/context/compaction.cut-snap-forward.test.ts (7 tests) 4ms
+ ✓ src/extensions/context/compaction.token-evidence-capture01.red01.test.ts (1 test) 3ms
+ ✓ src/extensions/context/compaction.working-context-authority-publish.test.ts (3 tests) 7ms
+ ✓ src/extensions/context/compaction.stable-prefix-repair01.test.ts (28 tests) 16ms
+ ✓ src/extensions/context/compaction.decision-capture.matrix.test.ts (18 tests) 675ms
+ ✓ src/extensions/context/compaction.decision-capture.red01.test.ts (3 tests) 5ms
+ ✓ src/extensions/context/compaction.decision-capture.conservation.test.ts (2 tests) 4ms
+ ✓ src/extensions/context/compaction.real-producer-seam-red.test.ts (1 test) 4ms
+ ↓ src/extensions/context/compaction.live.test.ts (1 test | 1 skipped)
+
+ Test Files  30 passed | 1 skipped (31)
+      Tests  560 passed | 2 skipped (562)
+   Start at  12:05:07
+   Duration  3.18s (transform 10.62s, setup 0ms, import 33.22s, tests 2.01s, environment 2ms)
+

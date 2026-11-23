@@ -39114,3 +39114,175 @@ No production implementation was made. No new public API was added. No new
 persistent ledger was created. The historical R3/R7/R8 thinking-only
 messages were NOT recovered -- the new contract applies only to future
 model outputs.
+
+# ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01-CORRECTION01 — PASS_CORRECTION_EVIDENCE_RECONCILED — 2026-11-23
+
+```text
+ACT_ID: ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01-CORRECTION01
+TYPE: bounded evidence correction (no production implementation)
+PREDECESSOR: ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01
+ENTRY_HEAD: df2be7a34  (the predecessor's final commit)
+BRANCH: main (no ACT branch created)
+WORKTREE: /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+PRODUCTION_CODE_CHANGES: 0   (shipped src/ diff vs ENTRY_HEAD = 0 bytes)
+RED_WITNESS_MODIFIED_BY_THIS_ACT: NO   (byte-identical to d69cfb9be)
+REVIEWER_VERDICT_ON_PREDECESSOR: HALT_LIVE_EVIDENCE_CONTRADICTION
+PREDECESSOR_VERDICT: PASS_PROBE_CONTINUITY_STRUCTURAL   (PRESERVED)
+VERDICT: PASS_CORRECTION_EVIDENCE_RECONCILED
+EVIDENCE: .factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01-CORRECTION01/
+  00-entry-identity.md
+  01-harness-correction.md
+  02-live-receipts.md
+  03-acceptance-gates.md
+  04-constraints-and-verdict.md
+  artifact-hashes.json
+  verification/
+```
+
+## Why this ACT was created
+
+The Factory runtime reviewer returned `HALT_LIVE_EVIDENCE_CONTRADICTION`
+on the predecessor. The verdict explicitly PRESERVED the predecessor's
+structural conclusion and refused only to authorize the implementation on
+the strength of the live-compliance evidence. Two P0 findings were
+raised.
+
+**P0-1 -- the committed live evidence contradicted the exit report.**
+
+```text
+SOURCE                        RUNS  VALID PUBS  SAME-TURN TOOL USE
+06-adversarial-controls.md      9       8       claimed 8/8
+07-contract-decision.md        10       9       claimed success
+gate8-live-model-probe.txt      1       1       FALSE  <-- counterexample
+```
+
+The single committed observation was a direct counterexample to the
+universal same-turn claim, and the 9/10 statistic was not derivable from
+the committed transcript.
+
+**P0-2 -- two live-probe correlation metrics were implemented incorrectly.**
+Both in `sdk/packages/core/scripts/adjudication-output-contract.live-probe.ts`:
+
+```text
+(a) SAME-TURN: turnToolCallCounts was per TURN; turnCarriers was per
+    TEXT-BEARING TURN. Indexing one with the other's position misreports
+    the metric as soon as a tool-only turn precedes the publishing turn.
+
+(b) AFTER-TOOL-RESULT: sawTextAfterToolResult was set from text emitted
+    in a tool-calling turn -- text emitted BEFORE the result was appended
+    -- and was not tied to the adjudication carrier.
+```
+
+Both were BOUNDED DIAGNOSTIC defects, not production defects.
+
+## What the correction did
+
+```text
+1. THE HARNESS CORRELATION IS FIXED. The turn index now travels WITH the
+   carrier (scripts/adjudication-output-contract.correlation.ts). The
+   after-tool-result property is derived from the conversation CHRONOLOGY.
+   The legacy computation is reproduced VERBATIM in the correction test
+   file, so each counterexample PROVES the defect executably.
+
+2. THE RECEIPTS ARE RECONCILED. 10 runs, 10 DISTINCT committed receipts.
+   Every reported statistic is derivable from the committed transcript
+   alone.
+
+3. SCHEMA VALIDITY IS SEPARATED FROM CONTRACT ACCEPTANCE. Four gates are
+   reported independently: schema_valid, canonical_refs_resolved,
+   source_revision_bound, candidate_accepted. The demonstrated `call_1`
+   reference FAILS gate 2 as required.
+
+4. C1 AND C2 ARE PRESERVED AS OPEN. Neither may be treated as solved.
+```
+
+## The corrected live measurement
+
+```text
+EXECUTION CLASS:  REAL_MODEL_RESPONSE   (NOT a LIVE INSTALLED RUN)
+MODEL / PROVIDER: minimax / MiniMax-M3
+RUNS MEASURED:                    10
+schema_valid:                      9
+canonical_refs_resolved:           1
+source_revision_bound:             0
+candidate_accepted:                0
+publishedTurnAlsoCarriedToolUse:   0 of 9   <-- universal claim REFUTED
+publishedAfterToolResult:          9 of 9
+turnIndex diverged from carrierIndex: 6 of 9 <-- the defect was LIVE
+```
+
+The `9 of 10 published` figure SURVIVES. The same-turn tool-use claim is
+REFUTED (0 of 9, not 8 of 8). The conflation of publication with
+acceptance is removed: acceptance was 0 of 10.
+
+**RUN 4 IS THE DECISIVE RECEIPT.** It is the only run whose evidence
+references resolved to canonical tool calls, and it STILL was not
+accepted, because it failed the source-revision gate. The four gates are
+independently demonstrated.
+
+## Gates
+
+```text
+GATE 1  focused contract probe + correction   64 passed (64)    EXIT=0
+                                                (55 predecessor + 9 correction)
+GATE 4  context directory              560 passed | 2 skipped   EXIT=0
+                                                (551 predecessor + 9 correction)
+GATE 5  typecheck                       44 diagnostics           EXIT=2
+                                               identical to the baseline;
+                                               0 ACT-owned
+GATE 6  historical RED (on demand)        5 failed (5)           EXIT=1
+                                               EXPECTED -- the RED is preserved
+GATE 7  biome                            clean                   EXIT=0
+GATE 8  live model probe (CORRECTED)    10 receipts             EXIT=0
+PRODUCTION DELTA                        ZERO
+```
+
+Gates 2 and 3 are unaffected (no production module and no pre-existing
+test changed); the context directory re-run covers both indirectly.
+
+## What is preserved
+
+```text
+PASS_PROBE_CONTINUITY_STRUCTURAL
+
+assistant `text` is a viable carrier                        PRESERVED
+assistant text survives M1; thinking blocks do not            PRESERVED
+canonical persistence preserves the carrier in tested paths  PRESERVED
+the strict parser rejects malformed/unsupported shapes       PRESERVED
+the summarizer CAN omit an otherwise valid candidate        PRESERVED
+```
+
+## What is NOT claimed
+
+```text
+LIVE COMPLIANCE:              no such figure exists. The only live figure
+                              is 9/10 schema-valid PUBLICATION; acceptance
+                              was 0/10.
+THE UNIVERSAL SAME-TURN CLAIM: refuted, not repaired.
+A DEPLOYED SECURITY GUARANTEE: the parser is TEST-LOCAL. Structured model
+                              output must be validated in trusted
+                              application code before downstream use.
+```
+
+## Next action
+
+**`ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01`** may proceed,
+with C1 and C2 as EXPLICIT, SEPARATELY TESTED PREREQUISITES -- not
+assumptions:
+
+```text
+C1  must be discharged by the implementation itself, with LIVE evidence
+    that canonical evidence ids are resolvable (or equivalently bound),
+    plus a decision on the gate-3 source-revision field.
+C2  must be discharged by a DETERMINISTIC retention mechanism, with the
+    G4.3-B summarizer-omission negative control re-measured.
+```
+
+The successor's acceptance criterion must be stated in terms of
+`candidate_accepted`, never `schema_valid`.
+
+## Scope
+
+The reviewer classified six whitespace diagnostics and unrelated stale
+gate-summary metadata as P2, NON-BLOCKING. They are OUT OF SCOPE here and
+are NOT claimed as fixed.

@@ -1,5 +1,37 @@
 # 09 — Exit report
 
+> **CORRECTION NOTICE — `ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01-CORRECTION01`**
+>
+> The Factory runtime reviewer returned
+> **`HALT_LIVE_EVIDENCE_CONTRADICTION`** on this report. Two P0 findings
+> were raised and have now been corrected in a bounded cycle:
+>
+> 1. **P0-1 — the live evidence contradicted this report.** The committed
+>    transcript held ONE observation while this report claimed ten
+>    measured runs, and the single committed observation was a direct
+>    counterexample to this report's universal same-turn claim.
+> 2. **P0-2 — two live-probe correlation metrics were implemented
+>    incorrectly** (a positional carrier/turn index mismatch, and an
+>    after-tool-result flag not tied to the adjudication carrier).
+>
+> **What this report's verdict does NOT change:** the structural
+> conclusion `PASS_PROBE_CONTINUITY_STRUCTURAL` is **PRESERVED** — the
+> reviewer explicitly supported it for the existing-carrier feasibility
+> tests. The carrier inventory, the M1 discriminator, the canonical
+> persistence result and the strict-parser controls all stand.
+>
+> **What this report's live claims DO change:** the withdrawn LIVE block
+> below is superseded by 10 committed receipts. The `9 of 10 published`
+> figure survives; the universal same-turn claim is **REFUTED**; and the
+> conflation of *publication* with *acceptance* is removed (acceptance was
+> 0 of 10).
+>
+> The correction's evidence:
+> `.factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01-CORRECTION01/`
+>
+> The successor's acceptance criterion must be stated in terms of
+> `candidate_accepted`, never `schema_valid`.
+
 ```text
 ACT:                         ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01
 ENTRY_HEAD:                  97c2659c8552a9b78ed87c56d2bbe7d31dc74900  (== expected)
@@ -40,8 +72,14 @@ assistant_text:            YES  -- first-class canonical ContentBlock; created
                                  persistence byte-identically; NOT dropped by
                                  the agentic_summary policy
 text_plus_tool_use:        YES  -- structurally proven in agent-runtime.ts /
-                                 ai-sdk.ts, and LIVE-proven (the publishing
-                                 turn also carried a tool call)
+                                 ai-sdk.ts, and structurally proven by
+                                 PROBE-2 in the probe test file.
+                                 **CORRECTION01: the LIVE proof is
+                                 REFUTED** -- the corrected measurement
+                                 records the publishing turn also carrying
+                                 a tool call in 0 of 9 schema-valid runs.
+                                 The STRUCTURAL claim stands; the LIVE
+                                 claim does not.
 existing_tool_carrier:     NO  -- every registered tool either mutates the
                                  workspace, executes a command, or ends the run
 canonical_persistence:     YES  -- normalizeStoredMessagesForPersistence and
@@ -173,6 +211,8 @@ GATE 6  historical RED (on demand)        5 failed (5)           EXIT=1
                                                EXPECTED
 GATE 7  biome                            clean                   EXIT=0
 GATE 8  live model probe                 publishedValidCandidate EXIT=0
+        (CORRECTION01: 10 committed receipts; schema_valid 9/10,
+         candidate_accepted 0/10, same-turn tool use 0/9)
 ```
 
 ## TYPECHECK_BASELINE
@@ -206,6 +246,32 @@ observations:      10 measured runs, 9 published a schema-valid candidate.
                    is correct, and which becomes design constraint C1 for the
                    successor.
 ```
+
+> **CORRECTION — `ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01-CORRECTION01`**
+>
+> The LIVE block above is **WITHDRAWN**. The Factory runtime reviewer found
+> that the committed transcript held **ONE** run, not ten, and that two of
+> the harness's correlation metrics were implemented incorrectly. It is
+> preserved verbatim for the record and is superseded by the corrected
+> measurement below.
+>
+> **CORRECTED MEASUREMENT — 10 runs, 10 distinct committed receipts**
+> (`.factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01-CORRECTION01/02-live-receipts.md`):
+>
+> ```text
+> runs measured:                    10
+> schema_valid:                      9   (9 of 10 published)
+> canonical_refs_resolved:           1
+> source_revision_bound:             0   (structurally impossible)
+> candidate_accepted:                0
+> publishedTurnAlsoCarriedToolUse:   0 of 9   <-- the universal claim is REFUTED
+> publishedAfterToolResult:          9 of 9
+> ```
+>
+> The `9 of 10 published` figure **survives** the correction. The
+> same-turn tool-use claim **does not**: it is refuted, not repaired.
+> And the conflation of *publication* with *acceptance* is removed —
+> acceptance was 0 of 10.
 
 ### The evidence categories were kept distinct
 
