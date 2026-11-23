@@ -35,7 +35,7 @@
       "P0-2 — a restored session did not restore its adjudication contract, and a lost secret was fail-openly replaced"
     ],
     "p1Closed": "the regression comparison was tightened to individual failing-TEST identities (190 baseline -> 187 corrected, ZERO new identities); see 12-p1-regression-reconciliation.md",
-    "sourceHead": "PENDING_COMMIT",
+    "sourceHead": "5279ac923d3313c5c8f2d58e1440e10b071909ce",
     "vsixStatus": "NOT_YET_REPACKAGED — the VSIX must be rebuilt and repackaged from the exact committed HEAD before any live claim",
     "installedLiveQualification": "NOT_EXECUTED for the corrected source",
     "actOwnedDiagnostics": 0,
@@ -70,15 +70,17 @@
       },
       {
         "path": "apps/vscode/src/sdk/adjudication-session-secret.ts",
-        "sha256": "f2382bde18394ae76c9b986cd4fddaea8fa1000628524c1cc0801d718ca06005",
+        "sha256": "5ddefe42cecc4e101ef12f2154cb8f71ab595802a258774637083ca2d5ca8799",
         "evidence_classification": "STRUCTURAL",
-        "note": "Production source: the per-session evidence secret provider (START and RESTORE variants)"
+        "note": "Production source: the per-session evidence secret provider (START and RESTORE variants)",
+        "hashNote": "sha256 of the COMMITTED content at the ACT HEAD (after the pre-commit biome/proto normalization)"
       },
       {
         "path": "apps/vscode/src/sdk/adjudication-source-revision-resolver.ts",
-        "sha256": "1fb35c9c5e9c64a848c582b108b0ffc1f292201ffe1f049a26beea65fd73ace5",
+        "sha256": "652721190e7c1335bc15c2cb4599da33ee5f7a7a43ab0613cc00facb85b8832c",
         "evidence_classification": "STRUCTURAL",
-        "note": "Production source: the workspace-bound source revision resolver"
+        "note": "Production source: the workspace-bound source revision resolver",
+        "hashNote": "sha256 of the COMMITTED content at the ACT HEAD (after the pre-commit biome/proto normalization)"
       },
       {
         "path": "apps/vscode/src/sdk/__tests__/adjudication-vscode-activation01.correction01.session-authority-lifecycle.test.ts",
@@ -108,7 +110,8 @@
         "evidence_classification": "STRUCTURAL",
         "note": "CORRECTION01 evidence: the 187 per-test failing identities after the correction (ZERO new)"
       }
-    ]
+    ],
+    "sourceHeadNote": "The exact committed HEAD that carries the CORRECTION01 source, tests and evidence. The VSIX must be rebuilt and repackaged from this HEAD."
   },
   "artifacts": [
     {
@@ -184,9 +187,10 @@
     {
       "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01/10-exit-report.md",
       "bytes": 10103,
-      "sha256": "c1ef94e6fabafec4b24387bdc76ed62b91f1dd50aa4f024afb4ca384fcfc1ac2",
+      "sha256": "fb5243e0d3328e4103540b4c3d2d15914e8f2699da547f45019828f8a4243f15",
       "evidence_classification": "STRUCTURAL",
-      "note": "Evidence document"
+      "note": "Evidence document",
+      "hashNote": "sha256 of the COMMITTED content at the ACT HEAD (after the pre-commit biome/proto normalization)"
     },
     {
       "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01/verification/build-esbuild.txt",
@@ -247,58 +251,66 @@
     {
       "path": "apps/vscode/src/sdk/adjudication-task-contract.ts",
       "bytes": 7359,
-      "sha256": "10fff6dac31288d1332a2fb73b3a288b413286ed9061d928647236a1a6c2e3c0",
+      "sha256": "cdbb6ddf082df840842ecfd2816841f7b06ae63dc5c6a9389292392c807d82c9",
       "evidence_classification": "STRUCTURAL",
-      "note": "ACT production source or test under qualification"
+      "note": "ACT production source or test under qualification",
+      "hashNote": "sha256 of the COMMITTED content at the ACT HEAD (after the pre-commit biome/proto normalization)"
     },
     {
       "path": "apps/vscode/src/sdk/adjudication-source-revision-resolver.ts",
       "bytes": 9817,
-      "sha256": "1fb35c9c5e9c64a848c582b108b0ffc1f292201ffe1f049a26beea65fd73ace5",
+      "sha256": "652721190e7c1335bc15c2cb4599da33ee5f7a7a43ab0613cc00facb85b8832c",
       "evidence_classification": "STRUCTURAL",
-      "note": "ACT production source or test under qualification"
+      "note": "ACT production source or test under qualification",
+      "hashNote": "sha256 of the COMMITTED content at the ACT HEAD (after the pre-commit biome/proto normalization)"
     },
     {
       "path": "apps/vscode/src/sdk/adjudication-session-secret.ts",
       "bytes": 6741,
-      "sha256": "f2382bde18394ae76c9b986cd4fddaea8fa1000628524c1cc0801d718ca06005",
+      "sha256": "5ddefe42cecc4e101ef12f2154cb8f71ab595802a258774637083ca2d5ca8799",
       "evidence_classification": "STRUCTURAL",
-      "note": "ACT production source or test under qualification"
+      "note": "ACT production source or test under qualification",
+      "hashNote": "sha256 of the COMMITTED content at the ACT HEAD (after the pre-commit biome/proto normalization)"
     },
     {
       "path": "apps/vscode/src/sdk/cline-session-factory.ts",
       "bytes": 75935,
-      "sha256": "dc13dbefb47ef339c3327a4a30658adb59932f654588589e8d3f6c18d6227a44",
+      "sha256": "34bcfd092a35dbf6d0df172a420e09785857381f7137d556d6598e693111fa6e",
       "evidence_classification": "STRUCTURAL",
-      "note": "ACT production source or test under qualification"
+      "note": "ACT production source or test under qualification",
+      "hashNote": "sha256 of the COMMITTED content at the ACT HEAD (after the pre-commit biome/proto normalization)"
     },
     {
       "path": "apps/vscode/src/sdk/sdk-task-start-coordinator.ts",
       "bytes": 29328,
-      "sha256": "a64a96f1bfbff0fe72e33dff61888301f35719a7fac567de0beb4b9e939bb60b",
+      "sha256": "6a7b32cdd6ce97fa936250705dd8ae2b194f5ead800a17b48a3c4543e6c8652e",
       "evidence_classification": "STRUCTURAL",
-      "note": "ACT production source or test under qualification"
+      "note": "ACT production source or test under qualification",
+      "hashNote": "sha256 of the COMMITTED content at the ACT HEAD (after the pre-commit biome/proto normalization)"
     },
     {
       "path": "apps/vscode/src/shared/storage/state-keys.ts",
       "bytes": 31254,
-      "sha256": "7a2771884b673d11d6530f458488fe76187609a4be7779770acbfbf7b599af9d",
+      "sha256": "19f75a6365d03c0d1e97f646ba58d9d00fbb1872904e2bc100702e2f2701a931",
       "evidence_classification": "STRUCTURAL",
-      "note": "ACT production source or test under qualification"
+      "note": "ACT production source or test under qualification",
+      "hashNote": "sha256 of the COMMITTED content at the ACT HEAD (after the pre-commit biome/proto normalization)"
     },
     {
       "path": "apps/vscode/src/sdk/__tests__/adjudication-vscode-activation01.test.ts",
       "bytes": 10513,
-      "sha256": "9b22a80e83da2efadb6ce35c69b6eb6e051f94ca4f0e7c8f16faa6242e61f289",
+      "sha256": "f7444e21ffb7903697931548f895d0b0dd5a9639a6beb6e2f4aecb913ff6d582",
       "evidence_classification": "STRUCTURAL",
-      "note": "ACT production source or test under qualification"
+      "note": "ACT production source or test under qualification",
+      "hashNote": "sha256 of the COMMITTED content at the ACT HEAD (after the pre-commit biome/proto normalization)"
     },
     {
       "path": "apps/vscode/src/sdk/__tests__/adjudication-vscode-activation01.runtime-chain.c24-c-bridge.test.ts",
       "bytes": 34689,
-      "sha256": "17871a6fdb89068c86fc7cc7366819166409c01e37915c60ac1341f96162be00",
+      "sha256": "f4fe066e0819a0e51f4e5d0e8c90da3fe07a87accb9781c5c365357c904b4752",
       "evidence_classification": "STRUCTURAL",
-      "note": "ACT production source or test under qualification"
+      "note": "ACT production source or test under qualification",
+      "hashNote": "sha256 of the COMMITTED content at the ACT HEAD (after the pre-commit biome/proto normalization)"
     },
     {
       "path": "dist/clinemm-4.1.26-7490a12a5-av01.vsix",

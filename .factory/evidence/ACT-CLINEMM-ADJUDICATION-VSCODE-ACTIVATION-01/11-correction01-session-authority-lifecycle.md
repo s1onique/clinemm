@@ -399,7 +399,20 @@ one new secret-storage key.
 cdbb6ddf082df840842ecfd2816841f7b06ae63dc5c6a9389292392c807d82c9  apps/vscode/src/sdk/adjudication-task-contract.ts
 34bcfd092a35dbf6d0df172a420e09785857381f7137d556d6598e693111fa6e  apps/vscode/src/sdk/cline-session-factory.ts
 dc74d550fd7bf8bb07737d4513abd2bd9e78ff2f3341222dffa82ba68c83a9eb  apps/vscode/src/sdk/__tests__/adjudication-vscode-activation01.correction01.session-authority-lifecycle.test.ts
+5ddefe42cecc4e101ef12f2154cb8f71ab595802a258774637083ca2d5ca8799  apps/vscode/src/sdk/adjudication-session-secret.ts
+652721190e7c1335bc15c2cb4599da33ee5f7a7a43ab0613cc00facb85b8832c  apps/vscode/src/sdk/adjudication-source-revision-resolver.ts
 ```
+
+> **Note on the committed hashes.** These are the hashes of the **COMMITTED**
+> content at the ACT HEAD (`5279ac923d3313c5c8f2d58e1440e10b071909ce`).
+> The pre-commit hook normalizes the staged files (biome format, and
+> `scripts/generate-state-proto.mjs` for the state proto), so the committed
+> bytes of a handful of files differ from the bytes that existed in the
+> working tree before the commit was made. The manifest
+> (`artifact-hashes.json`) records the **committed** hashes — the ones that
+> actually bind the artifact to the source — and was regenerated after the
+> commit for that reason. The `biome check` gate is re-run against the
+> committed state and remains clean (0 errors).
 
 ### The ACT + correction suites, together
 
