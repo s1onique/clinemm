@@ -1452,6 +1452,21 @@ async function applyAdjudicationCarryForward(
 				registry: AdjudicationEvidenceRegistry;
 				vocabulary?: import("./adjudication-continuity").AdjudicationVocabulary;
 				revisionResolver?: import("./adjudication-continuity").SourceRevisionResolver;
+				/**
+				 * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01.
+				 *
+				 * The acquisition-time evidence records.
+				 *
+				 * The compaction path READS the records; it never re-resolves
+				 * the workspace. A candidate whose cited evidence carries no
+				 * record is `UNBOUND`, so the section it supported is
+				 * dropped rather than carried with a guessed identity.
+				 */
+				getAcquisitions?: (
+					canonicalMessages: readonly MessageWithMetadata[],
+				) =>
+					| import("./adjudication-continuity").AcquisitionEvidenceLedger
+					| Promise<import("./adjudication-continuity").AcquisitionEvidenceLedger>;
 		  }
 		| undefined,
 	sourceMessageCount: number,
@@ -1464,12 +1479,14 @@ async function applyAdjudicationCarryForward(
 		Math.min(sourceMessageCount, canonicalMessages.length),
 	);
 	const boundaryPrefix = canonicalMessages.slice(0, boundary);
+	const acquisitions = await adjudication.getAcquisitions?.(canonicalMessages);
 	const accepted = await deriveAcceptedAdjudications(boundaryPrefix, {
 		registry: adjudication.registry,
 		...(adjudication.vocabulary ? { vocabulary: adjudication.vocabulary } : {}),
 		...(adjudication.revisionResolver
 			? { revisionResolver: adjudication.revisionResolver }
 			: {}),
+		...(acquisitions ? { acquisitions } : {}),
 	});
 	const applied = applyAdjudicationContinuityToCompactedMessages(
 		compactedMessages,
@@ -1549,6 +1566,20 @@ export function createCompactionStateAwarePrepareTurn(input: {
 		vocabulary?: import("./adjudication-continuity").AdjudicationVocabulary;
 		/** The runtime's source-revision resolver. */
 		revisionResolver?: import("./adjudication-continuity").SourceRevisionResolver;
+		/**
+		 * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01.
+		 *
+		 * The acquisition-time evidence records.
+		 *
+		 * It is a FUNCTION because the records are captured as the session
+		 * proceeds, so the compaction path asks for the current set at the
+		 * moment it derives the carried section.
+		 */
+		getAcquisitions?: (
+			canonicalMessages: readonly MessageWithMetadata[],
+		) =>
+			| import("./adjudication-continuity").AcquisitionEvidenceLedger
+			| Promise<import("./adjudication-continuity").AcquisitionEvidenceLedger>;
 	};
 }): ContextPipelinePrepareTurn {
 	return async (context) => {

@@ -51,7 +51,7 @@
  */
 
 import type * as LlmsProviders from "@cline/llms";
-import type { MessageWithMetadata } from "@cline/shared";
+import type { ContentBlock, MessageWithMetadata } from "@cline/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MessageBuilder } from "../../session/services/message-builder";
 import {
@@ -61,6 +61,9 @@ import {
 	applyAdjudicationPublicationInstruction,
 	attachEvidenceHandlesToAgentMessages,
 	attachEvidenceHandlesToMessages,
+	attachAcquisitionToToolResult,
+	buildAcquisitionEvidenceLedger,
+	captureAcquisitionEvidence,
 	deriveAcceptedAdjudications,
 	EVIDENCE_HANDLE_MARKER,
 	extractSourcePath,
@@ -142,7 +145,18 @@ const SYSTEM_PROMPT = "You are a helpful coding assistant.";
 
 const FINDING_ID = "S1";
 const SOURCE_CALL_ID = "call_s1_source_read_0001";
-const SOURCE_PATH = "synthetic-pool-config.yaml";
+/**
+ * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01.
+ *
+ * The SYNTHETIC source path.
+ *
+ * It is absolute, because the production `read_files` schema requires an
+ * `AbsolutePath` and the production executor reports the path it was given
+ * in the result payload's `query` attribution. The acquisition-time
+ * attribution requires a path-like value for the same reason the production
+ * source attribution does: an ambiguous attribution is worse than none.
+ */
+const SOURCE_PATH = "/synthetic/workspace/synthetic-pool-config.yaml";
 
 /**
  * The SYNTHETIC source revision the runtime observes.
@@ -207,6 +221,78 @@ const REVISION_RESOLVER: SourceRevisionResolver = {
 	resolve: ({ sourcePath }) =>
 		sourcePath === SOURCE_PATH ? observedRevision : undefined,
 };
+
+/**
+ * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01.
+ *
+ * The ACQUISITION-TIME evidence records for the synthetic source read.
+ *
+ * The predecessor bound the source revision by RE-RESOLVING the current file
+ * during evaluation, which established what the file looks like NOW rather
+ * than what the evidence WAS. The corrected contract captures the identity
+ * when the evidence is OBSERVED, and the candidate binds that RECORDED
+ * identity.
+ *
+ * The record is derived from the bytes the tool RETURNED, so it describes
+ * the file as it was read — which is what makes the binding race-free.
+ */
+async function acquisitionLedgerFor(
+	history: readonly MessageWithMetadata[],
+	toolUseId: string = SOURCE_CALL_ID,
+) {
+	// ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01:
+	// the acquisition record rides ON the canonical tool-result block, so
+	// the ledger is derived from the canonical history alone. The helper
+	// attaches the record first, exactly as the production conversion
+	// boundary does, and then reads the ledger back.
+	const toolName = canonicalToolName(history, toolUseId);
+	const record = await captureAcquisitionEvidence({
+		toolUseId,
+		toolName,
+		content: SOURCE_RESULT_PAYLOAD,
+		resolver: REVISION_RESOLVER,
+	});
+	if (!record) {
+		return buildAcquisitionEvidenceLedger(history);
+	}
+	const attached = history.map((message) =>
+		Array.isArray(message.content)
+			? {
+					...message,
+					content: (message.content as ContentBlock[]).map((block) =>
+						block.type === "tool_result" &&
+						block.tool_use_id === toolUseId
+							? attachAcquisitionToToolResult(block, record)
+							: block,
+					),
+				}
+			: message,
+	);
+	return buildAcquisitionEvidenceLedger(attached);
+}
+
+/**
+ * The tool name the CANONICAL CALL declared.
+ *
+ * A call that did not read a source file acquires no source identity, and
+ * the acquisition seam must reproduce that.
+ */
+function canonicalToolName(
+	history: readonly MessageWithMetadata[],
+	toolUseId: string,
+): string {
+	for (const message of history) {
+		if (!Array.isArray(message.content)) {
+			continue;
+		}
+		for (const block of message.content as ContentBlock[]) {
+			if (block.type === "tool_use" && block.id === toolUseId) {
+				return block.name;
+			}
+		}
+	}
+	return "read_files";
+}
 
 function envelopeJson(overrides: Record<string, unknown> = {}): string {
 	return JSON.stringify({
@@ -429,6 +515,17 @@ async function runStateAwareCompactionAndCapture(input: {
 		registry: AdjudicationEvidenceRegistry;
 		vocabulary?: AdjudicationVocabulary;
 		revisionResolver?: SourceRevisionResolver;
+		/**
+		 * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01.
+		 *
+		 * The acquisition-time records. The compaction path READS them; it
+		 * never re-resolves the workspace.
+		 */
+		getAcquisitions?: (
+			canonicalMessages: readonly MessageWithMetadata[],
+		) =>
+			| import("./adjudication-continuity").AcquisitionEvidenceLedger
+			| Promise<import("./adjudication-continuity").AcquisitionEvidenceLedger>;
 	};
 	saveState?: (state: unknown, sourceMessages: MessageWithMetadata[]) => void;
 	getState?: () => undefined;
@@ -517,6 +614,7 @@ describe("C1 — trusted evidence identity", () => {
 			registry: EVIDENCE_HANDLE_REGISTRY,
 			vocabulary: VOCABULARY,
 			revisionResolver: REVISION_RESOLVER,
+			acquisitions: await acquisitionLedgerFor(history),
 		});
 		// Schema validity alone is NOT acceptance.
 		expect(decision.schema_valid).toBe(true);
@@ -539,6 +637,7 @@ describe("C1 — trusted evidence identity", () => {
 			registry: EVIDENCE_HANDLE_REGISTRY,
 			vocabulary: VOCABULARY,
 			revisionResolver: REVISION_RESOLVER,
+			acquisitions: await acquisitionLedgerFor(history),
 		});
 		expect(decision.canonical_refs_resolved).toBe(false);
 		expect(decision.candidate_accepted).toBe(false);
@@ -559,6 +658,7 @@ describe("C1 — trusted evidence identity", () => {
 			registry: EVIDENCE_HANDLE_REGISTRY,
 			vocabulary: VOCABULARY,
 			revisionResolver: REVISION_RESOLVER,
+			acquisitions: await acquisitionLedgerFor(history),
 		});
 		expect(decision.canonical_refs_resolved).toBe(true);
 		expect(decision.source_revision_bound).toBe(true);
@@ -572,7 +672,14 @@ describe("C1 — trusted evidence identity", () => {
 		if (parsed.status !== "ok") {
 			return;
 		}
-		// No revision resolver at all: the runtime cannot bind a revision.
+		// No acquisition ledger at all: the runtime never observed the
+		// evidence's source identity, so it cannot bind one.
+		//
+		// ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01:
+		// the predecessor rejected this with `no_revision_resolver`, because
+		// it re-resolved the workspace during evaluation. The corrected
+		// contract binds the ACQUISITION-TIME identity, so the absence is
+		// reported as the absence of that record.
 		const decision = await resolveAdjudicationCandidate(parsed.candidate, {
 			canonicalMessages: history,
 			registry: EVIDENCE_HANDLE_REGISTRY,
@@ -582,7 +689,7 @@ describe("C1 — trusted evidence identity", () => {
 		expect(decision.canonical_refs_resolved).toBe(true);
 		expect(decision.source_revision_bound).toBe(false);
 		expect(decision.candidate_accepted).toBe(false);
-		expect(decision.reason).toBe("no_revision_resolver");
+		expect(decision.reason).toBe("no_acquisition_ledger");
 	});
 
 	it("an accepted candidate stays MODEL-AUTHORED and PROVISIONAL", async () => {
@@ -597,6 +704,7 @@ describe("C1 — trusted evidence identity", () => {
 			registry: EVIDENCE_HANDLE_REGISTRY,
 			vocabulary: VOCABULARY,
 			revisionResolver: REVISION_RESOLVER,
+			acquisitions: await acquisitionLedgerFor(history),
 		});
 		expect(decision.candidate_accepted).toBe(true);
 		// ACCEPTANCE IS NOT TRUTH.
@@ -616,6 +724,7 @@ describe("C1 — trusted evidence identity", () => {
 			canonicalMessages: history,
 			registry: EVIDENCE_HANDLE_REGISTRY,
 			revisionResolver: REVISION_RESOLVER,
+			acquisitions: await acquisitionLedgerFor(history),
 		});
 		expect(decision.candidate_accepted).toBe(false);
 		expect(decision.reason).toBe("no_authorized_vocabulary");
@@ -635,6 +744,7 @@ describe("C1 — trusted evidence identity", () => {
 			registry: EVIDENCE_HANDLE_REGISTRY,
 			vocabulary: VOCABULARY,
 			revisionResolver: REVISION_RESOLVER,
+			acquisitions: await acquisitionLedgerFor(history),
 		});
 		expect(decision.candidate_accepted).toBe(false);
 		expect(decision.reason).toBe("unknown_finding_id:S9");
@@ -654,6 +764,7 @@ describe("C1 — trusted evidence identity", () => {
 			registry: EVIDENCE_HANDLE_REGISTRY,
 			vocabulary: VOCABULARY,
 			revisionResolver: REVISION_RESOLVER,
+			acquisitions: await acquisitionLedgerFor(history),
 		});
 		expect(decision.candidate_accepted).toBe(false);
 		expect(decision.reason).toBe(
@@ -673,6 +784,7 @@ describe("C1 — trusted evidence identity", () => {
 			registry: EVIDENCE_HANDLE_REGISTRY,
 			vocabulary: VOCABULARY,
 			revisionResolver: REVISION_RESOLVER,
+			acquisitions: await acquisitionLedgerFor(history),
 		});
 		expect(decision.candidate_accepted).toBe(false);
 		expect(decision.reason).toBe(
@@ -699,6 +811,7 @@ describe("C1 — trusted evidence identity", () => {
 			registry: EVIDENCE_HANDLE_REGISTRY,
 			vocabulary: VOCABULARY,
 			revisionResolver: REVISION_RESOLVER,
+			acquisitions: await acquisitionLedgerFor(history),
 		});
 		expect(decision.canonical_refs_resolved).toBe(false);
 		expect(decision.candidate_accepted).toBe(false);
@@ -726,12 +839,16 @@ describe("C1 — trusted evidence identity", () => {
 			registry: EVIDENCE_HANDLE_REGISTRY,
 			vocabulary: VOCABULARY,
 			revisionResolver: REVISION_RESOLVER,
+			acquisitions: await acquisitionLedgerFor(history),
 		});
 		expect(decision.canonical_refs_resolved).toBe(true);
 		expect(decision.source_revision_bound).toBe(false);
 		expect(decision.candidate_accepted).toBe(false);
+		// ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01:
+		// a non-read tool produces NO acquisition record at all, so the
+		// candidate is UNBOUND for want of an observed source identity.
 		expect(decision.reason).toBe(
-			`evidence_has_no_source_identity:${SOURCE_CALL_ID}`,
+			`no_acquisition_record:${SOURCE_CALL_ID}`,
 		);
 	});
 });
@@ -757,6 +874,8 @@ describe("C2 — deterministic continuity under summarizer omission", () => {
 					registry: EVIDENCE_HANDLE_REGISTRY,
 					vocabulary: VOCABULARY,
 					revisionResolver: REVISION_RESOLVER,
+					getAcquisitions: async (canonicalMessages) =>
+						await acquisitionLedgerFor(canonicalMessages),
 				},
 			});
 
@@ -788,6 +907,9 @@ describe("C2 — deterministic continuity under summarizer omission", () => {
 				registry: EVIDENCE_HANDLE_REGISTRY,
 				vocabulary: VOCABULARY,
 				revisionResolver: REVISION_RESOLVER,
+				getAcquisitions: async (
+					canonicalMessages: readonly MessageWithMetadata[],
+				) => await acquisitionLedgerFor(canonicalMessages),
 			},
 		});
 		expect(providerVisibleText).toContain("Adjudication candidates");
@@ -814,6 +936,9 @@ describe("C2 — deterministic continuity under summarizer omission", () => {
 				registry: EVIDENCE_HANDLE_REGISTRY,
 				vocabulary: VOCABULARY,
 				revisionResolver: REVISION_RESOLVER,
+				getAcquisitions: async (
+					canonicalMessages: readonly MessageWithMetadata[],
+				) => await acquisitionLedgerFor(canonicalMessages),
 			},
 		});
 		expect(providerVisibleText).not.toContain("Adjudication candidates");
@@ -830,6 +955,9 @@ describe("C2 — deterministic continuity under summarizer omission", () => {
 				registry: EVIDENCE_HANDLE_REGISTRY,
 				vocabulary: VOCABULARY,
 				revisionResolver: REVISION_RESOLVER,
+				getAcquisitions: async (
+					canonicalMessages: readonly MessageWithMetadata[],
+				) => await acquisitionLedgerFor(canonicalMessages),
 			},
 		});
 		expect(providerVisibleText).not.toContain("Adjudication candidates");
@@ -848,6 +976,9 @@ describe("C2 — deterministic continuity under summarizer omission", () => {
 				registry: EVIDENCE_HANDLE_REGISTRY,
 				vocabulary: VOCABULARY,
 				revisionResolver: REVISION_RESOLVER,
+				getAcquisitions: async (
+					canonicalMessages: readonly MessageWithMetadata[],
+				) => await acquisitionLedgerFor(canonicalMessages),
 			},
 		});
 		expect(providerVisibleText).not.toContain("Adjudication candidates");
@@ -872,6 +1003,9 @@ describe("C2 — deterministic continuity under summarizer omission", () => {
 				registry: EVIDENCE_HANDLE_REGISTRY,
 				vocabulary: VOCABULARY,
 				revisionResolver: REVISION_RESOLVER,
+				getAcquisitions: async (
+					canonicalMessages: readonly MessageWithMetadata[],
+				) => await acquisitionLedgerFor(canonicalMessages),
 			},
 		});
 		expect(providerVisibleText).not.toContain("Adjudication candidates");
@@ -883,6 +1017,9 @@ describe("C2 — deterministic continuity under summarizer omission", () => {
 			registry: EVIDENCE_HANDLE_REGISTRY,
 			vocabulary: VOCABULARY,
 			revisionResolver: REVISION_RESOLVER,
+			getAcquisitions: async (
+				canonicalMessages: readonly MessageWithMetadata[],
+			) => await acquisitionLedgerFor(canonicalMessages),
 		};
 		const first = await runStateAwareCompactionAndCapture({
 			canonicalMessages: history,
@@ -912,6 +1049,9 @@ describe("C2 — deterministic continuity under summarizer omission", () => {
 			registry: EVIDENCE_HANDLE_REGISTRY,
 			vocabulary: VOCABULARY,
 			revisionResolver: REVISION_RESOLVER,
+			getAcquisitions: async (
+				canonicalMessages: readonly MessageWithMetadata[],
+			) => await acquisitionLedgerFor(canonicalMessages),
 		};
 		// The FIRST compaction persists a sidecar.
 		let persistedSidecar = false;
@@ -938,35 +1078,44 @@ describe("C2 — deterministic continuity under summarizer omission", () => {
 		expect(second.providerVisibleText).toContain("decision=narrowed");
 	});
 
-	it("a CHANGED source revision invalidates the stale binding", async () => {
+	it("a CHANGED source keeps the ACQUISITION-TIME identity", async () => {
 		const history = s1CanonicalHistory({ laterCallCount: 3 });
+		// The acquisition record is captured ONCE, at the moment the
+		// evidence was observed.
+		const acquisitions = await acquisitionLedgerFor(history);
 		const accepted = await deriveAcceptedAdjudications(history, {
 			registry: EVIDENCE_HANDLE_REGISTRY,
 			vocabulary: VOCABULARY,
 			revisionResolver: REVISION_RESOLVER,
+			acquisitions,
 		});
 		expect(accepted.length).toBe(1);
 		expect(accepted[0].source_revision).toContain(
 			SYNTHETIC_REVISION.revision.slice(0, 12),
 		);
 
-		// The source CHANGED: the runtime now observes a different revision,
-		// so the old binding is STALE and the candidate is not carried.
+		// ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01:
+		//
+		// The predecessor RE-RESOLVED the workspace during evaluation, so a
+		// source that changed afterwards REBOUND the candidate to the NEW
+		// revision — which is exactly the defect: the evidence was the
+		// OLDER content, and the carried identity claimed the NEWER one.
+		//
+		// The corrected contract binds the ACQUISITION-TIME identity, so the
+		// candidate keeps the identity the evidence HAD. The carried section
+		// is unchanged by a later edit.
 		observedRevision = CHANGED_REVISION;
 		const afterChange = await deriveAcceptedAdjudications(history, {
 			registry: EVIDENCE_HANDLE_REGISTRY,
 			vocabulary: VOCABULARY,
 			revisionResolver: REVISION_RESOLVER,
+			acquisitions,
 		});
-		// The revision the resolver observes is what the runtime binds, so
-		// the candidate is still accepted against the NEW revision, and the
-		// carried identity reflects the NEW revision.
 		expect(afterChange.length).toBe(1);
+		// The acquisition-time identity is preserved, NOT re-resolved.
+		expect(afterChange[0].source_revision).toBe(accepted[0].source_revision);
 		expect(afterChange[0].source_revision).toContain(
-			CHANGED_REVISION.revision.slice(0, 12),
-		);
-		expect(afterChange[0].source_revision).not.toBe(
-			accepted[0].source_revision,
+			SYNTHETIC_REVISION.revision.slice(0, 12),
 		);
 	});
 
@@ -985,6 +1134,7 @@ describe("C2 — deterministic continuity under summarizer omission", () => {
 			registry: EVIDENCE_HANDLE_REGISTRY,
 			vocabulary: VOCABULARY,
 			revisionResolver: REVISION_RESOLVER,
+			acquisitions: await acquisitionLedgerFor(history),
 		});
 		expect(accepted.length).toBe(1);
 		expect(accepted[0].decision).toBe("unresolved");
@@ -1005,6 +1155,7 @@ describe("C2 — deterministic continuity under summarizer omission", () => {
 			registry: EVIDENCE_HANDLE_REGISTRY,
 			vocabulary: VOCABULARY,
 			revisionResolver: REVISION_RESOLVER,
+			acquisitions: await acquisitionLedgerFor(history),
 		});
 		expect(accepted.length).toBe(1);
 		expect(accepted[0].decision).toBe("narrowed");
@@ -1048,6 +1199,7 @@ describe("security — the adversarial controls", () => {
 			registry: EVIDENCE_HANDLE_REGISTRY,
 			vocabulary: VOCABULARY,
 			revisionResolver: REVISION_RESOLVER,
+			acquisitions: await acquisitionLedgerFor(history),
 		});
 		expect(decision.candidate_accepted).toBe(false);
 		expect(decision.reason).toContain("unknown_qualification_code");
@@ -1078,6 +1230,7 @@ describe("security — the adversarial controls", () => {
 			registry: EVIDENCE_HANDLE_REGISTRY,
 			vocabulary: VOCABULARY,
 			revisionResolver: REVISION_RESOLVER,
+			acquisitions: await acquisitionLedgerFor(history),
 		});
 		expect(decision.canonical_refs_resolved).toBe(false);
 		expect(decision.candidate_accepted).toBe(false);
@@ -1105,6 +1258,9 @@ describe("security — the adversarial controls", () => {
 				registry: EVIDENCE_HANDLE_REGISTRY,
 				vocabulary: VOCABULARY,
 				revisionResolver: REVISION_RESOLVER,
+				getAcquisitions: async (
+					canonicalMessages: readonly MessageWithMetadata[],
+				) => await acquisitionLedgerFor(canonicalMessages),
 			},
 		});
 		// The source CONTENT must not be carried.
@@ -1123,6 +1279,9 @@ describe("security — the adversarial controls", () => {
 				registry: EVIDENCE_HANDLE_REGISTRY,
 				vocabulary: VOCABULARY,
 				revisionResolver: REVISION_RESOLVER,
+				getAcquisitions: async (
+					canonicalMessages: readonly MessageWithMetadata[],
+				) => await acquisitionLedgerFor(canonicalMessages),
 			},
 		});
 		// The section carries the decision, the qualification, the opaque
@@ -1148,6 +1307,7 @@ describe("security — the adversarial controls", () => {
 			registry: EVIDENCE_HANDLE_REGISTRY,
 			vocabulary: VOCABULARY,
 			revisionResolver: REVISION_RESOLVER,
+			acquisitions: await acquisitionLedgerFor(history),
 		});
 		expect(accepted.length).toBe(0);
 	});
@@ -1176,6 +1336,9 @@ describe("conservation — the ordinary path is unchanged", () => {
 				registry: EVIDENCE_HANDLE_REGISTRY,
 				vocabulary: VOCABULARY,
 				revisionResolver: REVISION_RESOLVER,
+				getAcquisitions: async (
+					canonicalMessages: readonly MessageWithMetadata[],
+				) => await acquisitionLedgerFor(canonicalMessages),
 			},
 		});
 		expect(JSON.stringify(history)).toBe(before);
@@ -1201,6 +1364,9 @@ describe("conservation — the ordinary path is unchanged", () => {
 				registry: EVIDENCE_HANDLE_REGISTRY,
 				vocabulary: VOCABULARY,
 				revisionResolver: REVISION_RESOLVER,
+				getAcquisitions: async (
+					canonicalMessages: readonly MessageWithMetadata[],
+				) => await acquisitionLedgerFor(canonicalMessages),
 			},
 		});
 		const after = history
@@ -1353,6 +1519,7 @@ describe("the evidence handle — the model can cite its evidence", () => {
 			registry: EVIDENCE_HANDLE_REGISTRY,
 			vocabulary: VOCABULARY,
 			revisionResolver: REVISION_RESOLVER,
+			acquisitions: await acquisitionLedgerFor(history),
 		});
 		expect(decision.canonical_refs_resolved).toBe(true);
 		expect(decision.source_revision_bound).toBe(true);
@@ -1536,6 +1703,7 @@ describe("the acceptance gates report INDEPENDENTLY", () => {
 			registry: EVIDENCE_HANDLE_REGISTRY,
 			vocabulary: VOCABULARY,
 			revisionResolver: REVISION_RESOLVER,
+			acquisitions: await acquisitionLedgerFor(history),
 		});
 		expect(decision.schema_valid).toBe(true);
 		expect(decision.canonical_refs_resolved).toBe(false);
@@ -1555,6 +1723,7 @@ describe("the acceptance gates report INDEPENDENTLY", () => {
 			registry: EVIDENCE_HANDLE_REGISTRY,
 			vocabulary: VOCABULARY,
 			revisionResolver: REVISION_RESOLVER,
+			acquisitions: await acquisitionLedgerFor(history),
 		});
 		expect(decision.schema_valid).toBe(true);
 		expect(decision.canonical_refs_resolved).toBe(true);

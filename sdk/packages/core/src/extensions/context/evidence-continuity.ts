@@ -678,6 +678,38 @@ export interface VerifiedOutcomeLedger {
 }
 
 /**
+ * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01.
+ *
+ * The marker that introduces the evidence-handle trailer on a tool result.
+ *
+ * It lives here because the classifier below must be able to RECOGNISE the
+ * trailer: the trailer is a runtime-added transport annotation, not a tool
+ * operation payload, so it must not be read as a payload that carries no
+ * success signal. The adjudication module re-exports this constant, so
+ * there is exactly ONE definition of the marker in the codebase.
+ */
+export const EVIDENCE_HANDLE_TRAILER_MARKER = "[cline-evidence-handle]";
+
+/**
+ * Whether a result payload is the runtime-added evidence-handle trailer
+ * rather than a tool operation payload.
+ *
+ * The trailer is appended to the tool result the model reads, so it travels
+ * inside the result's content. A classifier that read it as an operation
+ * payload would see a payload with no success signal and would refuse the
+ * whole result — including results that DID succeed.
+ */
+function isEvidenceHandleTrailerPayload(
+	payload: Record<string, unknown>,
+): boolean {
+	const text = payload.text;
+	return (
+		typeof text === "string" &&
+		text.includes(EVIDENCE_HANDLE_TRAILER_MARKER)
+	);
+}
+
+/**
  * The explicit success/failure signal of a tool result.
  *
  * The signal is read from the RESULT ITSELF, never from the tool name and
@@ -707,13 +739,16 @@ export function classifyToolResultStatus(resultBlock: {
 		resultBlock.content.every((item) => item && typeof item === "object")
 			? (resultBlock.content as Record<string, unknown>[])
 			: [];
+	const operationPayloads = payloads.filter(
+		(payload) => !isEvidenceHandleTrailerPayload(payload),
+	);
 	let sawSuccess = false;
 	// ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-CORRECTION02: EVERY payload
 	// must AFFIRMATIVELY succeed. A payload that carries no affirmative
 	// signal (for example `{success: true}` alongside `{isError: false}`)
 	// leaves the batch NOT wholly verified.
 	let sawUnverifiedPayload = false;
-	for (const payload of payloads) {
+	for (const payload of operationPayloads) {
 		// All failure indicators are checked INDEPENDENTLY on the SAME
 		// payload. The previous implementation used `continue` after
 		// `success === true`, which BYPASSED the `isError` check on that

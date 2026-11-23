@@ -58,8 +58,14 @@ import {
 	modelSupportsToolCalling,
 	sanitizeTraceErrorMessage,
 	type ToolCallRecord,
+	type ToolResultAcquisition,
 	usesImageGenerationOperation,
 } from "@cline/shared";
+import {
+	captureAcquisitionEvidence,
+	renderAcquisitionRecord,
+	type SourceRevisionResolver,
+} from "../../extensions/context/adjudication-continuity";
 import { filterDisabledTools } from "../../services/global-settings";
 import {
 	createAgentModelFromConfig,
@@ -87,6 +93,7 @@ import { ConversationStore } from "../../session/stores/conversation-store";
 import {
 	agentMessagesToMessages,
 	agentMessagesToMessagesWithMetadata,
+	attachAcquisitionsToAgentMessages,
 	messagesToAgentMessages,
 } from "../config/agent-message-codec";
 import {
@@ -408,6 +415,22 @@ export class SessionRuntime {
 	private readonly conversation: ConversationStore;
 	private readonly toolResultCache: ToolResultCache;
 	private cacheableToolNames = new Set<string>();
+	/**
+	 * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01.
+	 *
+	 * The ACQUISITION-TIME provenance records captured at the tool boundary.
+	 *
+	 * They are keyed by canonical tool-call id and are applied to the
+	 * canonical history at the CONVERSION boundary, which is where the
+	 * agent's messages become the persisted transcript. A record attached to
+	 * the persisted tool-result block is part of the DURABLE canonical
+	 * history, so a session recreated from that file restores the evidence
+	 * provenance with no in-memory handover.
+	 */
+	private readonly toolAcquisitions = new Map<
+		string,
+		ToolResultAcquisition
+	>();
 	private readonly maxCachedResultChars: number;
 	private pendingTerminalError:
 		| Extract<AgentEvent, { type: "error" }>
@@ -1539,9 +1562,11 @@ export class SessionRuntime {
 		// was seeded with the full transcript, so `runResult.messages`
 		// IS the complete new transcript (seed + newly-produced turn).
 		if (runResult && runResult.messages.length > 0) {
-			const replacement = agentMessagesToMessagesWithMetadata(
-				runResult.messages,
-			);
+			// ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01:
+			// the acquisition records are attached HERE, at the conversion
+			// boundary, so they become part of the PERSISTED canonical
+			// history and are restored by a recreated session.
+			const replacement = this.toCanonicalMessages(runResult.messages);
 			this.conversation.replaceMessages(replacement);
 		}
 
@@ -1671,6 +1696,24 @@ export class SessionRuntime {
 				if (stopped) return stopped;
 				const control = await hooks.afterTool?.(ctx);
 				const result = control?.result ?? ctx.result;
+				// ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01:
+				// the ACQUISITION-TIME capture.
+				//
+				// The capture runs on the EFFECTIVE result — the one AFTER the
+				// host's `afterTool` hook has had its chance to replace or
+				// redact it. An `afterTool` hook is a result-transforming hook,
+				// so the pre-hook result is not necessarily the result the
+				// canonical history records, and a record derived from it
+				// would describe content that was never persisted.
+				//
+				// The record is captured ONCE, at the moment the evidence is
+				// observed, and is applied to the canonical history at the
+				// conversion boundary.
+				await this.captureToolAcquisition(
+					ctx.toolCall.toolCallId,
+					ctx.toolCall.toolName,
+					result,
+				);
 				if (ctx.tool.resultPolicy === "cache-oversized") {
 					const { text: previewText } = prepareToolResultPreview(
 						toPersistedToolResultContent(result.output),
@@ -2096,13 +2139,83 @@ export class SessionRuntime {
 		}
 	}
 
+	/**
+	 * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01.
+	 *
+	 * Capture the ACQUISITION-TIME provenance record of one tool result.
+	 *
+	 * The capture is a no-op unless the host enabled the adjudication
+	 * contract and supplied a source-revision resolver: without a resolver
+	 * the runtime cannot establish a workspace revision, and without the
+	 * contract nothing consumes the record.
+	 *
+	 * A tool that established no source identity produces NO record. An
+	 * absent record is `UNBOUND` downstream, which is the fail-closed
+	 * direction.
+	 */
+	private async captureToolAcquisition(
+		toolCallId: string,
+		toolName: string,
+		result: { output: unknown; isError?: boolean },
+	): Promise<void> {
+		const resolver = this.adjudicationRevisionResolver;
+		if (!resolver) {
+			return;
+		}
+		if (result.isError === true) {
+			return;
+		}
+		const evidence = await captureAcquisitionEvidence({
+			toolUseId: toolCallId,
+			toolName,
+			content: result.output,
+			resolver,
+		});
+		if (!evidence) {
+			return;
+		}
+		this.toolAcquisitions.set(toolCallId, renderAcquisitionRecord(evidence));
+	}
+
+	/**
+	 * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01.
+	 *
+	 * The source-revision resolver the host supplied, when the adjudication
+	 * contract is enabled.
+	 */
+	private get adjudicationRevisionResolver():
+		| SourceRevisionResolver
+		| undefined {
+		return this.config.adjudication?.revisionResolver;
+	}
+
+	/**
+	 * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01.
+	 *
+	 * Convert the runtime's agent messages into the canonical history, with
+	 * the captured acquisition records attached to the tool results.
+	 *
+	 * This is the CONVERSION boundary: it is where the agent's messages
+	 * become the persisted transcript, so it is where the acquisition record
+	 * must be attached for the record to be DURABLE.
+	 */
+	private toCanonicalMessages(
+		messages: readonly AgentMessage[],
+	): MessageWithMetadata[] {
+		const withAcquisitions = attachAcquisitionsToAgentMessages(
+			messages,
+			this.toolAcquisitions,
+		);
+		return agentMessagesToMessagesWithMetadata(withAcquisitions);
+	}
+
 	private syncConversationFromRuntimeMessage(
 		snapshotMessages: readonly AgentMessage[],
 		fallbackMessages: readonly AgentMessage[],
 	): void {
 		if (snapshotMessages.length > 0) {
 			this.conversation.replaceMessages(
-				agentMessagesToMessagesWithMetadata(snapshotMessages),
+				this.toCanonicalMessages(snapshotMessages),
 			);
 			return;
 		}
@@ -2113,9 +2226,9 @@ export class SessionRuntime {
 				.map((message) => message.id)
 				.filter((id): id is string => typeof id === "string"),
 		);
-		const newMessages = agentMessagesToMessagesWithMetadata(
-			fallbackMessages,
-		).filter((message) => !message.id || !existingIds.has(message.id));
+		const newMessages = this.toCanonicalMessages(fallbackMessages).filter(
+			(message) => !message.id || !existingIds.has(message.id),
+		);
 		if (newMessages.length === 0) return;
 		this.conversation.replaceMessages([
 			...this.conversation.getMessages(),

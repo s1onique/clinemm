@@ -1,0 +1,115 @@
+{
+  "act": "ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01",
+  "verdict": "PASS_CORRECTION_PROVENANCE_BOUND",
+  "predecessor": "ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01",
+  "predecessor_verdict_preserved": "PASS_STRUCTURAL_ONLY",
+  "vsix": {
+    "path": "dist/clinemm-adjud-corr01.vsix",
+    "bytes": 65044927,
+    "sha256": "1c9cabff70b9891f6ad6f65bb6853db7a0309fa85da8fff4b7035c949054931f"
+  },
+  "evidence": [
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01/01-acquisition-time-binding.md",
+      "sha256": "dc8f5aacd5e8af8026cf598f734657f30700bccec9aeb392d38cb64e3ec0c738"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01/02-evidence-authority.md",
+      "sha256": "d7ad0f0cd0f37ffbb44f2975c8ab563b0d58c734d380fd3b494de5432287482a"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01/03-session-continuity.md",
+      "sha256": "9c2346d5f458fe6d0a3e47e3601bdf30d17acf73a1735173afe143db3638ba92"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01/04-artifact-identity.md",
+      "sha256": "cdc0c72ed69c6136100045cf2c4d3a256791ec481c237be9944851cd912c2f1d"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01/05-exit-report.md",
+      "sha256": "991caf4237c3a20da0e9d6f9b126f162cbfa7bb9ee2a50fca34e7bb6bffd6f53"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01/verification/gate1-3-red-provenance-predecessor.txt",
+      "sha256": "0c20abe81f20ae35a69841dd8dd4d2f5044889c18bf744848a4b7ad31e763982"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01/verification/gate1-red-durable-restoration.txt",
+      "sha256": "bbd48e02462c1e4e45147d83b058439fb5fd64d837a5e7fef71220d42e3cd7bd"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01/verification/gate2-red-multi-source-stale.txt",
+      "sha256": "97788aa18b91dfab8b9934910635836dd1d77396c6168f248a5f9e66b9a893f4"
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01/verification/gate4-artifact-identity.txt",
+      "sha256": "6e6aa4a604f2e6d9967f4e9b254fb3a99e9d5a2d3b965790ede726d487306ec2"
+    }
+  ],
+  "changed": [
+    {
+      "path": "sdk/packages/shared/src/llms/messages.ts",
+      "sha256": "b2a28ca8d3a651dccc361fb16f058345b8d90c484c8c38f160ca1f97f990cf2f"
+    },
+    {
+      "path": "sdk/packages/shared/src/agent.ts",
+      "sha256": "ad07a0ac40fd9a5ceaf8dc4cba60210024956b4f989e6a9a5cb17528167b5c10"
+    },
+    {
+      "path": "sdk/packages/shared/src/agents/types.ts",
+      "sha256": "95023a3a0bf31e9b5a12cf0e9c284aacdb3c036364b6c71cff12a024b8be121b"
+    },
+    {
+      "path": "sdk/packages/shared/src/index.ts",
+      "sha256": "15f03e80ecb3f6606526137ff1ef627475f4705b5f365786e04ed77526b0f7bb"
+    },
+    {
+      "path": "sdk/packages/core/src/extensions/context/adjudication-continuity.ts",
+      "sha256": "e8bde1c1c89072433f048b89f06d63259796319ae94769ad5b748118c3764471"
+    },
+    {
+      "path": "sdk/packages/core/src/extensions/context/evidence-continuity.ts",
+      "sha256": "bee5a18abd11e1fae067e42381c4a78ebcf123ee4625203297ea874d304c0361"
+    },
+    {
+      "path": "sdk/packages/core/src/extensions/context/compaction.ts",
+      "sha256": "fbd51e8828855a2aa952f54234719de46bbccf23c4bd92d523b8a66910a1e9cf"
+    },
+    {
+      "path": "sdk/packages/core/src/runtime/config/agent-message-codec.ts",
+      "sha256": "ff855e26b4d05ac98793ec66e28f6acc2808d0f8efbdd52e50130391ed1faa0a"
+    },
+    {
+      "path": "sdk/packages/core/src/runtime/orchestration/session-runtime-orchestrator.ts",
+      "sha256": "eef2b407375b88d3b9a5a272416a7a7c903572df41628c82fa84a21e906aab73"
+    },
+    {
+      "path": "sdk/packages/core/src/runtime/host/local-runtime-host.ts",
+      "sha256": "f89b940dbb53d2f91c75b48dd3389789fe9dc7e64c7bc3f5ac71cf007e81bf4d"
+    },
+    {
+      "path": "sdk/packages/core/src/types/adjudication-config.ts",
+      "sha256": "f52daa3e80423f4f16bb7759b1d0ecc31e40f89819db43a6213e725d19875b9a"
+    },
+    {
+      "path": "sdk/packages/core/src/index.ts",
+      "sha256": "d01b3fd48167c6db0cddabf12e79fe16e8137949f9b7591d6b9eae822b766074"
+    },
+    {
+      "path": "sdk/packages/core/src/extensions/context/compaction.adjudication-provenance.correction01.test.ts",
+      "sha256": "038f28f4c1e9b07dff8603004a2237d82228395fa860d4adae7853ba017054b6"
+    },
+    {
+      "path": "sdk/packages/core/src/runtime/orchestration/session-runtime-orchestrator.adjudication-acquisition.correction01.test.ts",
+      "sha256": "9a73a76e15781ba63e2e0d20679448188b7549990f659057a4b908148a7d6c33"
+    },
+    {
+      "path": "sdk/packages/core/src/extensions/context/compaction.adjudication-output-contract.implement01.test.ts",
+      "sha256": "53ca99ba24153817914e52587b72988332939f41e048ff42594e80e96b63c9d1"
+    },
+    {
+      "path": ".factory/acts/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01.md",
+      "sha256": "14a668ce662f9d5ab63604dcf6017d75c9a5aad69dc4e848cb6ad2c589227b68"
+    }
+  ]
+}

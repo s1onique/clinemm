@@ -24,6 +24,7 @@ import {
 	AdjudicationEvidenceRegistry,
 	applyAdjudicationPublicationInstruction,
 	attachEvidenceHandlesToAgentMessages,
+	buildAcquisitionEvidenceLedger,
 } from "../../extensions/context/adjudication-continuity";
 import {
 	createCompactionStateAwarePrepareTurn,
@@ -1067,8 +1068,23 @@ export class LocalRuntimeHost implements RuntimeHost {
 		//
 		// It is created ONLY when the host supplied an enabled adjudication
 		// contract, so the default path allocates nothing.
+		//
+		// ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01:
+		// the secret is HOST-SUPPLIED when the host can re-derive it, so the
+		// handles survive a session recreation. Without a host-supplied
+		// secret the registry generates an in-memory one and reports itself
+		// as NOT restorable — the fail-closed direction, reported rather
+		// than claimed away.
+		const adjudicationSecret = configWithProvider.adjudication?.enabled
+			? await configWithProvider.adjudication.secretProvider?.(sessionId)
+			: undefined;
 		const adjudicationRegistry = configWithProvider.adjudication?.enabled
-			? new AdjudicationEvidenceRegistry({ sessionId })
+			? new AdjudicationEvidenceRegistry({
+					sessionId,
+					...(adjudicationSecret !== undefined
+						? { secret: adjudicationSecret }
+						: {}),
+				})
 			: undefined;
 		const prepareTurn = createCompactionStateAwarePrepareTurn({
 			compact,
@@ -1089,6 +1105,22 @@ export class LocalRuntimeHost implements RuntimeHost {
 								revisionResolver:
 									configWithProvider.adjudication.revisionResolver,
 							}
+							: {}),
+						// ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01:
+						// the acquisition-time records.
+						//
+						// They are derived from the CANONICAL HISTORY, which is
+						// the DURABLE authority: the records ride on the
+						// persisted tool-result blocks, so a session recreated
+						// from the persisted transcript restores them with no
+						// in-memory handover and no workspace re-read.
+						...(configWithProvider.adjudication?.revisionResolver
+							? {
+									getAcquisitions: (
+										canonicalMessages: readonly LlmsProviders.MessageWithMetadata[],
+									) =>
+										buildAcquisitionEvidenceLedger(canonicalMessages),
+								}
 							: {}),
 					},
 				}
@@ -1238,6 +1270,27 @@ export class LocalRuntimeHost implements RuntimeHost {
 			prepareTurn,
 			tools,
 			modelTools: runtime.modelTools,
+			// ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01:
+			// the ACQUISITION-TIME resolver.
+			//
+			// The session runtime captures the acquisition-time provenance
+			// record of every source-reading tool result, and PERSISTS it
+			// onto the canonical tool-result block. The record therefore
+			// travels with the durable canonical history, so a session
+			// recreated from the persisted transcript restores the evidence
+			// provenance with no in-memory handover and no workspace re-read.
+			//
+			// It is forwarded ONLY when the host enabled the adjudication
+			// contract and supplied a resolver, so the default path captures
+			// nothing and stays byte-identical.
+			...(configWithProvider.adjudication?.revisionResolver
+				? {
+						adjudication: {
+							revisionResolver:
+								configWithProvider.adjudication.revisionResolver,
+						},
+					}
+				: {}),
 			// ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01: the
 			// EVIDENCE-HANDLE projection.
 			//

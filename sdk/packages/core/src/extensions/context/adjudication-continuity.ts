@@ -112,7 +112,12 @@ import type {
 	AgentMessagePart,
 	ContentBlock,
 	MessageWithMetadata,
+	ToolResultAcquisition,
 } from "@cline/shared";
+import { classifyToolResultStatus } from "./evidence-continuity";
+import type { VerifiedOutcomeStatus } from "./evidence-continuity";
+import { EVIDENCE_HANDLE_TRAILER_MARKER } from "./evidence-continuity";
+import { sha256HexSync } from "@cline/shared";
 
 // ===========================================================================
 // SECTION 1 — THE TASK-SCOPED VOCABULARY (HOST-SUPPLIED)
@@ -220,11 +225,19 @@ export const EVIDENCE_HANDLE_TRAILER_CHARS = 96;
 /**
  * The marker that introduces the evidence-handle trailer on a tool result.
  *
- * The marker is deliberately distinctive so the trailer can be located,
- * stripped and re-derived deterministically — and so a model can be told
- * what it is without the runtime having to parse prose.
+ * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01:
+ *
+ * The definition lives in `evidence-continuity.ts` because the PRODUCTION
+ * result classifier must be able to recognise the trailer and exclude it
+ * from the operation-payload set. The trailer is a transport annotation the
+ * runtime appends to the result the model reads; reading it as a tool
+ * operation payload would classify every successful result that carries a
+ * handle as `unknown`.
+ *
+ * It is RE-EXPORTED here so there is exactly ONE definition of the marker
+ * in the codebase and the two modules cannot drift apart.
  */
-export const EVIDENCE_HANDLE_MARKER = "[cline-evidence-handle]";
+export const EVIDENCE_HANDLE_MARKER = EVIDENCE_HANDLE_TRAILER_MARKER;
 
 /**
  * A session-scoped registry that maps an opaque evidence handle to the
@@ -245,16 +258,88 @@ export class AdjudicationEvidenceRegistry {
 	 *
 	 * It is never persisted and never leaves the session: it exists only to
 	 * make the handle unguessable and session-scoped.
+	 *
+	 * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01:
+	 *
+	 * The predecessor ALWAYS generated a fresh random secret when the
+	 * registry was constructed, and deliberately never persisted it. That
+	 * made the handle UNRESOLVABLE after a session recreation: a restored
+	 * session minted a NEW secret, so a previously published handle
+	 * resolved to nothing and the adjudication it supported silently
+	 * disappeared from the carried section.
+	 *
+	 * The secret is now supplied by the HOST, which owns the session's
+	 * lifetime and can therefore re-derive the same secret for the same
+	 * session id. When the host supplies NO secret, the registry is in the
+	 * DEGRADED mode described on {@link AdjudicationEvidenceRegistry} — see
+	 * {@link AdjudicationEvidenceRegistry.isRestorable}.
 	 */
 	readonly #secret: string;
 
 	/** The session this registry belongs to. */
 	readonly sessionId: string;
 
-	constructor(input: { sessionId: string; secret?: string }) {
+	/**
+	 * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01.
+	 *
+	 * Whether this registry's secret is RE-DERIVABLE after the session is
+	 * recreated.
+	 *
+	 * A host-supplied secret is re-derivable by construction: the host
+	 * derives it from the session id, so the same session id always yields
+	 * the same secret. A randomly generated secret is NOT: it exists only
+	 * in memory, so it is lost when the process ends.
+	 */
+	readonly #restorable: boolean;
+
+	constructor(input: {
+		sessionId: string;
+		secret?: string;
+		/**
+		 * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01.
+		 *
+		 * Whether the supplied secret is re-derivable after a session
+		 * recreation.
+		 *
+		 * Defaults to `true` when a secret is supplied: a host that
+		 * supplies a secret owns its lifetime and is expected to be able to
+		 * reproduce it. A host that cannot reproduce it must say so by
+		 * passing `false`, and the registry then reports itself as NOT
+		 * restorable — which is the fail-closed direction.
+		 */
+		restorable?: boolean;
+	}) {
 		this.sessionId = input.sessionId;
-		this.#secret =
-			input.secret ?? AdjudicationEvidenceRegistry.generateSecret();
+		if (input.secret !== undefined) {
+			this.#secret = input.secret;
+			this.#restorable = input.restorable ?? true;
+			return;
+		}
+		this.#secret = AdjudicationEvidenceRegistry.generateSecret();
+		// A randomly generated secret is, by construction, unrecoverable
+		// after the process ends.
+		this.#restorable = false;
+	}
+
+	/**
+	 * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01.
+	 *
+	 * Whether this registry can re-derive its handles after the session is
+	 * recreated.
+	 *
+	 * When it cannot, the registry is a FAIL-CLOSED DEGRADED MODE: the
+	 * handles it mints are valid for the lifetime of the process, and a
+	 * handle published before a restart simply stops resolving. That is
+	 * the correct security direction — an unresolvable handle cannot
+	 * authenticate anything — but it means the adjudication it supported
+	 * does NOT survive the restart.
+	 *
+	 * The distinction is REPORTED rather than blurred: a caller that
+	 * claims continuity across a restart must check this and must not
+	 * claim restoration when it is false.
+	 */
+	isRestorable(): boolean {
+		return this.#restorable;
 	}
 
 	/**
@@ -794,6 +879,24 @@ export interface CanonicalEvidenceLedger {
  *   - a result flagged as an error is not evidence;
  *   - a result with NO affirmative success signal is not evidence (the same
  *     rule the verified-outcome continuity already applies).
+ *
+ * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01:
+ *
+ * The predecessor implemented the last two rules as `block.is_error !== true`,
+ * which accepts a result that carries NO success signal at all — including a
+ * structured payload that reports a failure without setting `is_error`. The
+ * classification is now the PRODUCTION one
+ * ({@link classifyToolResultStatus}), which is the same rule the
+ * verified-outcome continuity already applies to the same canonical history:
+ *
+ *   - `is_error: true`              -> failed, not evidence;
+ *   - any payload `success: false`  -> failed, not evidence;
+ *   - any payload `isError: true`   -> failed, not evidence;
+ *   - a payload with no signal      -> UNKNOWN, so the whole result is not
+ *                                     evidence;
+ *   - every payload `success: true` -> succeeded, evidence.
+ *
+ * "No evidence of failure" is not "evidence of success".
  */
 export function buildCanonicalEvidenceLedger(
 	messages: readonly MessageWithMetadata[],
@@ -802,7 +905,10 @@ export function buildCanonicalEvidenceLedger(
 		string,
 		{ name: string; input: Record<string, unknown>; ambiguous: boolean }
 	>();
-	const results = new Map<string, { isError: boolean; count: number }>();
+	const results = new Map<
+		string,
+		{ isError: boolean; count: number; status: VerifiedOutcomeStatus }
+	>();
 
 	for (const message of messages) {
 		if (!Array.isArray(message.content)) {
@@ -832,6 +938,10 @@ export function buildCanonicalEvidenceLedger(
 				results.set(block.tool_use_id, {
 					isError: block.is_error === true,
 					count: 1,
+					status: classifyToolResultStatus({
+						is_error: block.is_error,
+						content: block.content,
+					}),
 				});
 			}
 		}
@@ -846,6 +956,11 @@ export function buildCanonicalEvidenceLedger(
 		if (!result || result.count !== 1 || result.isError) {
 			continue;
 		}
+		// ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01:
+		// the result must AFFIRMATIVELY have succeeded.
+		if (result.status !== "succeeded") {
+			continue;
+		}
 		paired.add(id);
 	}
 
@@ -857,8 +972,594 @@ export function buildCanonicalEvidenceLedger(
 }
 
 // ===========================================================================
-// SECTION 6 — THE ACCEPTANCE DECISION
+// SECTION 5A — THE ACQUISITION-TIME EVIDENCE LEDGER
 // ===========================================================================
+
+/**
+ * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01.
+ *
+ * WHY THIS SECTION EXISTS
+ * -----------------------
+ *
+ * The predecessor bound a candidate's source revision by RE-RESOLVING the
+ * source file at EVALUATION time:
+ *
+ *   bindSourceRevision() -> resolver.resolve({ sourcePath, toolName })
+ *
+ * That establishes what the file looks like NOW, not what the evidence the
+ * candidate cited actually WAS. The counterexample is a file edited between
+ * the read and the citation:
+ *
+ *   T1  read config.yaml              -> value = A
+ *   T2  modify config.yaml             -> value = B
+ *   T3  model cites T1's result
+ *   T4  revisionResolver resolves the CURRENT file
+ *   T5  candidate accepted with B's identity, although its evidence was A
+ *
+ * The git HEAD can even remain identical throughout, because the edit is
+ * uncommitted. So the defect is not a git edge case: it is the ordinary
+ * case of an agent that reads a file and then edits it.
+ *
+ * THE REPAIR
+ * ----------
+ *
+ * The runtime must record the source identity AT THE MOMENT THE EVIDENCE WAS
+ * ACQUIRED, and bind the candidate to that RECORDED identity. It must never
+ * re-resolve a file to answer "what did this evidence refer to?".
+ *
+ * The recorded identity has two independent halves, and BOTH are required:
+ *
+ *   1. WHAT WAS OBSERVED — the source paths the tool RESULT actually
+ *      reported. This is derived from the result payload's own attribution
+ *      (the production `read_files` executor persists one
+ *      `{query, result, success}` payload per requested file, and `query` is
+ *      the file path), NEVER from the tool call's declared arguments. A call
+ *      that declares a path but did not read it establishes no source
+ *      identity, and a NON-READ tool's arguments never establish one.
+ *
+ *   2. WHAT IT WAS AT THAT MOMENT — the revision and content identity
+ *      captured when the result was observed. The runtime resolves it once,
+ *      at acquisition, and stores it. Later evaluation READS the stored
+ *      value; it never asks the workspace what the file looks like now.
+ *
+ * The stored record travels WITH the canonical history, so it survives
+ * persistence and compaction. A record that was never captured is simply
+ * ABSENT, and an absent record is `UNBOUND` — the fail-closed direction.
+ */
+
+/**
+ * The source paths and revision captured for ONE tool result at the moment
+ * its evidence was acquired.
+ */
+export interface AcquisitionEvidence {
+	/** The canonical tool-call id this record belongs to. */
+	readonly toolUseId: string;
+	/** The tool that produced the result. */
+	readonly toolName: string;
+	/**
+	 * The source paths the RESULT reported observing.
+	 *
+	 * Every path in this list was READ by the tool. A path that appears only
+	 * in the call's arguments does NOT appear here.
+	 */
+	readonly sourcePaths: readonly string[];
+	/**
+	 * The revision captured AT ACQUISITION.
+	 *
+	 * This is the identity the evidence HAD, not the identity the file has
+	 * now.
+	 */
+	readonly revision: SourceRevision;
+	/**
+	 * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01.
+	 *
+	 * The CONTENT identity of each observed source, keyed by path.
+	 *
+	 * This is the load-bearing half of the acquisition record, and it is
+	 * derived from the bytes the tool ACTUALLY RETURNED — never from the
+	 * file on disk at evaluation time.
+	 *
+	 * That derivation is what makes the binding race-free by construction:
+	 * a file edited after the read cannot change the identity of the
+	 * evidence that was already read, because the evidence's content is
+	 * carried in the evidence itself.
+	 */
+	readonly contentIdentities: ReadonlyMap<string, string>;
+}
+
+/**
+ * The acquisition-time evidence ledger, keyed by canonical tool-call id.
+ */
+export interface AcquisitionEvidenceLedger {
+	/**
+	 * The tool-call ids that carry a captured acquisition record.
+	 */
+	readonly toolUseIds: readonly string[];
+	/**
+	 * The captured records, keyed by canonical tool-call id.
+	 */
+	readonly records: ReadonlyMap<string, AcquisitionEvidence>;
+}
+
+/**
+ * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01.
+ *
+ * The tool whose result payload attributes a SOURCE FILE it observed.
+ *
+ * The rule is matched on the TOOL'S OWN CONTRACT — the tool that persists
+ * one `{query, result, success}` payload per requested file — and not on a
+ * provider id. The set is closed and explicit rather than inferred, so a
+ * tool that merely ACCEPTS a path argument never gains source authority.
+ */
+const SOURCE_OBSERVING_TOOL_NAMES: ReadonlySet<string> = new Set([
+	"read_files",
+]);
+
+/**
+ * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01.
+ *
+ * Extract the source paths a tool RESULT reported observing.
+ *
+ * The extraction reads the result's OWN structured payloads and uses their
+ * `query` attribution — the production `read_files` executor names the
+ * source it read in `query` — and it requires each payload to carry the
+ * AFFIRMATIVE success signal.
+ *
+ * The rules, all of which fail closed:
+ *
+ *   - the tool must be a source-observing tool (`read_files`);
+ *   - the payload must carry `success: true` (an affirmative signal; the
+ *     absence of a signal is not a success);
+ *   - the payload's `query` must name a source path;
+ *   - a payload whose `success` is false, or which carries `isError: true`,
+ *     contributes NO path and fails the whole extraction, because a
+ *     multi-file read in which one file failed did not observe the set.
+ *
+ * The `query` may carry a `:start-end` range suffix; the range is stripped
+ * so the attribution names the SOURCE, not the line window.
+ */
+export function extractAcquiredSourcePaths(
+	toolName: string,
+	content: unknown,
+): string[] | undefined {
+	if (!SOURCE_OBSERVING_TOOL_NAMES.has(toolName)) {
+		return undefined;
+	}
+	const payloads =
+		Array.isArray(content) &&
+		content.every((item) => item && typeof item === "object")
+			? (content as Record<string, unknown>[])
+			: undefined;
+	if (!payloads || payloads.length === 0) {
+		return undefined;
+	}
+	const paths: string[] = [];
+	for (const payload of payloads) {
+		if (payload.success !== true) {
+			// No affirmative success signal, or an explicit failure.
+			return undefined;
+		}
+		if (payload.isError === true) {
+			return undefined;
+		}
+		const query = payload.query;
+		if (typeof query !== "string") {
+			return undefined;
+		}
+		const path = parseAcquiredSourcePath(query);
+		if (!path) {
+			return undefined;
+		}
+		paths.push(path);
+	}
+	if (paths.length === 0) {
+		return undefined;
+	}
+	return paths;
+}
+
+/**
+ * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01.
+ *
+ * Parse the source path out of a source-read query.
+ *
+ * The production `formatReadFileQuery()` renders a range as
+ * `<path>:<start>-<end>`, so the range suffix is stripped. The path itself
+ * may legitimately contain a colon (a Windows drive), so only a suffix that
+ * matches the range grammar is removed.
+ *
+ * A query that is not path-like is rejected: an ambiguous attribution is
+ * worse than no attribution.
+ */
+export function parseAcquiredSourcePath(query: string): string | undefined {
+	const trimmed = query.trim();
+	if (!trimmed || /[\n\r\0]/.test(trimmed)) {
+		return undefined;
+	}
+	const rangeMatch = /^(.*?):(\d+)(?:-(?:(\d+)|EOF))?$/.exec(trimmed);
+	const candidate = rangeMatch?.[1] ?? trimmed;
+	if (!candidate || (!candidate.includes("/") && !candidate.includes("\\"))) {
+		return undefined;
+	}
+	return candidate;
+}
+
+/**
+ * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01.
+ *
+ * The CONTENT identity of one observed source, derived from the bytes the
+ * tool RETURNED.
+ *
+ * The production `read_files` executor renders each line as
+ * `<number> | <content>`. The gutter is a PRESENTATION artifact of the read
+ * tool, not part of the source, so it is stripped before hashing: otherwise
+ * two reads of the same file with different line windows would hash
+ * differently, and the identity would describe the window rather than the
+ * source.
+ *
+ * A body whose lines do NOT carry the gutter is hashed verbatim: the source
+ * text is what was returned, and mangling an unrecognised shape would be
+ * worse than hashing it as-is.
+ */
+export function acquiredContentIdentity(result: unknown): string | undefined {
+	if (typeof result !== "string") {
+		return undefined;
+	}
+	return sha256HexSync(stripAcquiredLineGutter(result));
+}
+
+/**
+ * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01.
+ *
+ * Strip the source-file-read line-number gutter from a returned file body.
+ *
+ * The gutter is only stripped when EVERY non-empty line carries it, so a
+ * body that merely CONTAINS a numbered line is left untouched.
+ */
+function stripAcquiredLineGutter(body: string): string {
+	const gutter = /^\s*\d+\s*\|\s?/;
+	const meaningful = body.split("\n").filter((line) => line.trim().length > 0);
+	if (
+		meaningful.length === 0 ||
+		!meaningful.every((line) => gutter.test(line))
+	) {
+		return body;
+	}
+	return body
+		.split("\n")
+		.map((line) => (gutter.test(line) ? line.replace(gutter, "") : line))
+		.join("\n");
+}
+
+/**
+ * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01.
+ *
+ * Capture the ACQUISITION-TIME evidence record for ONE observed tool result.
+ *
+ * This is the function the runtime calls when the evidence is observed. It
+ * is the ONLY place a source identity is established, and it establishes it
+ * from the result's OWN content:
+ *
+ *   - the source paths come from the result's `query` attribution, not from
+ *     the call's arguments;
+ *   - the CONTENT identity of each source comes from the bytes the tool
+ *     RETURNED, so it describes the file as it was READ;
+ *   - the REVISION comes from the host's resolver, called ONCE, here.
+ *
+ * It returns `undefined` when the result establishes no source identity —
+ * a non-source-observing tool, a failed read, a result with no affirmative
+ * success signal, or a payload whose content is not attributable to a
+ * source. An absent record is `UNBOUND` downstream, which is the
+ * fail-closed direction.
+ */
+export async function captureAcquisitionEvidence(input: {
+	toolUseId: string;
+	toolName: string;
+	content: unknown;
+	/**
+	 * The host's source-revision resolver, called ONCE per observed source.
+	 */
+	resolver?: SourceRevisionResolver;
+}): Promise<AcquisitionEvidence | undefined> {
+	const payloads =
+		Array.isArray(input.content) &&
+		input.content.every((item) => item && typeof item === "object")
+			? (input.content as Record<string, unknown>[])
+			: undefined;
+	if (!payloads || payloads.length === 0) {
+		return undefined;
+	}
+	if (!SOURCE_OBSERVING_TOOL_NAMES.has(input.toolName)) {
+		return undefined;
+	}
+	const paths: string[] = [];
+	const contentIdentities = new Map<string, string>();
+	for (const payload of payloads) {
+		if (payload.success !== true || payload.isError === true) {
+			return undefined;
+		}
+		const query = payload.query;
+		if (typeof query !== "string") {
+			return undefined;
+		}
+		const path = parseAcquiredSourcePath(query);
+		if (!path) {
+			return undefined;
+		}
+		const identity = acquiredContentIdentity(payload.result);
+		if (!identity) {
+			return undefined;
+		}
+		paths.push(path);
+		contentIdentities.set(path, identity);
+	}
+	if (paths.length === 0) {
+		return undefined;
+	}
+	// The revision is resolved ONCE, for the FIRST observed source. The
+	// revision is a property of the WORKSPACE at the moment of observation,
+	// not of the file, and the content identity above is what pins the
+	// file. A multi-source read therefore needs one workspace revision.
+	const revision = input.resolver
+		? await input.resolver.resolve({
+				sourcePath: paths[0] as string,
+				toolName: input.toolName,
+			})
+		: undefined;
+	if (!revision) {
+		return undefined;
+	}
+	return {
+		toolUseId: input.toolUseId,
+		toolName: input.toolName,
+		sourcePaths: paths,
+		revision,
+		contentIdentities,
+	};
+}
+
+/**
+ * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01.
+ *
+ * Build the ACQUISITION-TIME evidence ledger.
+ *
+ * The ledger is derived from the CANONICAL HISTORY: every tool result that
+ * carries an acquisition record contributes it.
+ *
+ * That is the whole point of the record living ON the tool result: the
+ * canonical history is the durable authority, so a session recreated from
+ * the persisted messages restores the ledger with NO in-memory handover and
+ * NO workspace re-read. An in-memory map answered "what did this evidence
+ * refer to?" only while the process lived.
+ *
+ * A record is usable only when the canonical history actually contains the
+ * call AND exactly one non-error result for it. A record for a call that is
+ * not in the canonical history proves nothing, and an ambiguous
+ * call/result join fails closed.
+ */
+export function buildAcquisitionEvidenceLedger(
+	messages: readonly MessageWithMetadata[],
+): AcquisitionEvidenceLedger {
+	const records = new Map<string, AcquisitionEvidence>();
+	for (const message of messages) {
+		if (!Array.isArray(message.content)) {
+			continue;
+		}
+		for (const block of message.content as ContentBlock[]) {
+			if (block.type !== "tool_result") {
+				continue;
+			}
+			const acquisition = (block as { acquisition?: unknown }).acquisition;
+			if (!acquisition || typeof acquisition !== "object") {
+				continue;
+			}
+			const parsed = parseAcquisitionRecord(acquisition);
+			if (!parsed) {
+				continue;
+			}
+			const call = findCanonicalCall(messages, block.tool_use_id);
+			if (!call) {
+				continue;
+			}
+			const result = findCanonicalResult(messages, block.tool_use_id);
+			if (!result || result.isError) {
+				continue;
+			}
+			records.set(block.tool_use_id, parsed);
+		}
+	}
+	return {
+		toolUseIds: [...records.keys()],
+		records,
+	};
+}
+
+/**
+ * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01.
+ *
+ * Parse a persisted acquisition record back into the runtime's shape.
+ *
+ * The record is read from durable storage, so it is UNTRUSTED input: every
+ * field is validated, and a malformed record is treated as absent — which
+ * is `UNBOUND` downstream, the fail-closed direction.
+ */
+export function parseAcquisitionRecord(
+	value: unknown,
+): AcquisitionEvidence | undefined {
+	if (!value || typeof value !== "object" || Array.isArray(value)) {
+		return undefined;
+	}
+	const record = value as {
+		sourcePaths?: unknown;
+		contentIdentities?: unknown;
+		repositoryIdentity?: unknown;
+		workspaceRootIdentity?: unknown;
+		revision?: unknown;
+		clean?: unknown;
+	};
+	if (!Array.isArray(record.sourcePaths)) {
+		return undefined;
+	}
+	const sourcePaths = record.sourcePaths.filter(
+		(path): path is string => typeof path === "string" && path.length > 0,
+	);
+	if (sourcePaths.length === 0) {
+		return undefined;
+	}
+	if (
+		!record.contentIdentities ||
+		typeof record.contentIdentities !== "object" ||
+		Array.isArray(record.contentIdentities)
+	) {
+		return undefined;
+	}
+	const contentIdentities = new Map<string, string>();
+	for (const [path, identity] of Object.entries(
+		record.contentIdentities as Record<string, unknown>,
+	)) {
+		if (typeof identity !== "string" || identity.length === 0) {
+			return undefined;
+		}
+		contentIdentities.set(path, identity);
+	}
+	if (typeof record.repositoryIdentity !== "string") {
+		return undefined;
+	}
+	if (typeof record.workspaceRootIdentity !== "string") {
+		return undefined;
+	}
+	if (typeof record.revision !== "string" || record.revision.length === 0) {
+		return undefined;
+	}
+	// The content identity of a RESTORED record is the digest over the
+	// observed sources' own identities. It is stable, it is derived only
+	// from what was pinned, and it does not depend on the workspace.
+	const sourceIdentities = sourcePaths
+		.map((path) => contentIdentities.get(path))
+		.filter((identity): identity is string => Boolean(identity))
+		.sort();
+	return {
+		toolUseId: "",
+		toolName: "",
+		sourcePaths,
+		revision: {
+			repositoryIdentity: record.repositoryIdentity,
+			workspaceRootIdentity: record.workspaceRootIdentity,
+			revision: record.revision,
+			contentIdentity: sha256HexSync(sourceIdentities.join("\n")),
+			clean: record.clean === true,
+		},
+		contentIdentities,
+	};
+}
+
+/**
+ * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01.
+ *
+ * The PERSISTED shape of an acquisition record.
+ *
+ * It is what the runtime writes onto the tool result block, so it is the
+ * shape that survives a persistence round-trip and comes back when the
+ * session is recreated.
+ */
+export function renderAcquisitionRecord(
+	evidence: AcquisitionEvidence,
+): ToolResultAcquisition {
+	return {
+		sourcePaths: [...evidence.sourcePaths],
+		contentIdentities: Object.fromEntries(evidence.contentIdentities),
+		repositoryIdentity: evidence.revision.repositoryIdentity,
+		workspaceRootIdentity: evidence.revision.workspaceRootIdentity,
+		revision: evidence.revision.revision,
+		clean: evidence.revision.clean,
+	};
+}
+
+/**
+ * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01.
+ *
+ * Attach an acquisition record to a tool result block.
+ *
+ * The record rides ON the block, so it is part of the durable canonical
+ * history and is restored with it.
+ */
+export function attachAcquisitionToToolResult(
+	block: ContentBlock,
+	evidence: AcquisitionEvidence | undefined,
+): ContentBlock {
+	if (block.type !== "tool_result") {
+		return block;
+	}
+	if (!evidence) {
+		return block;
+	}
+	return {
+		...block,
+		acquisition: renderAcquisitionRecord(evidence),
+	} as ContentBlock;
+}
+
+/**
+ * Find the canonical tool CALL for a tool-call id.
+ *
+ * The join fails closed on ambiguity: an id claimed by more than one call
+ * is not a call.
+ */
+function findCanonicalCall(
+	messages: readonly MessageWithMetadata[],
+	toolUseId: string,
+): { name: string; input: Record<string, unknown> } | undefined {
+	let found:
+		| { name: string; input: Record<string, unknown> }
+		| undefined;
+	for (const message of messages) {
+		if (!Array.isArray(message.content)) {
+			continue;
+		}
+		for (const block of message.content as ContentBlock[]) {
+			if (block.type !== "tool_use" || block.id !== toolUseId) {
+				continue;
+			}
+			if (found) {
+				// Ambiguous: the same id claimed twice.
+				return undefined;
+			}
+			found = {
+				name: block.name,
+				input: (block.input ?? {}) as Record<string, unknown>,
+			};
+		}
+	}
+	return found;
+}
+
+/**
+ * Find the canonical tool RESULT for a tool-call id.
+ *
+ * The join fails closed on ambiguity: an id answered by more than one
+ * result is not a result.
+ */
+function findCanonicalResult(
+	messages: readonly MessageWithMetadata[],
+	toolUseId: string,
+): { isError: boolean } | undefined {
+	let found: { isError: boolean } | undefined;
+	for (const message of messages) {
+		if (!Array.isArray(message.content)) {
+			continue;
+		}
+		for (const block of message.content as ContentBlock[]) {
+			if (block.type !== "tool_result" || block.tool_use_id !== toolUseId) {
+				continue;
+			}
+			if (found) {
+				return undefined;
+			}
+			found = { isError: block.is_error === true };
+		}
+	}
+	return found;
+}
 
 /**
  * The acceptance decision for one candidate.
@@ -913,10 +1614,28 @@ export interface ResolveAdjudicationCandidateOptions {
 	/**
 	 * The runtime's source-revision resolver.
 	 *
-	 * When absent, no revision can be bound and every candidate is
-	 * rejected with `unbound_source_revision`.
+	 * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01:
+	 * the resolver is now an ACQUISITION-TIME instrument. It is called ONCE,
+	 * when the evidence is observed, and its answer is STORED against the
+	 * tool-result identity. It is NOT called during candidate evaluation.
+	 *
+	 * When absent, no acquisition-time identity can be captured, so no
+	 * candidate is bound and every candidate is rejected with
+	 * `no_acquisition_record`.
 	 */
 	readonly revisionResolver?: SourceRevisionResolver;
+	/**
+	 * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01.
+	 *
+	 * The acquisition-time records the runtime captured, keyed by canonical
+	 * tool-call id.
+	 *
+	 * This is the authority for "what did this evidence refer to?". It is
+	 * captured when the evidence is OBSERVED and travels with the canonical
+	 * history. A candidate whose cited evidence carries no record is
+	 * `UNBOUND` — the fail-closed direction.
+	 */
+	readonly acquisitions?: AcquisitionEvidenceLedger;
 	/**
 	 * An INDEPENDENT semantic adjudicator, keyed by canonical tool-call id.
 	 *
@@ -1071,15 +1790,22 @@ export async function resolveAdjudicationCandidate(
 	// The revision is bound by the RUNTIME. The model's claim is never
 	// read: the envelope has no revision field, so there is nothing for
 	// the model to override.
+	//
+	// ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01:
+	// the binding now reads the ACQUISITION-TIME record. The workspace is
+	// NOT consulted here, so the bound identity is the identity the
+	// evidence HAD when it was observed — not the identity the file has
+	// now.
 	let binding: SourceRevisionBinding = {
 		state: "UNBOUND",
-		reason: "no_revision_resolver",
+		reason: "no_acquisition_ledger",
 	};
-	if (options.revisionResolver) {
+	const acquisitions = options.acquisitions;
+	if (acquisitions) {
 		binding = await bindSourceRevision({
 			resolvedEvidence,
 			ledger,
-			resolver: options.revisionResolver,
+			acquisitions,
 		});
 	}
 	const sourceRevisionBound =
@@ -1146,56 +1872,89 @@ export async function resolveAdjudicationCandidate(
 /**
  * Bind ONE source revision across every cited evidence source.
  *
- * The binding is `BOUND` only when EVERY cited source resolved to the
- * SAME revision. Two sources from two different revisions describe a state
- * of the world that never existed, so the candidate is `STALE` rather than
- * `BOUND`.
+ * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01.
+ *
+ * THE REPAIR: THIS FUNCTION NO LONGER RESOLVES ANYTHING.
+ *
+ * The predecessor called `resolver.resolve({ sourcePath, toolName })` here,
+ * which established what the file looks like AT EVALUATION TIME. The
+ * candidate's evidence, however, was observed EARLIER, and the file may
+ * have changed in between. The bound revision was therefore frequently
+ * WRONG, and the defect was silent: a candidate citing an earlier read was
+ * accepted with the LATER file's identity.
+ *
+ * The binding now reads the ACQUISITION-TIME record the runtime captured
+ * when the evidence was observed. The workspace is never consulted at
+ * evaluation time, so "what did this evidence refer to?" is answered by the
+ * record of the observation, not by a guess about the present.
+ *
+ * The binding is `BOUND` only when EVERY cited source resolved to the SAME
+ * acquisition-time revision. Two sources observed at two different
+ * revisions describe a state of the world that never existed, so the
+ * candidate is `STALE` rather than `BOUND`.
  */
 async function bindSourceRevision(input: {
 	resolvedEvidence: readonly string[];
 	ledger: CanonicalEvidenceLedger;
-	resolver: SourceRevisionResolver;
+	acquisitions: AcquisitionEvidenceLedger;
 }): Promise<SourceRevisionBinding> {
 	if (input.resolvedEvidence.length === 0) {
 		return { state: "UNBOUND", reason: "no_evidence_to_bind" };
 	}
 	const revisions: SourceRevision[] = [];
 	for (const toolUseId of input.resolvedEvidence) {
-		const call = input.ledger.calls.get(toolUseId);
-		if (!call) {
+		const record = input.acquisitions.records.get(toolUseId);
+		if (!record) {
+			// No acquisition-time record: the runtime never observed this
+			// evidence's source identity. It is UNBOUND, not guessed.
 			return {
 				state: "UNBOUND",
-				reason: `unresolvable_tool_reference:${toolUseId}`,
+				reason: `no_acquisition_record:${toolUseId}`,
 			};
 		}
-		const sourcePath = extractSourcePath(call.input);
-		if (!sourcePath) {
-			// A tool call that does not read a SOURCE FILE cannot establish
-			// a source revision. A generic command's stdout is NOT
-			// reinterpreted as a file read.
+		if (record.sourcePaths.length === 0) {
 			return {
 				state: "UNBOUND",
 				reason: `evidence_has_no_source_identity:${toolUseId}`,
 			};
 		}
-		const revision = await input.resolver.resolve({
-			sourcePath,
-			toolName: call.name,
-		});
-		if (!revision) {
-			return {
-				state: "UNBOUND",
-				reason: `unbound_source_revision:${toolUseId}`,
-			};
+		// ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01
+		// (P1): the CONTENT identity of every observed source must be
+		// present. A source whose content identity is missing describes a
+		// file whose bytes were never pinned, so it establishes nothing.
+		for (const path of record.sourcePaths) {
+			if (!record.contentIdentities.get(path)) {
+				return {
+					state: "UNBOUND",
+					reason: `missing_content_identity:${toolUseId}:${path}`,
+				};
+			}
 		}
-		revisions.push(revision);
+		revisions.push(record.revision);
 	}
 	const first = revisions[0];
 	if (!first) {
 		return { state: "UNBOUND", reason: "no_evidence_to_bind" };
 	}
+	// ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01
+	// (P1): COMPATIBILITY is decided by the WORKSPACE identity — the
+	// repository, the workspace root and the revision — and NOT by the
+	// content identity.
+	//
+	// The content identity describes an INDIVIDUAL FILE, so two different
+	// files read at the same repository revision normally have DIFFERENT
+	// content hashes. Requiring them to agree would reject a candidate
+	// that cites two valid reads from two different files of the same
+	// repository state — a state that really existed.
+	//
+	// The content identity is validated per source, above, where it
+	// belongs: each observed source must have its own pinned identity.
 	for (const revision of revisions) {
-		if (revision.revision !== first.revision) {
+		if (
+			revision.revision !== first.revision ||
+			revision.repositoryIdentity !== first.repositoryIdentity ||
+			revision.workspaceRootIdentity !== first.workspaceRootIdentity
+		) {
 			return { state: "STALE", reason: "source_revision_mismatch" };
 		}
 	}
@@ -1207,6 +1966,13 @@ async function bindSourceRevision(input: {
  *
  * Only a call that DECLARES a file path yields one. A command's stdout is
  * never reinterpreted as a file read.
+ *
+ * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01:
+ * this function is RETAINED for the tool-call-argument shape only. It is
+ * NO LONGER the authority for a candidate's source identity: the
+ * authority is the ACQUISITION record (see
+ * {@link AcquisitionEvidenceLedger}), which is derived from what the tool
+ * RESULT actually reported. See {@link extractAcquiredSourcePaths}.
  */
 export function extractSourcePath(
 	input: Record<string, unknown>,
@@ -1568,6 +2334,14 @@ export async function deriveAcceptedAdjudications(
 		readonly registry: AdjudicationEvidenceRegistry;
 		readonly vocabulary?: AdjudicationVocabulary;
 		readonly revisionResolver?: SourceRevisionResolver;
+		/**
+		 * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01.
+		 *
+		 * The acquisition-time evidence records. Without them no candidate
+		 * can be bound, because the runtime cannot establish what the
+		 * evidence referred to at the moment it was observed.
+		 */
+		readonly acquisitions?: AcquisitionEvidenceLedger;
 	},
 ): Promise<AcceptedAdjudication[]> {
 	const published = collectPublishedAdjudicationCandidates(canonicalMessages);
@@ -1583,6 +2357,7 @@ export async function deriveAcceptedAdjudications(
 			...(options.revisionResolver
 				? { revisionResolver: options.revisionResolver }
 				: {}),
+			...(options.acquisitions ? { acquisitions: options.acquisitions } : {}),
 		});
 		if (!decision.candidate_accepted) {
 			continue;

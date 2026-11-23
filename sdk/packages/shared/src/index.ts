@@ -205,6 +205,7 @@ export type {
 	TextContent,
 	ThinkingContent,
 	ToolDefinition,
+	ToolResultAcquisition,
 	ToolResultContent,
 	ToolUseContent,
 } from "./llms/messages";

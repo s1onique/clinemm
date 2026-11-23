@@ -79,6 +79,44 @@ export interface ToolUseContent {
 }
 
 /**
+ * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01.
+ *
+ * The ACQUISITION-TIME provenance record of one tool result.
+ *
+ * It rides on the tool result itself, so it is part of the DURABLE
+ * CANONICAL HISTORY: the session's persisted messages carry it verbatim,
+ * and a session recreated from that file restores it without the runtime
+ * having to re-read the workspace.
+ *
+ * That is what makes "what did this evidence refer to?" answerable after a
+ * restart. An in-memory record answers it only while the process lives.
+ *
+ * The record is deliberately SMALL and CLOSED: the observed source paths,
+ * the content identity of each observed source, and the workspace revision
+ * observed at that moment. It carries no source CONTENT, so it can never
+ * leak a file's contents into the persisted history.
+ */
+export interface ToolResultAcquisition {
+	/** The source paths the RESULT reported observing. */
+	readonly sourcePaths: readonly string[];
+	/**
+	 * The content identity of each observed source, keyed by path.
+	 *
+	 * The identity is derived from the bytes the tool RETURNED, so it
+	 * describes the file as it was READ.
+	 */
+	readonly contentIdentities: Readonly<Record<string, string>>;
+	/** The repository identity observed at acquisition. */
+	readonly repositoryIdentity: string;
+	/** The workspace-root identity observed at acquisition. */
+	readonly workspaceRootIdentity: string;
+	/** The repository revision observed at acquisition. */
+	readonly revision: string;
+	/** Whether the working tree was clean at acquisition. */
+	readonly clean: boolean;
+}
+
+/**
  * Tool result content block (user's response to tool call)
  */
 export interface ToolResultContent {
@@ -91,6 +129,17 @@ export interface ToolResultContent {
 	content: string | Array<TextContent | ImageContent | FileContent>;
 	/** Whether this result represents an error */
 	is_error?: boolean;
+	/**
+	 * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01.
+	 *
+	 * The acquisition-time provenance record, when the runtime captured
+	 * one.
+	 *
+	 * It is ABSENT for every result that established no source identity,
+	 * and for every tool that is not a source-observing one. An absent
+	 * record is `UNBOUND` downstream, which is the fail-closed direction.
+	 */
+	acquisition?: ToolResultAcquisition;
 }
 
 /**

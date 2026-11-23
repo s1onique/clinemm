@@ -1,0 +1,31 @@
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core
+
+ ❯ src/extensions/context/compaction.adjudication-provenance.correction01.test.ts (21 tests | 4 failed) 12ms
+     ✓ captures the content identity from the bytes the tool RETURNED 2ms
+     × binds the ACQUISITION identity even when the workspace changed afterwards 4ms
+     × does NOT consult the workspace resolver during evaluation 1ms
+     × is UNBOUND when no acquisition record exists — it never guesses 0ms
+     ✓ is STALE when the cited sources were observed at different revisions 0ms
+     ✓ rejects a result whose structured payload reports a failure without is_error 0ms
+     ✓ rejects a result with NO success signal at all 0ms
+     ✓ rejects a result flagged as an error 0ms
+     ✓ accepts a result with an affirmative success signal 0ms
+     ✓ rejects a candidate whose cited evidence failed 0ms
+     ✓ gives NO source authority to a non-read tool with a path argument 0ms
+     ✓ gives NO source authority to a command whose arguments name a path 0ms
+     ✓ does not read the path out of the call arguments 0ms
+     ✓ binds EVERY path of a multi-file read, not only the first 0ms
+     ✓ fails the whole multi-file read when one file failed 0ms
+     ✓ strips the line-number gutter before hashing the returned content 0ms
+     ✓ strips the production range suffix so the attribution names the SOURCE 0ms
+     ✓ re-derives the SAME handle when the host supplies a re-derivable secret 0ms
+     ✓ reports the fail-closed degraded mode when no secret is supplied 0ms
+     × carries the adjudication across a session recreation with a re-derivable secret 1ms
+     ✓ drops the adjudication across a recreation WITHOUT a re-derivable secret 0ms
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 17 passed (21)
+   Start at  17:38:07
+   Duration  343ms (transform 212ms, setup 0ms, import 284ms, tests 12ms, environment 0ms)
+

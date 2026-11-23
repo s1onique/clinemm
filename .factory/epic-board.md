@@ -39286,3 +39286,136 @@ The successor's acceptance criterion must be stated in terms of
 The reviewer classified six whitespace diagnostics and unrelated stale
 gate-summary metadata as P2, NON-BLOCKING. They are OUT OF SCOPE here and
 are NOT claimed as fixed.
+
+# ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01 — PASS_CORRECTION_PROVENANCE_BOUND — 2026-11-23
+
+```text
+ACT_ID: ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01
+TYPE: bounded provenance correction (production implementation)
+PREDECESSOR: ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01
+ENTRY_HEAD: c7de1120e  (the predecessor's final commit)
+BRANCH: main (no ACT branch created)
+WORKTREE: /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+REVIEWER_VERDICT_ON_PREDECESSOR: HALT_ADJUDICATION_PROVENANCE_CONTRACT
+PREDECESSOR_VERDICT: PASS_STRUCTURAL_ONLY   (PRESERVED)
+PREDECESSOR_LIVE_ACCEPTANCE: 4/16 MiniMax-M3 runs   (PRESERVED)
+VERDICT: PASS_CORRECTION_PROVENANCE_BOUND
+EVIDENCE: .factory/evidence/ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01/
+  01-acquisition-time-binding.md
+  02-evidence-authority.md
+  03-session-continuity.md
+  04-artifact-identity.md
+  05-exit-report.md
+  artifact-hashes.json
+  verification/
+    gate1-3-red-provenance-predecessor.txt
+    gate1-red-durable-restoration.txt
+    gate2-red-multi-source-stale.txt
+    gate4-artifact-identity.txt
+```
+
+## Why this ACT was created
+
+The Factory runtime reviewer returned `HALT_ADJUDICATION_PROVENANCE_CONTRACT`
+on the predecessor. The verdict accepted the structural continuity result and
+the 4/16 real-model acceptance measurement, and raised three load-bearing
+defects plus one release-artifact blocker.
+
+```text
+P0-1  The source revision was NOT bound at acquisition time. The
+      predecessor re-resolved the CURRENT file while evaluating the
+      candidate, so a file edited between the read and the citation was
+      bound with the LATER identity although its evidence was the EARLIER
+      content. The git HEAD could remain identical throughout.
+
+P0-2  The evidence authority was too weak. The canonical ledger treated a
+      result as successful whenever is_error !== true, and the source path
+      was extracted from the tool call's ARGUMENTS without verifying that
+      the tool READ that path.
+
+P0-3  The acquisition records lived in an in-memory map, so a recreated
+      host restored nothing and the adjudication silently disappeared.
+
+P0-4  The packaged VSIX carried an outdated compiled SDK implementation.
+```
+
+## What this ACT closed
+
+```text
+P0-1  The binding reads an acquisition-time record whose content identity
+      is derived from the bytes the tool RETURNED, so it is race-free BY
+      CONSTRUCTION. bindSourceRevision() no longer resolves anything.
+
+P0-2  The ledger uses the PRODUCTION classifyToolResultStatus() rule, and
+      the source identity requires an OBSERVATION: the result payload's own
+      query attribution, for a source-observing tool only. A multi-file
+      call binds every path and fails whole if one file failed.
+
+P0-3  The acquisition record rides ON the canonical tool-result block, so
+      it is part of the DURABLE canonical history. A recreated host
+      restores it from the persisted transcript with no in-memory handover
+      and no workspace re-read. The handle secret is host-supplied, and
+      its absence is reported as the fail-closed degraded mode rather
+      than claimed away.
+
+P1    The multi-source compatibility is decided by the WORKSPACE identity
+      (revision + repository + workspace root); the content identity is
+      validated independently, per observed source.
+
+ORDER The capture runs on the EFFECTIVE, POST-HOOK result, because an
+      afterTool hook is a result-transforming hook.
+
+P0-4  The SDK was rebuilt, the VSIX repackaged, and the corrected
+      implementation verified in the VSIX's ACTUAL bundled bytes.
+```
+
+## The measurements
+
+```text
+FOCUSED SUITES (3 files)                 82 passed
+CONTEXT + ORCHESTRATION + CONFIG          919 passed, 2 skipped
+FULL @cline/core SUITE vs. BASELINE       ZERO regressions
+                                          (28 pre-existing failing files
+                                           identical before and after)
+TYPECHECK                                44 diagnostics (the baseline)
+HISTORICAL THINKING-ONLY RED WITNESS      byte-identical, 5 intentional
+                                          failures preserved
+RED gate1 (durable restoration)           7 failures
+RED gate2 (multi-source STALE)            1 failure
+```
+
+## The artifact
+
+```text
+Path:   dist/clinemm-adjud-corr01.vsix
+Bytes:  65044927
+SHA256: 1c9cabff70b9891f6ad6f65bb6853db7a0309fa85da8fff4b7035c949054931f
+```
+
+The extension bundles `@cline/core` from the COMPILED `dist/`, so the VSIX
+was extracted and its `extension/dist/extension.js` inspected DIRECTLY. The
+receipt `verification/gate4-artifact-identity.txt` records the corrected
+markers, the WORKSPACE-identity comparison, the flat persisted record shape,
+the ABSENCE of the predecessor's evaluation-time reason, and the capture at
+the tool boundary.
+
+## What is NOT claimed
+
+```text
+BEHAVIOURAL IMPROVEMENT:  whether ClineMM investigates less after
+                          compaction is NOT established by this ACT.
+LIVE INSTALLED RUN:       not performed. A GUI-driven installed run is not
+                          possible on this substrate, exactly as the
+                          predecessor recorded.
+THE P2 RESIDUE:           the three whitespace findings and the stale
+                          gate-summary binding remain P2, NON-BLOCKING.
+```
+
+## Scope
+
+The reviewer authorized ONE bounded extension, without opening another review
+cycle: persist the acquisition records, correct the multi-source identity
+validation, verify the post-hook capture, then rebuild, package and verify
+the embedded bundle. No new memory framework, no unrelated refactoring, no
+new long Round C run. The unrelated untracked evidence directories were left
+untouched.

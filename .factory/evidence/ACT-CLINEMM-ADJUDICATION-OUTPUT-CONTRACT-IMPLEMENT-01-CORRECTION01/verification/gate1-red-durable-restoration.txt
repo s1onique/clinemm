@@ -1,0 +1,181 @@
+(node:91977) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core
+
+(node:91992) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:91993) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ src/runtime/orchestration/session-runtime-orchestrator.adjudication-acquisition.correction01.test.ts (4 tests | 2 failed) 6ms
+     × records the result the host's afterTool hook PRODUCED 4ms
+     × survives a persistence round-trip and is restored by a fresh reader 0ms
+     ✓ produces NO record for a result that establishes no source identity 0ms
+     ✓ produces NO record for a NON-READ tool 0ms
+ ❯ src/extensions/context/compaction.adjudication-provenance.correction01.test.ts (24 tests | 5 failed) 13ms
+     ✓ captures the content identity from the bytes the tool RETURNED 2ms
+     × binds the ACQUISITION identity even when the workspace changed afterwards 4ms
+     ✓ does NOT consult the workspace resolver during evaluation 0ms
+     ✓ is UNBOUND when no acquisition record exists — it never guesses 0ms
+     × is STALE when the cited sources were observed at different revisions 1ms
+     ✓ rejects a result whose structured payload reports a failure without is_error 0ms
+     ✓ rejects a result with NO success signal at all 0ms
+     ✓ rejects a result flagged as an error 0ms
+     ✓ accepts a result with an affirmative success signal 0ms
+     ✓ rejects a candidate whose cited evidence failed 0ms
+     ✓ gives NO source authority to a non-read tool with a path argument 0ms
+     ✓ gives NO source authority to a command whose arguments name a path 0ms
+     ✓ does not read the path out of the call arguments 0ms
+     ✓ binds EVERY path of a multi-file read, not only the first 0ms
+     ✓ fails the whole multi-file read when one file failed 0ms
+     ✓ strips the line-number gutter before hashing the returned content 0ms
+     ✓ strips the production range suffix so the attribution names the SOURCE 0ms
+     × accepts a candidate citing two DIFFERENT files observed at the SAME revision 1ms
+     ✓ rejects a source whose CONTENT identity was never pinned 0ms
+     ✓ re-derives the SAME handle when the host supplies a re-derivable secret 0ms
+     ✓ reports the fail-closed degraded mode when no secret is supplied 1ms
+     × carries the adjudication across a session recreation with a re-derivable secret 0ms
+     × restores the adjudication from the PERSISTED canonical history alone 0ms
+     ✓ drops the adjudication across a recreation WITHOUT a re-derivable secret 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 7 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/extensions/context/compaction.adjudication-provenance.correction01.test.ts > P0-1 — the source revision is bound AT ACQUISITION, not re-resolved > binds the ACQUISITION identity even when the workspace changed afterwards
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/extensions/context/compaction.adjudication-provenance.correction01.test.ts:425:39
+    423|    },
+    424|   );
+    425|   expect(decision.candidate_accepted).toBe(true);
+       |                                       ^
+    426|   expect(decision.sourceRevision?.revision).toBe(
+    427|    SYNTHETIC_REVISION.revision,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/7]⎯
+
+ FAIL  src/extensions/context/compaction.adjudication-provenance.correction01.test.ts > P0-1 — the source revision is bound AT ACQUISITION, not re-resolved > is STALE when the cited sources were observed at different revisions
+AssertionError: expected +0 to be 1 // Object.is equality
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ src/extensions/context/compaction.adjudication-provenance.correction01.test.ts:517:36
+    515|    ),
+    516|   );
+    517|   expect(firstLedger.records.size).toBe(1);
+       |                                    ^
+    518|   const decision = await resolveAdjudicationCandidate(
+    519|    publishedCandidate(
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/7]⎯
+
+ FAIL  src/extensions/context/compaction.adjudication-provenance.correction01.test.ts > P1 — two files at the SAME revision are compatible > accepts a candidate citing two DIFFERENT files observed at the SAME revision
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/extensions/context/compaction.adjudication-provenance.correction01.test.ts:717:39
+    715|    },
+    716|   );
+    717|   expect(decision.candidate_accepted).toBe(true);
+       |                                       ^
+    718|   expect(decision.source_revision_bound).toBe(true);
+    719|   expect(acquisitions.records.size).toBe(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/7]⎯
+
+ FAIL  src/extensions/context/compaction.adjudication-provenance.correction01.test.ts > P0-3 — the handle continuity across a session recreation > carries the adjudication across a session recreation with a re-derivable secret
+AssertionError: expected +0 to be 1 // Object.is equality
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ src/extensions/context/compaction.adjudication-provenance.correction01.test.ts:819:27
+    817|    acquisitions,
+    818|   });
+    819|   expect(accepted.length).toBe(1);
+       |                           ^
+    820|   expect(accepted[0]?.finding_id).toBe(FINDING_ID);
+    821|  });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/7]⎯
+
+ FAIL  src/extensions/context/compaction.adjudication-provenance.correction01.test.ts > P0-3 — the handle continuity across a session recreation > restores the adjudication from the PERSISTED canonical history alone
+AssertionError: expected +0 to be 1 // Object.is equality
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ src/extensions/context/compaction.adjudication-provenance.correction01.test.ts:851:39
+    849|   });
+    850|   const restoredLedger = buildAcquisitionEvidenceLedger(persisted);
+    851|   expect(restoredLedger.records.size).toBe(1);
+       |                                       ^
+    852|   expect(
+    853|    restoredLedger.records.has(SOURCE_CALL_ID),
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/7]⎯
+
+ FAIL  src/runtime/orchestration/session-runtime-orchestrator.adjudication-acquisition.correction01.test.ts > the acquisition-time capture is on the EFFECTIVE result > records the result the host's afterTool hook PRODUCED
+AssertionError: expected +0 to be 1 // Object.is equality
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ src/runtime/orchestration/session-runtime-orchestrator.adjudication-acquisition.correction01.test.ts:166:37
+    164|    postHookOutput,
+    165|   );
+    166|   expect(acquisitions.records.size).toBe(1);
+       |                                     ^
+    167|   const record = acquisitions.records.get("call_1");
+    168|   expect(record?.sourcePaths).toEqual([SOURCE_PATH]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/7]⎯
+
+ FAIL  src/runtime/orchestration/session-runtime-orchestrator.adjudication-acquisition.correction01.test.ts > the acquisition record is DURABLE > survives a persistence round-trip and is restored by a fresh reader
+AssertionError: expected +0 to be 1 // Object.is equality
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ src/runtime/orchestration/session-runtime-orchestrator.adjudication-acquisition.correction01.test.ts:209:33
+    207|   // re-read. The record is restored from the persisted transcript.
+    208|   const restored = buildAcquisitionEvidenceLedger(persisted);
+    209|   expect(restored.records.size).toBe(1);
+       |                                 ^
+    210|   const record = restored.records.get("call_1");
+    211|   expect(record?.sourcePaths).toEqual([SOURCE_PATH]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/7]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  7 failed | 21 passed (28)
+   Start at  18:12:47
+   Duration  543ms (transform 610ms, setup 0ms, import 825ms, tests 19ms, environment 0ms)
+

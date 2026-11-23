@@ -1013,6 +1013,44 @@ export interface AgentConfig {
 	 */
 	consumePendingUserMessage?: () => string | undefined;
 
+	/**
+	 * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01.
+	 *
+	 * The OPT-IN adjudication provenance contract.
+	 *
+	 * When it is absent, the runtime captures no acquisition-time evidence
+	 * records and the ordinary path is byte-identical.
+	 *
+	 * The resolver is an ACQUISITION-TIME instrument: it is called once, when
+	 * a tool result is observed, and its answer is stored with the canonical
+	 * history. It is never consulted while a candidate is evaluated.
+	 */
+	adjudication?: {
+		readonly revisionResolver?: {
+			resolve(input: {
+				sourcePath: string;
+				toolName: string;
+			}): Promise<
+				| {
+						repositoryIdentity: string;
+						workspaceRootIdentity: string;
+						revision: string;
+						contentIdentity: string;
+						clean: boolean;
+					}
+				| undefined
+			>
+			| {
+					repositoryIdentity: string;
+					workspaceRootIdentity: string;
+					revision: string;
+					contentIdentity: string;
+					clean: boolean;
+				}
+				| undefined;
+		};
+	};
+
 	// -------------------------------------------------------------------------
 	// Cancellation
 	// -------------------------------------------------------------------------

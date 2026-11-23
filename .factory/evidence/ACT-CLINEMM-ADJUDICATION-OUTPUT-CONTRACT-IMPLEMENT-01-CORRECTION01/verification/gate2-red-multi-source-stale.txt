@@ -1,0 +1,60 @@
+(node:90363) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core
+
+(node:90381) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ src/extensions/context/compaction.adjudication-provenance.correction01.test.ts (24 tests | 1 failed) 15ms
+     ✓ captures the content identity from the bytes the tool RETURNED 2ms
+     ✓ binds the ACQUISITION identity even when the workspace changed afterwards 2ms
+     ✓ does NOT consult the workspace resolver during evaluation 0ms
+     ✓ is UNBOUND when no acquisition record exists — it never guesses 0ms
+     ✓ is STALE when the cited sources were observed at different revisions 1ms
+     ✓ rejects a result whose structured payload reports a failure without is_error 0ms
+     ✓ rejects a result with NO success signal at all 0ms
+     ✓ rejects a result flagged as an error 0ms
+     ✓ accepts a result with an affirmative success signal 0ms
+     ✓ rejects a candidate whose cited evidence failed 0ms
+     ✓ gives NO source authority to a non-read tool with a path argument 0ms
+     ✓ gives NO source authority to a command whose arguments name a path 0ms
+     ✓ does not read the path out of the call arguments 0ms
+     ✓ binds EVERY path of a multi-file read, not only the first 0ms
+     ✓ fails the whole multi-file read when one file failed 0ms
+     ✓ strips the line-number gutter before hashing the returned content 0ms
+     ✓ strips the production range suffix so the attribution names the SOURCE 0ms
+     × accepts a candidate citing two DIFFERENT files observed at the SAME revision 4ms
+     ✓ rejects a source whose CONTENT identity was never pinned 0ms
+     ✓ re-derives the SAME handle when the host supplies a re-derivable secret 0ms
+     ✓ reports the fail-closed degraded mode when no secret is supplied 1ms
+     ✓ carries the adjudication across a session recreation with a re-derivable secret 0ms
+     ✓ restores the adjudication from the PERSISTED canonical history alone 0ms
+     ✓ drops the adjudication across a recreation WITHOUT a re-derivable secret 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/extensions/context/compaction.adjudication-provenance.correction01.test.ts > P1 — two files at the SAME revision are compatible > accepts a candidate citing two DIFFERENT files observed at the SAME revision
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/extensions/context/compaction.adjudication-provenance.correction01.test.ts:717:39
+    715|    },
+    716|   );
+    717|   expect(decision.candidate_accepted).toBe(true);
+       |                                       ^
+    718|   expect(decision.source_revision_bound).toBe(true);
+    719|   expect(acquisitions.records.size).toBe(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 23 passed (24)
+   Start at  18:12:24
+   Duration  1.65s (transform 1.38s, setup 0ms, import 1.49s, tests 15ms, environment 0ms)
+

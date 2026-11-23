@@ -1,0 +1,25 @@
+VSIX BUNDLE VERIFICATION
+==============================================================
+Path:   dist/clinemm-adjud-corr01.vsix
+Bytes:  65044927
+SHA256: 1c9cabff70b9891f6ad6f65bb6853db7a0309fa85da8fff4b7035c949054931f
+
+--- 1. the corrected implementation is present in the BUNDLED bytes ---
+  no_acquisition_record: 1
+  missing_content_identity: 1
+  evidence_has_no_source_identity: 1
+
+--- 2. P1: compatibility is decided by WORKSPACE identity, NOT content ---
+  if(n.revision!==r.revision||n.repositoryIdentity!==r.repositoryIdentity||n.workspaceRootIdentity!==r.workspaceRootIdentity)return{state:"STALE",reason:"source_revision_mismatch
+
+  The predecessor compared contentIdentity here; the corrected bundle
+  compares revision + repositoryIdentity + workspaceRootIdentity.
+
+--- 3. P0: the acquisition record is PERSISTED in the FLAT durable shape ---
+  {sourcePaths:[...t.sourcePaths],contentIdentities:{...t.contentIdentities},repositoryIdentity:t.repositoryIdentity,workspaceRootIdentity:t.workspaceRootIdentity,revision:t.revision,clean:t.clean===!0}
+
+--- 4. the predecessor's evaluation-time reason is absent ---
+  no_revision_resolver: 0
+
+--- 5. the capture happens at the tool boundary ---
+  tring")return;let s=V5f(i);if(!s)return;let u=K5f(a.result);if(!u)return;r.push(s),n.set(s,u)}if(r.length===0)return;let o=t.resolver?await t.resolver.resolve({sourcePath:r[0],toolName:t.toolName}):void 0;if(o)return{toolUseId:t.toolUseId,toolName:t.toolName,sourcePaths:r,revision:o,contentIden

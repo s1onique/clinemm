@@ -11,6 +11,7 @@ import type {
 	RedactedThinkingContent,
 	TextContent,
 	ThinkingContent,
+	ToolResultAcquisition,
 	ToolResultContent,
 	ToolUseContent,
 } from "@cline/shared";
@@ -146,6 +147,79 @@ export function agentMessagesToMessagesWithMetadata(
 	return messages.map(agentMessageToMessageWithMetadata);
 }
 
+/**
+ * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01.
+ *
+ * Attach the acquisition-time provenance records to the tool results of an
+ * agent-message list.
+ *
+ * The records are captured at the tool boundary and applied here, at the
+ * CONVERSION boundary, because that is where the agent's messages become the
+ * canonical history that is persisted. A record attached to the persisted
+ * tool-result block is part of the DURABLE canonical history, so a session
+ * recreated from that file restores the evidence provenance without any
+ * in-memory handover.
+ *
+ * A tool result with no captured record is left untouched: an absent record
+ * is `UNBOUND` downstream, which is the fail-closed direction.
+ */
+export function attachAcquisitionsToAgentMessages(
+	messages: readonly AgentMessage[],
+	acquisitions: ReadonlyMap<string, ToolResultAcquisition>,
+): AgentMessage[] {
+	if (acquisitions.size === 0) {
+		return [...messages];
+	}
+	let changed = false;
+	const next = messages.map((message) => {
+		if (!Array.isArray(message.content)) {
+			return message;
+		}
+		let messageChanged = false;
+		const parts = message.content.map((part) => {
+			if (part.type !== "tool-result") {
+				return part;
+			}
+			const acquisition = acquisitions.get(part.toolCallId);
+			if (!acquisition) {
+				return part;
+			}
+			messageChanged = true;
+			return { ...part, acquisition };
+		});
+		if (!messageChanged) {
+			return message;
+		}
+		changed = true;
+		return { ...message, content: parts };
+	});
+	return changed ? next : [...messages];
+}
+
+/**
+ * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01.
+ *
+ * The PERSISTED shape of an acquisition record.
+ *
+ * The runtime's internal `AcquisitionEvidence` carries a `SourceRevision`
+ * object and a `Map`; neither survives a JSON round-trip in the shape the
+ * restoration expects. The PERSISTED shape is therefore FLAT — plain
+ * strings and a plain object — so the record that is written to disk is
+ * exactly the record that is read back.
+ */
+export function toPersistedAcquisition(
+	acquisition: ToolResultAcquisition,
+): ToolResultAcquisition {
+	return {
+		sourcePaths: [...acquisition.sourcePaths],
+		contentIdentities: { ...acquisition.contentIdentities },
+		repositoryIdentity: acquisition.repositoryIdentity,
+		workspaceRootIdentity: acquisition.workspaceRootIdentity,
+		revision: acquisition.revision,
+		clean: acquisition.clean === true,
+	};
+}
+
 export function agentMessagesToMessages(
 	messages: readonly AgentMessage[],
 ): Message[] {
@@ -220,6 +294,10 @@ function toolResultContentToAgentPart(
 		toolName: block.name,
 		output: block.content,
 		isError: block.is_error,
+		// ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01:
+		// the acquisition-time record rides WITH the result, so it survives
+		// the round-trip that persists the canonical history.
+		...(block.acquisition ? { acquisition: block.acquisition } : {}),
 	};
 }
 
@@ -289,6 +367,16 @@ function agentPartToContentBlock(
 				name: part.toolName,
 				content: toPersistedToolResultContent(part.output),
 				is_error: part.isError,
+				// ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01:
+				// the acquisition-time record is PERSISTED onto the canonical
+				// tool-result block, which is the durable authority a
+				// recreated session restores the evidence provenance from.
+				//
+				// It is written in the FLAT persisted shape, so the record that
+				// goes to disk is exactly the record that comes back.
+				...(part.acquisition
+					? { acquisition: toPersistedAcquisition(part.acquisition) }
+					: {}),
 			} satisfies ToolResultContent;
 		}
 	}

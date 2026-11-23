@@ -52,6 +52,29 @@ export interface CoreAdjudicationConfig {
 	 * Without it, no candidate can be accepted either: the runtime cannot
 	 * independently bind a source revision, and a model-authored revision
 	 * claim is never read.
+	 *
+	 * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01:
+	 * the resolver is an ACQUISITION-TIME instrument. It is called ONCE,
+	 * when a tool result is observed, and the answer is STORED against the
+	 * tool-result identity. It is NOT called during candidate evaluation.
 	 */
 	revisionResolver?: SourceRevisionResolver;
+	/**
+	 * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01.
+	 *
+	 * The host-supplied, RE-DERIVABLE per-session evidence-handle secret.
+	 *
+	 * The host owns the session's lifetime, so it is the only party that
+	 * can reproduce the same secret for the same session id. Supplying it
+	 * makes the opaque evidence handles survive a session recreation: a
+	 * restored session re-derives the same handles, so an adjudication
+	 * published before the restart still resolves afterwards.
+	 *
+	 * When it is absent, the runtime generates an in-memory secret, the
+	 * handles are valid only for the lifetime of the process, and a
+	 * restored session cannot resolve a previously published handle. That
+	 * is the FAIL-CLOSED direction, and the runtime reports it as such
+	 * rather than claiming a restoration it cannot perform.
+	 */
+	secretProvider?: (sessionId: string) => string | Promise<string>;
 }

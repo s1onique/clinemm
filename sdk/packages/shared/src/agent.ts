@@ -11,6 +11,7 @@ import type {
 } from "./agents/recovery/types";
 import type { GeneratedMedia } from "./llms/media";
 import type { ModelInfo } from "./llms/model-info";
+import type { ToolResultAcquisition } from "./llms/messages";
 import type {
 	CommandExecutionPlan,
 	InternalExecutionCapability,
@@ -78,6 +79,16 @@ export interface AgentToolResultPart {
 	toolName: string;
 	output: unknown;
 	isError?: boolean;
+	/**
+	 * ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01.
+	 *
+	 * The acquisition-time provenance record of this result.
+	 *
+	 * It travels with the result so the codec can persist it onto the
+	 * canonical tool-result block, which is the durable authority a
+	 * recreated session restores from.
+	 */
+	acquisition?: ToolResultAcquisition;
 	/** Absent for ordinary AgentRuntime-executed tools. */
 	execution?: ModelToolExecution;
 }
