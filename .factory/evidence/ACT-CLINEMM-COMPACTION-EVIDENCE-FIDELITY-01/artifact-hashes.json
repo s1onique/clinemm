@@ -1,6 +1,6 @@
 {
   "act": "ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01",
-  "entry_source_head": "43b3c062b6f0a16b71f54712b94aec79ce13ec48",
+  "entry_source_head": "1427bbabcf71dc3c8f02f6982b8ef91599d9fbb1",
   "branch": "main",
   "subject_source_revision": "42de653b59708e712d694aeb9732f822b7f8fe5b",
   "subject_source_branch": "optimize-ftls",
@@ -230,15 +230,15 @@
     },
     {
       "path": "sdk/packages/core/src/extensions/context/evidence-continuity.ts",
-      "bytes": 79047,
-      "sha256": "e9196d7029cfe9deb4923e323d1177bef4ef0a62e1f8515da100f593aa45e386",
+      "bytes": 82926,
+      "sha256": "d2a0465457314e9191c017443c1c1131cde3ee5d8eae740bda85968f816d2765",
       "role": "production source under this ACT",
       "private_outside_git": false
     },
     {
       "path": "sdk/packages/core/src/extensions/context/compaction.evidence-fidelity01.test.ts",
-      "bytes": 52356,
-      "sha256": "ada86dfe51d64f9e49fd20af35c0830f7dd82c32b3cb766b8671fb1a7e14ecb6",
+      "bytes": 59869,
+      "sha256": "f937f8976688ac976f3fefcd60a9bb8d49f52ff28c2813bbeabc3d58d3efd504",
       "role": "production-seam regression test",
       "private_outside_git": false
     }
@@ -266,6 +266,13 @@
       "private_outside_git": false
     },
     {
+      "path": ".factory/evidence/ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01/containment-record.md",
+      "bytes": 7248,
+      "sha256": "52a662975c6a9fc5070fa9b7cd575399f52ae5264ca3b3eace340aa37b10e74f",
+      "role": "published evidence artifact",
+      "private_outside_git": false
+    },
+    {
       "path": ".factory/evidence/ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01/correction-record.md",
       "bytes": 11230,
       "sha256": "51c5b3294c86a69724c6714f6aa44d8e63f0aadcd6c78feecd87393fbab8f5bf",
@@ -281,8 +288,8 @@
     },
     {
       "path": ".factory/evidence/ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01/qualification-report.md",
-      "bytes": 7545,
-      "sha256": "d519c938f1bec841a3eefe4f4a9183ce8966313b8f03cea6c0f7a55c0152f85f",
+      "bytes": 9373,
+      "sha256": "6e5639faf5570843e9f5d98a1f63cec4520e81eda2defacb43ba2a2b8e2791f8",
       "role": "published evidence artifact",
       "private_outside_git": false
     },
@@ -333,20 +340,20 @@
     {
       "command": "cd sdk/packages/core && bunx vitest run --config vitest.config.ts src/extensions/context/compaction.evidence-fidelity01.test.ts",
       "exit_code": 1,
-      "phase": "RED (production reverted to the pre-correction code)",
-      "result": "SECURITY 2, 3 and 5 FAIL - the .pgpass credential IS carried"
+      "phase": "RED (switch forced ON) - the containment cases must fail",
+      "result": "4 failed | 35 passed (39); CONTAINMENT 2 and 3 (the review's ordinary-file counterexample) FAIL"
     },
     {
       "command": "cd sdk/packages/core && bunx vitest run --config vitest.config.ts src/extensions/context/compaction.evidence-fidelity01.test.ts",
       "exit_code": 0,
-      "phase": "GREEN, after the SECURITY01 path-based fail-closed correction",
-      "result": "34 passed (34)"
+      "phase": "GREEN, deployed default",
+      "result": "39 passed (39)"
     },
     {
       "command": "cd sdk/packages/core && bunx vitest run --config vitest.config.ts src/extensions/context/",
       "exit_code": 0,
       "phase": "conservation sweep",
-      "result": "451 passed | 2 skipped (453)"
+      "result": "456 passed | 2 skipped (458)"
     },
     {
       "command": "cd sdk/packages/core && bun tsc -p tsconfig.dev.json --noEmit",
@@ -358,7 +365,7 @@
       "command": "cd sdk/packages/core && bunx vitest run --config vitest.config.ts",
       "exit_code": 1,
       "phase": "full-suite regression check",
-      "result": "154 failed | 5494 passed - IDENTICAL failure count and IDENTICAL failing file set to the entry HEAD (31 files, all pre-existing and unrelated)"
+      "result": "154 failed | 5499 passed - IDENTICAL failure count and IDENTICAL failing file set to the entry HEAD (31 files, all pre-existing and unrelated)"
     },
     {
       "command": "cd <repo> && bunx biome check <the modified production file> <the test file>",
@@ -373,7 +380,7 @@
     "credentials_in_git": false,
     "note": "Only safe fixture values and redacted references are published. The canonical transcript, the provider-request captures and the persisted sidecar stay in the operator-local cline-data directory and are referenced by path + SHA-256 only. The only credential-shaped strings in the repository copy are explicitly SYNTHETIC (SYNTHETIC-DO-NOT-USE-*, FAKE-CREDENTIAL-DO-NOT-USE, FAKE-AUTH-TOKEN-*, FAKE-DB-PASSWORD-*)."
   },
-  "correction": "ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-CORRECTION01 + ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-SECURITY-01",
+  "correction": "+ CORRECTION01 + SECURITY01 + CONTAINMENT01",
   "behavioural_causality": "BEHAVIORAL_CAUSE_UNPROVEN (the e9ab27bc8 SUPPORTED claim was withdrawn by the review; see correction-record.md P0-4)",
   "security_correction": {
     "act": "ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-SECURITY-01",
@@ -383,5 +390,16 @@
     "path_vocabulary_source": "reuses the codebase's existing credential-target vocabulary in runtime/command-policy/structured-command-risk.ts",
     "red_gate": "SECURITY 1-6 in compaction.evidence-fidelity01.test.ts; SECURITY 2/3/5 fail against the pre-correction code",
     "residual_limit": "an unrecognized credential format inside an ORDINARY file is not detected; closing that needs the broader trust mechanism (separate design ACT)"
+  },
+  "containment": {
+    "act": "ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-CONTAINMENT-01",
+    "trigger": "third review of 1427bbabc: HALT_P0_EXCERPT_CONTENT_CONFIDENTIALITY",
+    "confirmed_counterexample": "an unconventional credential in a NON-sensitive ordinary source (/repo/docs/build-notes.md) was carried verbatim",
+    "repair": "the automatic read_files excerpt carry-forward is OFF BY DEFAULT at the shared extraction boundary buildSourceFileFact()",
+    "switch": "SOURCE_FILE_FACT_CARRY_FORWARD_ENABLED = false",
+    "capability_retained": "setSourceFileFactCarryForwardForTesting() lets the R4 fidelity tests prove the mechanism without changing the production default",
+    "red_gate": "CONTAINMENT 1-5; with the switch forced ON, CONTAINMENT 1-4 FAIL",
+    "withdrawn": "PASS_STRUCTURAL_ONLY is withdrawn for the AUTOMATIC fact-preservation feature: the mechanism is demonstrated, the capability is NOT deployed",
+    "preserved": "task-contract carry-forward, verified-outcome carry-forward and stable-prefix behaviour are unchanged and active"
   }
 }

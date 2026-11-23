@@ -38572,3 +38572,102 @@ BIOME  0 errors, 0 warnings
 ## Evidence
 
 `.factory/evidence/ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01/` (see `security-record.md`)
+
+# ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-CONTAINMENT-01 — PASS_STRUCTURAL_ONLY (automatic feature WITHDRAWN) — 2026-11-23
+
+## Verdict
+
+`PASS_STRUCTURAL_ONLY` for the **mechanism**; the **automatic fact-preservation feature is
+WITHDRAWN** (contained, default off).
+
+The third review of `1427bbabc` returned `HALT_P0_EXCERPT_CONTENT_CONFIDENTIALITY`. It confirmed
+that SECURITY01 fixed the KNOWN sensitive-path bypass and that the rest of the evidence-fidelity
+work was sound, but held the automatic feature because the broader confidentiality defect was
+still open.
+
+## The review's counterexample — confirmed against production code
+
+```
+buildSourceFileFact({ query: "/repo/docs/build-notes.md",
+                       result: "1 | db.example:5432:production:app:FAKE-CREDENTIAL-DO-NOT-USE",
+                       success: true }, "read_files")
+  -> path sensitive?  : false
+  -> FACT EXCERPT      : "db.example:5432:production:app:FAKE-CREDENTIAL-DO-NOT-USE"
+  -> credential leaked : true
+```
+
+A `.pgpass`-shaped credential in a NON-sensitive source was carried verbatim. SECURITY01 closed
+the KNOWN credential LOCATIONS; it cannot close an unconventional credential inside an ordinary
+file, and no further regex or path denylist can — the credential-format set is unbounded. OWASP's
+secrets-management guidance makes the same point.
+
+## The containment — the review's instruction, followed literally
+
+> Disable automatic raw `read_files` excerpt carry-forward **by default**, at the shared
+> extraction boundary used by both the summarizer and deterministic file-fact section.
+
+`buildSourceFileFact()` IS that shared boundary: it is the single function through which BOTH the
+summarizer-input projection and the deterministic file-fact section obtain an excerpt. The
+containment is therefore total.
+
+```ts
+export const SOURCE_FILE_FACT_CARRY_FORWARD_ENABLED = false;
+```
+
+The **capability is not removed**: `setSourceFileFactCarryForwardForTesting()` lets the R4
+fidelity tests prove the mechanism without changing the production default, and an `afterEach`
+restores it unconditionally.
+
+## The RED — CONTAINMENT 1-5
+
+| Control | Asserts | Result |
+|---|---|---|
+| CONTAINMENT 1 | the automatic excerpt carry-forward is OFF by default | PASS |
+| CONTAINMENT 2 | the review's counterexample: an unrecognized credential in an ORDINARY source is NOT carried | PASS |
+| CONTAINMENT 3 | the ordinary-file credential reaches neither the summarizer request nor the persisted/provider-visible summary | PASS |
+| CONTAINMENT 4 | no source-file fact is produced for ANY source while the carry-forward is off | PASS |
+| CONTAINMENT 5 | the CAPABILITY still works when explicitly enabled | PASS |
+
+**Load-bearing:** with the switch forced ON, exactly CONTAINMENT 1-4 FAIL (4 failed | 35 passed).
+
+## The existing mechanisms are preserved
+
+The task-contract carry-forward, the verified-outcome carry-forward and the stable-prefix
+behaviour are UNCHANGED and active. The only behavioural change is that the automatic EXCERPT
+path produces nothing.
+
+The R4 fidelity tests are **kept as evidence of the capability** (with the switch explicitly
+enabled); the DEPLOYED behaviour is asserted separately by the CONTAINMENT cases.
+
+## Executable evidence
+
+```
+RED    (switch forced ON)      4 failed | 35 passed (39)        EXIT=1
+GREEN  (deployed default)      39 passed (39)                   EXIT=0
+SWEP   src/extensions/context/ 456 passed | 2 skipped (458)     EXIT=0
+TYPECHECK  43 diagnostics == entry-HEAD baseline; ACT-owned = 0
+FULL SUITE  failing file set IDENTICAL to the entry HEAD (31 files)
+BIOME  0 errors, 0 warnings
+```
+
+## The withdrawal the review anticipated
+
+The review said: *"This may require withdrawing `PASS_STRUCTURAL_ONLY` for the automatic
+fact-preservation feature."*
+
+It is withdrawn **for the automatic feature**:
+
+- The **information-loss mechanism** is `REPRODUCED` and the responsible transformation is
+  `IDENTIFIED` — facts about the ORIGINAL production code, unaffected by the containment.
+- The **fidelity capability** is `DEMONSTRATED` but **NOT DEPLOYED**.
+- The **automatic excerpt path** is `CONTAINED` (default off).
+- Live qualification of the SAFE configuration is next; broader trusted-evidence preservation is
+  a separate design ACT.
+
+No generic secret scanner, no further path denylist, no new memory framework. The compaction
+investigation is NOT reopened: the provenance corrections, the causal withdrawal
+(`BEHAVIORAL_CAUSE_UNPROVEN`) and the budget-boundary RED all stand.
+
+## Evidence
+
+`.factory/evidence/ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01/` (see `containment-record.md`)

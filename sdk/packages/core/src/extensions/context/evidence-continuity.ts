@@ -485,6 +485,89 @@ export function stripSourceLineGutter(body: string): string {
 }
 
 /**
+ * ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-CONTAINMENT-01
+ *
+ * Whether automatic source-file excerpt carry-forward is ENABLED.
+ *
+ * DEFAULT: **OFF**.
+ *
+ * WHY THE DEFAULT IS OFF.
+ *
+ * The excerpt path copies file CONTENT into a summarizer request and into a
+ * PERSISTED, repeatedly-transmitted compaction summary. Source attribution
+ * proves WHERE the bytes came from; it does not prove that those bytes are
+ * safe to retain or forward.
+ *
+ * The content sanitizer recognizes credential-shaped SYNTAX (`key=value`
+ * assignments, bearer headers, PEM blocks, provider key prefixes). It does
+ * NOT recognize a credential without such a marker: a `.pgpass`-style
+ * `host:port:db:user:password` line, a legacy `_auth=` token, or a
+ * `scheme://user:password@host` URL all pass through it verbatim.
+ *
+ * The sensitive-PATH rule (SECURITY01) closes that for KNOWN credential
+ * locations. It cannot close it for an ORDINARY source file that happens to
+ * contain an unconventional credential, and no additional regex or path
+ * denylist can: the set of credential formats is unbounded. OWASP's
+ * secrets-management guidance makes the same point -- detection based on
+ * recognizable formats cannot reliably identify human-created or
+ * unconventional credentials.
+ *
+ * So the capability is retained, and demonstrated by the R4 fidelity tests,
+ * but it is NOT deployed by default. Turning it on is a deliberate,
+ * explicitly opt-in decision that belongs to a broader trusted-evidence
+ * design (a separate ACT), not to a default.
+ *
+ * THE SWITCH IS AT THE SHARED EXTRACTION BOUNDARY
+ * (`buildSourceFileFact`), so it governs BOTH consumers at once: the
+ * summarizer-input projection and the deterministic file-fact section.
+ * There is no path by which the excerpt is carried while the switch is off.
+ */
+export const SOURCE_FILE_FACT_CARRY_FORWARD_ENABLED = false;
+
+/**
+ * ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-CONTAINMENT-01
+ *
+ * The RESOLVED state of the automatic excerpt carry-forward.
+ *
+ * The default is OFF. The override exists so that the CAPABILITY can be
+ * exercised by a test (and, later, by an explicit opt-in configuration)
+ * without changing the default that production uses.
+ *
+ * The override is read through a function rather than captured at module
+ * load, so a test can set it for the duration of one case and restore it.
+ */
+let sourceFileFactCarryForwardOverride: boolean | undefined;
+
+/**
+ * ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-CONTAINMENT-01
+ *
+ * Whether the automatic excerpt carry-forward is currently enabled.
+ */
+export function isSourceFileFactCarryForwardEnabled(): boolean {
+	return (
+		sourceFileFactCarryForwardOverride ?? SOURCE_FILE_FACT_CARRY_FORWARD_ENABLED
+	);
+}
+
+/**
+ * ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-CONTAINMENT-01
+ *
+ * Override the automatic excerpt carry-forward for the duration of a test.
+ *
+ * The returned function RESTORES the previous state, so a test can never
+ * leak the override into another case. Production never calls this.
+ */
+export function setSourceFileFactCarryForwardForTesting(
+	enabled: boolean | undefined,
+): () => void {
+	const previous = sourceFileFactCarryForwardOverride;
+	sourceFileFactCarryForwardOverride = enabled;
+	return () => {
+		sourceFileFactCarryForwardOverride = previous;
+	};
+}
+
+/**
  * ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01
  *
  * Build the bounded, source-attributed file fact for ONE structured result
@@ -493,10 +576,13 @@ export function stripSourceLineGutter(body: string): string {
  *
  * The conditions are ALL required:
  *
- *   1. The result's tool is the source-file read tool.
- *   2. The payload SUCCEEDED. A failed read establishes no file content.
- *   3. The query names a source path.
- *   4. The result is a non-empty STRING.
+ *   1. The automatic excerpt carry-forward is ENABLED
+ *      (`SOURCE_FILE_FACT_CARRY_FORWARD_ENABLED`). It is OFF by default.
+ *   2. The result's tool is the source-file read tool.
+ *   3. The payload SUCCEEDED. A failed read establishes no file content.
+ *   4. The query names a source path.
+ *   5. The result is a non-empty STRING.
+ *   6. The path is not a known credential-bearing location.
  *
  * The excerpt is bounded by `SOURCE_FILE_FACT_CHAR_LIMIT` characters, so
  * the carried representation is a fixed cost per payload.
@@ -505,6 +591,14 @@ export function buildSourceFileFact(
 	payload: Record<string, unknown>,
 	toolName: string | undefined,
 ): SourceFileFact | undefined {
+	if (!isSourceFileFactCarryForwardEnabled()) {
+		// ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-CONTAINMENT-01: the
+		// automatic carry-forward is OFF by default. Returning here is what
+		// makes the containment complete: BOTH the summarizer-input
+		// projection and the deterministic file-fact section go through
+		// this function, so neither can carry an excerpt.
+		return undefined;
+	}
 	if (toolName !== SOURCE_FILE_READ_TOOL_NAME) {
 		return undefined;
 	}

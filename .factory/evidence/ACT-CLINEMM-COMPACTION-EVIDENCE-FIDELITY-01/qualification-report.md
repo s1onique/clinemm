@@ -128,3 +128,33 @@ budget no longer decides a factual question. `MAX_CARRIED_OUTCOMES` itself is **
   explicitly separate causal chain.
 - It does not claim live-model behaviour: the qualification is a deterministic projection replay,
   i.e. **STRUCTURAL**, not **LIVE**.
+
+---
+
+## CONTAINMENT01 addendum — the automatic feature is withdrawn
+
+The third review (`HALT_P0_EXCERPT_CONTENT_CONFIDENTIALITY`) confirmed that an unconventional
+credential in an ORDINARY source file still reached the excerpt path. The automatic excerpt
+carry-forward is therefore **OFF by default** (`SOURCE_FILE_FACT_CARRY_FORWARD_ENABLED = false`),
+at the shared extraction boundary `buildSourceFileFact()` — the single function through which
+both the summarizer-input projection and the deterministic file-fact section obtain an excerpt.
+
+**What this table now describes.** The per-boundary results above are the qualification of the
+**CAPABILITY**, exercised with the switch explicitly enabled. With the deployed default, the
+automatic excerpt path produces nothing, and the table's "Corrected projection carries the fact"
+column does NOT describe the deployed configuration.
+
+| Boundary | Capability (switch ON) | Deployed default (switch OFF) |
+|---|---|---|
+| 7 -> 8 | summarizer input + file-fact section carry the fact | no excerpt carried |
+| 23 -> 24 | summarizer input + file-fact section carry the fact | no excerpt carried |
+| 41 -> 42 | summarizer input + file-fact section carry the fact | no excerpt carried |
+| 62 -> 63 | summarizer input + file-fact section carry the fact | no excerpt carried |
+| 84 -> 85 | summarizer input + file-fact section carry the fact | no excerpt carried |
+
+The **historical loss** remains `REPRODUCED` and the responsible transformation remains
+`IDENTIFIED` — those are facts about the ORIGINAL production code and are unaffected by the
+containment. What is withdrawn is the claim that the repair is **deployed**.
+
+The task-contract carry-forward, the verified-outcome carry-forward and the stable-prefix
+behaviour are UNCHANGED and remain active in the deployed default.

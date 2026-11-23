@@ -1,6 +1,6 @@
-# ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01 (+ CORRECTION01 + SECURITY01)
+# ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01 (+ CORRECTION01 + SECURITY01 + CONTAINMENT01)
 
-**Verdict:** `PASS_STRUCTURAL_ONLY` (after CORRECTION01 and SECURITY01)
+**Verdict:** `PASS_STRUCTURAL_ONLY` for the mechanism; the **automatic fact-preservation feature is WITHDRAWN** (contained, default off)
 **Entry HEAD:** `bd39be9da2d0a610c173fbc205e2bdea570f8e70` (branch `main`)
 **Historical session:** `1795382314359_rb19c` · **Provider-capture run:** `yHaQSIjO`
 **Subject source revision:** Keycloak `42de653b59708e712d694aeb9732f822b7f8fe5b` (`optimize-ftls`)
@@ -67,8 +67,8 @@ were real defects in the shipped repair.
 
 ```
 RED    (production reverted)    6 failed | 22 passed (28)      EXIT=1
-GREEN  (after the repair)       34 passed (34)                EXIT=0
-SWEP   src/extensions/context/ 451 passed | 2 skipped (453)    EXIT=0
+GREEN  (after the repair)       39 passed (39)                EXIT=0
+SWEP   src/extensions/context/ 456 passed | 2 skipped (458)    EXIT=0
 TYPECHECK  43 diagnostics == the entry-HEAD baseline; ACT-owned = 0
 FULL SUITE  failing file set IDENTICAL to the entry HEAD (31 files)
 BIOME  0 errors, 0 warnings
@@ -93,16 +93,43 @@ The path vocabulary reuses the one the codebase already applies to credential ta
 pre-correction code**, so the gate is load-bearing. The whole R4 evidence-fidelity suite is
 preserved and GREEN.
 
+## CONTAINMENT01 — the automatic excerpt path is contained (default off)
+
+The third review (`HALT_P0_EXCERPT_CONTENT_CONFIDENTIALITY`) confirmed the reviewer's
+ordinary-file counterexample against the production code: a `.pgpass`-shaped credential in a
+NON-sensitive source (`/repo/docs/build-notes.md`) was carried verbatim. SECURITY01 fixed the
+KNOWN sensitive-path bypass, but an unconventional credential in an ordinary file still got
+through — and no further regex or path denylist can close that, because the credential-format set
+is unbounded.
+
+Following the review's instruction literally — *"disable automatic raw `read_files` excerpt
+carry-forward by default, at the shared extraction boundary used by both the summarizer and
+deterministic file-fact section"*:
+
+```ts
+export const SOURCE_FILE_FACT_CARRY_FORWARD_ENABLED = false;
+```
+
+`buildSourceFileFact()` IS that shared boundary (the single function through which both
+consumers obtain an excerpt), so the containment is total: with the switch off, no excerpt is
+produced for any source.
+
+The **capability is not removed**: `setSourceFileFactCarryForwardForTesting()` lets the R4
+fidelity tests prove the mechanism without changing the production default. The ACT no longer
+claims the capability is deployed.
+
 ## Files changed
 
 | File | Change |
 |---|---|
 | `sdk/packages/core/src/extensions/context/compaction-shared.ts` | The tool name is threaded into the result projection; a source-attributed file read carries a bounded, redacted excerpt. |
-| `sdk/packages/core/src/extensions/context/evidence-continuity.ts` | The source-attributed file fact is derived from the canonical payload, redacted, and carried in a dedicated, independently budgeted section. A known credential-bearing SOURCE PATH is not carried at all (SECURITY01). |
+| `sdk/packages/core/src/extensions/context/evidence-continuity.ts` | The source-attributed file fact is derived from the canonical payload, redacted, and carried in a dedicated, independently budgeted section. A known credential-bearing SOURCE PATH is not carried at all (SECURITY01). The automatic carry-forward is **OFF by default** (CONTAINMENT01). |
 | `sdk/packages/core/src/extensions/context/compaction.evidence-fidelity01.test.ts` | NEW — the production-seam RED, the causal discriminator, 19 negative controls, the realistic outside-the-budget RED and the confidentiality controls (incl. the 6 SECURITY controls). |
 
 ## What is NOT claimed
 
+- **The automatic fact-preservation feature is NOT deployed.** The excerpt carry-forward is off
+  by default. The capability is demonstrated; its safe default deployment is a separate decision.
 - No live model was run. The qualification is STRUCTURAL, not LIVE.
 - The repair does not prove improved autonomous completion.
 - **Behavioural causality is UNPROVEN**: the model did not re-read the R4 fact after the boundary.
