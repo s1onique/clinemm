@@ -1,0 +1,17 @@
+PROFILE=codium-clinemm
+LAUNCHER=/etc/profiles/per-user/chistyakov/bin/codium-clinemm
+USER_DATA_DIR=/Volumes/UserData/Users/chistyakov/.vscodium-clinemm/user-data
+EXTENSIONS_DIR=/Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions
+VSIX_PATH=/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/dogfood/clinemm-4.1.26-a493eff07.vsix
+VSIX_BYTES=49731375
+VSIX_SHA256=d1ad8067ce1f00bd2a62b9e9c5afbeaebdd8689342c80a4fbea2838ff00b5354
+INSTALLED_VERSION=4.1.26-a493eff07
+INSTALLED_BUNDLE_PATH=/Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.26-a493eff07/dist/extension.js
+INSTALLED_BUNDLE_BYTES=27550799
+INSTALLED_BUNDLE_SHA256=48234a456deec83597575c2a8804a141ca17e5a3fca6456531f96c5586547d0f
+VSIX_EMBEDDED_BUNDLE_SHA256=48234a456deec83597575c2a8804a141ca17e5a3fca6456531f96c5586547d0f
+INSTALLED_BUNDLE_MATCHES_VSIX=YES
+MCP_HOST_EXTENSION_VERSION=4.1.26-a493eff07
+INSTALLED_VERSION_MATCHES_MCP_HOST=YES
+
+The extension in the unrelated default `.vscode-oss/extensions` profile was not used as the subject. Its older version was excluded after identifying the requested `codium-clinemm` profile.

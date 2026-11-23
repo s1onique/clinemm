@@ -1,0 +1,18 @@
+ACT_ID=ACT-CLINEMM-MCP-SUPERVISION-V2-LIVE-QUAL01
+OBSERVED_AT_UTC=2026-11-23T01:25:25Z
+ENTRY_HEAD=a493eff078ec5c8f2b6c874ad8f4a85009d1b64f
+BRANCH=main
+ENTRY_WORKTREE_STATUS=CLEAN
+V2_CORR01_ANCESTOR=YES (git merge-base --is-ancestor b0c5a0b232d4fb13291a754e1ac337e4e99b87fb HEAD exited 0)
+SOURCE_TREE_SHA=7053677b62192134dce8ff2fa7db28d523364730 (HEAD:apps/vscode/src)
+SOURCE_PACKAGE_VERSION=4.1.26 (apps/vscode/package.json)
+ARTIFACT_VERSION=4.1.26-a493eff07
+SOURCE_IDENTITY_VERIFIED=YES
+
+Identity basis:
+- The artifact version suffix `a493eff07` matches the first nine characters of ENTRY_HEAD.
+- The exact named VSIX and its installed package manifest report `4.1.26-a493eff07`.
+- The installed extension bundle SHA-256 equals the bundle extracted from that VSIX.
+- A separate same-version build at apps/vscode/dist/extension.js has a different byte hash; the historical packaging record states esbuild output is not byte-reproducible. The installed hash is recorded separately and was not inferred from the version string.
+
+Production seam inspection confirmed the current source contains the V2 routes, canonical `performCanonicalTurnStart`, approval-pending rejection, request-id conflict handling, and the existing `cancelTask()` call path. No source files were modified.

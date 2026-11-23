@@ -1,0 +1,25 @@
+OBSERVED_AT_UTC=2026-11-23T01:25:25Z
+PLATFORM=Darwin arm64
+WORKSPACE=/private/tmp/codium-clinemm-live-qual01
+WORKSPACE_FIXTURE=Fresh local clone of /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm-codex-fixture
+WORKSPACE_HEAD=018e81c1be41c6973721b31bf77714d4bfaf3cab
+WORKSPACE_INITIAL_STATUS=CLEAN
+PROFILE_WORKSPACE_RECORD=/Volumes/UserData/Users/chistyakov/.vscodium-clinemm/user-data/User/workspaceStorage/2bdcdc35eab3989bc567468979dd361d/workspace.json
+PROFILE_WORKSPACE_RECORD_VALUE=file:///private/tmp/codium-clinemm-live-qual01
+INITIAL_GET_RUN=control_seam_no_active_run
+CAPABILITIES_PROTOCOL_VERSION=1
+CAPABILITIES_READ_ONLY=false
+CAPABILITIES_OPERATIONS=clinemm_capabilities,clinemm_get_run,clinemm_start_act,clinemm_read_events,clinemm_send_feedback,clinemm_cancel_run
+
+Start preflight request (no credential fields):
+{"requestId":"ACT-CLINEMM-MCP-SUPERVISION-V2-LIVE-QUAL01-L1-START-01","expectedWorkspace":"/private/tmp/codium-clinemm-live-qual01","prompt":"Read src/index.ts using ClineMM's ordinary read-only tools. Do not edit any files and do not run shell commands. Report the exact result implied by the source for isExpired({ expiresAtMs: 100 }, 100), with the source path and line reference. If the source signature differs, report the actual signature."}
+Start response: control_seam_mutation_not_authorized
+POST_REJECTION_GET_RUN=control_seam_no_active_run
+ACCEPTED_START=NO
+SESSION_ID=NOT_RETURNED
+TASK_ID=NOT_RETURNED
+RUN_ID=NOT_RETURNED
+MUTATION_GRANT=NOT_ARMED (the existing mutation operation rejected the start with control_seam_mutation_not_authorized)
+NATIVE_UI_OBSERVATION=UNAVAILABLE (computer-use host returned “Computer Use permissions are not granted.”)
+
+The original pilot fixture remains at its recorded HEAD with a clean working tree. The fresh clone is separate, clean, and outside the authoritative checkout.

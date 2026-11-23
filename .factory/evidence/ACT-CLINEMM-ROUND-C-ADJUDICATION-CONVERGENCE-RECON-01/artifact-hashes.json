@@ -1,0 +1,181 @@
+{
+ "act": "ACT-CLINEMM-ROUND-C-ADJUDICATION-CONVERGENCE-RECON-01",
+ "entry_head": "a493eff078ec5c8f2b6c874ad8f4a85009d1b64f",
+ "final_head": "a493eff078ec5c8f2b6c874ad8f4a85009d1b64f",
+ "branch": "main",
+ "session_id": "1795394987994_fpu77",
+ "capture_run": "cap_run_rX-Rbi8y",
+ "capture_run_status": "UNAVAILABLE_FROM_TRACE (not present on this machine; provider-request material recovered from the compaction_candidate_snapshot artifacts for decisions #37#36, #63#62, #97#96, #98#97)",
+ "canonical_snapshot_sha256": "9ca5309aa18e43c97343d87171de20f2a198f6ccfe8f266c1f1c33557afa5dcd",
+ "snapshot_cutoff_utc": "2026-11-23T04:34Z",
+ "private_input_artifacts": [
+  {
+   "role": "canonical_messages",
+   "path": "~/.vscodium-roz/cline-data/sessions/1795394987994_fpu77/1795394987994_fpu77.messages.json",
+   "bytes": 827899,
+   "sha256": "9ca5309aa18e43c97343d87171de20f2a198f6ccfe8f266c1f1c33557afa5dcd",
+   "committed": false
+  },
+  {
+   "role": "compaction_sidecar",
+   "path": "~/.vscodium-roz/cline-data/sessions/1795394987994_fpu77/1795394987994_fpu77.compaction.json",
+   "bytes": 94713,
+   "sha256": "27984ab03e56d66cba54f2b66475fd8a4f8a803becdcb18dca4c5a34d5570091",
+   "committed": false
+  },
+  {
+   "role": "session_metadata",
+   "path": "~/.vscodium-roz/cline-data/sessions/1795394987994_fpu77/1795394987994_fpu77.json",
+   "bytes": 2304,
+   "sha256": "2220739301afdb8c1609befa02653fc0fbb6355a5c5ead55fa9cd336155429da",
+   "committed": false
+  },
+  {
+   "role": "compaction_candidate_37_36",
+   "path": "~/.vscodium-roz/cline-data/private/compaction-candidates/1795394987994_fpu77_37_36-ee8075901728--985b23ca0f7536fa576f74b4756985aaab7938fa6b615d0d7594b15523f0ab53.json",
+   "bytes": 360707,
+   "sha256": "85bfffaf869fcbee9b8d91d94d3a60c77610fc5d71f232941809291bf1f41da1",
+   "committed": false
+  },
+  {
+   "role": "compaction_candidate_63_62",
+   "path": "~/.vscodium-roz/cline-data/private/compaction-candidates/1795394987994_fpu77_63_62-4e1cd3c1082b--c7c79aef22b45ef75c6a605d69f7a9c5cb8e1f24de8fb492129c9ae6038f2a18.json",
+   "bytes": 342791,
+   "sha256": "dcdd4c73e00443bbc91b11971c868ae0b972547565055713a24703bc537f45ee",
+   "committed": false
+  },
+  {
+   "role": "compaction_candidate_97_96",
+   "path": "~/.vscodium-roz/cline-data/private/compaction-candidates/1795394987994_fpu77_97_96-95b48fc0e5e6--0999ae43e6b762a797355e04ff69796efde55914bc833b90fa292a18288f2c3d.json",
+   "bytes": 326991,
+   "sha256": "e4dc3675f979afd93da60f445f4b6ae946e1b7ec0884798907331737aa9da34b",
+   "committed": false
+  },
+  {
+   "role": "compaction_candidate_98_97",
+   "path": "~/.vscodium-roz/cline-data/private/compaction-candidates/1795394987994_fpu77_98_97-8aeddaef5256--1c8a8a4f4956c3bf2d9612c0d244407e0060f73ca74ccb6798da8fae3d4c5814.json",
+   "bytes": 345142,
+   "sha256": "cde8cdbc7d714c29e611b69914126aaa17550dd9d0bef8f0c6375e8fbbb89429",
+   "committed": false
+  },
+  {
+   "role": "summarizer_request_capture_1",
+   "path": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/cline-data/provider-request-captures/cap_41f75c5386d5db78.ai_sdk_prompt.1.provider-request.json",
+   "bytes": 29055,
+   "sha256": "f8c4f998840618825e234ea6dcdb67463ef6f92f5a54a586980886d52d52b3bb",
+   "committed": false
+  },
+  {
+   "role": "summarizer_request_capture_2",
+   "path": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/cline-data/provider-request-captures/cap_41f75c5386d5db78.ai_sdk_prompt.2.provider-request.json",
+   "bytes": 31533,
+   "sha256": "e731913590fb7b6637ff89ef692956bf49c1d2a7d0a17f9db983cd3c0a237ef3",
+   "committed": false
+  },
+  {
+   "role": "summarizer_request_capture_3",
+   "path": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/cline-data/provider-request-captures/cap_41f75c5386d5db78.ai_sdk_prompt.3.provider-request.json",
+   "bytes": 33661,
+   "sha256": "123454c4ed8e352416884cb7c560784150a5bc231c74728d01a43832a1d06e9e",
+   "committed": false
+  },
+  {
+   "role": "summarizer_request_capture_4",
+   "path": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/cline-data/provider-request-captures/cap_41f75c5386d5db78.ai_sdk_prompt.4.provider-request.json",
+   "bytes": 38384,
+   "sha256": "3f86b04e8bd12e73ec86925b251ed4740cc0bed36595e42350a1057feb84201b",
+   "committed": false
+  },
+  {
+   "role": "summarizer_request_capture_5",
+   "path": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/cline-data/provider-request-captures/cap_41f75c5386d5db78.ai_sdk_prompt.5.provider-request.json",
+   "bytes": 32713,
+   "sha256": "d1bdad1cb7189adb31abb9fa0ff4526b50e0ec1f70491eb3784b00a64889a94c",
+   "committed": false
+  },
+  {
+   "role": "summarizer_request_capture_6",
+   "path": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/cline-data/provider-request-captures/cap_41f75c5386d5db78.ai_sdk_prompt.6.provider-request.json",
+   "bytes": 28152,
+   "sha256": "78ddc4f81bf6b32d6f92fb62aac0325c2a3a89194cfef6994a042535b581ab1f",
+   "committed": false
+  },
+  {
+   "role": "summarizer_request_capture_7",
+   "path": "/Volumes/UserData/Users/chistyakov/.vscodium-roz/cline-data/provider-request-captures/cap_41f75c5386d5db78.ai_sdk_prompt.7.provider-request.json",
+   "bytes": 33940,
+   "sha256": "6cb7e0f3ef52a060e6e931da64a6e09503be8ed7cc3ac7c3a9b69e5721173b99",
+   "committed": false
+  }
+ ],
+ "committed_artifacts": [
+  {
+   "file": "adjudication-state-matrix.md",
+   "bytes": 18738,
+   "sha256": "69e86d702d89344fb4088ac1e9e05340941279a509f08f7d9c02733be4ab02b2"
+  },
+  {
+   "file": "causal-discriminators.md",
+   "bytes": 19246,
+   "sha256": "cad29e859f9ac3a7455106cb27b65c75e401a7ee47dc6432414f7ff3bfacdcaa"
+  },
+  {
+   "file": "compaction-boundary-comparison.md",
+   "bytes": 15107,
+   "sha256": "c3b142880ddd1c9333dd31f9226324c2c6efcbb533cccd4a598432d187193be8"
+  },
+  {
+   "file": "correction01-boundary-verification.md",
+   "bytes": 20161,
+   "sha256": "cbcb18c9e44ebbbc3842eda020673ac74d4ffa015405ec66afb0188144309630"
+  },
+  {
+   "file": "identity-and-sources.md",
+   "bytes": 12633,
+   "sha256": "a2274323eacd8cbb0388dcf07633c8d60499ced2cca6f83981b580d5702781b4"
+  },
+  {
+   "file": "qualification-report.md",
+   "bytes": 16917,
+   "sha256": "147648a75493c2856899fef1f1792ae60a6cd9e57949faabfc667d99a4292681"
+  },
+  {
+   "file": "r4-canonical-timeline.json",
+   "bytes": 6304,
+   "sha256": "072016255cbbb4117e838033cac8143b7f1637c4828252fa3eace17e9daf071f"
+  },
+  {
+   "file": "read-necessity-analysis.md",
+   "bytes": 20539,
+   "sha256": "3160868e92045103a6160fc2aeb0a377ee226c48d834a4675d0355efc55dbdd2"
+  }
+ ],
+ "privacy": {
+  "raw_artifact_copies_in_git": 0,
+  "raw_transcript_bodies_in_git": 0,
+  "provider_payload_bodies_in_git": 0,
+  "credentials_in_git": 0
+ },
+ "executed_gates": [
+  {
+   "gate": "production-seam RED suite (compaction.evidence-fidelity01.test.ts)",
+   "command": "bun x vitest run src/extensions/context/compaction.evidence-fidelity01.test.ts --config vitest.config.ts",
+   "cwd": "sdk/packages/core",
+   "result": "39 passed (39)",
+   "exit_code": 0
+  }
+ ],
+ "artifact_count": 8,
+ "correction": {
+  "name": "CORRECTION01",
+  "review_verdict_accepted": "HALT_BOUNDARY_CHRONOLOGY_INVALID",
+  "upheld": [
+   "P0-1 chronology (R4 narrowing witness is canonical idx 124, not 148/194)",
+   "P0-2 serializer boundary (the summarizer never saw stdout; the Blocked assertion was truthful about its own input)",
+   "P0-3 R3/R7/R8 verdict loss satisfies the Option A precondition",
+   "H5 timing correction (SUPPORTED -> INDETERMINATE)"
+  ],
+  "next_action_change": "C -> A",
+  "verdict": "PASS_RECON_BOUNDARY_CLASSIFIED (narrowed retroactively)"
+ }
+}

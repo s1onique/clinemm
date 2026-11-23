@@ -1,0 +1,15 @@
+ENTRY_CHECKOUT=UNCHANGED; entry HEAD a493eff078ec5c8f2b6c874ad8f4a85009d1b64f; clean before evidence files
+SOURCE_FILES=UNCHANGED; no implementation, build, or test actions performed
+PILOT_FIXTURE=UNCHANGED; /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm-codex-fixture remained at 018e81c1be41c6973721b31bf77714d4bfaf3cab with clean status
+FRESH_FIXTURE=CREATED; /private/tmp/codium-clinemm-live-qual01 cloned from the pilot fixture baseline and clean at 018e81c1be41c6973721b31bf77714d4bfaf3cab
+PROFILE=codium-clinemm; installed ClineMM bundle matches the recorded exact VSIX bundle hash
+MUTATION_AUTHORIZATION=FAIL_CLOSED; start rejected with control_seam_mutation_not_authorized
+TASK_EFFECTS=NONE_OBSERVED; no accepted session/task/run; post-rejection get_run returned control_seam_no_active_run
+UNRELATED_SESSIONS=NOT_EXERCISED
+NATIVE_APPROVALS=NOT_EXERCISED
+ORDINARY_UI_CONTINUATION_AND_CANCEL=NOT_OBSERVED
+AF_UNIX_OWNERSHIP_AND_TCP_ABSENCE=NOT_LIVE_VERIFIED
+BACKGROUND_JOB_CONTAINMENT=NOT_EXERCISED
+NATIVE_UI=LIVE_UNOBSERVABLE; computer-use permissions were unavailable
+
+No task, feedback, cancellation, approval, or file mutation was accepted. Do not promote the source inspection or capability response to live behavior evidence.
