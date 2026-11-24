@@ -396,21 +396,102 @@ export interface CanonicalToolEvent {
 }
 
 /**
+ * ACT-CLINEMM-PCK-EXACT-HEAD-PACKAGING-01 — C1 EXECUTION-AUTHORITY PREFLIGHT
+ *
+ * The AUTHORITATIVE executable-command fields of a tool call, per TOOL.
+ *
+ * ============================================================================
+ * WHY THE BOUNDARY IS PER TOOL AND NOT A GLOBAL KEY LIST
+ * ============================================================================
+ *
+ * The CORRECTION02 implementation walked a GLOBAL key list:
+ *
+ *   command, commands, query, script, path, file_path, filePath
+ *
+ * That is broader than an executable-command boundary. `path`,
+ * `file_path` and `filePath` are the READ-REQUEST fields of the
+ * production `read_files` schema, and `query` / `script` are not
+ * authoritative executable-command fields of the production
+ * `run_commands` schema either.
+ *
+ * The consequence was a FALSE ASSURANCE: a `read_files` call whose FILE
+ * PATH was the string "make build" was classified as a BUILD INVOCATION,
+ * and reached `tool_observed`. A file named "make build" is not a
+ * command, and a command is never inferred from a path.
+ *
+ * The production schemas (INSPECTED, not assumed):
+ *
+ *   sdk/packages/core/src/extensions/tools/schemas.ts
+ *
+ *     RunCommandsInputSchema (the CANONICAL, strict run_commands shape)
+ *         { commands: string[], notifyOnCompletion?: boolean }
+ *       The executable-bearing field is `commands`, an ARRAY of complete
+ *       shell command strings.
+ *
+ *       The lenient union additionally accepts `{command}`, `{cmd}`, a
+ *       bare array and a bare string, and
+ *       `normalizeRunCommandsToolInput()` canonicalises the confirmed
+ *       Flint shape `{command: "<JSON array>"}` into `{commands: [...]}`
+ *       BEFORE schema validation. So `commands` is the field the runtime
+ *       actually executes, and `command` / `cmd` are the accepted
+ *       compatibility spellings of the SAME field.
+ *
+ *     ReadFilesInputSchema
+ *         { files: ReadFileRequest[] }
+ *       A request carries `path` (and the tolerant aliases `file_path` /
+ *       `filePath`). THERE IS NO EXECUTABLE COMMAND IN A READ REQUEST.
+ *
+ * So the boundary is: for a COMMAND EXECUTION tool, read the
+ * executable-command fields; for every other tool, read NOTHING.
+ *
+ * ============================================================================
+ * THE BOUNDARY IS THE PRODUCTION SCHEMA'S, NOT A NEW ONE
+ * ============================================================================
+ *
+ * This is NOT another classifier. `classifyCommand()` still does the
+ * classification; this table only decides WHICH VALUES are eligible to
+ * be classified. A tool that is not listed here contributes NO
+ * classification at all, so it can never establish an operation.
+ */
+export const COMMAND_EXECUTION_INPUT_FIELDS: Readonly<
+	Record<string, readonly string[]>
+> = Object.freeze({
+	// The production `run_commands` executable-bearing field, plus the
+	// compatibility spellings the production normaliser and lenient union
+	// accept for the SAME field.
+	run_commands: Object.freeze(["commands", "command", "cmd"]),
+});
+
+/**
  * ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01-CORRECTION02
  *
  * The command CLASSIFICATIONS of a tool call's own declared input.
  *
- * The derivation is DELIBERATELY SHALLOW and mirrors the production
- * evidence-continuity module: only the call's own declared input is read,
- * never the tool OUTPUT, and only the well-known executable-bearing keys
- * are considered.
+ * ACT-CLINEMM-PCK-EXACT-HEAD-PACKAGING-01: the derivation is SCOPED TO THE
+ * TOOL. Only a tool whose schema declares an executable-command field
+ * contributes classifications, and only under THAT tool's authoritative
+ * field names.
  *
  * The OUTPUT is never read. A classification is a property of what the
  * runtime was ASKED to run, so a `make build` classification is established
  * by the call's own input plus the result's own success signal — not by
  * anything the tool printed.
+ *
+ * The traversal remains DELIBERATELY SHALLOW, mirroring the production
+ * evidence-continuity module: only the call's own declared input is read,
+ * and the depth is bounded.
  */
-function collectCommandClassifications(input: unknown): readonly string[] {
+function collectCommandClassifications(
+	toolName: string,
+	input: unknown,
+): readonly string[] {
+	const fields = COMMAND_EXECUTION_INPUT_FIELDS[toolName];
+	if (fields === undefined) {
+		// The tool's schema declares NO executable-command field, so the
+		// call establishes no command classification. A read_files call
+		// whose PATH happens to be "make build" establishes nothing.
+		return [];
+	}
 	const classifications: string[] = [];
 	const push = (value: unknown): void => {
 		if (typeof value === "string") {
@@ -442,18 +523,10 @@ function collectCommandClassifications(input: unknown): readonly string[] {
 		for (const [key, nested] of Object.entries(
 			value as Record<string, unknown>,
 		)) {
-			// The keys that carry an executable command in the production
-			// tool-call shapes. This is a DATA SHAPE allowlist, not a
-			// provider- or tool-name branch.
-			if (
-				key === "command" ||
-				key === "commands" ||
-				key === "query" ||
-				key === "script" ||
-				key === "path" ||
-				key === "file_path" ||
-				key === "filePath"
-			) {
+			// ONLY the tool's OWN authoritative executable-command fields
+			// are eligible. A metadata field — a path, a query, a script
+			// label — is never an executable command.
+			if (fields.includes(key)) {
 				push(nested);
 				continue;
 			}
@@ -565,7 +638,10 @@ export function collectCanonicalToolEvents(
 			toolName,
 			evidenceClass: classifyToolEvidenceClass(toolName),
 			succeeded: result.succeeded,
-			commandClassifications: collectCommandClassifications(call.input),
+			commandClassifications: collectCommandClassifications(
+				toolName,
+				call.input,
+			),
 		});
 	}
 	return events;

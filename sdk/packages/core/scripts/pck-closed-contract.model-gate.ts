@@ -300,10 +300,9 @@ async function main(): Promise<void> {
 					maxOutputTokens: 4096,
 					thinking: false,
 				});
-				for await (const chunk of handler.createMessage(
-					systemPrompt,
-					[{ role: "user", content: request }],
-				)) {
+				for await (const chunk of handler.createMessage(systemPrompt, [
+					{ role: "user", content: request },
+				])) {
 					// The PRODUCTION cancellation contract is honoured
 					// INSIDE the stream: an aborted attempt stops
 					// consuming the provider response immediately.
@@ -374,7 +373,8 @@ async function main(): Promise<void> {
 				JSON.stringify({
 					event: "attempt_failed",
 					attempt,
-					errorMessage: "the provider call failed inside the production attempt",
+					errorMessage:
+						"the provider call failed inside the production attempt",
 				}),
 			);
 			continue;
@@ -400,11 +400,18 @@ async function main(): Promise<void> {
 			sourcePrefixKey: "model-gate",
 			evidence: {
 				canonicalReferences: observedReferences,
-				maximumAssuranceFor: (references, atom) =>
+				// ACT-CLINEMM-PCK-EXACT-HEAD-PACKAGING-01: the SELECTED
+				// ARGUMENT is forwarded, exactly as `runPckAttempt()` does.
+				// Without it the gate's secondary evaluation would compute
+				// the assurance bound against a DIFFERENT proposition than
+				// the one the production attempt publishes, so its report
+				// would not describe the production behaviour.
+				maximumAssuranceFor: (references, atom, argument) =>
 					interpretCanonicalEvidence({
 						canonicalMessages,
 						references,
 						atom,
+						argument,
 					}),
 			},
 		});
