@@ -41445,3 +41445,119 @@ passed / 0 failed | typecheck 108 (baseline 109, ZERO ACT-owned) | SDK build
 PASS | Biome PASS | git diff --check CLEAN | VSIX packaging NOT EXECUTED |
 installed-live NOT EXECUTED | NEW_REGRESSIONS 0 (the 17 failing SDK files
 were verified against the stashed predecessor: the same 113 tests fail there)
+
+---
+
+## ACT-CLINEMM-COMPACTION-UTILITY-FINAL-DISCRIMINATOR-01 — A02b-R14
+
+**ENTRY_HEAD = 1988a44ec71625c881b862e8f9dc116e77dbcac1** (the expected
+predecessor, verified; the tree was clean and `git diff --check` was clean).
+
+**VERDICT = CLOSE_COMPACTION_SELECTION_NOT_QUALIFIED.**
+
+The campaign was executed as authorized: three arms over the REAL production
+projection, three physical inference requests, one per arm, no
+summarization request, no new heuristic, no production change.
+
+**THE BEHAVIOURAL UTILITY IS ESTABLISHED.** The ordering is monotone, on the
+same model, endpoint, reasoning policy and generation budget, scored with the
+repository's own committed adjudication rubric:
+
+```text
+arm  contextChars  promptTokens  O1                O4                O7                correct/partial/incorrect
+A    82 852        23 943       INCORRECT         INCORRECT         INCORRECT         0 / 0 / 3
+B    90 974        26 575       PARTIALLY_CORRECT INCORRECT         PARTIALLY_CORRECT 0 / 2 / 1
+C    93 071        27 126       PARTIALLY_CORRECT PARTIALLY_CORRECT PARTIALLY_CORRECT 0 / 3 / 0
+
+PHYSICAL_REQUEST_COUNT=3   ADDITIONAL_SUMMARIZATION_REQUESTS=0
+ORACLE_LEAKAGE=NONE (witness passed on all three arms)
+```
+
+Arm A answers 0 of 3 and, on O7, **INVENTS two timeout values** (10 s / 10 s
+in place of 500 ms / 1000 ms). Arm B answers 2 of 3 but **MISATTRIBUTES O1's
+failure cause** — it answers "missing chart dependency" where the source
+establishes a Go-template type error. Arm C, the oracle-guided positive
+capacity control, answers 3 of 3 at +3 183 provider-observed prompt tokens
+(+13%).
+
+**THE REMAINING GAP IS A CONTRACT DEFECT, NOT A SELECTION DEFECT.** The
+direct source adjudication establishes ONE cause for all three remaining
+failures:
+
+> **The carried unit is the tool OUTPUT, stripped of the COMMAND that
+> produced it. 0 of 8 carried fragments included their command.**
+
+```text
+O1  ADMISSION_TRUNCATION   the "wrong type for value" clause is at char 450
+                            of a 505-char line; the contract's 300-char
+                            per-line bound cuts it. The model then takes a
+                            NEIGHBOURING fragment's cause.
+O4  RELATIONSHIP_NOT_ESTABLISHED  the counting DEFINITION lives in the
+                            command (`grep -iE 'test\.java$'`, `grep -E
+                            '\.java$' | grep -i test`).
+O7  RELATIONSHIP_NOT_ESTABLISHED  the constant's PROVIDER lives in the
+                            command's file path (the named subproject's
+                            source tree; withheld as the predecessor does).
+```
+
+**VALUE-QUALIFICATION PAIRING IS AIMED AT THE WRONG LAYER.** It pairs
+fragments with each other, while the missing information is the FRAME that
+says what each fragment is a fragment OF. No re-ranking can recover a command
+the admission contract never carried.
+
+**THE SCORER UNDER-REPORTS.** Three of nine adjudications are scorer false
+negatives (O4/C, O7/B, O7/C): every fact IS carried and the matcher still
+reports an omission. The predecessor's `MATERIAL_DISTORTIONS=0` is a FLOOR,
+not a measurement — arm B's answer contradicted the carried evidence while
+the scorer reported 0, because the factual scorer reads only
+`generatedSummary` and not the retained tail.
+
+**THE PREDECESSOR'S BASELINE OMITTED THE RETAINED TAIL.** The real
+production projection scores `critOmitted=3`, not 5. Every structural number
+in the predecessor's report was measured against a context that did not
+exist in production.
+
+**ALL SIX OF THE REVIEW'S FINDINGS ARE CONFIRMED AT SOURCE LEVEL.** The
+multi-result invocation-correlation counterexample has ZERO instances in the
+measured workload, so its practical weight is bounded — but the repair is
+still required before activation, because the attribution must be preserved
+DURING extraction rather than rediscovered afterwards.
+
+**THE ACTIVATION BLOCKERS, ENUMERATED AND BOUNDED.**
+
+```text
+1 invocation correlation picks the FIRST result of a multi-result message  REPAIR
+2 the publication boundary trusts preselected fragments                    REPAIR
+3 the production selector differs from the measured winner                  REPAIR
+4 the carried unit lacks its command                                       CONTRACT DECISION
+5 the 300-char per-line bound cuts decisive single-line outputs           CONTRACT DECISION
+6 the factual scorer does not read the retained tail                       REPAIR
+7 the predecessor's baseline omitted the retained tail                     REPAIRED HERE
+```
+
+**THE REVIEW'S STRATEGIC READING IS CONFIRMED BY THE MEASUREMENT.** The
+distance between arm A and arm C is 3 183 prompt tokens and one well-chosen
+fragment set — worth paying. The distance between arm B and arm C is a
+selection-quality problem whose cause is that the candidate set is missing
+its subject bindings — not worth another ACT.
+
+**One final behavioural experiment, then move on unless the measured benefit
+justifies continuing. The measured benefit does not justify continuing.**
+
+```text
+A02b-R13 Subject-aware evidence selection   HALT_FACTUAL_PRESERVATION_NOT_ESTABLISHED
+A02b-R14 Value-qualification pairing         CLOSE_COMPACTION_SELECTION_NOT_QUALIFIED — CLOSED
+Proposed A12 Sanitizer bounded complexity   SECURITY — RED_REPRODUCED
+New P0 Carried-unit shape (no command + per-line bound)   MEASURED — THE MECHANISM'S REAL BLOCKER
+```
+
+**GATES:** frozen prefix/summary/selection identities VERIFIED (each check
+throws on mismatch) | the production projector USED and its refusal path
+honoured | the three arms share a byte-identical tail | oracle leakage
+witness PASSED on all three arms | no unauthorized evidence publication |
+**PRODUCTION_DELTA=NONE** (four experimental scripts under
+`sdk/packages/core/scripts/`, no production module touched) | no tracked raw
+histories or model responses (everything under the gitignored `tmp/` tree) |
+VSIX packaging NOT EXECUTED | installed-live NOT EXECUTED | the whole SDK
+regression suite NOT RUN (no production dependency changed, as the ACT
+requires) | git diff --check CLEAN
