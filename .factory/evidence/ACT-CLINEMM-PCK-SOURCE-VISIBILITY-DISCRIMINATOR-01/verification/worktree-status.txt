@@ -1,0 +1,3 @@
+?? .factory/evidence/ACT-CLINEMM-PCK-SOURCE-VISIBILITY-DISCRIMINATOR-01/
+?? sdk/packages/core/scripts/source-visibility-discriminator.generate.ts
+?? sdk/packages/core/src/extensions/context/source-visibility-discriminator/

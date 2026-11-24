@@ -1,0 +1,32 @@
+(node:57233) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core
+
+(node:57266) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:57267) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:57262) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:57265) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:57263) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:57264) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:57268) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/extensions/context/source-visibility-discriminator/trust-provenance.test.ts (6 tests) 3ms
+ ✓ src/extensions/context/source-visibility-discriminator/security-controls.test.ts (10 tests) 3ms
+ ✓ src/extensions/context/source-visibility-discriminator/model-evaluation.test.ts (7 tests) 37ms
+ ✓ src/extensions/context/source-visibility-discriminator/visibility-red.test.ts (7 tests) 49ms
+ ✓ src/extensions/context/source-visibility-discriminator/selection.test.ts (8 tests) 53ms
+ ✓ src/extensions/context/source-visibility-discriminator/reasoning-boundary.test.ts (3 tests) 98ms
+ ✓ src/extensions/context/source-visibility-discriminator/causal-ablation.test.ts (6 tests) 91ms
+
+ Test Files  7 passed (7)
+      Tests  47 passed (47)
+   Start at  01:43:42
+   Duration  729ms (transform 1.92s, setup 0ms, import 2.68s, tests 335ms, environment 0ms)
+

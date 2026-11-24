@@ -1,0 +1,112 @@
+{
+  "act": "ACT-CLINEMM-PCK-SOURCE-VISIBILITY-DISCRIMINATOR-01",
+  "session_id": "1795466566666_uzla2",
+  "capture_run": "cap_run_Nw2dRTjG",
+  "entry_head": "0f111f3d76a7e7da9b792cfd173d88635156182c",
+  "expected_historical_anchor": "502d31c5821492147ff1019773d3b5e30fedbbb8",
+  "branch": "main",
+  "production_delta": "NONE",
+  "predecessor_artifact_status": "COMMITTED (predecessor ACT is HEAD~0: 0f111f3d7); all 13 predecessor source hashes re-verified and MATCHING",
+  "frozen_private_artifacts_verified": {
+    "pre.json": "53161e6b3b4190951442dc37e89016a7d1b7e67898a01bc29d2bd250fe83efe1",
+    "post.json": "c938f0e2174a3edf74ddb0580bc1918d25acd722d6d4e73c6c45c00c8463e191",
+    "second-pre.json": "40a60baf6ca1fadf0cfe2d6bcfc2538b6e653dcf948af7c4bc98f91dfd3070e2",
+    "second-post.json": "666c87977416a08fc54cffe7563b012866e40d790d1c57c227d6a76ecd05a807",
+    "first-compaction.json": "49bff441c6cbcb0aa904aae8a80dcb567e6897a878986834764322b072fd845d",
+    "second-compaction.json": "6bc0f6f9dfab122229dc52bc3954144db403ae234c63e26233dcbb02cd43b069"
+  },
+  "frozen_private_artifacts_note": "Operator-local and NEVER committed. Verified by sha256 against the ACT's recorded identities.",
+  "canonical_prefix_correlation": {
+    "boundary-1": {
+      "source_message_count": 47,
+      "source_prefix_hash": "sha256:54936f46c7034de73268c085d551d227e1bbced8225e41757d42a22b90a3dbf9",
+      "recomputed_prefix_hash_match": true,
+      "source_last_message_key": "id:msg_ApSB6S4t"
+    },
+    "boundary-2": {
+      "source_message_count": 101,
+      "source_prefix_hash": "sha256:df3d0a481febff3f3c8d5581e930faed80112c9bef8c7e4b609da7136d4c5409",
+      "recomputed_prefix_hash_match": true,
+      "source_last_message_key": "id:msg_3d6nueiy"
+    }
+  },
+  "act_owned_source_files": {
+    "sdk/packages/core/src/extensions/context/source-visibility-discriminator/candidate-views.ts": "c643cd977e7ce5484766c06dfa82e391a79d7f55a0016d23fdf3ef0471cd822e",
+    "sdk/packages/core/src/extensions/context/source-visibility-discriminator/causal-ablation.test.ts": "064c645abdfbc818030d9472acbd04c2071cf2980ab12ccb0e60a0d55613cffe",
+    "sdk/packages/core/src/extensions/context/source-visibility-discriminator/content-origin.ts": "6d30b2ff0e52f6a7b59b525a24f91d1641e2e63770fd8a6277c8877fd4134a3e",
+    "sdk/packages/core/src/extensions/context/source-visibility-discriminator/discriminator.fixture.ts": "6be1c73f220d3815211bcf1d2edbbf9d9dcce496a433048d6ea6d7acb5074d41",
+    "sdk/packages/core/src/extensions/context/source-visibility-discriminator/model-evaluation.test.ts": "14f9c87f867afd8091c3673d91f90ca4457330c8c9ce80b949cfd056abe256a8",
+    "sdk/packages/core/src/extensions/context/source-visibility-discriminator/projection.ts": "ef0476b3d13f12137a269fa2c310c32fd9ea939d951817fcaa306c41b9247cd2",
+    "sdk/packages/core/src/extensions/context/source-visibility-discriminator/reasoning-boundary.test.ts": "ba774ee88cd60a34c38771fb65e4ef730588df18756869b69efa262a3ab17fcf",
+    "sdk/packages/core/src/extensions/context/source-visibility-discriminator/security-controls.test.ts": "ebe50ada6cd8898b7cb385b2d3435a3f994a07b10802d41267ff426255d9a97a",
+    "sdk/packages/core/src/extensions/context/source-visibility-discriminator/selection.test.ts": "34f650aa571ccbc5e1d0ee19e483a7f53ee7c30907ec3c3354e6b55c64ff6963",
+    "sdk/packages/core/src/extensions/context/source-visibility-discriminator/selection.ts": "31a23a75929ff6e860733e14410b4687d0d307b69d5f93f638f80b43a5f91e0f",
+    "sdk/packages/core/src/extensions/context/source-visibility-discriminator/trust-provenance.test.ts": "8a1f9ed38631d1f0de0e2a071942e80361647449f3adefe441c289b2b258fafa",
+    "sdk/packages/core/src/extensions/context/source-visibility-discriminator/trust.ts": "f25d78dfd0817672708035cd8bb884b346fbddba06dc6f6a5badee8176f43975",
+    "sdk/packages/core/src/extensions/context/source-visibility-discriminator/visibility-red.test.ts": "2456a702806228a3f51b636fe58c95ea3c6e653b7aabb1c17068361697c46ae3",
+    "sdk/packages/core/scripts/source-visibility-discriminator.generate.ts": "cef81dbbae8fe63399e616eb1bd0af81008181f960203c829db4aa563e8d9a12"
+  },
+  "evidence_files": {
+    ".factory/evidence/ACT-CLINEMM-PCK-SOURCE-VISIBILITY-DISCRIMINATOR-01/00-entry-identity.md": "60e11a1abb11d37654cf161a3d5f20af019a968d30cbde2715e0393ea5872c1e",
+    ".factory/evidence/ACT-CLINEMM-PCK-SOURCE-VISIBILITY-DISCRIMINATOR-01/01-predecessor-artifact-status.md": "a626a9e31373722b593e259b4f8a3f06619b5eea993128e1dff6beb542f45d5d",
+    ".factory/evidence/ACT-CLINEMM-PCK-SOURCE-VISIBILITY-DISCRIMINATOR-01/02-production-source-map.md": "91a1f16c2cad0eb0e4f8493aee3709cdd4182e2a8de5ed04600c598f0658d779",
+    ".factory/evidence/ACT-CLINEMM-PCK-SOURCE-VISIBILITY-DISCRIMINATOR-01/03-visibility-red.md": "ea429bfd84cfacae0dac982ad8d40df93547b0d8eb4663e50952125ac05b7ca6",
+    ".factory/evidence/ACT-CLINEMM-PCK-SOURCE-VISIBILITY-DISCRIMINATOR-01/04-candidate-input-matrix.md": "7ef72962d895a0637a05668185ccf527aa37397cc28ecc0c73e13ccbbf9ee1ab",
+    ".factory/evidence/ACT-CLINEMM-PCK-SOURCE-VISIBILITY-DISCRIMINATOR-01/05-trust-and-provenance.md": "b99b29b6836bc3f1e54613a535686295fe0b37ceded8c2b05d09b09fe2696f1b",
+    ".factory/evidence/ACT-CLINEMM-PCK-SOURCE-VISIBILITY-DISCRIMINATOR-01/06-record-selection.md": "c1569881c417d0b36a8b37211a3557b3b1b8f8e7801a724d150af40fdc2a22de",
+    ".factory/evidence/ACT-CLINEMM-PCK-SOURCE-VISIBILITY-DISCRIMINATOR-01/07-model-feasibility.md": "dadccd81c8f2e2e53aeab7e41f48553a287643d3864cc1ac1c6a65ab32123d83",
+    ".factory/evidence/ACT-CLINEMM-PCK-SOURCE-VISIBILITY-DISCRIMINATOR-01/08-causal-ablation.md": "5cfeab511d2ca4457f66b6a48832e2f16b7eb8850d6061f8e1ee5c3611437899",
+    ".factory/evidence/ACT-CLINEMM-PCK-SOURCE-VISIBILITY-DISCRIMINATOR-01/09-executable-gates.md": "d4f31cbed1f7618558fead8aa2f2215c5348425c05f8ed07e9a17dbb45c5fecc",
+    ".factory/evidence/ACT-CLINEMM-PCK-SOURCE-VISIBILITY-DISCRIMINATOR-01/10-exit-report.md": "b40f3a9559f1359b4ff8f54f760e26b82b1da4543eb27e249445d93a217e6411",
+    ".factory/evidence/ACT-CLINEMM-PCK-SOURCE-VISIBILITY-DISCRIMINATOR-01/verification/act-owned-tests.txt": "cb1ea8b24a6db3daadb523f8e561bd3a78e1deb79376c93f1a7efee6bdc01f65",
+    ".factory/evidence/ACT-CLINEMM-PCK-SOURCE-VISIBILITY-DISCRIMINATOR-01/verification/biome.txt": "eb60f4f2052c9492a53f92a7e45f51320e96f5c76648f9d0676403b2546464be",
+    ".factory/evidence/ACT-CLINEMM-PCK-SOURCE-VISIBILITY-DISCRIMINATOR-01/verification/context-suite-regression.txt": "54b50ce0b77dcc93dac5e77a2fc63c61eb65c656186dce1946af6f4cdae9527b",
+    ".factory/evidence/ACT-CLINEMM-PCK-SOURCE-VISIBILITY-DISCRIMINATOR-01/verification/frozen-artifact-hashes.txt": "6fe968b8e9cd874df12ac496f7e2709fe264a1af0559275dea813fe9f0584fc8",
+    ".factory/evidence/ACT-CLINEMM-PCK-SOURCE-VISIBILITY-DISCRIMINATOR-01/verification/production-delta.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    ".factory/evidence/ACT-CLINEMM-PCK-SOURCE-VISIBILITY-DISCRIMINATOR-01/verification/typecheck.txt": "9e0b31c3d7634dd8cde0c0fc4e81d4ff4bde39d02a236919471db93fdb9c6e5a",
+    ".factory/evidence/ACT-CLINEMM-PCK-SOURCE-VISIBILITY-DISCRIMINATOR-01/verification/worktree-status.txt": "5746bf99aca33dc913f36edd3abd2411d02cf5d917e340f09d139bec7e99bace"
+  },
+  "controlled_model_generation_operator_local": {
+    "root": "<repo>/tmp/pck-src-vis-private/1795466566666_uzla2 (gitignored, mode 0600)",
+    "note": "Raw model output and checkpoint free text NEVER committed.",
+    "boundary-1": {
+      "provider": "openai-compatible",
+      "model": "MiniMax-M3",
+      "latency_ms": 178853,
+      "input_chars": 273810,
+      "output_chars": 76714,
+      "model_records": 20,
+      "runtime_verified_overclaims": 2,
+      "projected_section_est_tokens": 960
+    },
+    "boundary-2": {
+      "provider": "openai-compatible",
+      "model": "MiniMax-M3",
+      "latency_ms": 73827,
+      "input_chars": 398988,
+      "output_chars": 70190,
+      "model_records": 16,
+      "runtime_verified_overclaims": 4,
+      "projected_section_est_tokens": 960
+    },
+    "calls": 2
+  },
+  "record_selection": {
+    "control_distinct_references": 64,
+    "treatment_distinct_references": 90,
+    "zero_novelty_control": 3,
+    "zero_novelty_treatment": 2,
+    "projected_tokens": 960,
+    "max_records": 12
+  },
+  "verification": {
+    "act_owned_tests": "47 passed / 7 files",
+    "context_suite": "769 passed, 2 skipped, 0 failed / 47 files passed, 1 skipped",
+    "typecheck_act_owned_diagnostics": 0,
+    "typecheck_baseline_diagnostics": 44,
+    "biome_exit": 0,
+    "production_delta_lines": 0,
+    "historical_intentional_red": "UNCHANGED (still 5 failed)"
+  },
+  "verdict": "GO_PCK_SOURCE_VIEW_FEASIBLE"
+}
