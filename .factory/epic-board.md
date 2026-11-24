@@ -40401,3 +40401,58 @@ A09     Causal convergence conclusion      PENDING
 A10     Evidence-continuity confidentiality SECURITY — RED_REPRODUCED
 B06     Completion-continuation quiescence  RECON_PENDING
 ```
+
+## ACT-CLINEMM-PCK-QWEN-INFERENCE-POLICY-01
+
+**ENTRY_HEAD:** `17f92301831c6da31af5d6b0f9c5ffb4177a0b74`
+**SUBJECT_HEAD:** `d390c7e761bc6c3e4207ef864540d4f18bf42b6f`
+
+The bounded, explicitly opt-in Qwen inference policy for the
+Pre-Compaction Knowledge Checkpoint is IMPLEMENTED and COMMITTED in the
+existing changeset (no separate correction ACT).
+
+The policy is selected by `CLINEMM_PCK_INFERENCE_POLICY=qwen-strata-v1`
+and applies ONLY when the request purpose is the PCK request, the PCK
+feature is enabled, the operator explicitly selected it, the effective
+model is EXACTLY `qwen3.8-flash-next-q2_0`, and the effective provider is
+compatible with the parameters.
+
+The live qualification ran against the deployed Kurchatov endpoint
+(`http://192.168.50.239:8080`, model `qwen3.8-flash-next-q2_0`): all four
+probes accepted, every derived check passing.
+
+The bounded review correction resolved three findings:
+
+1. The temperature propagation was scoped to the applied policy. The
+   request builder now reads the policy's numeric parameters from the
+   POLICY, so an ordinary request keeps the predecessor's body exactly —
+   including the predecessor's behaviour of NOT forwarding a configured
+   temperature on this seam.
+2. The live qualification verdict is now DERIVED from the observed
+   assertions. The provider's failure state is propagated rather than
+   hardcoded, the model's finish reason is reported only where it is
+   observable, there is no retry loop, the production deadline is reused,
+   the production `generateSummary()` transport is driven, and the harness
+   exits nonzero when a required condition fails.
+3. The admitted records' SEMANTICS are asserted, not merely their count.
+
+No general policy registry, model catalog rewrite, new provider transport,
+parser repair, vocabulary expansion or inference-engine modification is
+introduced. The general Default/None reasoning propagation defect is NOT
+touched by this ACT and remains a separate work item.
+
+### The updated epic board
+
+```text
+A02b-R2  Generation eligibility repair              CLOSED
+A02b-R4a Qwen non-thinking feasibility              PASS_LIVE
+A02b-R4b JSON-mode feasibility                      PASS_LIVE
+A02b-R4c Qwen inference policy                      CLOSED_WITH_REVIEW_CORRECTION
+A11      General Default/None semantics             NEXT
+A02b-R3  Exact-head repackaging                     BLOCKED
+M31-R1   Historical MiniMax evidence reconciliation  REOPENED
+M31-R2   MiniMax settings-to-wire qualification     PENDING
+M31-R3   Direct API comparison                      PENDING
+M31-R4   Controlled TTFE benchmark                  PENDING
+A05      Round C convergence                        PENDING
+```
