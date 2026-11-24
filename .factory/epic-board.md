@@ -41229,3 +41229,112 @@ mis-transcription mode rather than assume it absent; and remain at ONE
 inference request.
 
 **A10 IS NOT TOUCHED** and remains an INDEPENDENT security work item.
+
+### ACT-CLINEMM-COMPACTION-FACTUAL-PRESERVATION-REPAIR-01 — the factual-preservation repair
+
+**VERDICT=HALT_FACTUAL_PRESERVATION_NOT_ESTABLISHED.** The mechanism is
+built, measured and default-off; the SELECTION is not yet good enough to
+ship it.
+
+**THE REVIEWER'S THREE CORRECTIONS ARE COMPLETE AND EXECUTABLE.**
+
+C2.1 — the source-boundary witness is REPAIRED over the REAL workload. The
+synthetic observation is appended to the ORIGINAL canonical history, the
+prefix is RE-DERIVED at the UNCHANGED historical boundary, and the SAME
+production assembly path is exercised. The POSITIVE control now exists and
+PASSES, which is what makes the negative control meaningful.
+
+```text
+NEGATIVE  prefixIdentityPreserved = true
+          markerInClean = false
+          markerInContaminated = false
+          prefixDerivedIdentical = true
+          cleanPostBoundaryMessageCount = 2
+          contaminatedPostBoundaryMessageCount = 4   <- the window GREW
+POSITIVE  markerVisibleAtAdvancedBoundary = true
+```
+
+C2.2 — the semantic scoring is CORRECTED. The historical BR mistranscription
+("500 ms / 1500 ms" where the observed socket timeout is 1000 ms) is
+preserved as a deterministic RED fixture and now scores DISTORTED, not
+PARTIALLY_PRESERVED. 17 witnesses, including the reviewer's six adversarial
+cases.
+
+C2.3 — the evidence identity is DISTINGUISHED. Four mechanisms, separated by
+WHO WRITES THE BYTES. Three preserve the original bytes; only
+EVIDENCE_ENHANCED_SUMMARIZATION lets the model rewrite them.
+
+**THE CANDIDATE LADDER, MEASURED OVER THE FROZEN W1 WORKLOAD.**
+
+```text
+arm  mechanism                                   critOmitted  O1        O4        O7        distortions  requests
+A    ordinary compaction (production omission)       4       OMITTED   OMITTED   OMITTED          0          1
+B    evidence-enhanced summarization + instruction   4       OMITTED   OMITTED   OMITTED          0          1
+C    hybrid: summary + deterministic carry-forward   2       OMITTED   OMITTED   PARTIAL          0          1
+C-E  candidate C minus the carried section (ABLATION) 4       OMITTED   OMITTED   OMITTED          0          0
+```
+
+**CANDIDATE B DOES NOT WORK.** The cheapest candidate recovered NOTHING that
+the baseline did not already have, and cost 116 extra tokens. The reviewer
+predicted exactly this: a prompt cannot guarantee a value's preservation.
+
+**CANDIDATE C WORKS, AND THE ABLATION PROVES IT IS CAUSAL.** The ablation
+is candidate C's OWN continuation with the section stripped, so the
+summarizer request is byte-identical and the only difference is the carried
+section.
+
+```text
+completeRequestTokenDelta (C - A) = +6 953   (44 % more prompt, 0 fewer requests)
+```
+
+**THE TWO FINDINGS THAT MATTER MOST.**
+
+1. THE SELECTION IS THE BINDING CONSTRAINT. The admission contract admits
+   O7's decisive fragment (canonical index 187,
+   `DEFAULT_SOCKET_TIMEOUT_MILLIS = 1000`) CORRECTLY, but a shape-based
+   selector over a 122-payload prefix does not reliably reach it. O1's
+   decisive evidence is reached by NEITHER candidate.
+
+2. A NEIGHBOURING SUBJECT'S VALUE IS THE SAME SHAPE. Index 73 carries
+   `SOCKET_TIMEOUT_MS = 1500` from a DIFFERENT sender. When the selector
+   picks it, the continuation holds a neighbouring subject's value next to
+   the notification-service subject — which REPRODUCES the predecessor's
+   mistranscription mode in a NEW form: not by the summarizer rewriting a
+   value, but by the SELECTION carrying one in.
+
+**FOUR SCORER DEFECTS FOUND AND FIXED** by this ACT's own measurements: the
+camel-case subject anchor matched nothing; the opposite assertion was
+unscoped and fired on the section's own boilerplate; a file-path gutter
+(`...java:141:`) was read as a value; and a grouped number (`10_000`) was
+read as two numbers.
+
+**THE SANITIZER BOUND IS ESTABLISHED** in an independently terminable child
+process: the defect is confirmed (50 000 non-matching chars TERMINATED at
+5 001 ms) and the candidate's own 2 000-char bound terminates in at most
+12 ms. The production sanitizer's repair remains the independent item
+ACT-CLINEMM-EVIDENCE-SANITIZER-BOUNDED-COMPLEXITY-REPAIR-01.
+
+```text
+A02b-R12 Factual-preservation repair            HALT_FACTUAL_PRESERVATION_NOT_ESTABLISHED
+A02b-R13 Subject-aware evidence selection         RECON_PENDING — NEXT
+Proposed A12 Sanitizer bounded complexity        SECURITY — RED_REPRODUCED
+A10    Evidence-continuity confidentiality        SECURITY — RED_REPRODUCED
+```
+
+**THE STRATEGIC READING IS CONFIRMED.** The generative mechanism recovered
+nothing; the non-generative mechanism recovered a critical proposition and
+introduced no distortion. Our optimal compacter IS less generative, not more
+generative. What is NOT yet shown is that its 44 % prompt cost is
+acceptable — and the next ACT must solve the SELECTION, not the MECHANISM.
+
+```text
+ACT-OWNED WITNESSES:     88 (14 factual-preservation, 6 boundary-witness,
+                           21 source-bound-evidence, plus the existing suites)
+EXISTING CONTEXT SUITE:  74 files passed | 1 skipped; 1 072 tests passed
+TYPECHECK:               45 -> 45, ZERO DELTA; 0 ACT-OWNED diagnostics
+BIOME:                   clean
+PRODUCTION DELTA:        the source-bound carry-forward at three integration
+                         sites, DEFAULT OFF
+VSIX PACKAGING:          NOT EXECUTED
+INSTALLED-LIVE:          NOT EXECUTED
+```

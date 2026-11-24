@@ -66,6 +66,7 @@ import {
 	resolvePckDeadlineMs,
 	runPckAttempt,
 } from "./precompaction-knowledge-checkpoint/runtime";
+import { applySourceBoundEvidenceToCompactedMessages } from "./source-bound-evidence";
 import { applyTaskContractToCompactedMessages } from "./task-contract";
 
 export interface ContextPipelinePrepareTurnInput {
@@ -1607,7 +1608,9 @@ async function applyAdjudicationCarryForward(
 					canonicalMessages: readonly MessageWithMetadata[],
 				) =>
 					| import("./adjudication-continuity").AcquisitionEvidenceLedger
-					| Promise<import("./adjudication-continuity").AcquisitionEvidenceLedger>;
+					| Promise<
+							import("./adjudication-continuity").AcquisitionEvidenceLedger
+					  >;
 		  }
 		| undefined,
 	sourceMessageCount: number,
@@ -2051,6 +2054,29 @@ export function createCompactionStateAwarePrepareTurn(input: {
 						sourceMessageCount: countCanonicalSourceMessages(context.messages),
 					},
 				);
+				// ACT-CLINEMM-COMPACTION-FACTUAL-PRESERVATION-REPAIR-01:
+				// carry a bounded set of APPROVED, SOURCE-BOUND evidence
+				// excerpts forward from the CANONICAL history, alongside the
+				// generated summary.
+				//
+				// The generated summary is a LOSSY PROJECTION: it can drop an
+				// observation entirely, and it can also SUBSTITUTE a value
+				// from a neighbouring subsystem. The predecessor ACT measured
+				// the second mode: the summary published "500 ms / 1500 ms"
+				// where the observed socket timeout was 1000 ms.
+				//
+				// The carried section is assembled by the RUNTIME from the
+				// ORIGINAL excerpts, so the model never rewrites the bytes and
+				// cannot distort them. It is DEFAULT OFF, and it is applied
+				// AFTER the task contract and the verified outcomes so the
+				// carry-forwards compose without overwriting one another.
+				const sourceBound = applySourceBoundEvidenceToCompactedMessages(
+					evidenced.messages,
+					context.messages,
+					{
+						sourceMessageCount: countCanonicalSourceMessages(context.messages),
+					},
+				);
 				// ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01:
 				// carry an ACCEPTED adjudication candidate forward from the
 				// CANONICAL history into the freshly produced compaction
@@ -2060,7 +2086,7 @@ export function createCompactionStateAwarePrepareTurn(input: {
 				// the summarizer chose to repeat the candidate in its prose. A
 				// summarizer that omits the candidate loses nothing.
 				const adjudicated = await applyAdjudicationCarryForward(
-					evidenced.messages,
+					sourceBound.messages,
 					context.messages,
 					input.adjudication,
 					countCanonicalSourceMessages(context.messages),
@@ -2122,6 +2148,20 @@ export function createCompactionStateAwarePrepareTurn(input: {
 				context.messages,
 				{ sourceMessageCount: existingState.source_message_count },
 			);
+			// ACT-CLINEMM-COMPACTION-FACTUAL-PRESERVATION-REPAIR-01: the same
+			// source-bound evidence carry-forward, SCOPED TO THE SIDECAR'S OWN
+			// SOURCE BOUNDARY.
+			//
+			// The boundary is the persisted sidecar's `source_message_count`,
+			// the same boundary the verified-outcome section uses, so the
+			// provider-visible prefix stays byte-stable across every
+			// continuation.
+			const restoredWithSourceBoundEvidence =
+				applySourceBoundEvidenceToCompactedMessages(
+					restoredWithEvidence.messages,
+					context.messages,
+					{ sourceMessageCount: existingState.source_message_count },
+				);
 			// ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01:
 			// carry an ACCEPTED adjudication candidate forward from the
 			// CANONICAL history, independently of the summarizer's prose.
@@ -2131,7 +2171,7 @@ export function createCompactionStateAwarePrepareTurn(input: {
 			// provider-visible prefix stays byte-stable across every
 			// continuation.
 			const restoredWithAdjudication = await applyAdjudicationCarryForward(
-				restoredWithEvidence.messages,
+				restoredWithSourceBoundEvidence.messages,
 				context.messages,
 				input.adjudication,
 				existingState.source_message_count,
@@ -2207,11 +2247,21 @@ export function createCompactionStateAwarePrepareTurn(input: {
 					sourceMessageCount: countCanonicalSourceMessages(context.messages),
 				},
 			);
+			// ACT-CLINEMM-COMPACTION-FACTUAL-PRESERVATION-REPAIR-01: the same
+			// source-bound evidence carry-forward, applied on the FIRST
+			// compaction of a session.
+			const sourceBound = applySourceBoundEvidenceToCompactedMessages(
+				evidenced.messages,
+				context.messages,
+				{
+					sourceMessageCount: countCanonicalSourceMessages(context.messages),
+				},
+			);
 			// ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01:
 			// the same deterministic adjudication carry-forward, applied on
 			// the FIRST compaction of a session.
 			const adjudicated = await applyAdjudicationCarryForward(
-				evidenced.messages,
+				sourceBound.messages,
 				context.messages,
 				input.adjudication,
 				countCanonicalSourceMessages(context.messages),

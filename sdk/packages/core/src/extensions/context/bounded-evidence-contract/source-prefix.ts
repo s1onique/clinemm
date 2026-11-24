@@ -36,7 +36,7 @@
  */
 
 import { createHash } from "node:crypto";
-import type { MessageWithMetadata } from "@cline/shared";
+import type { MessageWithMetadata, TextContent } from "@cline/shared";
 
 /**
  * The PRODUCTION `sourcePrefixHash` domain separator.
@@ -191,6 +191,21 @@ export function postBoundaryMessageCount(prefix: FrozenSourcePrefix): number {
 export const POST_BOUNDARY_MARKER = "SYNTHETIC-POST-BOUNDARY-OBSERVATION";
 
 /**
+ * The TOOL-CALL ID of the synthetic observation.
+ *
+ * It is derived from the marker so that the observation is detectable in
+ * EVERY route a carry-forward can publish it:
+ *
+ *   - the verified-outcome section carries the tool-call id;
+ *   - the retained tail carries the message content;
+ *   - the source-file-fact section carries the payload's own text.
+ *
+ * A marker that only appeared in one of those routes would make the
+ * positive control dependent on which route happens to publish it.
+ */
+export const POST_BOUNDARY_TOOL_USE_ID = "synthetic-post-boundary-observation";
+
+/**
  * Build a synthetic post-boundary assistant/tool message pair.
  *
  * The message carries the marker in BOTH a text block and a tool-result body,
@@ -206,6 +221,12 @@ export function buildSyntheticPostBoundaryMessages(): MessageWithMetadata[] {
 					type: "text",
 					text: `${POST_BOUNDARY_MARKER}: this observation was acquired AFTER the compaction boundary and must never appear in a continuation reconstructed at that boundary.`,
 				},
+				{
+					type: "tool_use",
+					id: POST_BOUNDARY_TOOL_USE_ID,
+					name: "run_commands",
+					input: { commands: ["echo synthetic-post-boundary-observation"] },
+				},
 			],
 			ts: 0,
 		},
@@ -214,13 +235,13 @@ export function buildSyntheticPostBoundaryMessages(): MessageWithMetadata[] {
 			content: [
 				{
 					type: "tool_result",
-					tool_use_id: "synthetic-post-boundary",
+					tool_use_id: POST_BOUNDARY_TOOL_USE_ID,
 					name: "run_commands",
 					content: [
 						{
-							type: "text",
-							text: `${POST_BOUNDARY_MARKER}: echo synthetic-post-boundary`,
-						},
+							success: true,
+							result: `${POST_BOUNDARY_MARKER}: echo synthetic-post-boundary-observation`,
+						} as unknown as TextContent,
 					],
 					is_error: false,
 				},
