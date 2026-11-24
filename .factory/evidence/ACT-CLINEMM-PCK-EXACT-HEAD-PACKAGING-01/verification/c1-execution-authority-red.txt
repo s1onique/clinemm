@@ -1,0 +1,81 @@
+(node:22790) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core
+
+ ❯ src/extensions/context/precompaction-knowledge-checkpoint/pck-execution-authority.preflight.test.ts (8 tests | 3 failed) 7ms
+     ✓ P1.1: the PRODUCTION run_commands shape {commands:[...]} IS classified 2ms
+     ✓ P1.2: the PRODUCTION run_commands shape {commands:[...]} DOES reach tool_observed 0ms
+     × P1.3: a read_files PATH is NOT an executable command 3ms
+     ✓ P1.4: a read_files PATH does NOT establish a build invocation 0ms
+     × P1.5: the file_path / filePath aliases are ALSO not commands 0ms
+     × P1.6: an unrelated METADATA string does NOT establish a build invocation 1ms
+     ✓ P1.7: a MULTI-command batch is classified per member 0ms
+     ✓ P1.8: a batch that does NOT contain the argument does NOT establish it 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/extensions/context/precompaction-knowledge-checkpoint/pck-execution-authority.preflight.test.ts > ACT-CLINEMM-PCK-EXACT-HEAD-PACKAGING-01 — C1 execution authority preflight > P1.3: a read_files PATH is NOT an executable command
+AssertionError: expected [ 'make build' ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   "make build",
++ ]
+
+ ❯ src/extensions/context/precompaction-knowledge-checkpoint/pck-execution-authority.preflight.test.ts:171:44
+    169|   expect(events.length).toBe(1);
+    170|   // A read_files call establishes NO command classification.
+    171|   expect(events[0].commandClassifications).toEqual([]);
+       |                                            ^
+    172|  });
+    173|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  src/extensions/context/precompaction-knowledge-checkpoint/pck-execution-authority.preflight.test.ts > ACT-CLINEMM-PCK-EXACT-HEAD-PACKAGING-01 — C1 execution authority preflight > P1.5: the file_path / filePath aliases are ALSO not commands
+AssertionError: expected [ 'make build' ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   "make build",
++ ]
+
+ ❯ src/extensions/context/precompaction-knowledge-checkpoint/pck-execution-authority.preflight.test.ts:200:45
+    198|     }),
+    199|    );
+    200|    expect(events[0].commandClassifications).toEqual([]);
+       |                                             ^
+    201|   }
+    202|  });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  src/extensions/context/precompaction-knowledge-checkpoint/pck-execution-authority.preflight.test.ts > ACT-CLINEMM-PCK-EXACT-HEAD-PACKAGING-01 — C1 execution authority preflight > P1.6: an unrelated METADATA string does NOT establish a build invocation
+AssertionError: expected 'tool_observed' to be 'model_reported' // Object.is equality
+
+Expected: "model_reported"
+Received: "tool_observed"
+
+ ❯ src/extensions/context/precompaction-knowledge-checkpoint/pck-execution-authority.preflight.test.ts:222:6
+    220|      argument: "build",
+    221|     }),
+    222|    ).toBe("model_reported");
+       |      ^
+    223|   }
+    224|  });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 5 passed (8)
+   Start at  04:21:27
+   Duration  318ms (transform 192ms, setup 0ms, import 263ms, tests 7ms, environment 0ms)
+

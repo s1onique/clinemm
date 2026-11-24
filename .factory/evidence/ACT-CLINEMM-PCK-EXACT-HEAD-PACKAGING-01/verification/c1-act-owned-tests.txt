@@ -1,0 +1,21 @@
+(node:33385) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core
+
+ ✓ src/extensions/context/precompaction-knowledge-checkpoint/pck-knowledge-utility.test.ts (6 tests) 4ms
+ ✓ src/extensions/context/precompaction-knowledge-checkpoint/pck-conservation-ablation.test.ts (9 tests) 3ms
+ ✓ src/extensions/context/precompaction-knowledge-checkpoint/pck-observation-assurance.red01.test.ts (7 tests) 3ms
+ ✓ src/extensions/context/precompaction-knowledge-checkpoint/pck-persistence-restoration.test.ts (3 tests) 4ms
+ ✓ src/extensions/context/precompaction-knowledge-checkpoint/pck-same-class-assurance.red02.test.ts (14 tests) 4ms
+ ✓ src/extensions/context/precompaction-knowledge-checkpoint/pck-execution-authority.preflight.test.ts (9 tests) 4ms
+ ✓ src/extensions/context/precompaction-knowledge-checkpoint/pck-closed-contract.test.ts (27 tests) 28ms
+ ✓ src/extensions/context/precompaction-knowledge-checkpoint/pck-reference-confidentiality.test.ts (3 tests) 15ms
+ ✓ src/extensions/context/precompaction-knowledge-checkpoint/pck-default-off-equivalence.test.ts (2 tests) 15ms
+ ✓ src/extensions/context/precompaction-knowledge-checkpoint/pck-production-seam.test.ts (10 tests) 23ms
+
+ Test Files  10 passed (10)
+      Tests  90 passed (90)
+   Start at  04:23:55
+   Duration  519ms (transform 2.08s, setup 0ms, import 3.08s, tests 105ms, environment 1ms)
+
