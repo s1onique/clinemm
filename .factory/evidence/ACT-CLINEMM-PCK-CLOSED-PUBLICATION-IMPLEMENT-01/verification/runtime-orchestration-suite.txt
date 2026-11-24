@@ -1,0 +1,21 @@
+(node:84734) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core
+
+··············stdout | src/runtime/orchestration/null-runcommands-abort-orchestrator-recon01.test.ts > ACT-CLINEMM-NULL-RUNCOMMANDS-ABORT-RECON01 / orchestrator-level discriminators > D5_RECOVERY_BUDGET_THRESHOLD_IS_BISECTED
+[ACT-CLINEMM-NULL-RUNCOMMANDS-ABORT-RECON01] identical-null-call cardinality → finishReason: 1:completed, 2:completed, 3:completed, 4:aborted, 5:aborted, 6:aborted, 7:aborted
+
+·························································································································································································stdout | src/runtime/orchestration/session-runtime.subscribe-runtime-events.e2f-f1-bench.test.ts > ELM-02F F1 — performance and dual-stream witnesses > F1-P1: a single canonical subscriber sustains >= 20_000 events/sec across 10_000 events
+F1-P1: 10000 events, 10.3ms, 1.03us/event
+
+······stdout | src/runtime/orchestration/session-runtime.subscribe-runtime-events.e2f-f1-bench.test.ts > ELM-02F F1 — performance and dual-stream witnesses > F1-P2: 4 canonical subscribers scale linearly (no quadratic surprise)
+F1-P2: 4 subs × 5000 = 20000 events, 33.5ms, 1.68us/event-per-listener
+
+························································································································································································································
+
+ Test Files  32 passed (32)
+      Tests  421 passed (421)
+   Start at  03:20:52
+   Duration  4.16s (transform 10.73s, setup 0ms, import 31.42s, tests 11.89s, environment 3ms)
+

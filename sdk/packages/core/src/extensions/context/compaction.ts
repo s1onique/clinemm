@@ -20,6 +20,7 @@ import {
 	type TelemetryCompactionStrategy,
 } from "../../services/telemetry/core-events";
 import {
+	canonicalSourcePrefixKey,
 	countCanonicalSourceMessages,
 	createSessionCompactionState,
 	projectSessionCompactionState,
@@ -54,6 +55,17 @@ import {
 	resolveEffectiveMaxInputTokens,
 } from "./compaction-shared";
 import { applyVerifiedEvidenceToCompactedMessages } from "./evidence-continuity";
+import {
+	applyCheckpointToCompactedMessages,
+	type ProjectableCheckpointRecord,
+} from "./precompaction-knowledge-checkpoint/projection";
+import {
+	isPckClosedEnabled,
+	type PckAttemptIdentity,
+	type PckGenerate,
+	resolvePckDeadlineMs,
+	runPckAttempt,
+} from "./precompaction-knowledge-checkpoint/runtime";
 import { applyTaskContractToCompactedMessages } from "./task-contract";
 
 export interface ContextPipelinePrepareTurnInput {
@@ -1495,6 +1507,120 @@ async function applyAdjudicationCarryForward(
 	return { messages: applied.messages };
 }
 
+/**
+ * ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01 — SEAM 1.
+ *
+ * Generate the Pre-Compaction Knowledge Checkpoint for ONE compaction
+ * decision, BEFORE the agentic compaction runs.
+ *
+ * THE ORDERING IS LOAD-BEARING
+ * -----------------------------
+ *
+ * The checkpoint is generated only AFTER the compaction ELIGIBILITY decision
+ * has been made and only on the explicitly supported AGENTIC path. A normal
+ * turn that merely prepared a request never reaches this function, so no
+ * checkpoint model call happens merely because a turn was prepared.
+ *
+ * The PROVIDER-CONFIRMED OVERFLOW RECOVERY path never reaches this
+ * function: recovery must not wait for a potentially expensive additional
+ * model generation, because that generation could itself overflow the very
+ * window the recovery is trying to escape.
+ *
+ * The attempt is bound to the compaction DECISION identity and to the
+ * CANONICAL source-prefix identity, so a re-evaluated `prepareTurn` cannot
+ * silently repeat it for the same decision.
+ */
+async function generatePreCompactionKnowledgeCheckpoint(input: {
+	readonly seam:
+		| {
+				generate: PckGenerate;
+				decisionId: () => string;
+				deadlineMs?: () => number;
+		  }
+		| undefined;
+	readonly canonicalMessages: readonly MessageWithMetadata[];
+	readonly abortSignal: AbortSignal;
+	readonly logger: Pick<CoreSessionConfig, "logger">["logger"];
+}): Promise<readonly ProjectableCheckpointRecord[]> {
+	// DEFAULT-OFF: with the feature disabled, the seam returns immediately
+	// and NOTHING downstream changes.
+	if (!isPckClosedEnabled() || !input.seam) {
+		return [];
+	}
+	// The checkpoint is bound to the canonical source prefix it was
+	// generated from. The identity is RE-VERIFIED at publication time, so a
+	// checkpoint generated from a prefix that has since changed is stale
+	// and is rejected rather than published against a newer prefix.
+	const sourcePrefixKey = canonicalSourcePrefixKey(input.canonicalMessages);
+	const identity: PckAttemptIdentity = {
+		decisionId: input.seam.decisionId(),
+		sourcePrefixKey,
+	};
+	const deadlineMs = input.seam.deadlineMs?.() ?? resolvePckDeadlineMs();
+	input.logger?.debug("Pre-compaction knowledge checkpoint attempt", {
+		decisionId: identity.decisionId,
+		sourcePrefixKey,
+		deadlineMs,
+	});
+	const outcome = await runPckAttempt({
+		generate: input.seam.generate,
+		canonicalMessages: input.canonicalMessages,
+		identity,
+		taskSignal: input.abortSignal,
+		deadlineMs,
+		currentSourcePrefixKey: () =>
+			canonicalSourcePrefixKey(input.canonicalMessages),
+	});
+	if (!outcome.accepted) {
+		input.logger?.log(
+			"Pre-compaction knowledge checkpoint produced no accepted record",
+			{
+				severity: "info",
+				failureReason: outcome.failureReason,
+				gateCodes: outcome.gateCodes,
+				decisionId: identity.decisionId,
+			},
+		);
+		return [];
+	}
+	return outcome.records.map((record) => ({
+		id: record.id,
+		kind: record.kind,
+		assurance: record.assurance,
+		status: record.status,
+		statement: record.statement,
+		qualifications: record.qualifications,
+		evidenceRefs: record.evidenceRefs,
+	}));
+}
+
+/**
+ * ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01 — SEAM 2.
+ *
+ * Project the ACCEPTED checkpoint records into the compacted messages, AFTER
+ * the existing summary and enrichment sections.
+ *
+ * The projection attaches the section to the EXISTING `compaction_summary`
+ * message. No new message is created, no provider tool call is added, and
+ * every other projected message is preserved unchanged.
+ *
+ * The records it consumes are the gate's OUTPUT, so an ungated candidate
+ * has no path into the persisted sidecar or the provider projection.
+ */
+function projectPreCompactionKnowledgeCheckpoint(
+	compactedMessages: readonly MessageWithMetadata[],
+	records: readonly ProjectableCheckpointRecord[],
+): MessageWithMetadata[] {
+	if (records.length === 0) {
+		return [...compactedMessages];
+	}
+	const applied = applyCheckpointToCompactedMessages(
+		compactedMessages,
+		records,
+	);
+	return applied.messages;
+}
+
 export function createCompactionStateAwarePrepareTurn(input: {
 	compact?: ContextPipelinePrepareTurn;
 	getState?: () => SessionCompactionState | undefined;
@@ -1581,6 +1707,58 @@ export function createCompactionStateAwarePrepareTurn(input: {
 			| import("./adjudication-continuity").AcquisitionEvidenceLedger
 			| Promise<import("./adjudication-continuity").AcquisitionEvidenceLedger>;
 	};
+	/**
+	 * ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01.
+	 *
+	 * The Pre-Compaction Knowledge Checkpoint seam.
+	 *
+	 * When it is ABSENT, the compaction output is byte-identical to the
+	 * pre-ACT behaviour: no checkpoint model call, no checkpoint section,
+	 * no change to the summary, the sidecar, the task contract, the
+	 * verified-outcome carry-forward or the adjudication carry-forward.
+	 *
+	 * When it is PRESENT, the checkpoint is generated BEFORE the agentic
+	 * compaction runs and is projected AFTER the existing summary and
+	 * enrichment sections. The publication gate runs BEFORE the sidecar is
+	 * written and BEFORE the provider projection is built, so neither
+	 * destination can receive an ungated candidate.
+	 */
+	knowledgeCheckpoint?: {
+		/**
+		 * The provider transport for the checkpoint model call.
+		 *
+		 * It is injected so the checkpoint uses the SAME provider
+		 * configuration resolution as the ordinary summarizer, and so the
+		 * qualification tests can drive the same seam deterministically.
+		 */
+		generate: PckGenerate;
+		/**
+		 * The DECISION identity of the compaction that the checkpoint
+		 * belongs to.
+		 *
+		 * The attempt is bound to it, so a re-evaluated `prepareTurn`
+		 * cannot silently repeat the checkpoint for the same decision.
+		 */
+		decisionId: () => string;
+		/**
+		 * The operator-selected deadline, in milliseconds.
+		 *
+		 * It is always FINITE. When absent, the default deadline applies,
+		 * which is NOT smaller than the slowest legitimate checkpoint
+		 * execution the predecessor observed.
+		 */
+		deadlineMs?: () => number;
+	};
+	/**
+	 * ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01.
+	 *
+	 * The session logger, used for the checkpoint's OWN diagnostics.
+	 *
+	 * Only structural facts are logged: the decision identity, the source
+	 * prefix identity, the deadline and the failure reason. No model
+	 * content, no credential and no provider payload is ever logged.
+	 */
+	logger?: Pick<CoreSessionConfig, "logger">["logger"];
 }): ContextPipelinePrepareTurn {
 	return async (context) => {
 		const existingState = input.getState?.();
@@ -1810,6 +1988,28 @@ export function createCompactionStateAwarePrepareTurn(input: {
 				contractMaxRequestTokens,
 			);
 		}
+		// ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01 — SEAM 1.
+		//
+		// The checkpoint is generated ONLY on the FIRST compaction of a
+		// session, and ONLY on the agentic path. The re-compaction path
+		// below is the SECOND compaction: it re-compacts an already
+		// summarised transcript, so its checkpoint would be generated from a
+		// summary rather than from the working agent's context — which is
+		// exactly the lossy representation the checkpoint exists to avoid.
+		//
+		// The attempt happens AFTER the compaction ELIGIBILITY decision has
+		// been made by the inner seam: `input.compact` is the seam that
+		// decides whether to compact at all, so a turn that merely prepared
+		// a request never reaches this call.
+		const checkpointRecords =
+			input.knowledgeCheckpoint === undefined
+				? []
+				: await generatePreCompactionKnowledgeCheckpoint({
+						seam: input.knowledgeCheckpoint,
+						canonicalMessages: context.messages,
+						abortSignal: context.abortSignal,
+						logger: input.logger,
+					});
 		const result = input.compact ? await input.compact(context) : undefined;
 		if (result?.messages) {
 			// ACT-CLINEMM-COMPACTION-TASK-CONTRACT-CONSERVATION-REPAIR01: carry
@@ -1852,7 +2052,18 @@ export function createCompactionStateAwarePrepareTurn(input: {
 				input.adjudication,
 				countCanonicalSourceMessages(context.messages),
 			);
-			const contractedMessages = adjudicated.messages;
+			// ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01 — SEAM 2.
+			//
+			// The ACCEPTED checkpoint is projected AFTER the summary and
+			// every existing enrichment, and BEFORE the sidecar is written
+			// and BEFORE the provider projection is built. So both
+			// destinations consume the GATED content, and the existing
+			// sections are preserved.
+			const checkpointed = projectPreCompactionKnowledgeCheckpoint(
+				adjudicated.messages,
+				checkpointRecords,
+			);
+			const contractedMessages = checkpointed;
 			const nextState = createSessionCompactionState({
 				sourceMessages: context.messages,
 				compactedMessages: contractedMessages,

@@ -1,0 +1,375 @@
+/**
+ * ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01
+ *
+ * G4.5 — the EARLY REAL-MODEL GATE.
+ *
+ * ============================================================================
+ * WHAT IT DOES
+ * ============================================================================
+ *
+ * It executes a BOUNDED model-contract test against the EXISTING authorized
+ * local/provider configuration. It drives the PRODUCTION checkpoint
+ * generation seam (`runPckAttempt`) with the REAL provider transport and the
+ * REAL publication gate, and it measures:
+ *
+ *   SCHEMA_VALID
+ *   CLOSED_VALUES_VALID
+ *   REFERENCES_RESOLVED
+ *   ASSURANCE_BOUNDED
+ *   CANDIDATE_ACCEPTED
+ *
+ * The pass condition is `CANDIDATE_ACCEPTED`, not merely JSON validity.
+ *
+ * THE BUDGET
+ * ----------
+ *
+ *   Maximum generation attempts: 2
+ *   Tool calls:                0
+ *   Automatic retries:         0
+ *   Publication attempts:      1 per candidate
+ *
+ * THE CREDENTIAL
+ * --------------
+ *
+ * The credential is read from the operator-local secrets store and is NEVER
+ * written to any output file, log line, or evidence artefact. The raw model
+ * output is written to the repository's gitignored `tmp/` tree only.
+ */
+
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { createHandlerAsync } from "@cline/llms";
+import type { MessageWithMetadata } from "@cline/shared";
+import {
+	collectObservedCanonicalReferences,
+	interpretCanonicalEvidence,
+} from "../src/extensions/context/precompaction-knowledge-checkpoint/evidence";
+import {
+	buildCheckpointInputView,
+	buildCheckpointRequest,
+	CHECKPOINT_SYSTEM_PROMPT,
+	extractCheckpointJson,
+} from "../src/extensions/context/precompaction-knowledge-checkpoint/model-request";
+import { gateClosedProposals } from "../src/extensions/context/precompaction-knowledge-checkpoint/publication-gate";
+import { runPckAttempt } from "../src/extensions/context/precompaction-knowledge-checkpoint/runtime";
+
+const PRIVATE_ROOT = join(
+	process.cwd(),
+	"..",
+	"..",
+	"..",
+	"tmp",
+	"pck-model-gate",
+);
+
+interface OperatorProviderConfig {
+	readonly providerId: string;
+	readonly modelId: string;
+	readonly baseUrl?: string;
+	readonly apiKey?: string;
+	readonly modelInfo?: Record<string, unknown>;
+}
+
+/**
+ * Read the operator's EXISTING provider configuration.
+ */
+function readOperatorProviderConfig(): OperatorProviderConfig {
+	const state = JSON.parse(
+		readFileSync(join(homedir(), ".cline", "data", "globalState.json"), "utf8"),
+	) as Record<string, unknown>;
+	const secrets = JSON.parse(
+		readFileSync(join(homedir(), ".cline", "data", "secrets.json"), "utf8"),
+	) as Record<string, string>;
+	const providerId = "openai-compatible";
+	const modelId = String(state.actModeApiModelId ?? "MiniMax-M3");
+	const baseUrl = state.openAiBaseUrl ? String(state.openAiBaseUrl) : undefined;
+	const modelInfo = state.actModeOpenAiModelInfo as
+		| Record<string, unknown>
+		| undefined;
+	const apiKey = secrets.openAiApiKey ?? secrets.minimaxApiKey;
+	return { providerId, modelId, baseUrl, apiKey, modelInfo };
+}
+
+/**
+ * The synthetic fixture: a bounded, non-sensitive working session.
+ *
+ * It carries the R4/R2/R6-style observation classes the closed vocabulary
+ * must be able to express, and NO credential and NO private data.
+ */
+function syntheticFixture(): MessageWithMetadata[] {
+	return [
+		{
+			role: "user",
+			id: "fixture_task",
+			content:
+				"Inspect the deployment configuration and report what the evidence supports.",
+		} as unknown as MessageWithMetadata,
+		{
+			role: "assistant",
+			id: "fixture_call",
+			content: [
+				{
+					type: "tool_use",
+					id: "fixture_tool_1",
+					name: "run_commands",
+					input: { command: "deploy.sh build" },
+				},
+			],
+		} as unknown as MessageWithMetadata,
+		{
+			role: "user",
+			id: "fixture_result",
+			content: [
+				{
+					type: "tool_result",
+					tool_use_id: "fixture_tool_1",
+					content: [
+						{
+							query: "deploy.sh build",
+							result: "build finished successfully",
+							success: true,
+						},
+					],
+				},
+			],
+		} as unknown as MessageWithMetadata,
+		{
+			role: "assistant",
+			id: "fixture_call_2",
+			content: [
+				{
+					type: "tool_use",
+					id: "fixture_tool_2",
+					name: "read_file",
+					input: { path: "config/runtime.yaml" },
+				},
+			],
+		} as unknown as MessageWithMetadata,
+		{
+			role: "user",
+			id: "fixture_result_2",
+			content: [
+				{
+					type: "tool_result",
+					tool_use_id: "fixture_tool_2",
+					content: [
+						{
+							query: "config/runtime.yaml",
+							result: "connect timeout: 3 seconds",
+							success: true,
+						},
+					],
+				},
+			],
+		} as unknown as MessageWithMetadata,
+		{
+			role: "assistant",
+			id: "fixture_call_3",
+			content: [
+				{
+					type: "tool_use",
+					id: "fixture_tool_3",
+					name: "search_files",
+					input: { pattern: "token_cleanup" },
+				},
+			],
+		} as unknown as MessageWithMetadata,
+		{
+			role: "user",
+			id: "fixture_result_3",
+			content: [
+				{
+					type: "tool_result",
+					tool_use_id: "fixture_tool_3",
+					content: [
+						{
+							query: "token_cleanup",
+							result: "no matches in the searched scope",
+							success: true,
+						},
+					],
+				},
+			],
+		} as unknown as MessageWithMetadata,
+	];
+}
+
+async function main(): Promise<void> {
+	mkdirSync(PRIVATE_ROOT, { recursive: true });
+	const provider = readOperatorProviderConfig();
+	// The model identity is DISCOVERED at execution time and recorded.
+	console.log(
+		JSON.stringify({
+			event: "model_identity",
+			providerId: provider.providerId,
+			modelId: provider.modelId,
+			baseUrl: provider.baseUrl ?? "(default)",
+			hasCredential: Boolean(provider.apiKey),
+		}),
+	);
+	if (!provider.apiKey) {
+		throw new Error("No operator credential is configured.");
+	}
+	const canonicalMessages = syntheticFixture();
+	const observedReferences =
+		collectObservedCanonicalReferences(canonicalMessages);
+	const inputView = buildCheckpointInputView(canonicalMessages);
+	const request = buildCheckpointRequest(inputView, observedReferences);
+	console.log(
+		JSON.stringify({
+			event: "checkpoint_request",
+			observedReferenceCount: observedReferences.length,
+			requestChars: request.length,
+		}),
+	);
+
+	let attempt = 0;
+	let accepted = false;
+	const deadlineMs = 200_000;
+	while (attempt < 2 && !accepted) {
+		attempt += 1;
+		const startedAt = Date.now();
+		let rawText = "";
+		let usedTools = false;
+		try {
+			const handler = await createHandlerAsync({
+				providerId: provider.providerId,
+				modelId: provider.modelId,
+				...(provider.baseUrl ? { baseUrl: provider.baseUrl } : {}),
+				apiKey: provider.apiKey,
+				...(provider.modelInfo
+					? {
+							modelInfo: {
+								id: provider.modelId,
+								...(provider.modelInfo as Record<string, unknown>),
+							},
+						}
+					: {}),
+				maxOutputTokens: 4096,
+				thinking: false,
+			});
+			for await (const chunk of handler.createMessage(
+				CHECKPOINT_SYSTEM_PROMPT,
+				[{ role: "user", content: request }],
+			)) {
+				if (chunk.type === "text") {
+					rawText += chunk.text;
+				} else if (chunk.type === "tool_calls") {
+					usedTools = true;
+				}
+			}
+		} catch (error) {
+			console.log(
+				JSON.stringify({
+					event: "attempt_failed",
+					attempt,
+					errorMessage: error instanceof Error ? error.message : String(error),
+				}),
+			);
+			continue;
+		}
+		// The raw model output is OPERATOR-LOCAL. It is never committed.
+		writeFileSync(
+			join(PRIVATE_ROOT, `attempt-${attempt}-raw.txt`),
+			rawText,
+			"utf8",
+		);
+		console.log(
+			JSON.stringify({
+				event: "attempt_completed",
+				attempt,
+				elapsedMs: Date.now() - startedAt,
+				responseChars: rawText.length,
+				usedTools,
+			}),
+		);
+		if (usedTools) {
+			console.log(
+				JSON.stringify({
+					event: "attempt_rejected",
+					attempt,
+					reason: "tool_call_attempted",
+				}),
+			);
+			continue;
+		}
+		// The PRODUCTION gate validates the candidate.
+		const outcome = await runPckAttempt({
+			generate: async () => ({
+				text: rawText,
+				reasoningChars: 0,
+				usedTools,
+				failed: false,
+			}),
+			canonicalMessages,
+			identity: { decisionId: "model-gate", sourcePrefixKey: "model-gate" },
+			taskSignal: new AbortController().signal,
+			deadlineMs,
+			currentSourcePrefixKey: () => "model-gate",
+		});
+		// The measurement uses the PRODUCTION parser, so the reported
+		// metrics describe exactly what the production gate sees.
+		const parsed = extractCheckpointJson(rawText) as
+			| { records?: unknown[] }
+			| undefined;
+		const schemaValid = parsed !== undefined && Array.isArray(parsed?.records);
+		const gate = gateClosedProposals({
+			proposals: Array.isArray(parsed?.records) ? parsed.records : [],
+			sourcePrefixKey: "model-gate",
+			evidence: {
+				canonicalReferences: observedReferences,
+				maximumAssuranceFor: (references) =>
+					interpretCanonicalEvidence({
+						canonicalMessages,
+						references,
+					}),
+			},
+		});
+		console.log(
+			JSON.stringify({
+				event: "candidate_evaluated",
+				attempt,
+				SCHEMA_VALID: schemaValid,
+				CLOSED_VALUES_VALID: gate.codes.length === 0,
+				REFERENCES_RESOLVED:
+					gate.codes.filter((code) => code === "REFERENCE_NOT_CANONICAL")
+						.length === 0,
+				ASSURANCE_BOUNDED:
+					gate.records.length > 0 &&
+					gate.records.every(
+						(record) => record.assurance !== ("runtime_verified" as never),
+					),
+				CANDIDATE_ACCEPTED: outcome.accepted,
+				gateCodes: gate.codes,
+				admittedRecordCount: gate.records.length,
+				admittedRecords: gate.records.map((record) => ({
+					id: record.id,
+					kind: record.kind,
+					assurance: record.assurance,
+					status: record.status,
+					statement: record.statement,
+					qualificationCount: record.qualifications.length,
+					evidenceRefCount: record.evidenceRefs.length,
+				})),
+				failureReason: outcome.failureReason,
+			}),
+		);
+		accepted = outcome.accepted;
+	}
+	console.log(
+		JSON.stringify({
+			event: "model_gate_result",
+			attempts: attempt,
+			CANDIDATE_ACCEPTED: accepted,
+			verdict: accepted
+				? "MODEL_CLOSED_CONTRACT_SUPPORTED"
+				: "HALT_MODEL_CONTRACT_UNSUPPORTED",
+		}),
+	);
+	if (!accepted) {
+		process.exitCode = 1;
+	}
+}
+
+await main();

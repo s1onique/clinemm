@@ -63,6 +63,22 @@ export default defineConfig({
 			// negative controls, is
 			// `compaction.adjudication-continuity.discriminator01.test.ts`.
 			"src/extensions/context/compaction.adjudication-continuity.red01.test.ts",
+			// ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01: the RED
+			// witness.
+			//
+			// This file asserts that the REAL production compaction path does
+			// NOT yet carry a closed working-knowledge section. It FAILS
+			// against the production behaviour WITHOUT the checkpoint
+			// enabled, and it is deliberately EXCLUDED from the default
+			// suite so it never blocks the normal gate.
+			//
+			// It is runnable ON DEMAND through its dedicated config:
+			//
+			//   bun run test:red:pck-closed-publication
+			//
+			// The PASSING companion for the same mechanism is
+			// `src/extensions/context/precompaction-knowledge-checkpoint/pck-production-seam.test.ts`.
+			"src/extensions/context/precompaction-knowledge-checkpoint/pck-production-seam.red01.test.ts",
 		],
 		// Process, Git, and SQLite integration coverage shares this suite with
 		// pure unit tests. Windows hosted runners regularly exceed Vitest's 5s

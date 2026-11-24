@@ -31,6 +31,10 @@ import {
 	createContextCompactionPrepareTurn,
 	createImportedHistoryCompactionPrepareTurn,
 } from "../../extensions/context/compaction";
+import { resolveSummarizerConfig } from "../../extensions/context/compaction-shared";
+import { resolvePckDeadlineMs } from "../../extensions/context/precompaction-knowledge-checkpoint/runtime";
+import { generateSummary } from "../../extensions/context/summary-generation";
+import { resolveConnectionProviderConfig } from "../../services/llms/handler-factory";
 import type {
 	McpAppResourceReadRequest,
 	McpAppsRuntime,
@@ -1089,6 +1093,42 @@ export class LocalRuntimeHost implements RuntimeHost {
 		const prepareTurn = createCompactionStateAwarePrepareTurn({
 			compact,
 			getState: () => activeSessionRef?.compactionState,
+			// ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01: the
+			// Pre-Compaction Knowledge Checkpoint seam.
+			//
+			// The seam is ALWAYS PRESENT here, but it is a NO-OP unless the
+			// feature is explicitly enabled by the operator
+			// (`CLINEMM_PCK_CLOSED_ENABLED=1`). With the feature disabled,
+			// the compaction output is byte-identical to the pre-ACT
+			// behaviour: no checkpoint model call, no checkpoint section,
+			// no change to the summary, the sidecar, the task contract, the
+			// verified-outcome carry-forward or the adjudication
+			// carry-forward.
+			//
+			// The checkpoint uses the SAME provider configuration resolution
+			// as the ordinary summarizer, so it never sends credentials the
+			// host has since refreshed or replaced, and it never introduces
+			// a second transport.
+			knowledgeCheckpoint: {
+				generate: async ({ systemPrompt, request, signal }) => {
+					const checkpointProviderConfig = resolveSummarizerConfig({
+						activeProviderConfig: {
+							...resolveConnectionProviderConfig(configWithProvider),
+							abortSignal: signal,
+						},
+						summarizer: configWithProvider.compaction?.summarizer,
+					});
+					return await generateSummary({
+						providerConfig: checkpointProviderConfig,
+						systemPrompt,
+						request,
+						signal,
+					});
+				},
+				decisionId: () => sessionId,
+				deadlineMs: () => resolvePckDeadlineMs(),
+			},
+			logger: configWithProvider.logger,
 			// ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01: the
 			// adjudication seam is present ONLY when the host supplied an
 			// enabled contract. Without it the compaction output is

@@ -178,6 +178,26 @@ function sourcePrefixHash(
 	return `sha256:${hash.digest("hex")}`;
 }
 
+/**
+ * ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01.
+ *
+ * The CANONICAL source-prefix identity of a message list.
+ *
+ * It is the SAME hash the persisted sidecar records as `source_prefix_hash`,
+ * so a checkpoint can be bound to the exact prefix it was generated from
+ * and a stale checkpoint can be rejected before publication.
+ *
+ * It is EXPORTED so the checkpoint seam and the sidecar agree on ONE
+ * identity function; a checkpoint bound to a different derivation could not
+ * be compared with the persisted boundary at all.
+ */
+export function canonicalSourcePrefixKey(
+	messages: readonly MessageWithMetadata[],
+): string {
+	const sourceMessages = canonicalSourceMessages(messages);
+	return sourcePrefixHash(sourceMessages, sourceMessages.length);
+}
+
 export function createSessionCompactionState(input: {
 	sourceMessages: readonly MessageWithMetadata[];
 	compactedMessages: readonly MessageWithMetadata[];

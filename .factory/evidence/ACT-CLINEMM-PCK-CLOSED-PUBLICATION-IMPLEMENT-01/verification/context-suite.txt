@@ -1,0 +1,38 @@
+(node:84177) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core
+
+·····························································································································································································································································································································································································································stdout | src/extensions/context/compaction.working-context-ratio.test.ts > working-context ratio discriminator > GREEN: in the truncation-not-engaged case, manual-compaction ratio DOES transfer to working-context shrink
+[discriminator] {
+  "manualRatio": 0.0071774423241241815,
+  "workingContextRatio": 0.0071774423241241815,
+  "verdict": "S3_RATIO_TRANSFER_NOT_REPRODUCED",
+  "HBefore": 17555,
+  "HAfter": 126,
+  "WBefore": 17555,
+  "WAfter": 126,
+  "preparedBefore": 7,
+  "preparedAfter": 2
+}
+
+stdout | src/extensions/context/compaction.working-context-ratio.test.ts > working-context ratio discriminator > DEFECT-WITNESS: cross-scale compaction ratio diverges once provider-message truncation engages
+[discriminator: realistic] {
+  "manualRatio": 0.00020993002332555814,
+  "workingContextRatio": 0.0006294146443807259,
+  "verdict": "S3_REPRODUCED",
+  "HBefore": 600200,
+  "HAfter": 126,
+  "WBefore": 200186,
+  "WAfter": 126,
+  "preparedBefore": 7,
+  "preparedAfter": 2
+}
+
+···················-·····································································································································································································································································································································································································································································-
+
+ Test Files  58 passed | 1 skipped (59)
+      Tests  885 passed | 2 skipped (887)
+   Start at  03:20:46
+   Duration  2.53s (transform 9.05s, setup 0ms, import 26.00s, tests 2.57s, environment 8ms)
+

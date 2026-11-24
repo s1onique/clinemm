@@ -1,122 +1,125 @@
 {
-	"name": "@cline/core",
-	"description": "Cline Core SDK for Node Runtime",
-	"version": "0.2.0",
-	"repository": {
-		"type": "git",
-		"url": "https://github.com/cline/cline",
-		"directory": "sdk/packages/core"
-	},
-	"type": "module",
-	"types": "./dist/index.d.ts",
-	"main": "./dist/index.js",
-	"private": false,
-	"publishConfig": {
-		"access": "public"
-	},
-	"exports": {
-		".": {
-			"types": "./dist/index.d.ts",
-			"import": "./dist/index.js"
-		},
-		"./hub": {
-			"types": "./dist/hub/index.d.ts",
-			"import": "./dist/hub/index.js"
-		},
-		"./hub/daemon-entry": {
-			"types": "./dist/hub/daemon/entry.d.ts",
-			"import": "./dist/hub/daemon/entry.js"
-		},
-		"./telemetry": {
-			"types": "./dist/services/telemetry/index.d.ts",
-			"import": "./dist/services/telemetry/index.js"
-		},
-		"./services/feature-flags/posthog": {
-			"types": "./dist/services/feature-flags/posthog.d.ts",
-			"import": "./dist/services/feature-flags/posthog.js"
-		},
-		"./internal/command-risk-internal": {
-			"types": "./dist/runtime/command-policy/command-risk-internal.d.ts",
-			"import": "./dist/runtime/command-policy/command-risk-internal.js"
-		},
-		"./internal/parser-helper-runtime": {
-			"types": "./dist/runtime/command-policy/parser-helper/runtime.d.ts",
-			"import": "./dist/runtime/command-policy/parser-helper/runtime.js"
-		},
-		"./internal/reformulation-classifier": {
-			"types": "./dist/runtime/command-policy/reformulation-classifier-internal.d.ts",
-			"import": "./dist/runtime/command-policy/reformulation-classifier-internal.js"
-		},
-		"./internal/latency-trace": {
-			"types": "./dist/observability/latency/latency-trace-internal.d.ts",
-			"import": "./dist/observability/latency/latency-trace-internal.js"
-		},
-		"./cloud": {
-			"types": "./dist/cloud/index.d.ts",
-			"import": "./dist/cloud/index.js"		}
-	},
-	"scripts": {
-		"build": "bun run ./bun.mts && bun tsc -p tsconfig.build.json && bun run ./scripts/verify-runtime-build-id.ts",
-		"typecheck": "bun tsc -p tsconfig.dev.json --noEmit && bun run typecheck:smoke && bun run typecheck:barrel-witness",
-		"typecheck:smoke": "bun tsc -p tsconfig.smoke.json --noEmit",
-		"typecheck:barrel-witness": "bun tsc -p tsconfig.witness.json --noEmit",
-		"test": "bun run test:unit && bun run test:e2e",
-		"test:live": "vitest run --config vitest.config.ts src/extensions/context/compaction.live.test.ts",
-		"test:compaction": "bun --conditions=development run scripts/compact-session.ts",
-		"test:unit": "vitest run --config vitest.config.ts",
-		"test:e2e": "vitest run --config vitest.e2e.config.ts",
-		"test:red:summary-churn01": "vitest run --config vitest.red.summary-churn01.config.ts",
-		"test:red:adjudication-continuity-red01": "vitest run --config vitest.red.adjudication-continuity-red01.config.ts",
-		"verify:routines": "zsh -lc 'bunx vitest run src/cron/schedule-service.test.ts --config vitest.config.ts'",
-		"test:watch": "vitest --config vitest.config.ts"
-	},
-	"dependencies": {
-		"@cline/agents": "workspace:*",
-		"@cline/shared": "workspace:*",
-		"@cline/llms": "workspace:*",
-		"@modelcontextprotocol/sdk": "^1.29.0",
-		"@opentelemetry/api": "^1.9.0",
-		"@opentelemetry/api-logs": "^0.214.0",
-		"@opentelemetry/exporter-logs-otlp-http": "^0.214.0",
-		"@opentelemetry/exporter-metrics-otlp-http": "^0.214.0",
-		"@opentelemetry/exporter-trace-otlp-http": "^0.214.0",
-		"@opentelemetry/resources": "^2.6.1",
-		"@opentelemetry/sdk-logs": "^0.214.0",
-		"@opentelemetry/sdk-metrics": "^2.6.1",
-		"@opentelemetry/sdk-trace-base": "^2.6.1",
-		"@opentelemetry/sdk-trace-node": "^2.6.1",
-		"@opentelemetry/semantic-conventions": "^1.40.0",
-		"http-proxy-agent": "^7.0.2",
-		"https-proxy-agent": "^7.0.6",
-		"jiti": "^2.7.0",
-		"node-machine-id": "^1.1.12",
-		"nanoid": "^5.1.7",
-		"proxy-from-env": "^2.1.0",
-		"simple-git": "3.36.0",
-		"ws": "^8.20.0",
-		"yaml": "^2.8.2",
-		"zod": "^4.3.6"
-	},
-	"peerDependencies": {
-		"posthog-node": "^5.8.0"
-	},
-	"peerDependenciesMeta": {
-		"posthog-node": {
-			"optional": true
-		}
-	},
-	"devDependencies": {
-		"@types/proxy-from-env": "^1.0.4",
-		"@types/ws": "^8.18.1",
-		"posthog-node": "^5.8.0",
-		"skills": "1.7.2"
-	},
-	"engines": {
-		"node": ">=22"
-	},
-	"files": [
-		"dist",
-		"bin",
-		"!dist/**/*.d.ts.map"
-	]
+  "name": "@cline/core",
+  "description": "Cline Core SDK for Node Runtime",
+  "version": "0.2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cline/cline",
+    "directory": "sdk/packages/core"
+  },
+  "type": "module",
+  "types": "./dist/index.d.ts",
+  "main": "./dist/index.js",
+  "private": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./hub": {
+      "types": "./dist/hub/index.d.ts",
+      "import": "./dist/hub/index.js"
+    },
+    "./hub/daemon-entry": {
+      "types": "./dist/hub/daemon/entry.d.ts",
+      "import": "./dist/hub/daemon/entry.js"
+    },
+    "./telemetry": {
+      "types": "./dist/services/telemetry/index.d.ts",
+      "import": "./dist/services/telemetry/index.js"
+    },
+    "./services/feature-flags/posthog": {
+      "types": "./dist/services/feature-flags/posthog.d.ts",
+      "import": "./dist/services/feature-flags/posthog.js"
+    },
+    "./internal/command-risk-internal": {
+      "types": "./dist/runtime/command-policy/command-risk-internal.d.ts",
+      "import": "./dist/runtime/command-policy/command-risk-internal.js"
+    },
+    "./internal/parser-helper-runtime": {
+      "types": "./dist/runtime/command-policy/parser-helper/runtime.d.ts",
+      "import": "./dist/runtime/command-policy/parser-helper/runtime.js"
+    },
+    "./internal/reformulation-classifier": {
+      "types": "./dist/runtime/command-policy/reformulation-classifier-internal.d.ts",
+      "import": "./dist/runtime/command-policy/reformulation-classifier-internal.js"
+    },
+    "./internal/latency-trace": {
+      "types": "./dist/observability/latency/latency-trace-internal.d.ts",
+      "import": "./dist/observability/latency/latency-trace-internal.js"
+    },
+    "./cloud": {
+      "types": "./dist/cloud/index.d.ts",
+      "import": "./dist/cloud/index.js"
+    }
+  },
+  "scripts": {
+    "build": "bun run ./bun.mts && bun tsc -p tsconfig.build.json && bun run ./scripts/verify-runtime-build-id.ts",
+    "typecheck": "bun tsc -p tsconfig.dev.json --noEmit && bun run typecheck:smoke && bun run typecheck:barrel-witness",
+    "typecheck:smoke": "bun tsc -p tsconfig.smoke.json --noEmit",
+    "typecheck:barrel-witness": "bun tsc -p tsconfig.witness.json --noEmit",
+    "test": "bun run test:unit && bun run test:e2e",
+    "test:live": "vitest run --config vitest.config.ts src/extensions/context/compaction.live.test.ts",
+    "test:compaction": "bun --conditions=development run scripts/compact-session.ts",
+    "test:unit": "vitest run --config vitest.config.ts",
+    "test:e2e": "vitest run --config vitest.e2e.config.ts",
+    "test:red:summary-churn01": "vitest run --config vitest.red.summary-churn01.config.ts",
+    "test:red:adjudication-continuity-red01": "vitest run --config vitest.red.adjudication-continuity-red01.config.ts",
+    "test:red:pck-closed-publication": "vitest run --config vitest.red.pck-closed-publication.config.ts",
+    "test:model-gate:pck-closed-contract": "bun scripts/pck-closed-contract.model-gate.ts",
+    "verify:routines": "zsh -lc 'bunx vitest run src/cron/schedule-service.test.ts --config vitest.config.ts'",
+    "test:watch": "vitest --config vitest.config.ts"
+  },
+  "dependencies": {
+    "@cline/agents": "workspace:*",
+    "@cline/shared": "workspace:*",
+    "@cline/llms": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/api-logs": "^0.214.0",
+    "@opentelemetry/exporter-logs-otlp-http": "^0.214.0",
+    "@opentelemetry/exporter-metrics-otlp-http": "^0.214.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.214.0",
+    "@opentelemetry/resources": "^2.6.1",
+    "@opentelemetry/sdk-logs": "^0.214.0",
+    "@opentelemetry/sdk-metrics": "^2.6.1",
+    "@opentelemetry/sdk-trace-base": "^2.6.1",
+    "@opentelemetry/sdk-trace-node": "^2.6.1",
+    "@opentelemetry/semantic-conventions": "^1.40.0",
+    "http-proxy-agent": "^7.0.2",
+    "https-proxy-agent": "^7.0.6",
+    "jiti": "^2.7.0",
+    "node-machine-id": "^1.1.12",
+    "nanoid": "^5.1.7",
+    "proxy-from-env": "^2.1.0",
+    "simple-git": "3.36.0",
+    "ws": "^8.20.0",
+    "yaml": "^2.8.2",
+    "zod": "^4.3.6"
+  },
+  "peerDependencies": {
+    "posthog-node": "^5.8.0"
+  },
+  "peerDependenciesMeta": {
+    "posthog-node": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/proxy-from-env": "^1.0.4",
+    "@types/ws": "^8.18.1",
+    "posthog-node": "^5.8.0",
+    "skills": "1.7.2"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "files": [
+    "dist",
+    "bin",
+    "!dist/**/*.d.ts.map"
+  ]
 }
