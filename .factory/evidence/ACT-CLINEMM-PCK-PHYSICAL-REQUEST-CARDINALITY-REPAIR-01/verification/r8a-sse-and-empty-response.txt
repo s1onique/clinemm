@@ -1,0 +1,113 @@
+ACT-CLINEMM-PCK-PHYSICAL-REQUEST-CARDINALITY-REPAIR-01 — A02b-R8a
+BOUNDED FOLLOW-UP: THE SSE-ERROR AND EMPTY-RESPONSE VERIFICATION CONTROLS
+
+ENTRY_HEAD: 8a78510b8
+CLASSIFICATION: SYNTHETIC_REAL (the REAL production transport, synthetic wire
+                responses). NOT installed-live.
+
+WHY THIS FILE EXISTS
+--------------------
+The review found that the predecessor's GREEN suite exercised ONLY the
+request-INITIATION retry authority. Its failure-status matrix was
+
+    [429, 500, 502, 503]
+
+Every entry exercises `maxRetries`. NONE exercises:
+  1. the POST-STREAM-START authority (`streamRetries`), and
+  2. the EMPTY-RESPONSE authority (`emptyResponseAttempts`).
+
+The review also established an AI SDK subtlety that makes the gap
+load-bearing. In the resolved dependency (`ai@7.0.159`):
+
+    "Set to `0` to disable automatic retries while allowing `onError` to
+     request one retry. When automatic retries are configured, `onError` can
+     request at most one additional retry after they are exhausted. Omit this
+     option to disable all stream retry behavior..."
+
+So `streamRetries: 0` disables AUTOMATIC stream retries but STILL permits a
+CALLBACK-DIRECTED retry when `onError` returns `{ retry: true }`.
+
+The existing production `onError` (sdk/packages/llms/src/providers/ai-sdk.ts)
+is:
+
+    onError: ({ error: streamError }) => {
+        const captured = captureStreamError(streamError);
+        capturedError.current = captured;
+        streamTelemetry.captureError(streamError);
+    },
+
+Its arrow function has a BLOCK body and no `return`, so it yields
+`undefined` and does NOT request a retry. The effective behaviour is
+therefore correct — but it is correct BY ACCIDENT of the callback's return
+value, not by construction. This file establishes the behaviour
+EMPIRICALLY instead.
+
+THE WITNESSES
+-------------
+File:
+  sdk/packages/core/src/extensions/context/precompaction-knowledge-checkpoint/
+    pck-physical-request-cardinality.r8a.test.ts
+
+Each witness drives the REAL production transport (`createHandlerAsync` ->
+the gateway -> `ai-sdk.ts` -> `streamText`) with a stubbed `fetch` and
+counts the stub invocations. It does not re-implement the retry logic.
+
+Every witness is paired with a RETRY-POSITIVE CONTROL: the same scenario
+WITHOUT the PCK policy must produce MORE THAN ONE physical request. Without
+that control, a "1 physical request" assertion would be vacuous.
+
+  R8a.1  post-stream-start failure, WITH the policy    -> exactly 1
+  R8a.2  post-stream-start failure, WITHOUT the policy -> 4   (CONTROL)
+  R8a.3  empty response,          WITH the policy     -> exactly 1
+  R8a.4  empty response,          WITHOUT the policy  -> 4   (CONTROL)
+  R8a.5  both authorities disarmed together           -> exactly 1 each
+  R8a.6  CONSERVATION: an ordinary request keeps both -> > 1 each
+  R8a.7  the policy still names all three authorities
+  R8a.8  the policy never mutates the configuration it was given
+
+THE OBSERVED CARDINALITY
+------------------------
+  post_stream_start: { with_policy: 1, without_policy: 4 }
+  empty_response:    { with_policy: 1, without_policy: 4 }
+
+So the two previously-unqualified authorities are now experimentally
+qualified. The defect that the repair closed is not merely "the
+request-initiation authority was armed": BOTH remaining authorities were
+armed at FOUR physical requests each, and the repair reduces every one of
+them to ONE.
+
+THE CAUSAL CLAIM
+----------------
+The review asked that the maximum reachable cardinality be recorded
+correctly. The corrected record is:
+
+    OBSERVED_PREDECESSOR_CARDINALITY=4
+    COMPOSED_WORST_CASE=NOT_ESTABLISHED
+
+The composition of the three authorities was NOT multiplicative in the
+observed measurements (each authority was observed at 4 on its own), and
+the actual nesting, failure classification and cancellation rules determine
+the reachable bound. Neither 27 nor 48 is an established reachable
+maximum.
+
+THE HISTORICAL 180-SECOND FAILURE
+----------------------------------
+The review corrected the attribution: the historical 180-second checkpoint
+failure was NOT established to be retry backoff. The observed live phases
+were
+
+    First generation, including cold prefill    174.2 s
+    Second correlated generation                 ~6 s
+    PCK deadline                                 180 s
+
+The reproduced retry mechanism is a PLAUSIBLE explanation for the second
+generation, but the actual HTTP/SSE failure identity was never recovered.
+This ACT does NOT change that classification: the historical ownership
+remains UNRESOLVED.
+
+THE BOUNDED FOLLOW-UP IS COMPLETE
+---------------------------------
+    R8a_WITNESSES: 8/8 PASS
+    RETRY_POSITIVE_CONTROLS: 2 (both PROVED the authority was LIVE)
+    CLASSIFICATION: SYNTHETIC_REAL
+    INSTALLED_LIVE_QUALIFICATION: NOT EXECUTED

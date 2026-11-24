@@ -40630,8 +40630,236 @@ A02b-R4b JSON-mode feasibility                      PASS_LIVE
 A02b-R4c Qwen inference policy                      CLOSED_WITH_REVIEW_CORRECTION
 A11      General Default/None semantics             CLOSED
 A02b-R8  Physical-request cardinality repair        CLOSED
-A02b-R7  Evidence-first input optimization          HIGH_PRIORITY
-A02b-R9  Generation-time record budget              RECON_PENDING
+A02b-R8a SSE and empty-response verification        CLOSED
+A02b-R7  Evidence-first input optimization          CLOSED — NO_INCREMENTAL_UTILITY
+A02b-R9  Generation-time record budget              HIGH_PRIORITY — FIRST-ORDER_DEFECT
+A02b-R5  Auxiliary cache isolation                  RECON_PENDING
+A02b-R6  Source-prefix freshness                    UNRESOLVED
+A02b-R3  Exact-head repackaging                     BLOCKED
+A11a     Adaptive-thinking UI consistency           FOLLOW_UP
+A11b     Installed settings round trip              LIVE_PENDING
+M31-R1   Historical MiniMax evidence reconciliation  REOPENED
+M31-R2   MiniMax settings-to-wire qualification     PENDING
+M31-R3   Direct API comparison                      PENDING
+M31-R4   Controlled TTFE benchmark                  PENDING
+A05      Round C convergence                        PENDING
+A10      Evidence-continuity confidentiality         SECURITY_BACKLOG
+B06      Completion-continuation quiescence         RECON_PENDING
+```
+
+---
+
+## ACT-CLINEMM-PCK-PHYSICAL-REQUEST-CARDINALITY-REPAIR-01 — A02b-R8a closure
+
+The review's P1 verification residue is CLOSED. The two retry authorities
+the predecessor's GREEN suite did not exercise are now experimentally
+qualified, each with a RETRY-POSITIVE CONTROL.
+
+```text
+ACT_ID: ACT-CLINEMM-PCK-PHYSICAL-REQUEST-CARDINALITY-REPAIR-01
+ROW:    A02b-R8a
+VERDICT: CLOSED — BOUNDED_VERIFICATION_RESIDUE_RESOLVED
+ENTRY_HEAD: 8a78510b8
+EVIDENCE: .factory/evidence/ACT-CLINEMM-PCK-PHYSICAL-REQUEST-CARDINALITY-REPAIR-01/
+  verification/r8a-sse-and-empty-response.txt
+```
+
+### What the review found
+
+The predecessor's GREEN suite drove the REAL transport with synthetic HTTP
+failures at the REQUEST-INITIATION boundary only (`[429, 500, 502, 503]`).
+Neither the post-stream-start authority nor the empty-response authority
+was exercised, and G1.6 asserted only the POLICY DECLARATION.
+
+The review also established an AI SDK subtlety that makes the gap
+load-bearing. In the resolved dependency (`ai@7.0.159`):
+
+> "Set to `0` to disable automatic retries while allowing `onError` to
+> request one retry. … Omit this option to disable all stream retry
+> behavior."
+
+So `streamRetries: 0` disables AUTOMATIC stream retries but still permits a
+CALLBACK-DIRECTED retry when `onError` returns `{ retry: true }`. The
+production `onError` (`sdk/packages/llms/src/providers/ai-sdk.ts`) has a
+block body and no `return`, so it yields `undefined` and does NOT request a
+retry — the behaviour is correct, but by accident of the return value rather
+than by construction.
+
+### What this ACT established
+
+```text
+R8a_WITNESSES: 8/8 PASS
+  post_stream_start: { with_policy: 1, without_policy: 4 }
+  empty_response:    { with_policy: 1, without_policy: 4 }
+```
+
+Both previously-unqualified authorities were armed at FOUR physical
+requests each, and the repair reduces every one of them to ONE. Each
+disarm assertion is paired with a control proving the authority was LIVE,
+so neither assertion is vacuous.
+
+```text
+OBSERVED_PREDECESSOR_CARDINALITY=4
+COMPOSED_WORST_CASE=NOT_ESTABLISHED
+```
+
+The review's causal correction is recorded: the composition was NOT
+multiplicative in the observed measurements, and neither 27 nor 48 is an
+established reachable maximum.
+
+### The historical 180-second attribution
+
+The review's second causal correction is recorded and NOT re-litigated: the
+historical 180-second checkpoint failure was NOT established to be retry
+backoff. The observed phases were 174.2 s (first generation, including cold
+prefill), ~6 s (second correlated generation) and a 180 s PCK deadline. The
+reproduced retry mechanism is a PLAUSIBLE explanation for the second
+generation; the actual HTTP/SSE failure identity was never recovered.
+Historical ownership remains UNRESOLVED.
+
+```text
+CLASSIFICATION: SYNTHETIC_REAL
+INSTALLED-LIVE QUALIFICATION: NOT EXECUTED
+```
+
+---
+
+## ACT-CLINEMM-PCK-EVIDENCE-FIRST-INPUT-RECON-01 — A02b-R7 closure
+
+```text
+ACT_ID: ACT-CLINEMM-PCK-EVIDENCE-FIRST-INPUT-RECON-01
+ROW:    A02b-R7
+VERDICT: PCK_INCREMENTAL_UTILITY_NOT_ESTABLISHED
+ENTRY_HEAD: 8a78510b8
+EVIDENCE: .factory/evidence/ACT-CLINEMM-PCK-EVIDENCE-FIRST-INPUT-RECON-01/
+  00-entry-and-source-identity.md
+  01-c2-c4-comparative-candidates.md
+  02-c3-utility-oracle.md
+  03-c5-trust-boundary-conservation.md
+  04-c6-decision.md
+```
+
+### The workload
+
+A REAL mature session was recovered, not a synthetic fixture:
+`1795489471969_tachv`, SHA-256 `3d398ad2…db9b27`, extension build
+`4.1.26-6fdf56079`, 114 messages, 56 joined canonical tool events,
+production input view 296 103 chars (~98 701 estimated tokens).
+
+### The candidates, all against that SAME history
+
+| Cand | Representation | Input chars | Est. tok | Actual prompt tok | Latency | Admitted |
+| --- | --- | --- | --- | --- | --- | --- |
+| A | existing full-history input | 296 103 | 98 701 | never completed | 237.8 s / 291.4 s | **0** |
+| B | evidence-first | 9 524 | 3 175 | 6 376 | 34.4 s | 10 |
+| C | evidence-only | 5 263 | 1 755 | 4 942 | 33.9 s / 91.6 s | 5 / 6 |
+| D | deterministic extraction | 53 | 18 | 0 | **2 ms** | **0** |
+
+Input reduction: **96.8 %** (B) and **98.2 %** (C).
+
+### The findings
+
+1. **The OUTPUT BUDGET is the first-order defect.** At the production
+   1024-token budget EVERY inference candidate fails with
+   `finish_reason=length`, including the baseline. Candidate A burns
+   **237.8 s** and admits nothing — and would be killed by the 180 s PCK
+   deadline before it could return. **A02b-R9 is now the highest-value
+   follow-up**, because it is a NUMBER, not an architecture.
+
+2. **The bottleneck is the closed publication vocabulary, not the input
+   representation.** The published statement is RENDERED from six atom
+   labels and six argument labels, and the argument vocabulary's only
+   deterministically-establishable entry is `build` via `make build`. On
+   this workload **0 of 56** canonical tool events carry that
+   classification, so every admitted statement renders generically
+   (`operation invoked: none`). Candidate B admitted 10 records with **10**
+   generic statements; candidate C admitted 5–6 with **all** generic.
+
+3. **The deterministic discriminator (D) is not feasible for this
+   workload.** Its establishable surface is EMPTY. It is the cheapest
+   possible answer (2 ms, 0 physical requests) and the wrong one.
+
+4. **The utility oracle bounds the incremental value at ~zero.** The 10
+   items that actually matter — the ten frozen findings R1–R10 with their
+   severity/confidence ratings — are ALREADY PRESERVED by the production
+   task-contract mechanism. The remaining 56 runtime observations are
+   already preserved by the production verified-outcome ledger.
+
+5. **The trust boundary is conserved.** 8/8 C5 witnesses pass. The
+   assurance ceiling is computed from the CANONICAL history, never from the
+   candidate's view, so omission can only DOWNGRADE. No candidate carries
+   private reasoning or raw tool output.
+
+6. **The physical-request contract held on EVERY live measurement** in this
+   ACT: 1 physical request on every candidate run, including every
+   failure. A02b-R8 is confirmed against the LIVE endpoint, not only
+   against synthetic wire responses.
+
+### The decision
+
+```text
+MATURE_HISTORY_IDENTITY=1795489471969_tachv
+BASELINE_INPUT_TOKENS=98701
+EVIDENCE_FIRST_INPUT_TOKENS=3175
+EVIDENCE_ONLY_INPUT_TOKENS=1755
+DETERMINISTIC_EXTRACTION_FEASIBILITY=NOT_FEASIBLE_FOR_THIS_WORKLOAD
+INCREMENTAL_KNOWLEDGE_UTILITY=NOT_ESTABLISHED
+ASSURANCE_CONSERVATION=PASS
+CONFIDENTIALITY_CONSERVATION=PASS
+PREFERRED_CANDIDATE=NONE
+VERDICT=PCK_INCREMENTAL_UTILITY_NOT_ESTABLISHED
+```
+
+Optimising the input would make the PCK faster and cheaper while
+preserving exactly nothing. A fast, cheap, useless checkpoint is harder to
+notice and therefore harder to remove — strictly worse than ordinary
+compaction.
+
+### The recommended question for a successor ACT
+
+Not "how do we make the input smaller?" but "should the closed vocabulary
+carry a bounded, RUNTIME-OWNED observation payload — an allowlisted
+command subject already computed by `classifyCommand()` — so a record can
+say WHICH operation was invoked rather than merely THAT one was?", or
+alternatively whether the PCK should be retired in favour of the existing
+verified-outcome ledger and task contract, or scoped to the workloads where
+its deterministic surface is non-empty.
+
+Option (a) keeps the trust boundary exactly as it is: an allowlisted subject
+is a constant from a closed set, rendered by the host — the same property
+the current atom labels have. This ACT does not authorise any of the three;
+it attaches the evidence and leaves the answer to the successor.
+
+### What is NOT claimed
+
+```text
+INSTALLED-LIVE QUALIFICATION:  NOT EXECUTED.
+MATURE-CONTEXT UTILITY:         NOT ESTABLISHED in either direction. ONE real
+                                mature session, ONE live endpoint. No
+                                convergence or multi-session claim.
+OUTPUT-BUDGET VARIANCE:         MEASURED AND MATERIAL. The 4096-token budget
+                                is MARGINAL: candidate B succeeded once and
+                                failed with `finish_reason=length` twice. A
+                                production budget must be chosen against that
+                                variance, not against one successful run.
+CACHE CONDITIONS:              NOT COMPARABLE ACROSS ALL RUNS. One candidate C
+                                run obtained a 4 935-token cache hit (the
+                                canonical reference list is a stable prefix);
+                                other runs obtained none.
+```
+
+### The updated epic board
+
+```text
+A02b-R2  Generation eligibility repair              CLOSED
+A02b-R4a Qwen non-thinking feasibility              PASS_LIVE
+A02b-R4b JSON-mode feasibility                      PASS_LIVE
+A02b-R4c Qwen inference policy                      CLOSED_WITH_REVIEW_CORRECTION
+A11      General Default/None semantics             CLOSED
+A02b-R8  Physical-request cardinality repair        CLOSED
+A02b-R8a SSE and empty-response verification        CLOSED
+A02b-R7  Evidence-first input optimization          CLOSED — NO_INCREMENTAL_UTILITY
+A02b-R9  Generation-time record budget              HIGH_PRIORITY — FIRST-ORDER_DEFECT
 A02b-R5  Auxiliary cache isolation                  RECON_PENDING
 A02b-R6  Source-prefix freshness                    UNRESOLVED
 A02b-R3  Exact-head repackaging                     BLOCKED

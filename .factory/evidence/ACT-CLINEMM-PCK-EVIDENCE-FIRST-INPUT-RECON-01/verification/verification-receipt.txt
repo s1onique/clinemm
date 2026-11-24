@@ -1,0 +1,109 @@
+ACT-CLINEMM-PCK-EVIDENCE-FIRST-INPUT-RECON-01 — VERIFICATION RECEIPT
+ENTRY_HEAD: 8a78510b8
+SCOPE: bounded executable recon + the A02b-R8a bounded follow-up
+
+--- TYPECHECK ---
+Project: sdk/packages/core (tsconfig.dev.json)
+BASELINE (ENTRY_HEAD 8a78510b8, clean tree): 45
+AFTER    (this ACT):                           45
+DELTA:                                           0
+Diagnostics mentioning an ACT-owned file:      NONE
+
+--- PCK REGRESSION SUITE ---
+Command: bunx vitest run src/extensions/context/precompaction-knowledge-checkpoint/
+Result:  16 test files PASSED, 152/152 tests PASSED
+
+  pck-conservation-ablation.test.ts                            (9)
+  pck-observation-assurance.red01.test.ts                      (7)
+  pck-persistence-restoration.test.ts                          (3)
+  pck-same-class-assurance.red02.test.ts                      (14)
+  pck-execution-authority.preflight.test.ts                    (9)
+  pck-qwen-inference-policy.resolver01.test.ts                (16)
+  pck-input-candidates.recon.test.ts            [C5, NEW]     (8)
+  pck-closed-contract.test.ts                                 (27)
+  pck-reference-confidentiality.test.ts                        (3)
+  pck-default-off-equivalence.test.ts                          (2)
+  pck-production-seam.test.ts                                 (10)
+  pck-qwen-inference-policy.transport01.test.ts                (8)
+  pck-physical-request-cardinality.r8a.test.ts  [R8a, NEW]     (8)
+  pck-generation-eligibility.repair01.test.ts                 (14)
+  pck-physical-request-cardinality.test.ts                     (8)
+
+--- CORE REGRESSION SUITE ---
+Command: bunx vitest run   (sdk/packages/core)
+BASELINE (ENTRY_HEAD 8a78510b8, clean tree, verified by git stash):
+  Test Files  17 failed | 392 passed | 3 skipped (412)
+  Tests      113 failed | 6093 passed | 162 skipped (6368)
+AFTER (this ACT):
+  Test Files  17 failed | 394 passed | 3 skipped (414)
+  Tests      113 failed | 6109 passed | 162 skipped (6384)
+
+FAILING FILE SET — IDENTICAL:
+  $ diff <baseline failing files> <after failing files>
+  (no output — IDENTICAL)
+
+  src/extensions/composio/composio-tools-extension.test.ts
+  src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts
+  src/hooks/checkpoint-hooks.test.ts
+  src/hub/runtime-host/hub-runtime-host.test.ts
+  src/hub/server/boundary.test.ts
+  src/hub/server/cloud-session-service.test.ts
+  src/hub/server/fetch-wiring.test.ts
+  src/hub/server/hub-plugins.test.ts
+  src/hub/server/index.test.ts
+  src/hub/server/replay-wire.test.ts
+  src/hub/server/ui-events.test.ts
+  src/hub/settings.test.ts
+  src/runtime/command-policy/path-authority.temporary-external.test.ts
+  src/runtime/sandbox/macos/seatbelt-availability.test.ts
+  src/runtime/sandbox/sandbox-backend.test.ts
+  src/session/checkpoint-restore.test.ts
+  src/session/services/persistence-service.test.ts
+
+  The +16 passing tests are exactly the 16 new ACT-owned tests (8 R8a + 8 C5).
+
+  ZERO ACT-owned regressions.  ACT_OWNED_DIAGNOSTICS: 0.
+
+--- LIVE EXPERIMENT RUNS ---
+Endpoint:  the LIVE qualified operator endpoint (openai-compatible,
+          qwen3.8-flash-next-q2_0)
+Credential: read from the operator's existing provider settings store and
+          NEVER written to any output file, log line or evidence artefact.
+
+Candidate runs against the REAL mature canonical history
+(1795489471969_tachv, SHA-256 3d398ad2...db9b27): 16 runs
+  A  1024  1 run    B  1024  1 run    C  1024  4 runs   D  1 run
+  A  4096  1 run    B  4096  3 runs   C  4096  5 runs
+
+Physical provider requests per run, MEASURED by wrapping the transport's
+`fetch`:  1 on EVERY inference run; 0 on candidate D (by construction).
+
+--- CONFIDENTIALITY ---
+The acquired canonical history and every raw model output are written ONLY
+to the repository's GITIGNORED `tmp/` tree:
+  tmp/pck-input-recon/1795489471969_tachv.canonical.json
+  tmp/pck-input-recon/1795489471969_tachv.acquisition.json
+  tmp/pck-input-recon/1795489471969_tachv.utility-oracle.json
+  tmp/pck-input-recon/1795489471969_tachv.comparison.json
+  tmp/pck-input-recon/candidate-{A,B,C,D}-raw.txt
+
+The committed evidence carries ONLY aggregate, non-reversible counts and
+admitted records whose every byte is a RUNTIME-OWNED constant. No private
+repository content, no credential and no raw reasoning reached committed
+evidence.
+
+--- WHAT IS NOT CLAIMED ---
+INSTALLED-LIVE QUALIFICATION:  NOT EXECUTED. The VSIX has not been packaged,
+                                installed or run live against these findings.
+MATURE-CONTEXT UTILITY:         NOT ESTABLISHED in either direction. ONE real
+                                mature session, ONE live endpoint. No
+                                convergence, multi-session or other-workload
+                                claim.
+OUTPUT-BUDGET VARIANCE:         MEASURED. Candidate C is STABLE (4/4 failures
+                                at 1024, 5/5 successes at 4096). Candidate B
+                                is VARIABLE at 4096 (1 success, 2 failures).
+CACHE CONDITIONS:              NOT COMPARABLE ACROSS ALL RUNS. The canonical
+                                reference list is a stable prefix; once warm,
+                                candidate C reported 4 935 of 4 942 prompt
+                                tokens cached. Latency figures span both
+                                conditions and are reported separately.
