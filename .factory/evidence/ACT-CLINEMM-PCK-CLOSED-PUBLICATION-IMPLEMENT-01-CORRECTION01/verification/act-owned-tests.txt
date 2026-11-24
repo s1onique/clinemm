@@ -1,0 +1,18 @@
+[0m[2m[35m$[0m [2m[1mvitest run --config vitest.config.ts src/extensions/context/precompaction-knowledge-checkpoint/[0m
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core
+
+ ✓ src/extensions/context/precompaction-knowledge-checkpoint/pck-knowledge-utility.test.ts (6 tests) 3ms
+ ✓ src/extensions/context/precompaction-knowledge-checkpoint/pck-observation-assurance.red01.test.ts (7 tests) 3ms
+ ✓ src/extensions/context/precompaction-knowledge-checkpoint/pck-conservation-ablation.test.ts (9 tests) 3ms
+ ✓ src/extensions/context/precompaction-knowledge-checkpoint/pck-closed-contract.test.ts (27 tests) 30ms
+ ✓ src/extensions/context/precompaction-knowledge-checkpoint/pck-persistence-restoration.test.ts (3 tests) 6ms
+ ✓ src/extensions/context/precompaction-knowledge-checkpoint/pck-reference-confidentiality.test.ts (3 tests) 17ms
+ ✓ src/extensions/context/precompaction-knowledge-checkpoint/pck-default-off-equivalence.test.ts (2 tests) 19ms
+ ✓ src/extensions/context/precompaction-knowledge-checkpoint/pck-production-seam.test.ts (8 tests) 29ms
+
+ Test Files  8 passed (8)
+      Tests  65 passed (65)
+   Start at  03:53:06
+   Duration  679ms (transform 1.76s, setup 0ms, import 2.37s, tests 109ms, environment 0ms)
+

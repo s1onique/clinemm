@@ -28,6 +28,36 @@
  *   Automatic retries:         0
  *   Publication attempts:      1 per candidate
  *
+ * ============================================================================
+ * CORRECTION01 — THE PROVIDER CALL RUNS INSIDE THE PRODUCTION ATTEMPT
+ * ============================================================================
+ *
+ * The predecessor performed the provider request FIRST and then handed the
+ * already-collected response to `runPckAttempt()`. The production attempt's
+ * deadline therefore did NOT bound the actual network request, and the
+ * production cancellation contract did NOT govern it.
+ *
+ * The provider call now runs INSIDE the generator that the production
+ * attempt invokes, so:
+ *
+ *   - the production attempt's combined deadline/cancellation signal
+ *     governs the REAL request,
+ *   - an aborted attempt stops consuming the provider response
+ *     immediately,
+ *   - the request that reaches the provider is the EXACT request the
+ *     production seam builds from the canonical history, not a
+ *     reconstruction of it.
+ *
+ * The attempt budget is UNCHANGED: two attempts, no automatic retries.
+ *
+ * WHAT THIS QUALIFIES
+ * -------------------
+ *
+ * It qualifies the REAL MODEL's ability to produce an acceptable closed
+ * proposal THROUGH the production generation lifecycle: the production
+ * request, the production deadline and cancellation contract, the
+ * production parser and the production publication gate.
+ *
  * THE CREDENTIAL
  * --------------
  *
@@ -48,7 +78,6 @@ import {
 import {
 	buildCheckpointInputView,
 	buildCheckpointRequest,
-	CHECKPOINT_SYSTEM_PROMPT,
 	extractCheckpointJson,
 } from "../src/extensions/context/precompaction-knowledge-checkpoint/model-request";
 import { gateClosedProposals } from "../src/extensions/context/precompaction-knowledge-checkpoint/publication-gate";
@@ -214,6 +243,13 @@ async function main(): Promise<void> {
 	const canonicalMessages = syntheticFixture();
 	const observedReferences =
 		collectObservedCanonicalReferences(canonicalMessages);
+	// ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01-CORRECTION01:
+	//
+	// The request is NOT built here. The PRODUCTION attempt builds it from
+	// the canonical history, so the request that reaches the provider is
+	// the EXACT request the production seam would send — not a
+	// reconstruction of it. The measurement below reports the size of
+	// that request for the receipt.
 	const inputView = buildCheckpointInputView(canonicalMessages);
 	const request = buildCheckpointRequest(inputView, observedReferences);
 	console.log(
@@ -227,63 +263,122 @@ async function main(): Promise<void> {
 	let attempt = 0;
 	let accepted = false;
 	const deadlineMs = 200_000;
+	// ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01-CORRECTION01:
+	//
+	// The PROVIDER CALL NOW RUNS INSIDE the generator that the PRODUCTION
+	// attempt invokes. The predecessor performed the provider request
+	// FIRST and then handed the already-collected response to
+	// `runPckAttempt()`, so the production attempt's deadline did not
+	// bound the actual network request and the production cancellation
+	// contract did not govern it.
+	//
+	// With the call inside the generator, the production attempt's
+	// combined deadline/cancellation signal governs the REAL request, and
+	// the attempt budget stays at the same two attempts.
 	while (attempt < 2 && !accepted) {
 		attempt += 1;
 		const startedAt = Date.now();
 		let rawText = "";
 		let usedTools = false;
-		try {
-			const handler = await createHandlerAsync({
-				providerId: provider.providerId,
-				modelId: provider.modelId,
-				...(provider.baseUrl ? { baseUrl: provider.baseUrl } : {}),
-				apiKey: provider.apiKey,
-				...(provider.modelInfo
-					? {
-							modelInfo: {
-								id: provider.modelId,
-								...(provider.modelInfo as Record<string, unknown>),
-							},
-						}
-					: {}),
-				maxOutputTokens: 4096,
-				thinking: false,
-			});
-			for await (const chunk of handler.createMessage(
-				CHECKPOINT_SYSTEM_PROMPT,
-				[{ role: "user", content: request }],
-			)) {
-				if (chunk.type === "text") {
-					rawText += chunk.text;
-				} else if (chunk.type === "tool_calls") {
-					usedTools = true;
+		// The PRODUCTION attempt drives the provider call. Its signal is
+		// the combined deadline/cancellation handle.
+		const outcome = await runPckAttempt({
+			generate: async ({ systemPrompt, request, signal }) => {
+				const handler = await createHandlerAsync({
+					providerId: provider.providerId,
+					modelId: provider.modelId,
+					...(provider.baseUrl ? { baseUrl: provider.baseUrl } : {}),
+					apiKey: provider.apiKey,
+					...(provider.modelInfo
+						? {
+								modelInfo: {
+									id: provider.modelId,
+									...(provider.modelInfo as Record<string, unknown>),
+								},
+							}
+						: {}),
+					maxOutputTokens: 4096,
+					thinking: false,
+				});
+				for await (const chunk of handler.createMessage(
+					systemPrompt,
+					[{ role: "user", content: request }],
+				)) {
+					// The PRODUCTION cancellation contract is honoured
+					// INSIDE the stream: an aborted attempt stops
+					// consuming the provider response immediately.
+					if (signal.aborted) {
+						break;
+					}
+					if (chunk.type === "text") {
+						rawText += chunk.text;
+					} else if (chunk.type === "tool_calls") {
+						usedTools = true;
+					}
 				}
-			}
-		} catch (error) {
+				// The raw model output is OPERATOR-LOCAL. It is never
+				// committed.
+				writeFileSync(
+					join(PRIVATE_ROOT, `attempt-${attempt}-raw.txt`),
+					rawText,
+					"utf8",
+				);
+				console.log(
+					JSON.stringify({
+						event: "attempt_completed",
+						attempt,
+						elapsedMs: Date.now() - startedAt,
+						responseChars: rawText.length,
+						usedTools,
+						aborted: signal.aborted,
+					}),
+				);
+				// The signal is raised so the production attempt observes
+				// the cancellation rather than a completed request.
+				signal.throwIfAborted();
+				return {
+					text: rawText,
+					reasoningChars: 0,
+					usedTools,
+					failed: false,
+				};
+			},
+			canonicalMessages,
+			identity: { decisionId: "model-gate", sourcePrefixKey: "model-gate" },
+			taskSignal: new AbortController().signal,
+			deadlineMs,
+			currentSourcePrefixKey: () => "model-gate",
+		});
+		if (outcome.failureReason === "timeout") {
 			console.log(
 				JSON.stringify({
-					event: "attempt_failed",
+					event: "attempt_rejected",
 					attempt,
-					errorMessage: error instanceof Error ? error.message : String(error),
+					reason: "timeout",
 				}),
 			);
 			continue;
 		}
-		// The raw model output is OPERATOR-LOCAL. It is never committed.
-		writeFileSync(
-			join(PRIVATE_ROOT, `attempt-${attempt}-raw.txt`),
-			rawText,
-			"utf8",
-		);
-		console.log(
-			JSON.stringify({
-				event: "attempt_completed",
-				attempt,
-				elapsedMs: Date.now() - startedAt,
-				responseChars: rawText.length,
-				usedTools,
-			}),
-		);
+		if (outcome.failureReason === "cancelled") {
+			console.log(
+				JSON.stringify({
+					event: "attempt_rejected",
+					attempt,
+					reason: "cancelled",
+				}),
+			);
+			continue;
+		}
+		if (outcome.failureReason === "provider_failure") {
+			console.log(
+				JSON.stringify({
+					event: "attempt_failed",
+					attempt,
+					errorMessage: "the provider call failed inside the production attempt",
+				}),
+			);
+			continue;
+		}
 		if (usedTools) {
 			console.log(
 				JSON.stringify({
@@ -294,20 +389,6 @@ async function main(): Promise<void> {
 			);
 			continue;
 		}
-		// The PRODUCTION gate validates the candidate.
-		const outcome = await runPckAttempt({
-			generate: async () => ({
-				text: rawText,
-				reasoningChars: 0,
-				usedTools,
-				failed: false,
-			}),
-			canonicalMessages,
-			identity: { decisionId: "model-gate", sourcePrefixKey: "model-gate" },
-			taskSignal: new AbortController().signal,
-			deadlineMs,
-			currentSourcePrefixKey: () => "model-gate",
-		});
 		// The measurement uses the PRODUCTION parser, so the reported
 		// metrics describe exactly what the production gate sees.
 		const parsed = extractCheckpointJson(rawText) as
@@ -319,10 +400,11 @@ async function main(): Promise<void> {
 			sourcePrefixKey: "model-gate",
 			evidence: {
 				canonicalReferences: observedReferences,
-				maximumAssuranceFor: (references) =>
+				maximumAssuranceFor: (references, atom) =>
 					interpretCanonicalEvidence({
 						canonicalMessages,
 						references,
+						atom,
 					}),
 			},
 		});

@@ -1,0 +1,64 @@
+[0m[2m[35m$[0m [2m[1mvitest run --config vitest.red.pck-observation-assurance.config.ts[0m
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core
+ ❯ src/extensions/context/precompaction-knowledge-checkpoint/pck-observation-assurance.red01.test.ts (7 tests | 4 failed) 6ms
+     × P0-1.1: `echo hello` does NOT support a SEARCH_RETURNED_NO_MATCH claim 4ms
+     × P0-1.2: the PUBLISHED record carries the downgraded assurance 1ms
+     ✓ P0-1.3: the tool event ledger records the CLASS, not just the id 0ms
+     ✓ P0-1.4: EVERY atom's required class is a RUNTIME-OWNED member 0ms
+     ✓ P0-1.5: a MATCHING successful event DOES reach tool_observed 0ms
+     × P0-1.6: a FAILED search does NOT reach tool_observed 0ms
+     × P0-1.7: an UNANSWERED call establishes nothing 0ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/extensions/context/precompaction-knowledge-checkpoint/pck-observation-assurance.red01.test.ts > ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01-CORRECTION01 — P0-1 RED > P0-1.1: `echo hello` does NOT support a SEARCH_RETURNED_NO_MATCH claim
+AssertionError: expected 'tool_observed' to be 'model_reported' // Object.is equality
+Expected: "model_reported"
+Received: "tool_observed"
+ ❯ src/extensions/context/precompaction-knowledge-checkpoint/pck-observation-assurance.red01.test.ts:104:19
+    102|   });
+    103|   // The predecessor returned "tool_observed" here.
+    104|   expect(ceiling).toBe("model_reported");
+       |                   ^
+    105|  });
+    106|
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+ FAIL  src/extensions/context/precompaction-knowledge-checkpoint/pck-observation-assurance.red01.test.ts > ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01-CORRECTION01 — P0-1 RED > P0-1.2: the PUBLISHED record carries the downgraded assurance
+AssertionError: expected 'tool_observed' to be 'model_reported' // Object.is equality
+Expected: "model_reported"
+Received: "tool_observed"
+ ❯ src/extensions/context/precompaction-knowledge-checkpoint/pck-observation-assurance.red01.test.ts:132:37
+    130|   // The record SURVIVES — the working knowledge is preserved — but
+    131|   // its assurance is TRUTHFUL.
+    132|   expect(gate.records[0].assurance).toBe("model_reported");
+       |                                     ^
+    133|   expect(gate.records[0].statement).toBe("bounded search returned no m…
+    134|  });
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+ FAIL  src/extensions/context/precompaction-knowledge-checkpoint/pck-observation-assurance.red01.test.ts > ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01-CORRECTION01 — P0-1 RED > P0-1.6: a FAILED search does NOT reach tool_observed
+AssertionError: expected 'tool_observed' to be 'model_reported' // Object.is equality
+Expected: "model_reported"
+Received: "tool_observed"
+ ❯ src/extensions/context/precompaction-knowledge-checkpoint/pck-observation-assurance.red01.test.ts:255:5
+    253|     atom: "SEARCH_RETURNED_NO_MATCH",
+    254|    }),
+    255|   ).toBe("model_reported");
+       |     ^
+    256|  });
+    257|
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+ FAIL  src/extensions/context/precompaction-knowledge-checkpoint/pck-observation-assurance.red01.test.ts > ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01-CORRECTION01 — P0-1 RED > P0-1.7: an UNANSWERED call establishes nothing
+AssertionError: expected 'tool_observed' to be 'model_reported' // Object.is equality
+Expected: "model_reported"
+Received: "tool_observed"
+ ❯ src/extensions/context/precompaction-knowledge-checkpoint/pck-observation-assurance.red01.test.ts:266:5
+    264|     atom: "OPERATION_INVOKED",
+    265|    }),
+    266|   ).toBe("model_reported");
+       |     ^
+    267|  });
+    268| });
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+ Test Files  1 failed (1)
+      Tests  4 failed | 3 passed (7)
+   Start at  03:37:54
+   Duration  142ms (transform 24ms, setup 0ms, import 31ms, tests 6ms, environment 0ms)
+[0m[31merror[0m[2m:[0m script [1m"test:red:pck-observation-assurance"[0m exited with code 1[0m

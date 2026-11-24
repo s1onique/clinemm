@@ -284,8 +284,15 @@ describe("ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01 — ablation and conse
 			})),
 		);
 		const text = JSON.stringify(projected.messages);
-		// The ONLY reference in the section is the one the runtime observed.
-		expect(text).toContain(VALID_TOOL_CALL_ID);
+		// ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01-CORRECTION01:
+		// the published section carries a HOST-MINTED OPAQUE ALIAS, not the
+		// raw canonical identifier. MEMBERSHIP established that the id was
+		// PRESENT in the canonical history, never that it is SAFE TO
+		// REPUBLISH, so the raw id does not leave the host.
+		expect(text).not.toContain(VALID_TOOL_CALL_ID);
 		expect(text).not.toContain("tool_call_from_another_session");
+		// The alias IS present, so the record still carries its provenance
+		// handle.
+		expect(text).toContain("ref-0");
 	});
 });

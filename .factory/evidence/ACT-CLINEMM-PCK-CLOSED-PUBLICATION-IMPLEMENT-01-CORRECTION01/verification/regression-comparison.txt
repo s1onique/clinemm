@@ -1,0 +1,45 @@
+ACT: ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01-CORRECTION01
+METHOD: the SAME failing-file set is captured at the entry head (with the
+        correction stashed) and at the corrected head, then diffed.
+
+=== ENTRY-HEAD BASELINE FAILING FILES (17) ===
+src/extensions/composio/composio-tools-extension.test.ts
+src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts
+src/hooks/checkpoint-hooks.test.ts
+src/hub/runtime-host/hub-runtime-host.test.ts
+src/hub/server/boundary.test.ts
+src/hub/server/cloud-session-service.test.ts
+src/hub/server/fetch-wiring.test.ts
+src/hub/server/hub-plugins.test.ts
+src/hub/server/index.test.ts
+src/hub/server/replay-wire.test.ts
+src/hub/server/ui-events.test.ts
+src/hub/settings.test.ts
+src/runtime/command-policy/path-authority.temporary-external.test.ts [ src/runtime/command-policy/path-authority.temporary-external.test.ts ]
+src/runtime/sandbox/macos/seatbelt-availability.test.ts
+src/runtime/sandbox/sandbox-backend.test.ts
+src/session/checkpoint-restore.test.ts
+src/session/services/persistence-service.test.ts
+
+=== CORRECTED-HEAD FAILING FILES (17) ===
+src/extensions/composio/composio-tools-extension.test.ts
+src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts
+src/hooks/checkpoint-hooks.test.ts
+src/hub/runtime-host/hub-runtime-host.test.ts
+src/hub/server/boundary.test.ts
+src/hub/server/cloud-session-service.test.ts
+src/hub/server/fetch-wiring.test.ts
+src/hub/server/hub-plugins.test.ts
+src/hub/server/index.test.ts
+src/hub/server/replay-wire.test.ts
+src/hub/server/ui-events.test.ts
+src/hub/settings.test.ts
+src/runtime/command-policy/path-authority.temporary-external.test.ts [ src/runtime/command-policy/path-authority.temporary-external.test.ts ]
+src/runtime/sandbox/macos/seatbelt-availability.test.ts
+src/runtime/sandbox/sandbox-backend.test.ts
+src/session/checkpoint-restore.test.ts
+src/session/services/persistence-service.test.ts
+
+=== DIFF ===
+IDENTICAL — ZERO NEW REGRESSIONS
+NEW_REGRESSIONS=0

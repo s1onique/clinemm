@@ -1,0 +1,16 @@
+ACT: ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01-CORRECTION01
+COMMAND: git diff --check (against the entry head)
+
+=== git diff --check ===
+exit=0
+
+=== consecutive blank lines in the changed files (0 = clean) ===
+0  sdk/packages/core/src/extensions/context/precompaction-knowledge-checkpoint/evidence.ts
+0  sdk/packages/core/src/extensions/context/precompaction-knowledge-checkpoint/publication-gate.ts
+0  sdk/packages/core/src/extensions/context/precompaction-knowledge-checkpoint/runtime.ts
+0  sdk/packages/core/src/extensions/context/precompaction-knowledge-checkpoint/pck-closed-contract.test.ts
+0  sdk/packages/core/src/extensions/context/precompaction-knowledge-checkpoint/pck-conservation-ablation.test.ts
+0  sdk/packages/core/src/extensions/context/precompaction-knowledge-checkpoint/pck-observation-assurance.red01.test.ts
+0  sdk/packages/core/src/extensions/context/precompaction-knowledge-checkpoint/pck-reference-confidentiality.test.ts
+0  sdk/packages/core/scripts/pck-closed-contract.model-gate.ts
+0  sdk/packages/core/vitest.red.pck-observation-assurance.config.ts

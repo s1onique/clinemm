@@ -149,7 +149,19 @@ export interface AdmittedCheckpointRecord {
 	readonly statement: string;
 	/** The runtime-rendered qualifications. */
 	readonly qualifications: readonly string[];
-	/** The canonical references this record rests on. */
+	/**
+	 * The OPAQUE reference aliases this record rests on.
+	 *
+	 * ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01-CORRECTION01: these are
+	 * HOST-MINTED aliases, NOT the raw canonical identifiers.
+	 *
+	 * The raw canonical tool-call id and message id are NOT safe to
+	 * republish: MEMBERSHIP establishes that an identifier was PRESENT in
+	 * the canonical history, not that the identifier is SAFE TO REPUBLISH.
+	 * A credential-shaped id that happens to be a canonical tool-call id
+	 * would otherwise be carried verbatim into the persisted sidecar and
+	 * the provider-visible continuation.
+	 */
 	readonly evidenceRefs: readonly string[];
 	/**
 	 * The canonical source-prefix identity the record was generated from.
@@ -183,6 +195,28 @@ export interface GateOutcome {
 export const CHECKPOINT_ID_PREFIX = "pck";
 
 /**
+ * The prefix of a HOST-MINTED opaque reference alias.
+ *
+ * It is a runtime-owned constant, so an alias cannot carry content.
+ */
+export const CHECKPOINT_REFERENCE_ALIAS_PREFIX = "ref";
+
+/**
+ * Mint ONE opaque reference alias.
+ *
+ * ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01-CORRECTION01:
+ *
+ * The alias is a SEQUENCE NUMBER, not a derivative of the canonical
+ * identifier. A hash of the canonical id would still be a function of the
+ * id, and a credential-shaped id is short enough to be brute-forced from a
+ * digest. A per-publication sequence carries NO information about the
+ * canonical id at all.
+ */
+export function mintReferenceAlias(sequence: number): string {
+	return `${CHECKPOINT_REFERENCE_ALIAS_PREFIX}-${sequence}`;
+}
+
+/**
  * The evidence the gate needs in order to bound a proposal's assurance.
  *
  * The runtime supplies BOTH the observed canonical references AND the
@@ -211,14 +245,20 @@ export interface GateEvidence {
 	readonly canonicalReferences: readonly string[];
 	/**
 	 * The maximum assurance the runtime's evidence interpreter supports for
-	 * a given reference set.
+	 * a given reference set AND the selected observation atom.
 	 *
 	 * The runtime interprets the OBSERVED canonical tool events. It does not
 	 * inspect a model-authored statement. A syntactically valid reference
-	 * therefore NEVER raises the assurance on its own.
+	 * therefore NEVER raises the assurance on its own, and a reference that
+	 * RESOLVES but does not SUPPORT the selected atom leaves the ceiling at
+	 * `model_reported`.
+	 *
+	 * The atom is REQUIRED, because the atom decides which kind of
+	 * canonical evidence can support the claim.
 	 */
 	readonly maximumAssuranceFor: (
 		references: readonly string[],
+		atom: ObservationAtom,
 	) => BoundedAssurance | undefined;
 }
 
@@ -433,6 +473,20 @@ export function gateClosedProposals(input: {
 	const observed = new Set(input.evidence.canonicalReferences);
 	let rejectedCount = 0;
 	let sequence = 0;
+	// ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01-CORRECTION01:
+	// The OPAQUE ALIAS TABLE.
+	//
+	// Every canonical reference that a record cites is mapped to a
+	// HOST-MINTED alias. The published record carries ONLY the alias, so
+	// the raw canonical identifier — which MEMBERSHIP proved was PRESENT
+	// in the canonical history, but NOT that it is SAFE TO REPUBLISH —
+	// never reaches the persisted sidecar or the provider-visible
+	// continuation.
+	//
+	// The table is per-gate-call, so an alias means nothing outside the
+	// checkpoint that carries it.
+	const aliasByReference = new Map<string, string>();
+	let aliasSequence = 0;
 	for (const proposal of input.proposals) {
 		const shapeCodes = validateClosedProposalShape(proposal);
 		if (shapeCodes.length > 0) {
@@ -454,7 +508,12 @@ export function gateClosedProposals(input: {
 		}
 		// The assurance is BOUNDED by the runtime's own interpreter. The
 		// model's claim is only honoured when it does not exceed the bound.
-		const maximum = input.evidence.maximumAssuranceFor(typed.evidenceRefs);
+		// The ATOM is part of the interpreter's input, because the atom
+		// decides which kind of canonical evidence can support the claim.
+		const maximum = input.evidence.maximumAssuranceFor(
+			typed.evidenceRefs,
+			typed.atom,
+		);
 		const boundedAssurance = boundAssurance({
 			claimed: typed.assurance,
 			maximum,
@@ -469,6 +528,16 @@ export function gateClosedProposals(input: {
 		}
 		const identifier = `${CHECKPOINT_ID_PREFIX}-${sequence}`;
 		sequence += 1;
+		const aliases: string[] = [];
+		for (const reference of typed.evidenceRefs) {
+			let alias = aliasByReference.get(reference);
+			if (alias === undefined) {
+				alias = mintReferenceAlias(aliasSequence);
+				aliasSequence += 1;
+				aliasByReference.set(reference, alias);
+			}
+			aliases.push(alias);
+		}
 		records.push({
 			id: identifier,
 			kind: typed.kind,
@@ -476,7 +545,7 @@ export function gateClosedProposals(input: {
 			status: typed.status,
 			statement: renderClosedStatement(typed),
 			qualifications: renderClosedQualifications(typed),
-			evidenceRefs: [...typed.evidenceRefs],
+			evidenceRefs: aliases,
 			sourcePrefixKey: input.sourcePrefixKey,
 		});
 	}

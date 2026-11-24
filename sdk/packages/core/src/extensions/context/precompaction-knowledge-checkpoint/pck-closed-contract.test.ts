@@ -18,6 +18,7 @@ import {
 	CHECKPOINT_BEGIN_MARKER,
 	CHECKPOINT_END_MARKER,
 	MODEL_AUTHORED_BANNER,
+	type ObservationAtom,
 } from "./closed-vocabulary";
 import {
 	collectCanonicalToolCallIds,
@@ -51,6 +52,11 @@ const FOREIGN_TOOL_CALL_ID = "tool_call_other_session";
 
 /**
  * The canonical history the evidence is derived from.
+ *
+ * ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01-CORRECTION01: the fixture
+ * carries the call AND its successful result, because a call that was never
+ * answered establishes nothing. The correction requires a canonical tool
+ * event that is unambiguously joined AND affirmatively successful.
  */
 const CANONICAL_MESSAGES = [
 	{
@@ -65,17 +71,36 @@ const CANONICAL_MESSAGES = [
 			},
 		],
 	},
+	{
+		role: "user",
+		id: "msg_result",
+		content: [
+			{
+				type: "tool_result",
+				tool_use_id: VALID_TOOL_CALL_ID,
+				content: [
+					{
+						query: "echo hello",
+						result: "hello",
+						success: true,
+					},
+				],
+			},
+		],
+	},
 ] as never;
 
 function evidenceFor(
 	references: readonly string[] = [VALID_TOOL_CALL_ID],
+	atom: ObservationAtom = "OPERATION_INVOKED",
 ): GateEvidence {
 	return {
 		canonicalReferences: references,
-		maximumAssuranceFor: (cited) =>
+		maximumAssuranceFor: (cited, selectedAtom) =>
 			interpretCanonicalEvidence({
 				canonicalMessages: CANONICAL_MESSAGES,
 				references: cited,
+				atom: selectedAtom ?? atom,
 			}),
 	};
 }
@@ -169,9 +194,17 @@ describe("ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01 — closed contract", 
 	});
 
 	it("G3.5: a VALID but SEMANTICALLY UNRELATED reference does NOT raise the assurance", () => {
+		// ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01-CORRECTION01.
+		//
 		// The reference resolves: the tool call EXISTS. But the runtime's
 		// interpreter does NOT establish that "echo hello" supports a
-		// SEARCH_RETURNED_NO_MATCH claim. The claim is therefore bounded.
+		// SEARCH_RETURNED_NO_MATCH claim, because `run_commands` is a
+		// COMMAND EXECUTION and the search atom requires a SEARCH.
+		//
+		// The predecessor published this record as `tool_observed`, which
+		// was a FALSE OBSERVATION: the runtime-owned wording ("bounded
+		// search returned no match") did not imply runtime-established
+		// truth. The claim is now DOWNGRADED to `model_reported`.
 		const gate = gateClosedProposals({
 			proposals: [
 				{
@@ -185,12 +218,10 @@ describe("ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01 — closed contract", 
 			evidence: evidenceFor(),
 			sourcePrefixKey: "prefix-1",
 		});
-		// The record IS admitted, but the ASSURANCE is what matters here.
+		// The record IS admitted, and the working knowledge SURVIVES — but
+		// the ASSURANCE is truthful.
 		expect(gate.records.length).toBe(1);
-		// The runtime observed the tool call, so `tool_observed` is the
-		// ceiling. The SEMANTIC claim is carried by the ATOM, and the atom
-		// is a runtime-owned label, never a model-authored statement.
-		expect(gate.records[0].assurance).toBe("tool_observed");
+		expect(gate.records[0].assurance).toBe("model_reported");
 		expect(gate.records[0].statement).toBe("bounded search returned no match");
 	});
 

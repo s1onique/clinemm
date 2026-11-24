@@ -360,10 +360,11 @@ export async function runPckAttempt(input: {
 		sourcePrefixKey: input.identity.sourcePrefixKey,
 		evidence: {
 			canonicalReferences: observedReferences,
-			maximumAssuranceFor: (references) =>
+			maximumAssuranceFor: (references, atom) =>
 				interpretCanonicalEvidence({
 					canonicalMessages: input.canonicalMessages,
 					references,
+					atom,
 				}),
 		},
 	});

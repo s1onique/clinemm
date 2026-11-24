@@ -39710,8 +39710,227 @@ THE P2 RESIDUE:           the three whitespace findings and the stale
 ## Scope
 
 The reviewer authorized ONE bounded extension, without opening another review
-cycle: persist the acquisition records, correct the multi-source identity
+cycle: persist the acquisition records, correct the multi-source
 validation, verify the post-hook capture, then rebuild, package and verify
 the embedded bundle. No new memory framework, no unrelated refactoring, no
 new long Round C run. The unrelated untracked evidence directories were left
 untouched.
+
+---
+
+## ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01-CORRECTION01
+
+```text
+STATUS:  COMPLETE
+VERDICT: GO_PACKAGING
+ENTRY:   a99b7187f0192f408608f25896da2bedcd56ed01
+```
+
+### The work items
+
+```text
+A01     PCK source implementation      IMPLEMENTED  (unchanged)
+A01-C1  Bounded trust-boundary         CORRECTED   <- THIS ACT
+A02a    Exact-head VSIX packaging      UNBLOCKED   (was BLOCKED BY C1)
+A02b    Installed-live qualification   UNBLOCKED   (was BLOCKED BY A02a)
+A03     Adjudication/PCK reconciliation PENDING     (unchanged)
+A05     Round C controlled experiment   PENDING     (unchanged)
+A09     Causal convergence conclusion  PENDING     (unchanged)
+```
+
+All other epic-board items remain unchanged.
+
+### P0-1 — the false observation assurance
+
+```text
+THE DEFECT: the predecessor derived `tool_observed` from reference
+             MEMBERSHIP. "The cited set contains a canonical tool-call
+             id" established only that a CALL EXISTED. It did NOT
+             establish that the call's RESULT SUPPORTS the selected
+             observation atom, so a `run_commands`/`echo hello` event
+             could be published as "bounded search returned no match".
+
+THE RED:    the predecessor implementation was restored and the
+             discriminator executed against it.
+             4 failed | 3 passed
+             AssertionError: expected 'tool_observed' to be 'model_reported'
+
+THE FIX:   membership is replaced by ATOM-SCOPED SUPPORT against a
+            closed, runtime-owned table of six observation atoms against
+            three tool classes:
+
+              command_execution   run_commands
+              source_read         read_files, read_file, list_files
+              search              search_files, grep_search,
+                                    codebase_search
+
+              OPERATION_INVOKED       -> command_execution
+              OPERATION_ARGUMENT_SET  -> command_execution
+              CONFIGURATION_VALUE_SET  -> source_read
+              IMPLEMENTATION_INSPECTED -> source_read
+              SEARCH_RETURNED_NO_MATCH -> search
+              QUESTION_REMAINS_OPEN    -> (none), permanently model_reported
+
+            A cited event supports a claim only when it is
+            (a) unambiguously joined, (b) AFFIRMATIVELY successful, and
+            (c) of the class the atom requires. Otherwise the claim is
+            DOWNGRADED to `model_reported`.
+
+            This is NOT a general-purpose semantic verification engine.
+
+THE GREEN:  7 passed.
+```
+
+### P0-2 — the canonical reference confidentiality
+
+```text
+THE DISCRIMINATOR: a synthetic credential-shaped value in an otherwise
+                   valid canonical tool-call id, referenced by an
+                   otherwise valid closed proposal, through the ACTUAL
+                   publication gate and the ACTUAL production seam,
+                   inspecting BOTH the persisted summary and the
+                   provider-visible continuation.
+
+THE VERDICT:       RED_REPRODUCED. The raw identifier reached both
+                   destinations:
+
+                     evidence_refs=toolu_01FAKE-CREDENTIAL-DO-NOT-USE-7P4xQz
+
+THE FIX:           the published record now carries a HOST-MINTED OPAQUE
+                   ALIAS (`ref-0`, `ref-1`, ...) instead of the raw
+                   canonical identifier. The alias is a SEQUENCE NUMBER,
+                   not a derivative of the canonical id: a digest would
+                   still be a function of the id, and a credential-shaped
+                   id is short enough to be brute-forced from one.
+
+A SEPARATE, PRE-EXISTING EXPOSURE IS RECORDED, NOT HIDDEN: the
+evidence-continuity carry-forward renders the canonical tool-call id too.
+It shipped before this ACT, it is a separate mechanism, and repairing it
+is a P2 follow-up for THAT module. The discriminator isolates the PCK's
+own section so the finding is not misattributed and not silently
+claimed away.
+```
+
+### P1-1 — the model qualification lifecycle
+
+```text
+THE DEFECT: the script performed the provider request FIRST and handed
+             the already-collected response to `runPckAttempt()`, so the
+             production attempt's deadline did not bound the actual
+             network request and the production cancellation contract
+             did not govern it.
+
+THE FIX:    the provider call now runs INSIDE the generator the
+             production attempt invokes. The production signal governs
+             the REAL request, an aborted attempt stops consuming the
+             provider response immediately, and the request that reaches
+             the provider is the EXACT production request.
+             The attempt budget is UNCHANGED: two attempts, no retries.
+
+THE RESULT: four independent executions of the corrected script against
+             the real MiniMax-M3 model, all MODEL_CLOSED_CONTRACT_SUPPORTED.
+             The correction is VISIBLE in the live output: the model
+             claimed `tool_observed` for records whose cited references
+             did not support the atom, and the runtime DOWNGRADED them.
+```
+
+### P1-2 — the evidence reconciliation
+
+```text
+"55 ACT tests" vs "53 tests, five files": the receipt now enumerates
+    EIGHT files and 65 tests, and the receipt's number and file list
+    agree by construction.
+
+"Two independent accepted runs" vs "one rejection then acceptance": the
+    predecessor's claim and its own receipt disagreed. The correction
+    keeps the distinction EXPLICIT and gives each of the four
+    executions its OWN receipt, each stating its attempt sequence and
+    rejection reason.
+
+"Structural gates met" vs "invalid gate-summary binding": a limitation
+    of the evidence package, not proof the tests failed. The historical
+    gate summary is NOT repaired (the review forbade spending another
+    ACT on LEAMAS); the focused receipts are REGENERATED at the
+    corrected head, and each receipt's COMMAND EXIT CODE is the
+    authority, not a summary file.
+
+"Clean patch hygiene" vs "five trailing-blank-line findings": the
+    corrected patch carries NONE, verified mechanically
+    (`git diff --check` exit 0, 0 consecutive blank lines). The frozen
+    historical receipts keep their original findings, because rewriting
+    them would destroy the record the review examined.
+```
+
+### The measurements
+
+```text
+ACT-OWNED FOCUSED SUITE (8 files)         65 passed
+CONTEXT SUITE                              897 passed, 2 skipped
+RUNTIME/ORCHESTRATION SUITE (32 files)     421 passed
+TYPECHECK                                  44 diagnostics (the baseline)
+                                           ACT_OWNED_DIAGNOSTICS=0
+FULL @cline/core REGRESSION                ZERO new regressions
+                                           (the SAME 17 failing files
+                                            before and after)
+PATCH HYGIENE                              git diff --check exit 0
+REAL MODEL GATE                            4 independent executions,
+                                           MODEL_CLOSED_CONTRACT_SUPPORTED
+```
+
+### The exit conditions
+
+```text
+FALSE_OBSERVATION_ASSURANCE_RED_REPRODUCED     ESTABLISHED
+FALSE_OBSERVATION_ASSURANCE_GREEN               ESTABLISHED
+
+REFERENCE_CONFIDENTIALITY:                       RED_REPRODUCED_AND_GREEN
+
+MODEL_CONTRACT_SUPPORTED                        ESTABLISHED
+DEFAULT_OFF_EQUIVALENCE_PASS                    ESTABLISHED
+ACT_OWNED_DIAGNOSTICS=0                         ESTABLISHED
+NEW_REGRESSIONS=0                               ESTABLISHED
+
+VERDICT=GO_PACKAGING
+```
+
+### What is NOT claimed
+
+```text
+ACTUAL CONVERGENCE IMPROVEMENT:   not established. The checkpoint's
+                                  usefulness for arbitrary software
+                                  engineering tasks remains unproven.
+INSTALLED-LIVE QUALIFICATION:     not performed.
+EXACT-HEAD VSIX:                  not built. Out of scope by instruction.
+LIVE PROVIDER CANCELLATION:        not exercised against a real provider.
+```
+
+### The question that must not be lost sight of
+
+```text
+The PCK vocabulary is extremely narrow: six observation atoms, six
+runtime arguments, five qualification classes. It can preserve certain
+categories of working knowledge, but its usefulness for arbitrary
+software-engineering tasks remains unproven.
+
+The observed real-model cost is 12.9 s to 41.9 s per attempt. That
+overhead matters even more against local Strata inference.
+
+    T_PCK < T_redundant work avoided
+
+remains an OPEN QUESTION. The Round C experiment (A05) must therefore
+measure BOTH correctness and TOTAL task completion time, not merely
+checkpoint survival. A checkpoint that safely preserves information but
+adds more latency than it saves is not a successful optimization.
+```
+
+### Scope
+
+One bounded correction cycle, exactly as the reviewer authorised: *"One
+bounded correction cycle, then executable evidence and dogfooding. No
+further speculative architecture work."* The correction corrects the trust
+boundary, executes the discriminator the review specified, corrects the
+qualification lifecycle, and refreshes the focused evidence at the
+corrected head.
+
+Nothing was built, packaged or installed. Both predecessor evidence trees
+were preserved unmodified.
