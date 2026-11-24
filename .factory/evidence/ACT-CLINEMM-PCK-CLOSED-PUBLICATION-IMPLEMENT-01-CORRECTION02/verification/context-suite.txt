@@ -1,0 +1,102 @@
+(node:49505) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core
+
+ ✓ src/extensions/context/compact-session-script.test.ts (2 tests) 379ms
+ ✓ src/extensions/context/compaction.adjudication-output-contract.probe01.test.ts (55 tests) 112ms
+ ✓ src/extensions/context/knowledge-checkpoint-probe/checkpoint-historical-baseline.test.ts (6 tests) 139ms
+ ✓ src/extensions/context/source-visibility-discriminator/model-evaluation.test.ts (7 tests) 128ms
+ ✓ src/extensions/context/source-visibility-discriminator/selection.test.ts (8 tests) 159ms
+ ✓ src/extensions/context/source-visibility-discriminator/reasoning-boundary.test.ts (3 tests) 209ms
+ ✓ src/extensions/context/knowledge-checkpoint-probe/checkpoint-projection.test.ts (6 tests) 12ms
+ ✓ src/extensions/context/compaction.evidence-fidelity01.test.ts (39 tests) 23ms
+ ✓ src/extensions/context/compaction.adjudication-output-contract.implement01.test.ts (54 tests) 41ms
+ ✓ src/extensions/context/compaction.test.ts (112 tests) 58ms
+ ✓ src/extensions/context/source-visibility-discriminator/causal-ablation.test.ts (6 tests) 89ms
+ ✓ src/extensions/context/source-visibility-discriminator/visibility-red.test.ts (7 tests) 57ms
+ ✓ src/extensions/context/compaction.adjudication-trailer-prestrip.correction05.test.ts (11 tests) 4ms
+ ✓ src/extensions/context/knowledge-checkpoint-probe/checkpoint-model-treatment.test.ts (6 tests) 922ms
+     ✓ G6.3: the published checkpoint contains no credential-shaped text  798ms
+ ✓ src/extensions/context/compaction.estimator-parity01.test.ts (19 tests) 64ms
+ ✓ src/extensions/context/compaction.roundc-fidelity-recon02.test.ts (20 tests | 1 skipped) 75ms
+ ✓ src/extensions/context/compaction.token-evidence-capture01.test.ts (5 tests) 16ms
+ ✓ src/extensions/context/summarize-conversation.test.ts (23 tests) 31ms
+ ✓ src/extensions/context/output-trust-boundary/production-seam.test.ts (6 tests) 20ms
+stdout | src/extensions/context/compaction.working-context-ratio.test.ts > working-context ratio discriminator > GREEN: in the truncation-not-engaged case, manual-compaction ratio DOES transfer to working-context shrink
+[discriminator] {
+  "manualRatio": 0.0071774423241241815,
+  "workingContextRatio": 0.0071774423241241815,
+  "verdict": "S3_RATIO_TRANSFER_NOT_REPRODUCED",
+  "HBefore": 17555,
+  "HAfter": 126,
+  "WBefore": 17555,
+  "WAfter": 126,
+  "preparedBefore": 7,
+  "preparedAfter": 2
+}
+
+ ✓ src/extensions/context/task-contract-conservation.historical.test.ts (3 tests) 56ms
+stdout | src/extensions/context/compaction.working-context-ratio.test.ts > working-context ratio discriminator > DEFECT-WITNESS: cross-scale compaction ratio diverges once provider-message truncation engages
+[discriminator: realistic] {
+  "manualRatio": 0.00020993002332555814,
+  "workingContextRatio": 0.0006294146443807259,
+  "verdict": "S3_REPRODUCED",
+  "HBefore": 600200,
+  "HAfter": 126,
+  "WBefore": 200186,
+  "WAfter": 126,
+  "preparedBefore": 7,
+  "preparedAfter": 2
+}
+
+ ✓ src/extensions/context/compaction.working-context-ratio.test.ts (3 tests) 27ms
+ ✓ src/extensions/context/compaction.adjudication-continuity.discriminator01.test.ts (24 tests) 10ms
+ ✓ src/extensions/context/precompaction-knowledge-checkpoint/pck-closed-contract.test.ts (27 tests) 30ms
+ ✓ src/extensions/context/compaction.summary-churn01.test.ts (20 tests) 14ms
+ ✓ src/extensions/context/compaction.adjudication-provenance.correction01.test.ts (24 tests) 14ms
+ ✓ src/extensions/context/knowledge-checkpoint-probe/checkpoint-security-controls.test.ts (10 tests) 6ms
+ ✓ src/extensions/context/compaction.tool-result-shape-red.test.ts (15 tests) 28ms
+ ✓ src/extensions/context/budget-projection/project.test.ts (14 tests) 6ms
+ ✓ src/extensions/context/output-trust-boundary/security-negative-controls.test.ts (31 tests) 6ms
+ ✓ src/extensions/context/precompaction-knowledge-checkpoint/pck-reference-confidentiality.test.ts (3 tests) 23ms
+ ✓ src/extensions/context/compaction.long-session-discriminator.test.ts (7 tests) 7ms
+ ✓ src/extensions/context/precompaction-knowledge-checkpoint/pck-production-seam.test.ts (10 tests) 33ms
+ ✓ src/extensions/context/precompaction-knowledge-checkpoint/pck-default-off-equivalence.test.ts (2 tests) 38ms
+ ✓ src/extensions/context/compaction.adjudication-output-contract.correction01.test.ts (9 tests) 5ms
+ ✓ src/extensions/context/output-trust-boundary/causal-ablation.test.ts (5 tests) 4ms
+ ✓ src/extensions/context/compaction.trigger-accounting-representation.test.ts (6 tests) 7ms
+ ✓ src/extensions/context/compaction.adjudication-trailer-spoofing.correction01.test.ts (20 tests) 4ms
+ ✓ src/extensions/context/compaction.adjudication-continuity.feasibility01.test.ts (16 tests) 5ms
+ ✓ src/extensions/context/source-visibility-discriminator/trust-provenance.test.ts (6 tests) 4ms
+ ✓ src/extensions/context/compaction.decision-capture.matrix.test.ts (18 tests) 1032ms
+     ✓ Retention overflow: the truncation metadata states the capture is incomplete  470ms
+ ✓ src/extensions/context/compaction.adjudication-trailer-origin.correction03.test.ts (16 tests) 4ms
+ ✓ src/extensions/context/compaction.latency-span-lifecycle.red01.test.ts (6 tests) 56ms
+ ✓ src/extensions/context/output-trust-boundary/confidentiality-red.test.ts (9 tests) 3ms
+ ✓ src/extensions/context/compaction.adjudication-trailer-payload.correction04.test.ts (9 tests) 3ms
+ ✓ src/extensions/context/output-trust-boundary/knowledge-utility.test.ts (5 tests) 3ms
+ ✓ src/extensions/context/output-trust-boundary/injection-red.test.ts (7 tests) 3ms
+ ✓ src/extensions/context/task-contract-conservation.test.ts (29 tests) 15ms
+ ✓ src/extensions/context/precompaction-knowledge-checkpoint/pck-conservation-ablation.test.ts (9 tests) 5ms
+ ✓ src/extensions/context/evidence-continuity.test.ts (62 tests) 16ms
+ ✓ src/extensions/context/precompaction-knowledge-checkpoint/pck-knowledge-utility.test.ts (6 tests) 4ms
+ ✓ src/extensions/context/source-visibility-discriminator/security-controls.test.ts (10 tests) 6ms
+ ✓ src/extensions/context/task-contract-budget-authority.test.ts (9 tests) 15ms
+ ✓ src/extensions/context/precompaction-knowledge-checkpoint/pck-persistence-restoration.test.ts (3 tests) 4ms
+ ✓ src/extensions/context/precompaction-knowledge-checkpoint/pck-same-class-assurance.red02.test.ts (14 tests) 4ms
+ ✓ src/extensions/context/compaction.stable-prefix-repair01.test.ts (28 tests) 16ms
+ ✓ src/extensions/context/compaction.cut-snap-forward.test.ts (7 tests) 4ms
+ ✓ src/extensions/context/compaction.token-evidence-capture01.red01.test.ts (1 test) 5ms
+ ✓ src/extensions/context/precompaction-knowledge-checkpoint/pck-observation-assurance.red01.test.ts (7 tests) 3ms
+ ✓ src/extensions/context/compaction.working-context-authority-publish.test.ts (3 tests) 6ms
+ ✓ src/extensions/context/compaction.decision-capture.red01.test.ts (3 tests) 5ms
+ ✓ src/extensions/context/compaction.decision-capture.conservation.test.ts (2 tests) 5ms
+ ✓ src/extensions/context/compaction.real-producer-seam-red.test.ts (1 test) 4ms
+ ↓ src/extensions/context/compaction.live.test.ts (1 test | 1 skipped)
+
+ Test Files  62 passed | 1 skipped (63)
+      Tests  913 passed | 2 skipped (915)
+   Start at  04:09:08
+   Duration  3.83s (transform 11.48s, setup 0ms, import 40.77s, tests 4.09s, environment 7ms)
+

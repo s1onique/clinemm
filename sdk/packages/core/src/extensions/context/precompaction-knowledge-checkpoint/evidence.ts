@@ -33,25 +33,82 @@
  * reader of the published checkpoint would reasonably believe the runtime
  * observed a search. That is a FALSE OBSERVATION.
  *
- * THE BOUNDED CORRECTION
+ * ============================================================================
+ * CORRECTION02 — THE COMPLETE RENDERED PROPOSITION MUST BE ESTABLISHED
+ * ============================================================================
+ *
+ * CORRECTION01 replaced MEMBERSHIP with ATOM-SCOPED SUPPORT: a cited event
+ * had to be unambiguously joined, AFFIRMATIVELY SUCCESSFUL and of the TOOL
+ * CLASS the atom requires. That closed the CROSS-CLASS false attribution,
+ * but it left the SAME-CLASS false attribution open.
+ *
+ * The remaining counterexamples are all SAME-CLASS:
+ *
+ *   successful search returning 42 matches   -> SEARCH_RETURNED_NO_MATCH
+ *   successful `echo hello`                   -> OPERATION_INVOKED: build
+ *   successful `echo hello`                   -> OPERATION_ARGUMENT_SET:
+ *                                                start --optimized
+ *   read configuration holding a 30s timeout -> CONFIGURATION_VALUE_SET:
+ *                                                connect timeout 3 seconds
+ *   successful directory listing             -> IMPLEMENTATION_INSPECTED
+ *
+ * In every one of those cases the runtime established three facts — the
+ * reference RESOLVED, the execution SUCCEEDED, and the tool was of the RIGHT
+ * CLASS — and NONE of them says anything about whether the observed result
+ * SUPPORTS the rendered claim. The interpreter never even received the
+ * selected `argument`, so it could not have compared the rendered argument
+ * with the observed operation even in principle.
+ *
+ * THE REQUIRED INVARIANT
  * ----------------------
  *
- * The runtime now establishes support ATOM BY ATOM, against a CLOSED,
- * RUNTIME-OWNED table:
+ *   Evidence actually supports the COMPLETE RENDERED CLAIM
+ *     -> `tool_observed`
+ *   otherwise
+ *     -> `model_reported`
  *
- *   - an OBSERVATION ATOM names the TOOL CLASS that can support it,
- *   - a canonical tool event is only counted when it is
- *       (a) unambiguously joined to its call,
- *       (b) affirmatively SUCCESSFUL, and
- *       (c) of the class the atom requires,
- *   - a reference that resolves but does not SUPPORT the atom leaves the
- *     claim at `model_reported`.
+ * THE BOUNDED REPAIR — SIMPLIFICATION, NOT A NEW ENGINE
+ * -------------------------------------------------------
+ *
+ * This correction REMOVES the atom/class table rather than extending it. The
+ * runtime now establishes a claim only through evidence it ALREADY owns and
+ * ALREADY computes deterministically:
+ *
+ *   - The PRODUCTION command classifier (`classifyCommand()`, owned by
+ *     `evidence-continuity.ts`) turns a tool call's own declared input into
+ *     a FINITE, ALLOWLISTED classification (`helm template`, `make build`,
+ *     `git status`, ...). It is already fail-closed, already free of
+ *     user-controlled text, and already regression-tested.
+ *
+ *   - A CLOSED, RUNTIME-OWNED table says which classifications establish
+ *     which RUNTIME ARGUMENT.
+ *
+ * So the interpreter verifies the COMPLETE RENDERED PROPOSITION for the
+ * operation atoms: the cited event must be a command execution whose own
+ * runtime-owned classification is one the selected argument requires. A
+ * successful `echo hello` cannot establish `build`; a successful
+ * `make build` cannot establish `start --optimized`.
+ *
+ * For every OTHER atom there is NO deterministic runtime-owned rule that
+ * establishes the complete rendered proposition:
+ *
+ *   - a bounded search that returned 42 matches does not establish "no
+ *     match", and deciding otherwise needs a semantic interpreter;
+ *   - a directory listing does not establish "the implementation was
+ *     inspected";
+ *   - a configuration that holds a 30-second timeout does not establish
+ *     "connect timeout 3 seconds";
+ *   - an absence of support is never established by a tool.
+ *
+ * Those atoms are therefore bounded at `model_reported`. The working
+ * knowledge is PRESERVED — the record is still published, still carries the
+ * runtime-owned statement and qualifications — but it no longer MISREPRESENTS
+ * ITS AUTHORITY. That is the whole point of the checkpoint: preserve useful
+ * working knowledge across compaction WITHOUT misrepresenting its authority.
  *
  * This is NOT a general-purpose semantic verification engine. It is a
- * CLOSED, TOTAL, RUNTIME-OWNED table of six atoms against three tool
- * classes. An atom with no supportable class can never reach
- * `tool_observed`, and an unknown atom is rejected by the publication gate
- * before it ever reaches this module.
+ * CLOSED, TOTAL table of runtime arguments against classifications the
+ * production system already computes.
  *
  * NO AUTHORITY LAUNDERING
  * -----------------------
@@ -63,7 +120,12 @@
  */
 
 import type { MessageWithMetadata } from "@cline/shared";
-import type { BoundedAssurance, ObservationAtom } from "./closed-vocabulary";
+import { classifyCommand } from "../evidence-continuity";
+import type {
+	BoundedAssurance,
+	ObservationAtom,
+	RuntimeArgument,
+} from "./closed-vocabulary";
 
 /**
  * A RUNTIME-OWNED class of tool.
@@ -103,27 +165,19 @@ export const TOOL_EVIDENCE_CLASS_MEMBERS: Readonly<
 /**
  * The tool class each OBSERVATION ATOM requires for `tool_observed`.
  *
- * THE TABLE IS THE WHOLE SEMANTIC CONTRACT
- * ----------------------------------------
+ * ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01-CORRECTION02: this table
+ * is GONE, and that is the point of the correction.
  *
- * It is CLOSED and TOTAL over the six runtime-owned atoms:
+ * A tool CLASS says what KIND of operation ran. It says nothing about
+ * whether the operation's RESULT supports the rendered claim, so it can
+ * never by itself establish a proposition. The predecessor's atom/class
+ * table therefore still allowed a successful search returning 42 matches to
+ * be published as "bounded search returned no match".
  *
- *   OPERATION_INVOKED / OPERATION_ARGUMENT_SET
- *       an operation was invoked. Only a COMMAND EXECUTION can establish
- *       that.
- *
- *   CONFIGURATION_VALUE_SET / IMPLEMENTATION_INSPECTED
- *       something was read and its content was inspected. Only a SOURCE
- *       READ can establish that.
- *
- *   SEARCH_RETURNED_NO_MATCH
- *       a BOUNDED SEARCH found nothing. Only a SEARCH can establish that.
- *       A command execution CANNOT: `echo hello` is not a search, and a
- *       failed grep is not a bounded search with a recorded scope.
- *
- *   QUESTION_REMAINS_OPEN
- *       an absence of support. NO tool class can establish it, so it is
- *       permanently bounded at `model_reported`.
+ * It is RETAINED here only as a DECLARED, CLOSED vocabulary of the tool
+ * classes the runtime recognises, so the classification of an event stays
+ * inspectable and total. Support is decided by
+ * `RUNTIME_ARGUMENT_EVIDENCE_CLASSIFICATIONS` and by the interpreter.
  */
 export const OBSERVATION_ATOM_REQUIRED_CLASS: Readonly<
 	Record<ObservationAtom, ToolEvidenceClass | undefined>
@@ -135,6 +189,88 @@ export const OBSERVATION_ATOM_REQUIRED_CLASS: Readonly<
 	SEARCH_RETURNED_NO_MATCH: "search",
 	QUESTION_REMAINS_OPEN: undefined,
 });
+
+/**
+ * ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01-CORRECTION02
+ *
+ * The PRODUCTION command classifications that deterministically establish
+ * each RUNTIME ARGUMENT.
+ *
+ * ============================================================================
+ * WHY THIS TABLE IS THE WHOLE CONTRACT
+ * ============================================================================
+ *
+ * The checkpoint's `RuntimeArgument` vocabulary renders a claim like
+ * "operation invoked: build". For the runtime to publish that with
+ * `tool_observed`, it must DETERMINISTICALLY establish that the cited
+ * evidence really performed a `build`.
+ *
+ * The production system ALREADY computes exactly that: `classifyCommand()`
+ * (owned by `evidence-continuity.ts`) reduces a tool call's own declared
+ * input to a FINITE, ALLOWLISTED classification such as `make build`,
+ * `helm template` or `git status`. It is already:
+ *
+ *   - fail-closed (an ambiguous shell chain yields NO classification),
+ *   - free of user-controlled text (only an allowlist entry is ever
+ *     returned),
+ *   - regression-tested in production, and
+ *   - already the mechanism the rest of the system uses to decide that an
+ *     operation was verified.
+ *
+ * So the checkpoint does NOT need a semantic interpreter. It needs one
+ * CLOSED table that says which of those existing classifications establish
+ * which argument.
+ *
+ * THE EMPTY SET IS THE NORM
+ * -------------------------
+ *
+ * An argument with an EMPTY set has NO deterministic runtime-owned evidence
+ * that establishes it, so a claim rendering that argument is bounded at
+ * `model_reported`. That is the correct, conservative outcome — the
+ * working knowledge survives, and its authority is not overstated.
+ *
+ * The `start` / `start_optimized` arguments are empty on purpose: the
+ * production allowlist carries no `start` classification, because a bare
+ * `start` word is not decidable from a command line. The timeout arguments
+ * are empty because they are CONFIGURATION VALUES, not commands: no
+ * deterministic runtime-owned rule reads a configuration file's timeout and
+ * compares it with "connect timeout 3 seconds".
+ */
+export const RUNTIME_ARGUMENT_EVIDENCE_CLASSIFICATIONS: Readonly<
+	Record<RuntimeArgument, readonly string[]>
+> = Object.freeze({
+	// `make build` is the only allowlisted classification that establishes a
+	// BUILD.
+	build: Object.freeze(["make build"]),
+	// No allowlisted classification establishes a bare `start`.
+	start: Object.freeze([]),
+	// No allowlisted classification establishes `start --optimized`.
+	start_optimized: Object.freeze([]),
+	// A configuration value is not a command; nothing classifies it.
+	connect_timeout_3s: Object.freeze([]),
+	// A configuration value is not a command; nothing classifies it.
+	socket_timeout_10s: Object.freeze([]),
+	// The explicit absence of an argument establishes nothing.
+	none: Object.freeze([]),
+});
+
+/**
+ * The OBSERVATION ATOMs the runtime can establish at `tool_observed`.
+ *
+ * ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01-CORRECTION02: the
+ * operation atoms are the only ones the runtime can establish, because the
+ * operation's OWN command classification is deterministic runtime-owned
+ * evidence for the rendered argument.
+ *
+ * Every other atom is bounded at `model_reported`. That is not a defect: it
+ * is the truthful ceiling. A bounded search that returned 42 matches does
+ * not establish "no match"; a directory listing does not establish "the
+ * implementation was inspected"; a configuration holding a 30-second
+ * timeout does not establish "connect timeout 3 seconds"; and an absence of
+ * support is never established by a tool.
+ */
+export const DETERMINISTICALLY_ESTABLISHABLE_ATOMS: readonly ObservationAtom[] =
+	Object.freeze(["OPERATION_INVOKED", "OPERATION_ARGUMENT_SET"] as const);
 
 /**
  * Classify a tool NAME into its runtime-owned evidence class.
@@ -240,6 +376,94 @@ export interface CanonicalToolEvent {
 	readonly evidenceClass: ToolEvidenceClass | undefined;
 	/** Whether the result AFFIRMATIVELY succeeded. */
 	readonly succeeded: boolean;
+	/**
+	 * ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01-CORRECTION02
+	 *
+	 * The PRODUCTION command CLASSIFICATION of the call's own declared input.
+	 *
+	 * It is computed by the production `classifyCommand()`, so it is:
+	 *
+	 *   - deterministic,
+	 *   - fail-closed (an ambiguous shell chain yields NO classification),
+	 *   - drawn from a finite allowlist, and
+	 *   - free of any user-controlled text.
+	 *
+	 * This is the runtime-owned evidence the operation atoms are verified
+	 * against. It is EMPTY for a call the classifier does not recognise,
+	 * which is the common case and is NOT a defect.
+	 */
+	readonly commandClassifications: readonly string[];
+}
+
+/**
+ * ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01-CORRECTION02
+ *
+ * The command CLASSIFICATIONS of a tool call's own declared input.
+ *
+ * The derivation is DELIBERATELY SHALLOW and mirrors the production
+ * evidence-continuity module: only the call's own declared input is read,
+ * never the tool OUTPUT, and only the well-known executable-bearing keys
+ * are considered.
+ *
+ * The OUTPUT is never read. A classification is a property of what the
+ * runtime was ASKED to run, so a `make build` classification is established
+ * by the call's own input plus the result's own success signal — not by
+ * anything the tool printed.
+ */
+function collectCommandClassifications(input: unknown): readonly string[] {
+	const classifications: string[] = [];
+	const push = (value: unknown): void => {
+		if (typeof value === "string") {
+			const label = classifyCommand(value);
+			if (label && !classifications.includes(label)) {
+				classifications.push(label);
+			}
+			return;
+		}
+		if (Array.isArray(value)) {
+			for (const item of value) {
+				push(item);
+			}
+		}
+	};
+	const visit = (value: unknown, depth: number): void => {
+		if (depth > 3) {
+			return;
+		}
+		if (Array.isArray(value)) {
+			for (const item of value) {
+				visit(item, depth + 1);
+			}
+			return;
+		}
+		if (!value || typeof value !== "object") {
+			return;
+		}
+		for (const [key, nested] of Object.entries(
+			value as Record<string, unknown>,
+		)) {
+			// The keys that carry an executable command in the production
+			// tool-call shapes. This is a DATA SHAPE allowlist, not a
+			// provider- or tool-name branch.
+			if (
+				key === "command" ||
+				key === "commands" ||
+				key === "query" ||
+				key === "script" ||
+				key === "path" ||
+				key === "file_path" ||
+				key === "filePath"
+			) {
+				push(nested);
+				continue;
+			}
+			if (nested && typeof nested === "object") {
+				visit(nested, depth + 1);
+			}
+		}
+	};
+	visit(input, 0);
+	return classifications;
 }
 
 /**
@@ -263,7 +487,10 @@ export function collectCanonicalToolEvents(
 	messages: readonly MessageWithMetadata[],
 ): readonly CanonicalToolEvent[] {
 	const callCounts = new Map<string, number>();
-	const callsById = new Map<string, string>();
+	const callsById = new Map<
+		string,
+		{ readonly toolName: string; readonly input: unknown }
+	>();
 	for (const message of messages) {
 		if (!Array.isArray(message.content)) {
 			continue;
@@ -272,7 +499,10 @@ export function collectCanonicalToolEvents(
 			if (block.type === "tool_use") {
 				callCounts.set(block.id, (callCounts.get(block.id) ?? 0) + 1);
 				if (!callsById.has(block.id)) {
-					callsById.set(block.id, block.name);
+					callsById.set(block.id, {
+						toolName: block.name,
+						input: (block as { input?: unknown }).input,
+					});
 				}
 			}
 		}
@@ -308,7 +538,8 @@ export function collectCanonicalToolEvents(
 		}
 	}
 	const events: CanonicalToolEvent[] = [];
-	for (const [toolCallId, toolName] of callsById) {
+	for (const [toolCallId, call] of callsById) {
+		const toolName = call.toolName;
 		// AMBIGUOUS CALL: the id was claimed by more than one call, so
 		// neither claim can be trusted.
 		if ((callCounts.get(toolCallId) ?? 0) !== 1) {
@@ -334,6 +565,7 @@ export function collectCanonicalToolEvents(
 			toolName,
 			evidenceClass: classifyToolEvidenceClass(toolName),
 			succeeded: result.succeeded,
+			commandClassifications: collectCommandClassifications(call.input),
 		});
 	}
 	return events;
@@ -382,8 +614,8 @@ function classifyToolResultSuccess(resultBlock: {
  * The runtime's own evidence interpreter.
  *
  * It answers ONE question: what is the MAXIMUM assurance the RUNTIME can
- * support for a set of canonical references, GIVEN the observation atom the
- * model selected?
+ * support for a set of canonical references, GIVEN the COMPLETE rendered
+ * claim the model selected?
  *
  * It NEVER inspects a model-authored statement, and it NEVER returns
  * `runtime_verified`.
@@ -398,16 +630,41 @@ function classifyToolResultSuccess(resultBlock: {
  * the selected observation atom, so a `run_commands`/`echo hello` event
  * could be published as "bounded search returned no match".
  *
- * The interpreter now requires BOTH:
+ * CORRECTION01 required the cited event to be unambiguously joined,
+ * AFFIRMATIVELY SUCCESSFUL and of the class the atom requires. That closed
+ * the CROSS-CLASS false attribution.
  *
- *   1. the cited set contains a canonical tool event that is unambiguously
- *      joined, AFFIRMATIVELY SUCCESSFUL, and
- *   2. that event's evidence CLASS is the class the selected atom
- *      REQUIRES (see `OBSERVATION_ATOM_REQUIRED_CLASS`).
+ * ============================================================================
+ * CORRECTION02 — THE COMPLETE RENDERED PROPOSITION MUST BE ESTABLISHED
+ * ============================================================================
  *
- * A reference that resolves but does not SUPPORT the atom leaves the
- * ceiling at `model_reported`, so the claim is DOWNGRADED rather than
- * published as a false observation.
+ * CORRECTION01 left the SAME-CLASS false attribution open, because a tool
+ * CLASS says what KIND of operation ran, not whether its RESULT supports
+ * the claim:
+ *
+ *   successful search returning 42 matches   -> SEARCH_RETURNED_NO_MATCH
+ *   successful `echo hello`                   -> OPERATION_INVOKED: build
+ *   successful `echo hello`                   -> OPERATION_ARGUMENT_SET:
+ *                                                start --optimized
+ *
+ * The interpreter now verifies the COMPLETE RENDERED PROPOSITION:
+ *
+ *   1. The ATOM must be one the runtime can establish at all. Only the
+ *      OPERATION atoms can: for every other atom there is no deterministic
+ *      runtime-owned rule that establishes the rendered claim.
+ *
+ *   2. The RENDERED ARGUMENT must be deterministically establishable. The
+ *      interpreter now RECEIVES the selected argument — the predecessor
+ *      never did, so it could not compare the rendered argument with the
+ *      observed operation even in principle.
+ *
+ *   3. A cited event must be a COMMAND EXECUTION that is unambiguously
+ *      joined, AFFIRMATIVELY SUCCESSFUL, and whose own runtime-owned
+ *      command CLASSIFICATION is one the selected argument requires.
+ *
+ * A reference that resolves but does not establish the complete rendered
+ * proposition leaves the ceiling at `model_reported`, so the claim is
+ * DOWNGRADED rather than published as a false observation.
  */
 export function interpretCanonicalEvidence(input: {
 	readonly canonicalMessages: readonly MessageWithMetadata[];
@@ -416,10 +673,21 @@ export function interpretCanonicalEvidence(input: {
 	 * The observation atom the model selected.
 	 *
 	 * It is REQUIRED, because the atom is what decides which kind of
-	 * evidence can support the claim. An atom with no supportable class
-	 * (`QUESTION_REMAINS_OPEN`) is permanently bounded at `model_reported`.
+	 * evidence can establish the claim. An atom with no deterministic
+	 * runtime-owned rule is permanently bounded at `model_reported`.
 	 */
 	readonly atom: ObservationAtom;
+	/**
+	 * ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01-CORRECTION02
+	 *
+	 * The runtime argument the model selected, if any.
+	 *
+	 * It is REQUIRED for the operation atoms, because the rendered claim is
+	 * "operation invoked: <argument>" — the ARGUMENT is part of the
+	 * proposition, and the interpreter must verify it against the observed
+	 * operation rather than the tool class alone.
+	 */
+	readonly argument?: RuntimeArgument;
 }): BoundedAssurance | undefined {
 	if (input.references.length === 0) {
 		return undefined;
@@ -434,23 +702,43 @@ export function interpretCanonicalEvidence(input: {
 	if (observed.length === 0) {
 		return "unverified";
 	}
-	const requiredClass = OBSERVATION_ATOM_REQUIRED_CLASS[input.atom];
-	if (requiredClass === undefined) {
-		// The atom names no supportable evidence class, so NO tool
-		// observation can establish it.
+	// (1) The atom must be establishable by deterministic runtime-owned
+	// evidence at all.
+	if (!DETERMINISTICALLY_ESTABLISHABLE_ATOMS.includes(input.atom)) {
+		// No deterministic runtime-owned rule establishes this atom's
+		// rendered proposition, so NO tool observation can establish it.
 		return "model_reported";
 	}
+	// (2) The rendered ARGUMENT must be deterministically establishable.
+	//
+	// `OPERATION_INVOKED` renders the atom label alone, so it accepts the
+	// explicit absence of an argument. `OPERATION_ARGUMENT_SET` renders
+	// "operation invoked with argument: <argument>", so an argument is
+	// REQUIRED: without one the rendered proposition is incomplete.
+	const argument = input.argument;
+	if (input.atom === "OPERATION_ARGUMENT_SET" && argument === undefined) {
+		return "model_reported";
+	}
+	const requiredClassifications =
+		argument === undefined
+			? []
+			: (RUNTIME_ARGUMENT_EVIDENCE_CLASSIFICATIONS[argument] ?? []);
+	// (3) A cited event must be a command execution whose own runtime-owned
+	// classification is one the selected argument requires.
 	const events = collectCanonicalToolEvents(input.canonicalMessages);
 	const supporting = events.some(
 		(event) =>
 			observed.includes(event.toolCallId) &&
 			event.succeeded &&
-			event.evidenceClass === requiredClass,
+			event.evidenceClass === "command_execution" &&
+			event.commandClassifications.some((classification) =>
+				requiredClassifications.includes(classification),
+			),
 	);
 	if (supporting) {
 		return "tool_observed";
 	}
-	// The references RESOLVE, but no cited event SUPPORTS this atom. The
-	// claim survives at the truthful ceiling.
+	// The references RESOLVE, but no cited event ESTABLISHES the complete
+	// rendered proposition. The claim survives at the truthful ceiling.
 	return "model_reported";
 }

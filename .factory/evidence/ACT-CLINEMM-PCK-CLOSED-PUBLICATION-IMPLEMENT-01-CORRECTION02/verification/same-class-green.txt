@@ -1,0 +1,12 @@
+(node:74810) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core
+
+ ✓ src/extensions/context/precompaction-knowledge-checkpoint/pck-same-class-assurance.red02.test.ts (14 tests) 5ms
+
+ Test Files  1 passed (1)
+      Tests  14 passed (14)
+   Start at  04:12:59
+   Duration  348ms (transform 218ms, setup 0ms, import 298ms, tests 5ms, environment 0ms)
+

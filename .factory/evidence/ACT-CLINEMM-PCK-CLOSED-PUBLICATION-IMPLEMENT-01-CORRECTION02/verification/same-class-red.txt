@@ -1,0 +1,197 @@
+(node:75019) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core
+
+ ❯ src/extensions/context/precompaction-knowledge-checkpoint/pck-same-class-assurance.red02.test.ts (14 tests | 11 failed) 8ms
+     × P0-2.1: a successful search returning 42 MATCHES does NOT establish SEARCH_RETURNED_NO_MATCH 4ms
+     × P0-2.2: a successful search returning NO MATCHES does NOT establish SEARCH_RETURNED_NO_MATCH either 0ms
+     × P0-2.3: a successful `echo hello` does NOT establish OPERATION_INVOKED: build 0ms
+     × P0-2.4: a successful `echo hello` does NOT establish OPERATION_ARGUMENT_SET: start --optimized 0ms
+     × P0-2.5: reading a configuration holding a 30-second timeout does NOT establish connect timeout 3 seconds 0ms
+     ✓ P0-2.6: a successful directory listing does NOT establish IMPLEMENTATION_INSPECTED 0ms
+     × P0-2.7: the PUBLISHED record carries the downgraded assurance 0ms
+     × P0-2.8: ONLY the operation atoms are deterministically establishable 0ms
+     × P0-2.9: the runtime-argument evidence table is CLOSED and TOTAL 0ms
+     ✓ P0-2.10: a DETERMINISTICALLY ESTABLISHED operation DOES reach tool_observed 0ms
+     ✓ P0-2.11: a FAILED operation does NOT reach tool_observed 0ms
+     × P0-2.12: an AMBIGUOUS command chain does NOT reach tool_observed 0ms
+     × P0-2.13: a DIFFERENT argument does NOT establish the selected one 0ms
+     × P0-2.14: OPERATION_ARGUMENT_SET without an argument establishes nothing 0ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 11 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/extensions/context/precompaction-knowledge-checkpoint/pck-same-class-assurance.red02.test.ts > ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01-CORRECTION02 — P0-2 RED > P0-2.1: a successful search returning 42 MATCHES does NOT establish SEARCH_RETURNED_NO_MATCH
+AssertionError: expected 'tool_observed' to be 'model_reported' // Object.is equality
+
+Expected: "model_reported"
+Received: "tool_observed"
+
+ ❯ src/extensions/context/precompaction-knowledge-checkpoint/pck-same-class-assurance.red02.test.ts:145:5
+    143|     atom: "SEARCH_RETURNED_NO_MATCH",
+    144|    }),
+    145|   ).toBe("model_reported");
+       |     ^
+    146|  });
+    147|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/11]⎯
+
+ FAIL  src/extensions/context/precompaction-knowledge-checkpoint/pck-same-class-assurance.red02.test.ts > ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01-CORRECTION02 — P0-2 RED > P0-2.2: a successful search returning NO MATCHES does NOT establish SEARCH_RETURNED_NO_MATCH either
+AssertionError: expected 'tool_observed' to be 'model_reported' // Object.is equality
+
+Expected: "model_reported"
+Received: "tool_observed"
+
+ ❯ src/extensions/context/precompaction-knowledge-checkpoint/pck-same-class-assurance.red02.test.ts:165:5
+    163|     atom: "SEARCH_RETURNED_NO_MATCH",
+    164|    }),
+    165|   ).toBe("model_reported");
+       |     ^
+    166|  });
+    167|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/11]⎯
+
+ FAIL  src/extensions/context/precompaction-knowledge-checkpoint/pck-same-class-assurance.red02.test.ts > ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01-CORRECTION02 — P0-2 RED > P0-2.3: a successful `echo hello` does NOT establish OPERATION_INVOKED: build
+AssertionError: expected 'tool_observed' to be 'model_reported' // Object.is equality
+
+Expected: "model_reported"
+Received: "tool_observed"
+
+ ❯ src/extensions/context/precompaction-knowledge-checkpoint/pck-same-class-assurance.red02.test.ts:182:5
+    180|     argument: "build",
+    181|    }),
+    182|   ).toBe("model_reported");
+       |     ^
+    183|  });
+    184|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/11]⎯
+
+ FAIL  src/extensions/context/precompaction-knowledge-checkpoint/pck-same-class-assurance.red02.test.ts > ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01-CORRECTION02 — P0-2 RED > P0-2.4: a successful `echo hello` does NOT establish OPERATION_ARGUMENT_SET: start --optimized
+AssertionError: expected 'tool_observed' to be 'model_reported' // Object.is equality
+
+Expected: "model_reported"
+Received: "tool_observed"
+
+ ❯ src/extensions/context/precompaction-knowledge-checkpoint/pck-same-class-assurance.red02.test.ts:199:5
+    197|     argument: "start_optimized",
+    198|    }),
+    199|   ).toBe("model_reported");
+       |     ^
+    200|  });
+    201|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/11]⎯
+
+ FAIL  src/extensions/context/precompaction-knowledge-checkpoint/pck-same-class-assurance.red02.test.ts > ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01-CORRECTION02 — P0-2 RED > P0-2.5: reading a configuration holding a 30-second timeout does NOT establish connect timeout 3 seconds
+AssertionError: expected 'tool_observed' to be 'model_reported' // Object.is equality
+
+Expected: "model_reported"
+Received: "tool_observed"
+
+ ❯ src/extensions/context/precompaction-knowledge-checkpoint/pck-same-class-assurance.red02.test.ts:216:5
+    214|     argument: "connect_timeout_3s",
+    215|    }),
+    216|   ).toBe("model_reported");
+       |     ^
+    217|  });
+    218|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/11]⎯
+
+ FAIL  src/extensions/context/precompaction-knowledge-checkpoint/pck-same-class-assurance.red02.test.ts > ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01-CORRECTION02 — P0-2 RED > P0-2.7: the PUBLISHED record carries the downgraded assurance
+AssertionError: expected 'tool_observed' to be 'model_reported' // Object.is equality
+
+Expected: "model_reported"
+Received: "tool_observed"
+
+ ❯ src/extensions/context/precompaction-knowledge-checkpoint/pck-same-class-assurance.red02.test.ts:267:37
+    265|   });
+    266|   expect(gate.records.length).toBe(1);
+    267|   expect(gate.records[0].assurance).toBe("model_reported");
+       |                                     ^
+    268|   expect(gate.records[0].statement).toBe("bounded search returned no m…
+    269|  });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/11]⎯
+
+ FAIL  src/extensions/context/precompaction-knowledge-checkpoint/pck-same-class-assurance.red02.test.ts > ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01-CORRECTION02 — P0-2 RED > P0-2.8: ONLY the operation atoms are deterministically establishable
+TypeError: Spread syntax requires ...iterable not be null or undefined
+ ❯ src/extensions/context/precompaction-knowledge-checkpoint/pck-same-class-assurance.red02.test.ts:275:14
+    273|   // open-question atoms have NO deterministic runtime-owned rule, so
+    274|   // they can never reach `tool_observed`.
+    275|   expect([...DETERMINISTICALLY_ESTABLISHABLE_ATOMS]).toEqual([
+       |              ^
+    276|    "OPERATION_INVOKED",
+    277|    "OPERATION_ARGUMENT_SET",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/11]⎯
+
+ FAIL  src/extensions/context/precompaction-knowledge-checkpoint/pck-same-class-assurance.red02.test.ts > ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01-CORRECTION02 — P0-2 RED > P0-2.9: the runtime-argument evidence table is CLOSED and TOTAL
+TypeError: undefined is not an object (evaluating 'Object.keys(RUNTIME_ARGUMENT_EVIDENCE_CLASSIFICATIONS)')
+ ❯ src/extensions/context/precompaction-knowledge-checkpoint/pck-same-class-assurance.red02.test.ts:285:11
+    283|   // EMPTY set has no deterministic evidence that establishes it.
+    284|   expect(
+    285|    Object.keys(RUNTIME_ARGUMENT_EVIDENCE_CLASSIFICATIONS).sort(),
+       |           ^
+    286|   ).toEqual([
+    287|    "build",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/11]⎯
+
+ FAIL  src/extensions/context/precompaction-knowledge-checkpoint/pck-same-class-assurance.red02.test.ts > ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01-CORRECTION02 — P0-2 RED > P0-2.12: an AMBIGUOUS command chain does NOT reach tool_observed
+AssertionError: expected 'tool_observed' to be 'model_reported' // Object.is equality
+
+Expected: "model_reported"
+Received: "tool_observed"
+
+ ❯ src/extensions/context/precompaction-knowledge-checkpoint/pck-same-class-assurance.red02.test.ts:368:5
+    366|     argument: "build",
+    367|    }),
+    368|   ).toBe("model_reported");
+       |     ^
+    369|  });
+    370|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/11]⎯
+
+ FAIL  src/extensions/context/precompaction-knowledge-checkpoint/pck-same-class-assurance.red02.test.ts > ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01-CORRECTION02 — P0-2 RED > P0-2.13: a DIFFERENT argument does NOT establish the selected one
+AssertionError: expected 'tool_observed' to be 'model_reported' // Object.is equality
+
+Expected: "model_reported"
+Received: "tool_observed"
+
+ ❯ src/extensions/context/precompaction-knowledge-checkpoint/pck-same-class-assurance.red02.test.ts:388:5
+    386|     argument: "start_optimized",
+    387|    }),
+    388|   ).toBe("model_reported");
+       |     ^
+    389|  });
+    390|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/11]⎯
+
+ FAIL  src/extensions/context/precompaction-knowledge-checkpoint/pck-same-class-assurance.red02.test.ts > ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01-CORRECTION02 — P0-2 RED > P0-2.14: OPERATION_ARGUMENT_SET without an argument establishes nothing
+AssertionError: expected 'tool_observed' to be 'model_reported' // Object.is equality
+
+Expected: "model_reported"
+Received: "tool_observed"
+
+ ❯ src/extensions/context/precompaction-knowledge-checkpoint/pck-same-class-assurance.red02.test.ts:406:5
+    404|     atom: "OPERATION_ARGUMENT_SET",
+    405|    }),
+    406|   ).toBe("model_reported");
+       |     ^
+    407|  });
+    408| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/11]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  11 failed | 3 passed (14)
+   Start at  04:13:02
+   Duration  98ms (transform 23ms, setup 0ms, import 30ms, tests 8ms, environment 0ms)
+

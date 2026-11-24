@@ -1,0 +1,61 @@
+# ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01-CORRECTION02
+# typecheck diagnostic delta
+#
+COMMAND: cd sdk/packages/core && bun tsc -p tsconfig.dev.json --noEmit
+
+=== BASELINE (entry head 5d6ff6e53) ===
+diagnostics: 44
+
+=== AFTER THE CORRECTION ===
+diagnostics: 44
+
+=== DIAGNOSTIC SET COMPARISON ===
+TYPECHECK_DIAGNOSTIC_SET_BYTE_IDENTICAL_TO_BASELINE
+
+ACT_OWNED_DIAGNOSTICS=0
+
+=== THE BASELINE DIAGNOSTIC SET (44, all pre-existing and outside this ACT) ===
+../shared/src/runtime/prefix-forensics-analyzer.ts(43,8): error TS5097: An import path can only end with a '.ts' extension when 'allowImportingTsExtensions' is enabled.
+src/extensions/context/compaction.latency-span-lifecycle.red01.test.ts(273,4): error TS2559: Type 'ProviderConfig' has no properties in common with type 'CoreCompactionConfig'.
+src/extensions/context/compaction.latency-span-lifecycle.red01.test.ts(292,5): error TS2559: Type 'ProviderConfig' has no properties in common with type 'CoreCompactionConfig'.
+src/extensions/context/compaction.latency-span-lifecycle.red01.test.ts(330,5): error TS2559: Type 'ProviderConfig' has no properties in common with type 'CoreCompactionConfig'.
+src/extensions/context/compaction.test.ts(351,43): error TS2345: Argument of type 'unknown' is not assignable to parameter of type 'number | undefined'.
+src/extensions/context/compaction.working-context-ratio.test.ts(164,3): error TS2322: Type '(context: { messages: Message[]; }) => { messages?: Message[] | undefined; systemPrompt?: string | undefined; } | undefined' is not assignable to type 'ContextPipelinePrepareTurn'.
+src/extensions/tools/definitions.test.ts(877,24): error TS2322: Type '{ command: string; args: string[]; }' is not assignable to type 'string'.
+src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts(123,52): error TS2345: Argument of type '{ executable: string; args: string[]; cwd: string; }' is not assignable to parameter of type 'SpawnConfig'.
+src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts(209,52): error TS2345: Argument of type '{ executable: string; args: string[]; cwd: string; }' is not assignable to parameter of type 'SpawnConfig'.
+src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts(229,52): error TS2345: Argument of type '{ executable: string; args: string[]; cwd: string; }' is not assignable to parameter of type 'SpawnConfig'.
+src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts(248,52): error TS2345: Argument of type '{ executable: string; args: string[]; cwd: string; }' is not assignable to parameter of type 'SpawnConfig'.
+src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts(267,52): error TS2345: Argument of type '{ executable: string; args: string[]; cwd: string; }' is not assignable to parameter of type 'SpawnConfig'.
+src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts(289,52): error TS2345: Argument of type '{ executable: string; args: string[]; cwd: string; }' is not assignable to parameter of type 'SpawnConfig'.
+src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts(307,52): error TS2345: Argument of type '{ executable: string; args: string[]; cwd: string; }' is not assignable to parameter of type 'SpawnConfig'.
+src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts(333,52): error TS2345: Argument of type '{ executable: string; args: string[]; cwd: string; }' is not assignable to parameter of type 'SpawnConfig'.
+src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts(63,74): error TS2345: Argument of type '{ executable: string; args: string[]; cwd: string; env?: Record<string, string> | undefined; envSemantics?: "complete" | "overlay" | undefined; }' is not assignable to parameter of type 'SpawnConfig'.
+src/extensions/tools/executors/bash.supervised.test.ts(274,22): error TS2345: Argument of type 'number | undefined' is not assignable to parameter of type 'number'.
+src/extensions/tools/executors/bash.supervised.test.ts(282,22): error TS2345: Argument of type 'number | undefined' is not assignable to parameter of type 'number'.
+src/hub/server/hub-trace-cardinality-discriminator.c2-4-fork-upstream-corr01.test.ts(233,20): error TS2493: Tuple type '[]' of length '0' has no element at index '1'.
+src/hub/server/hub-trace-cardinality-discriminator.c2-4-fork-upstream-corr01.test.ts(249,11): error TS2493: Tuple type '[]' of length '0' has no element at index '2'.
+src/hub/server/hub-trace-cardinality-discriminator.c2-4-fork-upstream-corr01.test.ts(249,6): error TS2352: Conversion of type 'undefined' to type '{ context?: { type?: string | undefined; } | undefined; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+src/runtime/command-policy/command-execution-plan.test.ts(592,29): error TS2345: Argument of type '{ mode: string; explicitAllowRules: readonly { source: string; pattern: RegExp; }[]; workspaceRoots: never[]; tempAuthorityEvidence: { platform: "darwin"; executablePath: string; executableRealpath: string; darwinUserTempRoot: string; canonicalDarwinUserTempRoot: string; }; }' is not assignable to parameter of type '{ mode: CommandHostMode; mandatorySeatbelt?: boolean | undefined; explicitDenyRules?: readonly { source: string; pattern: RegExp; }[] | undefined; explicitAllowRules?: readonly CommandHostAllowRule[] | undefined; ... 4 more ...; temporaryExternalCanonicalRoots?: readonly string[] | undefined; }'.
+src/runtime/command-policy/command-execution-plan.test.ts(607,29): error TS2345: Argument of type '{ mode: string; explicitAllowRules: readonly { source: string; pattern: RegExp; }[]; workspaceRoots: never[]; tempAuthorityEvidence: { platform: "darwin"; executablePath: string; executableRealpath: string; darwinUserTempRoot: string; canonicalDarwinUserTempRoot: string; }; }' is not assignable to parameter of type '{ mode: CommandHostMode; mandatorySeatbelt?: boolean | undefined; explicitDenyRules?: readonly { source: string; pattern: RegExp; }[] | undefined; explicitAllowRules?: readonly CommandHostAllowRule[] | undefined; ... 4 more ...; temporaryExternalCanonicalRoots?: readonly string[] | undefined; }'.
+src/runtime/command-policy/command-execution-plan.test.ts(628,29): error TS2345: Argument of type '{ mode: string; explicitAllowRules: readonly { source: string; pattern: RegExp; }[]; workspaceRoots: never[]; tempAuthorityEvidence: { platform: "darwin"; executablePath: string; executableRealpath: string; darwinUserTempRoot: string; canonicalDarwinUserTempRoot: string; }; }' is not assignable to parameter of type '{ mode: CommandHostMode; mandatorySeatbelt?: boolean | undefined; explicitDenyRules?: readonly { source: string; pattern: RegExp; }[] | undefined; explicitAllowRules?: readonly CommandHostAllowRule[] | undefined; ... 4 more ...; temporaryExternalCanonicalRoots?: readonly string[] | undefined; }'.
+src/runtime/command-policy/parser-helper/runtime.real-binary.test.ts(181,24): error TS2339: Property 'cmd' does not exist on type 'StructuredStmt'.
+src/runtime/command-policy/parser-helper/runtime.real-binary.test.ts(198,36): error TS2339: Property 'cmd' does not exist on type 'StructuredStmt'.
+src/runtime/command-policy/parser-provenance.test.ts(74,3): error TS2578: Unused '@ts-expect-error' directive.
+src/runtime/command-policy/parser-provenance.test.ts(79,4): error TS2353: Object literal may only specify known properties, and 'parserResult' does not exist in type 'EvaluateCommandRiskInput'.
+src/runtime/command-policy/path-authority.temporary-external.test.ts(56,2): error TS2304: Cannot find name 'mkdirSync'.
+src/runtime/command-policy/path-authority.temporary-external.test.ts(57,2): error TS2304: Cannot find name 'mkdirSync'.
+src/runtime/command-policy/structured-command-risk.cd-cwd-authority.test.ts(360,20): error TS2339: Property 'cmd' does not exist on type 'StructuredStmt'.
+src/runtime/command-policy/structured-command-risk.find-quoted-pattern.test.ts(493,38): error TS2339: Property 'cmd' does not exist on type 'StructuredStmt'.
+src/runtime/observability/model-behavior-trace.test.ts(144,28): error TS2339: Property 'contextWindow' does not exist on type '{ modelMaxInputTokens: number; }'.
+src/runtime/observability/model-behavior-trace.test.ts(146,12): error TS2339: Property 'userContextCeiling' does not exist on type '{ modelMaxInputTokens: number; }'.
+src/runtime/orchestration/session-runtime-orchestrator.tool-outcome-hook.tes02.test.ts(103,20): error TS2345: Argument of type '{ hooks: { onToolRuntimeOutcome: () => never; }; }' is not assignable to parameter of type 'undefined'.
+src/runtime/orchestration/session-runtime-orchestrator.tool-outcome-hook.tes02.test.ts(29,2): error TS2322: Type '{}' is not assignable to type 'never'.
+src/runtime/orchestration/session-runtime-orchestrator.tool-outcome-hook.tes02.test.ts(29,32): error TS2344: Type 'typeof SessionRuntime' does not satisfy the constraint '(...args: any) => any'.
+src/runtime/orchestration/session-runtime-orchestrator.tool-outcome-hook.tes02.test.ts(37,3): error TS2698: Spread types may only be created from object types.
+src/runtime/orchestration/session-runtime-orchestrator.tool-outcome-hook.tes02.test.ts(38,18): error TS2344: Type 'typeof SessionRuntime' does not satisfy the constraint '(...args: any) => any'.
+src/runtime/orchestration/session-runtime-orchestrator.tool-outcome-hook.tes02.test.ts(73,20): error TS2345: Argument of type '{ hooks: { onToolRuntimeOutcome: (ctx: AgentToolRuntimeOutcomeHookContext) => void; }; }' is not assignable to parameter of type 'undefined'.
+src/runtime/orchestration/session-runtime.model-behavior-trace.test.ts(212,4): error TS2353: Object literal may only specify known properties, and 'enableTools' does not exist in type 'AgentConfig'.
+src/runtime/orchestration/session-runtime.model-behavior-trace.test.ts(348,5): error TS2353: Object literal may only specify known properties, and 'enableTools' does not exist in type 'AgentConfig'.
+src/runtime/orchestration/session-runtime.model-behavior-trace.test.ts(408,5): error TS2353: Object literal may only specify known properties, and 'enableTools' does not exist in type 'AgentConfig'.
+src/runtime/orchestration/session-runtime.model-behavior-trace.test.ts(463,5): error TS2353: Object literal may only specify known properties, and 'enableTools' does not exist in type 'AgentConfig'.

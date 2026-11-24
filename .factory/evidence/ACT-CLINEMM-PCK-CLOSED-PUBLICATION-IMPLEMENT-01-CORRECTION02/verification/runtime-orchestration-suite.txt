@@ -1,0 +1,47 @@
+(node:49504) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core
+
+ ✓ src/runtime/orchestration/runtime-event-adapter.test.ts (43 tests) 31ms
+ ✓ src/runtime/orchestration/team-persistence-writer.test.ts (9 tests) 11ms
+ ✓ src/runtime/orchestration/runtime-event-adapter.e2f-f0-witnesses.test.ts (10 tests) 15ms
+ ✓ src/runtime/orchestration/session-runtime-orchestrator.runtime-prepare-turn-w-strip.test.ts (2 tests) 6ms
+stdout | src/runtime/orchestration/session-runtime.subscribe-runtime-events.e2f-f1-bench.test.ts > ELM-02F F1 — performance and dual-stream witnesses > F1-P1: a single canonical subscriber sustains >= 20_000 events/sec across 10_000 events
+F1-P1: 10000 events, 41.9ms, 4.19us/event
+
+stdout | src/runtime/orchestration/session-runtime.subscribe-runtime-events.e2f-f1-bench.test.ts > ELM-02F F1 — performance and dual-stream witnesses > F1-P2: 4 canonical subscribers scale linearly (no quadratic surprise)
+F1-P2: 4 subs × 5000 = 20000 events, 1.8ms, 0.09us/event-per-listener
+
+ ✓ src/runtime/orchestration/session-runtime.subscribe-runtime-events.e2f-f1.test.ts (9 tests) 51ms
+ ✓ src/runtime/orchestration/session-runtime.subscribe-runtime-events.e2f-f1-bench.test.ts (4 tests) 51ms
+ ✓ src/runtime/orchestration/session-runtime.model-behavior-trace.test.ts (7 tests) 59ms
+stdout | src/runtime/orchestration/null-runcommands-abort-orchestrator-recon01.test.ts > ACT-CLINEMM-NULL-RUNCOMMANDS-ABORT-RECON01 / orchestrator-level discriminators > D5_RECOVERY_BUDGET_THRESHOLD_IS_BISECTED
+[ACT-CLINEMM-NULL-RUNCOMMANDS-ABORT-RECON01] identical-null-call cardinality → finishReason: 1:completed, 2:completed, 3:completed, 4:aborted, 5:aborted, 6:aborted, 7:aborted
+
+ ✓ src/runtime/orchestration/session-runtime-result-cache.test.ts (3 tests) 93ms
+ ✓ src/runtime/orchestration/null-runcommands-abort-orchestrator-recon01.test.ts (4 tests) 80ms
+ ✓ src/runtime/orchestration/session-runtime-orchestrator.trace-sink-channel-forwarding.test.ts (3 tests) 3ms
+ ✓ src/runtime/orchestration/session-runtime-orchestrator.adjudication-acquisition.correction01.test.ts (4 tests) 5ms
+ ✓ src/runtime/orchestration/runtime-oauth-token-manager.test.ts (6 tests) 419ms
+     ✓ coordinates independent managers and does not force-refresh a token another manager just rotated  396ms
+ ✓ src/runtime/orchestration/session-runtime-orchestrator.test.ts (80 tests) 160ms
+ ✓ src/runtime/orchestration/runtime-builder.team-persistence.test.ts (2 tests) 2883ms
+     ✓ persists teammate specs and runtime state from team events  2873ms
+ ✓ src/runtime/orchestration/runtime-builder.configured-agent-execution.test.ts (2 tests) 1033ms
+     ✓ invokes configured agents with host callbacks, scoped tools, skills, overrides, and parent context  1013ms
+ ✓ src/runtime/orchestration/runtime-builder.routing-evals.swcm02.test.ts (12 tests) 1474ms
+     ✓ A1-disabled-tool: toolPolicies.run_commands.enabled=false strips run_commands from runtime.tools  1299ms
+ ✓ src/runtime/orchestration/runtime-parity.test.ts (3 tests) 21ms
+ ✓ src/runtime/orchestration/session-runtime-orchestrator.tool-outcome-hook.tes02.test.ts (3 tests) 3ms
+ ✓ src/runtime/orchestration/session-runtime-orchestrator.adjudication-acquisition.hook-boundary.correction01.test.ts (4 tests) 4ms
+ ✓ src/runtime/orchestration/runtime-oauth-token-manager.process.test.ts (1 test) 2007ms
+     ✓ refreshes a single-use token once and gives both processes the rotated credential  2006ms
+ ✓ src/runtime/orchestration/runtime-builder.test.ts (39 tests) 1447ms
+     ✓ skips broken MCP servers without crashing  1037ms
+
+ Test Files  21 passed (21)
+      Tests  250 passed (250)
+   Start at  04:09:08
+   Duration  4.92s (transform 15.62s, setup 0ms, import 34.87s, tests 9.86s, environment 2ms)
+

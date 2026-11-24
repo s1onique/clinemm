@@ -1,0 +1,168 @@
+# ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01-CORRECTION02
+# regression comparison BY TEST IDENTITY, not only by filename
+#
+# The review's P1-1 finding: the predecessor compared 'identical sets of
+# 17 failing FILES, not necessarily identical failing TESTS'. This receipt
+# compares the full 'file > describe > test' identity of every failing test.
+#
+ENTRY HEAD : 5d6ff6e539c5bdc9f7ee461baa1ff15f0b417fa3
+
+=== FAILING FILE SETS ===
+before: 28 files
+after : 28 files
+
+FAILING_FILE_SET_IDENTICAL
+
+=== FAILING TEST IDENTITY SETS ===
+before: 140 identities
+after : 140 identities
+
+FAILING_TEST_IDENTITY_SET_IDENTICAL
+
+=== TOTALS ===
+before:  Test Files  28 failed | 374 passed | 3 skipped (405)
+              Tests  139 failed | 5989 passed | 159 skipped (6287)
+after :  Test Files  28 failed | 375 passed | 3 skipped (406)
+              Tests  139 failed | 6005 passed | 159 skipped (6303)
+
+=== THE FULL FAILING TEST IDENTITY LIST (identical before and after) ===
+src/auth/codex.test.ts > auth/codex loginOpenAICodex — callback port unavailable > continues via manual code entry when the port is occupied but a manual fallback exists
+src/auth/codex.test.ts > auth/codex loginOpenAICodex — callback port unavailable > fails fast before opening the browser when the port is occupied and no manual fallback exists
+src/extensions/composio/composio-tools-extension.test.ts > createComposioToolsExtension > includes only meta schemas in every model request despite hundreds of saved tools
+src/extensions/composio/composio-tools-extension.test.ts > createComposioToolsExtension > records COMPOSIO_MANAGE_CONNECTIONS usage once through the runtime event pipeline
+src/extensions/composio/composio-tools-extension.test.ts > createComposioToolsExtension > records COMPOSIO_WAIT_FOR_CONNECTIONS usage once through the runtime event pipeline
+src/extensions/composio/composio-tools-extension.test.ts > createComposioToolsExtension > runs the in-chat connector flow (host transport: false)
+src/extensions/composio/composio-tools-extension.test.ts > createComposioToolsExtension > runs the in-chat connector flow (host transport: true)
+src/extensions/mcp/client.test.ts > mcp client stdin failures > fails the request at once and stops a server that closes stdin but stays alive (honors SIGTERM)
+src/extensions/mcp/client.test.ts > mcp client stdin failures > fails the request at once and stops a server that closes stdin but stays alive (ignores SIGTERM)
+src/extensions/plugin/plugin-registry.test.ts > PluginRegistry > times out and stops commands, rule content, and message builders
+src/extensions/tools/__tests__/skill-trigger-evals01.swcm01.test.ts > D1 — enabled skill metadata reaches the trigger surface > enabled names appear sorted alphabetically in the suffix
+src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts > ACT-CLINEMM-COMMAND-EXECUTOR-BASH-STARTUP-ENV-AUTHORITY01 (C2: supervisor strips inherited bash-startup-affecting env under overlay semantics) > RED CLOSED: BASH_ENV startup file does NOT run before the authorized command > `/usr/bin/mktemp -d`: BASH_ENV sentinel remains empty
+src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts > ACT-CLINEMM-COMMAND-EXECUTOR-BASH-STARTUP-ENV-AUTHORITY01 (C2: supervisor strips inherited bash-startup-affecting env under overlay semantics) > RED CLOSED: BASH_ENV startup file does NOT run before the authorized command > `/usr/bin/mktemp` (slash-form AUTO): BASH_ENV sentinel remains empty
+src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts > ACT-CLINEMM-COMMAND-EXECUTOR-BASH-STARTUP-ENV-AUTHORITY01 (C2: supervisor strips inherited bash-startup-affecting env under overlay semantics) > RED CLOSED: BASH_FUNC_<name>%% inherited exported function does NOT shadow bare AUTO commands > slash-prefixed `/usr/bin/mktemp` still works (slash-bypass composes with the strip)
+src/hooks/checkpoint-hooks.test.ts > createCheckpointHooks > captures untracked files as a third parent so restore can rewind them
+src/hooks/checkpoint-hooks.test.ts > createCheckpointHooks > detects untracked content changes across turns when core.ignorestat is enabled
+src/hooks/checkpoint-hooks.test.ts > createCheckpointHooks > drops persistent-index entries for untracked files that disappear between runs
+src/hooks/checkpoint-hooks.test.ts > createCheckpointHooks > emits one checkpoint.snapshot event per snapshot attempt without file paths
+src/hooks/checkpoint-hooks.test.ts > createCheckpointHooks > keeps an untracked nested repository's gitlink across turns
+src/hooks/checkpoint-hooks.test.ts > createCheckpointHooks > recovers from a stale index.lock left by a killed git process
+src/hooks/checkpoint-hooks.test.ts > createCheckpointHooks > removes the per-session scratch dir together with the checkpoint refs
+src/hub/client/proxy.test.ts > NodeHubClient proxy selection > bypasses the proxy for an exact NO_PROXY host and port
+src/hub/client/proxy.test.ts > NodeHubClient proxy selection > maps WS to HTTP_PROXY
+src/hub/client/proxy.test.ts > NodeHubClient proxy selection > maps WSS to HTTPS_PROXY and preserves destination headers and URL
+src/hub/client/proxy.test.ts > NodeHubClient proxy selection > preserves direct behavior when no proxy is configured
+src/hub/client/proxy.test.ts > NodeHubClient proxy selection > re-resolves proxy selection and headers on reconnect
+src/hub/client/proxy.test.ts > NodeHubClient proxy selection > supports lowercase proxy variables for ws://remote.example/hub
+src/hub/client/proxy.test.ts > NodeHubClient proxy selection > supports lowercase proxy variables for wss://remote.example/hub
+src/hub/runtime-host/hub-runtime-host.test.ts > ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01-CORRECTION02 / PPA-HUB-RACE-02 Layout C > sends atomic first-prompt steering through the Hub without listing the queue
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > allows a creator to claim ownerless compaction sidecar ownership
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > authorizes compaction sidecar access from server session state, not mutable metadata
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > cancels pending capability requests when a run is aborted
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > clears compaction sidecar ownership when the owner detaches
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > clears compaction sidecar ownership when the owner unregisters
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > continues publishing when one listener throws
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > delegates pathless session.create and returns the host-resolved workspace
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > denies non-interactive approval requests immediately
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > detaches a running command through the hub command boundary
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > does not grant compaction sidecar ownership from session attach
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > does not let session metadata updates overwrite server-owned compaction owner
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > does not publish session updates when compaction sidecar update is stale
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > does not start a runtime when reading saved history fails
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > does not transfer capability ownership to attached clients
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > fails capability requests to an owner that left the task but stays connected
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > forwards explicit session title and prompt updates to the session host
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > forwards run file attachment paths to the session host
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > forwards the session.list rootOnly flag to the session host
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > holds capability requests for a disconnected owner through a short reconnect
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > ignores recoverable and non-lead agent error events
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > includes accumulated usage on session.get
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > keeps interactive approval requests pending until a response arrives
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > keeps session list and get lightweight unless snapshots are requested
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > never captures the transcript into event or reply snapshots
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > preserves capability-backed tools when starting session 123-saved-session
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > preserves capability-backed tools when starting session undefined
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > preserves create with 'existing ID without history'
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > preserves create with 'explicit empty history'
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > preserves create with 'explicit replacement history'
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > preserves create with 'new ID'
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > projects an unreported non-recoverable agent error as run.failed
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > projects in-flight tool updates onto the hub stream
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > projects live usage events with aggregate usage and agent identity
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > projects notices with teammate provenance intact
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > publishes iteration lifecycle events from agent events
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > publishes result error text on failed run events
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > publishes session updates after successful compaction sidecar updates
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > recovers an empty cloud snapshot set from a fresh daemon
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > rejects capability responses from non-owner clients
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > rejects corrupt persisted history before starting a runtime
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > rejects invalid compaction sidecar updates before calling the session host
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > rejects pending tool approvals when a run is aborted
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > rejects resume with 'invalid_resume' without creating a runtime
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > rejects resume with 'session_messages_not_found' without creating a runtime
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > rejects resume with 'session_not_found' without creating a runtime
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > replays a pending approval to a client that (re)subscribes after it was raised
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > requires connection registration before cloud access even when another client id is known
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > resumes history with the supplied configuration (live reader: false)
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > resumes history with the supplied configuration (live reader: true)
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > returns compaction sidecar state to the server-owned session client
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > returns session_not_found when a run starts against a stale active session
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > returns session_not_found when session messages are requested for an unknown session
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > serves session messages from the hub-owned session host
+src/hub/server/boundary.test.ts > HubServerTransport boundaries > suppresses the agent-error projection while an RPC turn awaits the result
+src/hub/server/cloud-session-service.test.ts > cloud RPC over a shared hub socket > hydrates another desktop client, preserves ownership on disconnect, and refuses new work while draining
+src/hub/server/cloud-session-service.test.ts > cloud RPC over a shared hub socket > keeps creation active after the requesting viewer disconnects
+src/hub/server/cloud-session-service.test.ts > cloud RPC over a shared hub socket > keeps one publication and creation after viewer disconnect and rejects origin-only Git requests
+src/hub/server/cloud-session-service.test.ts > cloud RPC over a shared hub socket > preserves repository preparation and ordinary send results over the socket
+src/hub/server/cloud-session-service.test.ts > hub cloud credentials > retains the controller when its OAuth refresh rotates tokens without an account id
+src/hub/server/fetch-wiring.test.ts > hub runtime wiring > does not construct a default LocalRuntimeHost when sessionHost is supplied
+src/hub/server/fetch-wiring.test.ts > hub runtime wiring > forwards HubWebSocketServerOptions.fetch into the internal LocalRuntimeHost
+src/hub/server/fetch-wiring.test.ts > hub runtime wiring > forwards observability into the internal LocalRuntimeHost
+src/hub/server/hub-plugins.test.ts > Hub plugin status > passes the session plugin policy through and returns plugin issues
+src/hub/server/hub-plugins.test.ts > Hub plugin status > reports plugin status, broadcasts changes, and reloads a fixed plugin
+src/hub/server/index.test.ts > hub server startup > does not clear a replacement generation's discovery record
+src/hub/server/index.test.ts > hub server startup > does not reuse a closed shared server
+src/hub/server/index.test.ts > hub server startup > does not reuse managed discovery from an older build
+src/hub/server/index.test.ts > hub server startup > fails when the requested port is already occupied
+src/hub/server/index.test.ts > hub server startup > falls back to an ephemeral port when fallback is allowed
+src/hub/server/index.test.ts > hub server startup > notifies the owner and tears down after authenticated shutdown
+src/hub/server/index.test.ts > hub server startup > rejects WebSocket upgrade with 401 when no auth token is provided
+src/hub/server/index.test.ts > hub server startup > rejects a second live endpoint for the same owner
+src/hub/server/index.test.ts > hub server startup > rejects shutdown request with 401 when no auth token is provided
+src/hub/server/index.test.ts > hub server startup > reports its build and instance identity on the unauthenticated health endpoint
+src/hub/server/index.test.ts > hub server startup > reuses managed discovery from a build it cannot order itself against
+src/hub/server/index.test.ts > hub server startup > reuses managed discovery from a newer build instead of starting a rival
+src/hub/server/index.test.ts > hub server startup > reuses the same owner when port zero selected the bound port
+src/hub/server/index.test.ts > hub server startup > shuts down active server through the shutdown endpoint
+src/hub/server/index.test.ts > hub server startup > starts on the requested port instead of drifting to a random port
+src/hub/server/index.test.ts > hub server startup > survives websocket upgrade handler failures
+src/hub/server/index.test.ts > hub server startup > waits for complete close but tolerates cleanup errors during replacement
+src/hub/server/replay-wire.test.ts > hub event replay over the wire > replays a full run to a client that connected after the fact
+src/hub/server/ui-events.test.ts > hub UI events > broadcasts ui.notify event to subscribed clients
+src/hub/server/ui-events.test.ts > hub UI events > broadcasts ui.show_window event to subscribed clients
+src/hub/server/ui-events.test.ts > hub UI events > lists connected clients and sessions for initial UI hydration
+src/hub/server/ui-events.test.ts > hub UI events > receives hub.client.registered events when clients connect
+src/hub/settings.test.ts > hub settings commands > forwards explicit Agent Plugin paths to the hub settings service
+src/hub/settings.test.ts > hub settings commands > publishes committed host plugin state without a post-mutation source read
+src/hub/settings.test.ts > hub settings commands > rejects malformed settings.list payloads before calling settings
+src/hub/settings.test.ts > hub settings commands > rejects malformed settings.toggle payloads before calling settings
+src/hub/settings.test.ts > hub settings commands > returns an updated snapshot and publishes settings.changed after toggle
+src/hub/settings.test.ts > hub settings commands > uses an injected host plugin source across list and toggle commands
+src/remote/shell-path.test.ts > loginShellFor > returns the passwd-database shell when one exists
+src/runtime/command-policy/path-authority.temporary-external.test.ts [ src/runtime/command-policy/path-authority.temporary-external.test.ts ]
+src/runtime/sandbox/macos/seatbelt-availability.test.ts > probeSeatbeltAvailability > returns true on darwin when /usr/bin/sandbox-exec is present and functional
+src/runtime/sandbox/macos/seatbelt-backend.test.ts > SeatbeltSandboxBackendExperimental — host-helper network-deny gate (ACT-CLINEMM-BACKGROUND-EXEC-EPERM-QUALIFICATION01-CORRECTION01) > emits the host-helper AF_UNIX rule when the capability allows network
+src/runtime/sandbox/macos/seatbelt-ssh-agent-authority.test.ts > ACT-IMPL01 ssh-agent authority > SSH-07 agent mode: unrelated secrets remain stripped
+src/runtime/sandbox/macos/seatbelt-ssh-agent-authority.test.ts > ACT-IMPL01 ssh-agent authority > agent mode: SSH_AUTH_SOCK IS reintroduced from parent env; SSH_AGENT_PID stays stripped
+src/runtime/sandbox/macos/seatbelt-ssh-agent-authority.test.ts > ACT-IMPL01 ssh-agent authority > agent mode: profile contains AF_UNIX system-socket + path-literal network-outbound (one value, one owner)
+src/runtime/sandbox/sandbox-backend.test.ts > getSandboxBackend — seatbelt-experimental WITH opt-in > on darwin with opt-in and substrate present, returns the SeatbeltSandboxBackendExperimental instance
+src/runtime/tools/subprocess-sandbox.test.ts > SubprocessSandbox runtime resolution > retains system CA trust when a compiled executable becomes the helper runtime
+src/services/plugin-tools.test.ts > listPluginToolsWithDiagnostics > inspects plugins through the sandbox in sandbox mode
+src/services/session-import/session-import.test.ts > 'Claude Code' path resolution > uses the default store for blank override " \t "
+src/services/session-import/session-import.test.ts > 'Claude Code' path resolution > uses the default store for blank override ""
+src/services/session-import/session-import.test.ts > 'Codex' path resolution > uses the default store for blank override " \t "
+src/services/session-import/session-import.test.ts > 'Codex' path resolution > uses the default store for blank override ""
+src/services/session-import/session-import.test.ts > 'Opencode' path resolution > uses the default store for blank override " \t "
+src/services/session-import/session-import.test.ts > 'Opencode' path resolution > uses the default store for blank override ""
+src/session/checkpoint-restore.test.ts > applyCheckpointToWorktree > fully rewinds a snapshot checkpoint: untracked reverted, created-after removed, no apply conflict
+src/session/checkpoint-restore.test.ts > applyCheckpointToWorktree > keeps .gitignored files when rewinding a snapshot checkpoint
+src/session/services/persistence-service.test.ts > UnifiedSessionPersistenceService > reconciles dead running sessions into failed manifests with terminal markers

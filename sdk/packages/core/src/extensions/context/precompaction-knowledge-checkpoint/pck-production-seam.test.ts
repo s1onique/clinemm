@@ -114,7 +114,10 @@ afterEach(() => {
 	delete process.env.CLINEMM_PCK_CLOSED_ENABLED;
 });
 
-function syntheticCanonicalHistory(): MessageWithMetadata[] {
+function syntheticCanonicalHistory(
+	options: { readonly command?: string } = {},
+): MessageWithMetadata[] {
+	const command = options.command ?? "kc.sh build";
 	const messages: MessageWithMetadata[] = [
 		{
 			role: "user",
@@ -129,7 +132,7 @@ function syntheticCanonicalHistory(): MessageWithMetadata[] {
 					type: "tool_use",
 					id: SYNTHETIC_VALID_TOOL_CALL_ID,
 					name: "run_commands",
-					input: { command: "kc.sh build" },
+					input: { command },
 				},
 			],
 		} as unknown as MessageWithMetadata,
@@ -336,6 +339,73 @@ describe("ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01 — G7 production seam
 		// The injected instruction is NOT published.
 		expect(seam.providerVisibleText).not.toContain(SYNTHETIC_INJECTION);
 		expect(seam.persistedText).not.toContain(SYNTHETIC_INJECTION);
+	});
+
+	it("G7.2b: the PUBLISHED assurance is the TRUTHFUL one through the REAL production path", async () => {
+		// ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01-CORRECTION02.
+		//
+		// The synthetic canonical history's only tool event is
+		// `run_commands` -> `kc.sh build`. The model claims
+		// `OPERATION_INVOKED` with the `build` argument.
+		//
+		// `kc.sh` is not in the production command-classification
+		// allowlist, so the runtime has NO deterministic runtime-owned
+		// evidence that a BUILD was performed. The claim is therefore
+		// DOWNGRADED to `model_reported`.
+		//
+		// This is the end-to-end proof that the correction reaches the
+		// PROVIDER-VISIBLE and PERSISTED destinations, not only the unit
+		// level interpreter.
+		process.env.CLINEMM_PCK_CLOSED_ENABLED = "1";
+		checkpointResponseText = ACCEPTED_RESPONSE;
+		const history = syntheticCanonicalHistory();
+		const seam = await runProductionSeam({
+			canonicalMessages: history,
+			enabled: true,
+		});
+		expect(seam.providerVisibleText).toContain("assurance=model_reported");
+		expect(seam.persistedText).toContain("assurance=model_reported");
+		// The FALSE assurance is NOT published to either destination.
+		expect(seam.providerVisibleText).not.toContain("assurance=tool_observed");
+		expect(seam.persistedText).not.toContain("assurance=tool_observed");
+		// The working knowledge is PRESERVED: the runtime-owned statement
+		// still reaches both destinations.
+		expect(seam.providerVisibleText).toContain("operation invoked: build");
+		expect(seam.persistedText).toContain("operation invoked: build");
+	});
+
+	it("G7.2c: a DETERMINISTICALLY ESTABLISHED operation keeps the stronger assurance through the REAL production path", async () => {
+		// ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01-CORRECTION02.
+		//
+		// The correction must not simply DISABLE the feature. A canonical
+		// call whose own production classification establishes the
+		// rendered argument (`make build` -> the `build` argument) keeps
+		// `tool_observed` through the REAL production path.
+		process.env.CLINEMM_PCK_CLOSED_ENABLED = "1";
+		checkpointResponseText = JSON.stringify({
+			records: [
+				{
+					kind: "observation",
+					assurance: "tool_observed",
+					status: "active",
+					atom: "OPERATION_ARGUMENT_SET",
+					argument: "build",
+					evidenceRefs: [SYNTHETIC_VALID_TOOL_CALL_ID],
+				},
+			],
+		});
+		const history = syntheticCanonicalHistory({
+			command: "make build",
+		});
+		const seam = await runProductionSeam({
+			canonicalMessages: history,
+			enabled: true,
+		});
+		expect(seam.providerVisibleText).toContain("assurance=tool_observed");
+		expect(seam.persistedText).toContain("assurance=tool_observed");
+		expect(seam.providerVisibleText).toContain(
+			"operation invoked with argument: build",
+		);
 	});
 
 	it("G7.3: a REJECTED candidate leaves the ordinary compaction completely intact", async () => {

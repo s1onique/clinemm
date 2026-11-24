@@ -245,20 +245,28 @@ export interface GateEvidence {
 	readonly canonicalReferences: readonly string[];
 	/**
 	 * The maximum assurance the runtime's evidence interpreter supports for
-	 * a given reference set AND the selected observation atom.
+	 * a given reference set AND the selected observation atom AND the
+	 * selected runtime argument.
 	 *
 	 * The runtime interprets the OBSERVED canonical tool events. It does not
 	 * inspect a model-authored statement. A syntactically valid reference
 	 * therefore NEVER raises the assurance on its own, and a reference that
-	 * RESOLVES but does not SUPPORT the selected atom leaves the ceiling at
-	 * `model_reported`.
+	 * RESOLVES but does not ESTABLISH the complete rendered proposition
+	 * leaves the ceiling at `model_reported`.
 	 *
-	 * The atom is REQUIRED, because the atom decides which kind of
-	 * canonical evidence can support the claim.
+	 * The atom AND the argument are REQUIRED, because the rendered claim is
+	 * the ATOM's label joined with the ARGUMENT's label — and the
+	 * interpreter must verify the COMPLETE proposition, not the tool class
+	 * alone.
+	 *
+	 * ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01-CORRECTION02: the
+	 * predecessor's interpreter never received the argument, so it could
+	 * not compare the rendered argument with the observed operation.
 	 */
 	readonly maximumAssuranceFor: (
 		references: readonly string[],
 		atom: ObservationAtom,
+		argument?: RuntimeArgument,
 	) => BoundedAssurance | undefined;
 }
 
@@ -508,11 +516,14 @@ export function gateClosedProposals(input: {
 		}
 		// The assurance is BOUNDED by the runtime's own interpreter. The
 		// model's claim is only honoured when it does not exceed the bound.
-		// The ATOM is part of the interpreter's input, because the atom
-		// decides which kind of canonical evidence can support the claim.
+		// The ATOM AND THE ARGUMENT are part of the interpreter's input,
+		// because the RENDERED PROPOSITION is the atom's label joined with
+		// the argument's label, and the interpreter must verify the
+		// COMPLETE proposition rather than the tool class alone.
 		const maximum = input.evidence.maximumAssuranceFor(
 			typed.evidenceRefs,
 			typed.atom,
+			typed.argument,
 		);
 		const boundedAssurance = boundAssurance({
 			claimed: typed.assurance,

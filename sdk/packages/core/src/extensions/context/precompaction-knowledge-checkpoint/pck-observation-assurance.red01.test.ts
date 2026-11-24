@@ -1,5 +1,6 @@
 /**
  * ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01-CORRECTION01
+ * ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01-CORRECTION02
  *
  * P0-1 — the RED witness for FALSE OBSERVATION ASSURANCE.
  *
@@ -33,14 +34,40 @@
  * attribution of knowledge.
  *
  * ============================================================================
+ * CORRECTION02 — THE SAME-CLASS COUNTEREXAMPLE
+ * ============================================================================
+ *
+ * CORRECTION01 closed the CROSS-CLASS case by requiring the cited event to
+ * be of the TOOL CLASS the atom requires. The SAME-CLASS case remained:
+ *
+ *   successful search returning 42 matches   -> SEARCH_RETURNED_NO_MATCH
+ *   successful `echo hello`                   -> OPERATION_INVOKED: build
+ *   successful `echo hello`                   -> OPERATION_ARGUMENT_SET:
+ *                                                start --optimized
+ *   read configuration holding a 30s timeout -> CONFIGURATION_VALUE_SET:
+ *                                                connect timeout 3 seconds
+ *   successful directory listing             -> IMPLEMENTATION_INSPECTED
+ *
+ * In each case the runtime established that the reference RESOLVED, the
+ * execution SUCCEEDED and the tool was of the RIGHT CLASS — and nothing
+ * about whether the observed result SUPPORTS the rendered claim. The
+ * interpreter never even received the selected `argument`.
+ *
+ * P0-1.5 was ORIGINALLY the GREEN for "a matching successful event DOES
+ * reach tool_observed". That assertion was itself a false assurance and is
+ * now INVERTED: the search atom is not deterministically establishable, so
+ * it is bounded at `model_reported`.
+ *
+ * ============================================================================
  * THE EXPECTED OUTCOME
  * ============================================================================
  *
  * Against the CORRECTED implementation this suite PASSES: the assurance is
- * DOWNGRADED to `model_reported` because no cited event supports the atom.
+ * DOWNGRADED to `model_reported` because no cited event establishes the
+ * complete rendered proposition.
  *
- * Against the PREDECESSOR implementation this suite FAILS, and the failure
- * IS the RED that established the finding. It is recorded here so the
+ * Against the PREDECESSOR implementations this suite FAILS, and the failure
+ * IS the RED that established the findings. It is recorded here so the
  * discriminator is permanent and re-runnable, not just a historical note.
  *
  * It is ISOLATED: it has its own vitest config, so it never enters the
@@ -51,8 +78,10 @@ import type { MessageWithMetadata } from "@cline/shared";
 import { describe, expect, it } from "vitest";
 import {
 	collectCanonicalToolEvents,
+	DETERMINISTICALLY_ESTABLISHABLE_ATOMS,
 	interpretCanonicalEvidence,
 	OBSERVATION_ATOM_REQUIRED_CLASS,
+	RUNTIME_ARGUMENT_EVIDENCE_CLASSIFICATIONS,
 } from "./evidence";
 import { gateClosedProposals } from "./publication-gate";
 
@@ -154,9 +183,7 @@ describe("ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01-CORRECTION01 — P0-1 
 			"source_read",
 			"search",
 		] as const);
-		for (const required of Object.values(
-			OBSERVATION_ATOM_REQUIRED_CLASS,
-		)) {
+		for (const required of Object.values(OBSERVATION_ATOM_REQUIRED_CLASS)) {
 			if (required !== undefined) {
 				expect(classes.has(required)).toBe(true);
 			}
@@ -169,9 +196,21 @@ describe("ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01-CORRECTION01 — P0-1 
 	});
 
 	it("P0-1.5: a MATCHING successful event DOES reach tool_observed", () => {
-		// The correction must not simply DISABLE the feature. A search
-		// tool that affirmatively succeeded DOES support the
-		// SEARCH_RETURNED_NO_MATCH atom.
+		// ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01-CORRECTION02.
+		//
+		// CORRECTION01 asserted that a matching successful event reaches
+		// `tool_observed`. That assertion was itself a FALSE ASSURANCE:
+		// the event's TOOL CLASS matched the atom's required class, but
+		// the event's RESULT did not establish the rendered proposition.
+		// "no matches in the searched scope" is a claim ABOUT THE RESULT,
+		// and the runtime never read the result.
+		//
+		// The search atom is no longer establishable at all: there is no
+		// deterministic runtime-owned rule that establishes "a bounded
+		// search found nothing" from a tool result. A search that returned
+		// 42 matches and a search that returned no matches are
+		// INDISTINGUISHABLE to a class check, so the atom is bounded at
+		// `model_reported`.
 		const matching = [
 			{
 				role: "assistant",
@@ -209,7 +248,7 @@ describe("ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01-CORRECTION01 — P0-1 
 				references: ["tool_call_search"],
 				atom: "SEARCH_RETURNED_NO_MATCH",
 			}),
-		).toBe("tool_observed");
+		).toBe("model_reported");
 	});
 
 	it("P0-1.6: a FAILED search does NOT reach tool_observed", () => {

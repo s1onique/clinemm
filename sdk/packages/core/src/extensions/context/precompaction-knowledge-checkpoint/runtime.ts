@@ -360,11 +360,17 @@ export async function runPckAttempt(input: {
 		sourcePrefixKey: input.identity.sourcePrefixKey,
 		evidence: {
 			canonicalReferences: observedReferences,
-			maximumAssuranceFor: (references, atom) =>
+			// ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01-CORRECTION02:
+			// the SELECTED ARGUMENT is passed to the interpreter, because
+			// the rendered proposition is the atom's label joined with the
+			// argument's label. Without it the interpreter could not compare
+			// the rendered argument with the observed operation.
+			maximumAssuranceFor: (references, atom, argument) =>
 				interpretCanonicalEvidence({
 					canonicalMessages: input.canonicalMessages,
 					references,
 					atom,
+					argument,
 				}),
 		},
 	});

@@ -39934,3 +39934,244 @@ corrected head.
 
 Nothing was built, packaged or installed. Both predecessor evidence trees
 were preserved unmodified.
+
+## ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01-CORRECTION02
+
+```text
+STATUS:  COMPLETE
+VERDICT: GO_PACKAGING
+ENTRY:   5d6ff6e539c5bdc9f7ee461baa1ff15f0b417fa3
+```
+
+### The work items
+
+```text
+A01     PCK source implementation      IMPLEMENTED  (unchanged)
+A01-C1  Bounded trust-boundary         CORRECTED   (CORRECTION01)
+A01-C2  Same-class assurance           CORRECTED   <- THIS ACT
+A02a    Exact-head VSIX packaging      UNBLOCKED   (unchanged)
+A02b    Installed-live qualification   UNBLOCKED   (unchanged)
+A03     Adjudication/PCK reconciliation PENDING     (unchanged)
+A05     Round C controlled experiment   PENDING     (unchanged)
+A09     Causal convergence conclusion  PENDING     (unchanged)
+A10     Evidence-continuity reference   RED_REPRODUCED (NEW, separate)
+        confidentiality
+B06     Completion-continuation        RECON_PENDING  (NEW, separate)
+        quiescence
+```
+
+All other epic-board items remain unchanged.
+
+### P0-2 — the same-class false observation assurance
+
+```text
+THE DEFECT: the CORRECTION01 interpreter verified IDENTITY, EXECUTION
+             SUCCESS and TOOL CLASS. Those are three NECESSARY
+             conditions, and they are not SUFFICIENT: none of them says
+             anything about whether the observed RESULT SUPPORTS the
+             rendered claim. The interpreter never examined the result's
+             meaning, and it never even received the selected
+             `argument`, so it could not compare the rendered argument
+             with the observed operation even in principle.
+
+THE REVIEW'S COUNTEREXAMPLES (all SAME-CLASS):
+
+  successful search returning 42 matches   -> SEARCH_RETURNED_NO_MATCH
+  successful `echo hello`                   -> OPERATION_INVOKED: build
+  successful `echo hello`                   -> OPERATION_ARGUMENT_SET:
+                                               start --optimized
+  read configuration holding a 30s timeout -> CONFIGURATION_VALUE_SET:
+                                               connect timeout 3 seconds
+  successful directory listing             -> IMPLEMENTATION_INSPECTED
+
+THE RED:    the cheapest RED the review specified: the successor to
+             P0-1.5 with ONLY the synthetic tool result changed.
+
+               - result: "no matches in the searched scope",
+               + result: "42 matches found in the searched scope",
+                 success: true,
+
+             11 failed | 3 passed (14 tests)
+             AssertionError: expected 'tool_observed' to be 'model_reported'
+
+THE FIX:    the atom/class table is GONE as a support rule. The runtime
+             now establishes a claim through evidence it ALREADY owns and
+             ALREADY computes deterministically: the PRODUCTION command
+             classifier `classifyCommand()`, owned by
+             `evidence-continuity.ts`. It is already deterministic,
+             fail-closed, drawn from a finite allowlist, free of
+             user-controlled text, and already the mechanism the rest of
+             the system uses to decide that an operation was verified.
+
+             ONE CLOSED, RUNTIME-OWNED TABLE:
+
+               build                 -> ["make build"]
+               start                 -> []
+               start_optimized       -> []
+               connect_timeout_3s   -> []
+               socket_timeout_10s    -> []
+               none                  -> []
+
+             The EMPTY SET is the norm, and it is the correct outcome: an
+             argument with no deterministic establishing classification
+             is bounded at `model_reported`.
+
+             `tool_observed` now REQUIRES all of:
+               1. the atom is deterministically establishable at all
+                  (ONLY OPERATION_INVOKED and OPERATION_ARGUMENT_SET),
+               2. the rendered ARGUMENT is present and establishable --
+                  the interpreter now RECEIVES it, which the predecessor
+                  never did, and
+               3. a cited event is a COMMAND EXECUTION that is
+                  unambiguously joined, AFFIRMATIVELY SUCCESSFUL, and
+                  whose own runtime-owned command CLASSIFICATION is one
+                  the selected argument requires.
+
+             This is NOT a general-purpose semantic verification engine,
+             and it is NOT new architecture: the correction REMOVED a
+             table and REUSED a production mechanism.
+
+THE GREEN:  14 passed.
+
+THE FEATURE IS NOT DISABLED: a successful `make build` still reaches
+`tool_observed`, and the end-to-end production seam proves it (G7.2c).
+```
+
+### The end-to-end production proof
+
+```text
+G7.2b  the PUBLISHED assurance is the TRUTHFUL one through the REAL
+       production path. `kc.sh build` is not in the production
+       classification allowlist, so no deterministic evidence establishes
+       a BUILD. BOTH the persisted summary AND the provider-visible
+       continuation carry `assurance=model_reported`; NEITHER carries
+       `assurance=tool_observed`; the working knowledge still SURVIVES
+       and the runtime-owned statement reaches both destinations.
+
+G7.2c  a DETERMINISTICALLY ESTABLISHED operation keeps the stronger
+       assurance through the REAL production path. `make build` reaches
+       `assurance=tool_observed` in both destinations.
+```
+
+### The measurements
+
+```text
+ACT-OWNED FOCUSED SUITE (9 files)         81 passed
+SAME-CLASS RED WITNESS (isolated)         14 passed (GREEN)
+                                           11 failed | 3 passed (RED
+                                           against CORRECTION01)
+CONTEXT SUITE                              913 passed, 2 skipped
+RUNTIME/ORCHESTRATION SUITE                250 passed
+TYPECHECK                                  44 diagnostics (the baseline)
+                                           ACT_OWNED_DIAGNOSTICS=0
+                                           the diagnostic set is
+                                           BYTE-IDENTICAL to the baseline
+FULL @cline/core REGRESSION                ZERO new regressions
+                                           the failing FILE set is IDENTICAL
+                                           (28 files)
+                                           the failing TEST IDENTITY set is
+                                           IDENTICAL (140 identities)
+PATCH HYGIENE                              git diff --check exit 0,
+                                           0 consecutive blank lines
+LINT/FORMAT                                biome check clean
+```
+
+### The review's P1-1 qualification is ADDRESSED
+
+```text
+The review noted that the predecessor compared "identical sets of 17
+failing FILES, not necessarily identical failing TESTS". This ACT
+compares the failing TEST IDENTITIES -- the full `file > describe > test`
+paths -- and they are IDENTICAL. Recorded in
+`verification/regression-identity-comparison.txt`.
+```
+
+### The exit conditions
+
+```text
+SAME_CLASS_FALSE_ASSURANCE_RED_REPRODUCED     ESTABLISHED
+SAME_CLASS_FALSE_ASSURANCE_GREEN               ESTABLISHED
+PCK_PUBLICATION_CONFIDENTIALITY_PASS           ESTABLISHED
+DEFAULT_OFF_EQUIVALENCE_PASS                   ESTABLISHED
+ACT_OWNED_DIAGNOSTICS=0                        ESTABLISHED
+NEW_REGRESSIONS=0                              ESTABLISHED
+
+VERDICT=GO_PACKAGING
+```
+
+### A10 — the evidence-continuity reference confidentiality (SEPARATE)
+
+```text
+ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01
+
+PRIORITY:         SECURITY
+EVIDENCE:         SYNTHETIC_REAL
+STATUS:           RED_REPRODUCED
+PRODUCTION_CHANGE: NONE
+```
+
+A confidentiality defect is NOT documentary residue merely because it
+predates the current ACT. The discriminator explicitly proves that the
+existing verified-outcome section still publishes the synthetic
+canonical identifier. It does not block an otherwise qualified
+PCK-specific repair, but it prevents claiming confidentiality of the
+ENTIRE compacted summary.
+
+### B06 — the completion-continuation quiescence (SEPARATE)
+
+```text
+COMPLETION-CONTINUATION-QUIESCENCE-RECON01
+
+Evidence:          LIVE transcript
+Causality:         UNRESOLVED
+Production repair: NOT_AUTHORIZED
+```
+
+ClineMM repeatedly attempted completion, received deferred terminal
+observations, and launched additional verification commands, until the
+runtime refused with `invalid_owner (no active session/task at launch)`.
+
+The refusal itself may be correct: the runtime apparently no longer had a
+valid owner. The transcript does NOT establish whether completion
+succeeded, ownership was prematurely removed, or a stale continuation
+remained active.
+
+In particular, observing held terminal results must not become a RECURSIVE
+process that generates more terminal results requiring observation.
+
+### What is NOT claimed
+
+```text
+ACTUAL CONVERGENCE IMPROVEMENT:   not established. The checkpoint's
+                                  usefulness for arbitrary software
+                                  engineering tasks remains unproven.
+INSTALLED-LIVE QUALIFICATION:     not performed.
+EXACT-HEAD VSIX:                  not built. Out of scope by instruction.
+LIVE PROVIDER CANCELLATION:        not exercised against a real provider.
+                                  The provider script checks
+                                  `signal.aborted` AFTER receiving a
+                                  stream chunk; that does NOT establish
+                                  that an outstanding network operation
+                                  is cancelled while waiting for a chunk.
+                                  This discriminator is INCLUDED in the
+                                  installed-live qualification.
+DURABLE PROVENANCE ALIASES:       the alias map is LOCAL to the gate
+                                  invocation. `ref-0` is a
+                                  checkpoint-local correlation label, not
+                                  a durable, independently resolvable
+                                  provenance reference.
+```
+
+### Scope
+
+One bounded correction cycle, exactly as the review authorised: *"No need
+for another enormous ACT document."* The correction eliminates the
+same-class false observation assurance, reproduces the RED the review
+specified, applies the SMALLEST conservative correction, and preserves
+admitted working knowledge, the closed vocabulary, the opaque aliases,
+the default-off equivalence and ordinary compaction behaviour.
+
+Nothing was built, packaged or installed. The predecessor evidence trees
+were preserved unmodified. The architecture was not reopened: the
+correction REMOVED a table rather than adding a layer, and it reused a
+production mechanism rather than writing a new engine.
