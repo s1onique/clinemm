@@ -76,9 +76,13 @@
 import type { MessageWithMetadata } from "@cline/shared";
 import {
 	admitEvidenceFragment,
-	type BoundedEvidenceFragment,
 	type EvidenceFragmentKind,
 } from "./bounded-evidence-contract/contract";
+import {
+	escapeSectionDelimiters as escapeDelimiters,
+	joinStrippedSection,
+	stripAllDelimitedSections,
+} from "./section-delimiters";
 
 /**
  * The HEADING of the source-bound evidence section.
@@ -201,13 +205,22 @@ export interface SourceBoundEvidence {
  *
  * Without this, an excerpt containing the END marker could close the section
  * early and append text of its own choosing in its place.
+ *
+ * ACT-CLINEMM-COMPACTION-TASK-CONDITIONED-EVIDENCE-SELECTION-01 (C2.1): the
+ * predecessor escaped with a BACKSLASH PREFIX while the stripper searched
+ * with a PLAIN `indexOf`. The escaped marker still CONTAINED the literal
+ * marker, so the stripper found it and terminated the section INSIDE the
+ * excerpt. The escape convention was one the parser did not recognise.
+ *
+ * The repair is the SHARED primitive in `section-delimiters.ts`: the writer
+ * and the reader use the SAME convention, so an escaped marker is never a
+ * delimiter.
  */
 function escapeSectionDelimiters(text: string): string {
-	return text
-		.split(SOURCE_BOUND_EVIDENCE_BEGIN_MARKER)
-		.join(`\\${SOURCE_BOUND_EVIDENCE_BEGIN_MARKER}`)
-		.split(SOURCE_BOUND_EVIDENCE_END_MARKER)
-		.join(`\\${SOURCE_BOUND_EVIDENCE_END_MARKER}`);
+	return escapeDelimiters(text, [
+		SOURCE_BOUND_EVIDENCE_BEGIN_MARKER,
+		SOURCE_BOUND_EVIDENCE_END_MARKER,
+	]);
 }
 
 /**
@@ -249,40 +262,26 @@ export function renderSourceBoundEvidenceSection(
  *
  * The carry-forward is therefore IDEMPOTENT: a later compaction replaces the
  * section rather than appending a second copy.
+ *
+ * ACT-CLINEMM-COMPACTION-TASK-CONDITIONED-EVIDENCE-SELECTION-01 (C2.1): the
+ * predecessor located the section with a PLAIN `indexOf`, which also found an
+ * ESCAPED marker inside a carried excerpt. The strip therefore ended at the
+ * excerpt, and everything after it survived the strip — so a carried excerpt
+ * could append text of its own choosing in the section's place, and the
+ * carry-forward was not idempotent.
+ *
+ * The section is now located with the SHARED primitive, which recognises the
+ * escape convention that the writer uses.
  */
 export function stripSourceBoundEvidenceSection(summaryText: string): string {
-	const begin = summaryText.indexOf(SOURCE_BOUND_EVIDENCE_BEGIN_MARKER);
-	if (begin === -1) {
-		return summaryText;
-	}
-	const end = summaryText.indexOf(SOURCE_BOUND_EVIDENCE_END_MARKER, begin);
-	const headingIndex = summaryText.lastIndexOf(
-		SOURCE_BOUND_EVIDENCE_SECTION_HEADING,
-		begin,
+	return joinStrippedSection(
+		stripAllDelimitedSections({
+			text: summaryText,
+			beginMarker: SOURCE_BOUND_EVIDENCE_BEGIN_MARKER,
+			endMarker: SOURCE_BOUND_EVIDENCE_END_MARKER,
+			heading: SOURCE_BOUND_EVIDENCE_SECTION_HEADING,
+		}),
 	);
-	const sectionStart =
-		headingIndex !== -1 &&
-		summaryText
-			.slice(headingIndex + SOURCE_BOUND_EVIDENCE_SECTION_HEADING.length, begin)
-			.trim() === ""
-			? headingIndex
-			: begin;
-	if (end === -1) {
-		// A malformed (truncated) section is removed to its end so a partial
-		// record can never be presented as a complete one.
-		return summaryText.slice(0, sectionStart).trimEnd();
-	}
-	const before = summaryText.slice(0, sectionStart).trimEnd();
-	const after = summaryText
-		.slice(end + SOURCE_BOUND_EVIDENCE_END_MARKER.length)
-		.trimStart();
-	if (!before) {
-		return after;
-	}
-	if (!after) {
-		return before;
-	}
-	return `${before}\n\n${after}`;
 }
 
 /**
@@ -523,6 +522,123 @@ export function extractSourceBoundEvidence(input: {
 }
 
 /**
+ * ACT-CLINEMM-COMPACTION-TASK-CONDITIONED-EVIDENCE-SELECTION-01
+ *
+ * C4 — THE UNBUDGETED ADMISSION.
+ *
+ * ============================================================================
+ * WHY THIS EXISTS
+ * ============================================================================
+ *
+ * The measurement over the frozen W1 workload showed that the SELECTION was
+ * never given the decisive fragments to choose between:
+ *
+ *   admitted=24 of 122 eligible payloads
+ *   decisive indexes 145, 147, 187, 189  ->  NOT ADMITTED
+ *
+ * The reason is the ORDER of the two steps in `extractSourceBoundEvidence()`.
+ * The extraction applied the FRAGMENT BUDGET and then ranked the survivors,
+ * so the candidate set handed to the selector was already the FIRST 24
+ * payloads in transcript order. A selector cannot choose a fragment it was
+ * never offered.
+ *
+ * This function applies the ADMISSION RULES WITHOUT the fragment budget, so
+ * the selector sees EVERY eligible fragment and the budget is spent by the
+ * SELECTION, after the selection.
+ *
+ * ============================================================================
+ * WHAT IS NOT CHANGED
+ * ============================================================================
+ *
+ * The CONFIDENTIALITY rules are UNCHANGED and are applied here, in full:
+ *
+ *   - a credential-bearing SOURCE is refused entirely;
+ *   - an empty body is refused;
+ *   - a body that carries nothing after redaction is refused;
+ *   - the body is BOUNDED before it is redacted, so the sanitizer never sees
+ *     an unbounded input;
+ *   - the excerpt is redacted with the existing value-position sanitizer.
+ *
+ * Only the ORDER changes: the budget is no longer spent at admission time.
+ * The selection spends it, and the selection is the thing under test.
+ *
+ * ============================================================================
+ * THE BOUNDED COST
+ * ============================================================================
+ *
+ * The unbounded admission is bounded by the CANONICAL PREFIX, not by the
+ * transcript: it walks the boundary prefix once, and every payload is
+ * bounded and redacted before it is admitted. The TOTAL deterministic
+ * processing cost is therefore bounded by the prefix size, and the SET of
+ * admitted fragments is bounded by the prefix size — not by an arbitrary
+ * fragment count that would hide the decisive evidence.
+ */
+export function extractSourceBoundEvidenceCandidates(input: {
+	readonly canonicalMessages: readonly MessageWithMetadata[];
+}): {
+	readonly admitted: readonly SourceBoundEvidence[];
+	readonly admittedCount: number;
+	readonly omittedConfidentiality: number;
+	readonly omittedUnrecognizedShape: number;
+	readonly addedChars: number;
+} {
+	const admitted: SourceBoundEvidence[] = [];
+	let omittedConfidentiality = 0;
+	let omittedUnrecognizedShape = 0;
+	let addedChars = 0;
+	for (let index = 0; index < input.canonicalMessages.length; index += 1) {
+		const message = input.canonicalMessages[index];
+		if (!Array.isArray(message.content)) {
+			continue;
+		}
+		for (const block of message.content) {
+			if (block.type !== "tool_result") {
+				continue;
+			}
+			const payloads = collectStructuredPayloads(block.content);
+			for (const payload of payloads) {
+				const admission = admitEvidenceFragment({
+					payload,
+					index,
+					toolName:
+						typeof (block as { name?: unknown }).name === "string"
+							? ((block as { name?: string }).name as string)
+							: undefined,
+				});
+				if (!admission.fragment) {
+					if (admission.verdict === "OMITTED_UNRECOGNIZED_SHAPE") {
+						omittedUnrecognizedShape += 1;
+					} else {
+						omittedConfidentiality += 1;
+					}
+					continue;
+				}
+				const fragment = admission.fragment;
+				const bounded =
+					fragment.excerpt.length > MAX_CARRIED_SOURCE_BOUND_EVIDENCE_CHARS
+						? `${fragment.excerpt.slice(0, MAX_CARRIED_SOURCE_BOUND_EVIDENCE_CHARS)}\n...[excerpt truncated]`
+						: fragment.excerpt;
+				admitted.push({
+					source: fragment.source,
+					status: fragment.status,
+					kind: fragment.kind,
+					excerpt: bounded,
+					canonicalIndex: index,
+				});
+				addedChars += bounded.length + fragment.source.length;
+			}
+		}
+	}
+	return {
+		admitted,
+		admittedCount: admitted.length,
+		omittedConfidentiality,
+		omittedUnrecognizedShape,
+		addedChars,
+	};
+}
+
+/**
  * The result of applying the source-bound evidence carry-forward.
  */
 export interface SourceBoundEvidenceApplicationResult {
@@ -586,6 +702,115 @@ function rebuildSummaryMessage(
 }
 
 /**
+ * The SELECTION POLICY.
+ *
+ * It names the ARM of the ladder that decides which admitted fragments are
+ * carried.
+ *
+ * `SHAPE` is the predecessor's information-density ranking: the BASELINE.
+ * `TASK_CONDITIONED` is this ACT's selection.
+ */
+export type EvidenceSelectionPolicy = "SHAPE" | "TASK_CONDITIONED";
+
+/**
+ * The result of ONE selection.
+ */
+export interface SourceBoundEvidenceSelection {
+	/** The SELECTED fragments, in selection order. */
+	readonly admitted: readonly SourceBoundEvidence[];
+	/** The admission report over the WHOLE eligible set. */
+	readonly report: {
+		readonly admittedCount: number;
+		readonly omittedConfidentiality: number;
+		readonly omittedBudget: number;
+		readonly addedChars: number;
+	};
+	/** The policy that produced the selection. */
+	readonly policy: EvidenceSelectionPolicy;
+}
+
+/**
+ * Select the fragments to carry.
+ *
+ * ACT-CLINEMM-COMPACTION-TASK-CONDITIONED-EVIDENCE-SELECTION-01: the budget
+ * is spent AFTER the selection, so the selector sees every eligible
+ * fragment. The predecessor's order — budget first, selection second —
+ * hid the decisive fragments from every selector.
+ *
+ * When `selectedFragments` is supplied, it IS the selection: the caller
+ * ran a richer policy (the task-conditioned arm, which lives in the
+ * selection module and would otherwise create a circular import).
+ *
+ * The `SHAPE` policy reproduces the predecessor's ranking over the SAME
+ * admitted set, so the comparison between the two policies is over the
+ * SELECTION alone.
+ */
+export function selectSourceBoundEvidence(input: {
+	readonly canonicalMessages: readonly MessageWithMetadata[];
+	readonly selectedFragments?: readonly SourceBoundEvidence[];
+	readonly maxFragments?: number;
+}): SourceBoundEvidenceSelection {
+	const empty = {
+		admitted: [] as readonly SourceBoundEvidence[],
+		report: {
+			admittedCount: 0,
+			omittedConfidentiality: 0,
+			omittedBudget: 0,
+			addedChars: 0,
+		},
+		policy: "SHAPE" as EvidenceSelectionPolicy,
+	};
+	if (!isSourceBoundEvidenceCarryForwardEnabled()) {
+		return empty;
+	}
+	const maxFragments = input.maxFragments ?? MAX_CARRIED_SOURCE_BOUND_EVIDENCE;
+	const candidates = extractSourceBoundEvidenceCandidates({
+		canonicalMessages: input.canonicalMessages,
+	});
+	if (input.selectedFragments) {
+		// The caller ran its own policy. The budget is applied HERE, so the
+		// selection is never truncated by the admission.
+		const admitted = input.selectedFragments.slice(0, maxFragments);
+		return {
+			admitted,
+			report: {
+				admittedCount: admitted.length,
+				omittedConfidentiality: candidates.omittedConfidentiality,
+				omittedBudget: candidates.admitted.length - admitted.length,
+				addedChars: admitted.reduce(
+					(total, fragment) =>
+						total + fragment.excerpt.length + fragment.source.length,
+					0,
+				),
+			},
+			policy: "TASK_CONDITIONED",
+		};
+	}
+	// The BASELINE: the predecessor's information-density ranking, applied
+	// to the SAME admitted set. The budget is spent after the ranking.
+	const ranked = [...candidates.admitted].sort((left, right) => {
+		const delta =
+			selectivityScore(right.excerpt) - selectivityScore(left.excerpt);
+		return delta !== 0 ? delta : left.canonicalIndex - right.canonicalIndex;
+	});
+	const admitted = ranked.slice(0, maxFragments);
+	return {
+		admitted,
+		report: {
+			admittedCount: admitted.length,
+			omittedConfidentiality: candidates.omittedConfidentiality,
+			omittedBudget: candidates.admitted.length - admitted.length,
+			addedChars: admitted.reduce(
+				(total, fragment) =>
+					total + fragment.excerpt.length + fragment.source.length,
+				0,
+			),
+		},
+		policy: "SHAPE",
+	};
+}
+
+/**
  * Apply the SOURCE-BOUND EVIDENCE carry-forward to a compacted message list.
  *
  * The fragments are attached to the EXISTING `compaction_summary` message —
@@ -619,6 +844,21 @@ export function applySourceBoundEvidenceToCompactedMessages(
 		 * destination.
 		 */
 		readonly maxFragments?: number;
+		/**
+		 * The PRE-SELECTED fragments.
+		 *
+		 * ACT-CLINEMM-COMPACTION-TASK-CONDITIONED-EVIDENCE-SELECTION-01: the
+		 * SELECTION is a separate concern from the ADMISSION, and it lives in
+		 * `task-conditioned-evidence-selection.ts` — which imports this
+		 * module. Keeping the selection OUT of this module avoids a circular
+		 * import and keeps the two responsibilities distinct.
+		 *
+		 * When it is `undefined`, the module's OWN SHAPE-BASED selection is
+		 * used, which reproduces the predecessor's ranking over the SAME
+		 * admitted set. The budget is spent AFTER the selection, so the
+		 * decisive fragments are never hidden from it.
+		 */
+		readonly selectedFragments?: readonly SourceBoundEvidence[];
 	} = {},
 ): SourceBoundEvidenceApplicationResult {
 	const canonical = canonicalMessages.filter(
@@ -629,16 +869,21 @@ export function applySourceBoundEvidenceToCompactedMessages(
 		Math.min(options.sourceMessageCount ?? canonical.length, canonical.length),
 	);
 	const boundaryPrefix = canonical.slice(0, boundaryCount);
-	const report = extractSourceBoundEvidence({
+	// The SELECTION is applied BEFORE the budget, so the selector sees every
+	// eligible fragment.
+	const selection = selectSourceBoundEvidence({
 		canonicalMessages: boundaryPrefix,
+		selectedFragments: options.selectedFragments,
 		maxFragments: options.maxFragments,
 	});
+	const report = selection.report;
+	const admitted = selection.admitted;
 	const summaryIndex = compactedMessages.findIndex(
 		(message) =>
 			(message.metadata as { kind?: string } | undefined)?.kind ===
 			"compaction_summary",
 	);
-	if (summaryIndex === -1 || report.admitted.length === 0) {
+	if (summaryIndex === -1) {
 		return {
 			messages: [...compactedMessages],
 			applied: false,
@@ -662,15 +907,33 @@ export function applySourceBoundEvidenceToCompactedMessages(
 			omittedBudget: report.omittedBudget,
 		};
 	}
+	// ==========================================================================
+	// THE REVOCATION STEP
+	// ==========================================================================
+	//
+	// ACT-CLINEMM-COMPACTION-TASK-CONDITIONED-EVIDENCE-SELECTION-01 (C2.1):
+	// the predecessor RETURNED EARLY when the current admission produced no
+	// fragments, and that early return never stripped the section. A summary
+	// that already carried evidence therefore KEPT carrying it — after the
+	// switch was turned off, and after the selection became empty.
+	//
+	// The empty result must be read as "nothing to carry, so remove what was
+	// carried", not as "nothing to do". The strip therefore happens
+	// UNCONDITIONALLY, and the section is re-added only when there is
+	// something to carry.
+	//
+	// This is what makes the carry-forward REVOCABLE: the current admission
+	// result is the ONLY authority on what may be published, and an absent
+	// result revokes.
 	const nextSummary = applySourceBoundEvidenceToSummary(
 		currentSummary,
-		report.admitted,
+		admitted,
 	);
 	if (nextSummary === currentSummary) {
 		return {
 			messages: [...compactedMessages],
 			applied: false,
-			carriedFragmentCount: report.admittedCount,
+			carriedFragmentCount: admitted.length,
 			addedChars: 0,
 			omittedConfidentiality: report.omittedConfidentiality,
 			omittedBudget: report.omittedBudget,
@@ -681,7 +944,7 @@ export function applySourceBoundEvidenceToCompactedMessages(
 	return {
 		messages,
 		applied: true,
-		carriedFragmentCount: report.admittedCount,
+		carriedFragmentCount: admitted.length,
 		addedChars: report.addedChars,
 		omittedConfidentiality: report.omittedConfidentiality,
 		omittedBudget: report.omittedBudget,

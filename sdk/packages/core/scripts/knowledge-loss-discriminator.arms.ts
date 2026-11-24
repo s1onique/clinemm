@@ -405,6 +405,7 @@ const armReports: Record<string, unknown> = {};
 		taskContract: "",
 		verifiedOutcome: "",
 		adjudication: "",
+		sourceBoundEvidence: "",
 		retainedTail: "",
 		evidenceBodies: renderContextBlock(prefix),
 	};

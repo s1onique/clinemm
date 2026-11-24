@@ -66,6 +66,7 @@ const EMPTY_CONTEXT: KnowledgeContext = {
 	taskContract: "",
 	verifiedOutcome: "",
 	adjudication: "",
+	sourceBoundEvidence: "",
 	retainedTail: "",
 	evidenceBodies: "",
 };

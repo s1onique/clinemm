@@ -41338,3 +41338,110 @@ PRODUCTION DELTA:        the source-bound carry-forward at three integration
 VSIX PACKAGING:          NOT EXECUTED
 INSTALLED-LIVE:          NOT EXECUTED
 ```
+
+---
+
+## ACT-CLINEMM-COMPACTION-TASK-CONDITIONED-EVIDENCE-SELECTION-01 — A02b-R13
+
+**ENTRY_HEAD = 428bf3028fdf6f4ae1b6919e400037dd6c355321** (the expected
+predecessor, verified; the tree was clean and there were no stashes).
+
+**VERDICT = HALT_FACTUAL_PRESERVATION_NOT_ESTABLISHED.**
+
+The mechanism is measured, the four mandatory corrections are executable, and
+the SELECTION is finally solved well enough to reach O7 — but two of the three
+decisive items are still not `PRESERVED`, the behavioural gate was not
+reached, and generalisation is not established. **No GO is forced.**
+
+**C2.1 — THE SECTION BOUNDARY WAS A REAL TRUST DEFECT. REPRODUCED AND
+REPAIRED.** The predecessor escaped the section's delimiters with a BACKSLASH
+prefix while the stripper searched with a PLAIN `indexOf`. The escaped marker
+still CONTAINED the literal marker, so the strip terminated the section
+INSIDE a carried excerpt: a carried excerpt could close the section early and
+append text of its own choosing — forged authority. The same defect existed in
+the two SIBLING sections (verified outcomes, file facts).
+
+```text
+RED    7 of 11 witnesses FAILED (canarySurvivesStrip=true, idempotent=false)
+GREEN  11 of 11
+```
+
+The repair is a NEW shared primitive (`section-delimiters.ts`): one writer and
+one reader, a zero-width-space escape prefix the reader RECOGNISES, legacy
+backslash tolerance for persisted state, and removal of EVERY copy of a
+section. All three sections now use it.
+
+**C2.1 — THE REVOCATION WAS NOT IMPLEMENTED. REPRODUCED AND REPAIRED.** The
+seam returned EARLY when the admission produced nothing and never STRIPPED
+the section, so previously carried evidence SURVIVED the switch being turned
+off. The strip is now UNCONDITIONAL: an absent admission result REVOKES.
+
+```text
+RED    4 of 8 witnesses FAILED
+GREEN  8 of 8
+```
+
+**C2.2 — THE PREDECESSOR'S B IS RECLASSIFIED PROMPT_ONLY_PRESERVATION.** Its
+measured `evidenceChars` was 0: the evidence never entered the summarizer's
+input. Only the INSTRUCTION changed. This ACT therefore does NOT claim that
+evidence-enhanced factual-preservation summarization failed. C−E is
+relabelled STRUCTURAL_ABLATION. BEHAVIORAL_IMPROVEMENT = NOT_EXECUTED.
+
+**C2.3 — THE PROJECTOR ACCEPTS AN INTERNALLY CONSISTENT STATE.** The state is
+built by the PRODUCTION constructor over the boundary prefix, so its identity
+is consistent by construction; the forbidden construction (full history, then
+overwrite only the count) is asserted to be REFUSED; and the negative control
+distinguishes the byte-identical PREFIX-DERIVED content from the legitimately
+different retained tail.
+
+**C2.4 — THE SCORER READ ONLY `generatedSummary`, AND THE SECTION WAS NOT
+STRIPPED FROM IT.** So the carried section's bytes were credited to the
+MODEL — and a summarizer-written CONTRADICTION could sit next to a carried
+excerpt stating the CORRECT value and be REPORTED AS CONSISTENT. The carried
+section would have MASKED exactly the distortion mode this ACT exists to
+detect. The section is now its own supply mechanism.
+
+**THE BINDING CONSTRAINT WAS THE ADMISSION ORDER, NOT THE SELECTOR.** The
+predecessor's finding was half right. The budget was spent BEFORE the
+ranking, so the candidate set was the first 24 payloads in transcript order
+and the decisive indexes 145, 147, 187 and 189 were NEVER OFFERED to any
+selector. After the repair, 122 of 122 eligible payloads are admitted; only
+the ORDER changes, and the confidentiality rules are reused UNCHANGED.
+
+**THE TASK CONTEXT IS THE WRONG SIGNAL; THE CALL INPUTS ARE THE RIGHT ONE.**
+The task context is the brief and the previous session's PLAN, and the plan's
+vocabulary is DECLARED by the planning fragments, so a fragment could win by
+declaring many plan words. The agent's own tool CALL INPUTS are
+RUNTIME-OWNED, are not model-authored, and name the decisive subjects.
+
+**THE MEASUREMENT OVER THE FROZEN W1 WORKLOAD** (no summarization request;
+the frozen summary artefact is reused by every arm):
+
+```text
+arm                            budget  selected  estTok  critOmit  critPres  O1        O4        O7
+baseline (no section)              -         0       0         5         0  OMITTED   OMITTED   OMITTED
+S0 SHAPE                         2048         8    2042         4         0  OMITTED   OMITTED   OMITTED
+S1 TASK_CONDITIONED               2048         5    2034         4         1  OMITTED   OMITTED   OMITTED
+S2 SUBJECT_DIVERSITY              2048         5    2030         3         1  OMITTED   OMITTED   PARTIAL
+S2 SUBJECT_DIVERSITY ABLATED      2048         0       0         5         0  OMITTED   OMITTED   OMITTED
+MATERIAL DISTORTIONS = 0 in every arm.
+```
+
+**THE REMAINING GAP IS PRECISE.** The material QUALIFICATIONS of O1, O4 and O7
+live in a fragment other than the value's, and the oracle's matcher cannot
+bind them across the source's line structure. The evidence IS carried and
+DOES contain the facts. Closing it needs a value-qualification PAIRING in the
+selection or a contiguous source window — not a change to the oracle, which is
+the evaluation layer's property.
+
+```text
+A02b-R13 Subject-aware evidence selection   HALT_FACTUAL_PRESERVATION_NOT_ESTABLISHED
+A02b-R14 Value-qualification pairing         RECON_PENDING — NEXT
+Proposed A12 Sanitizer bounded complexity   SECURITY — RED_REPRODUCED
+```
+
+**GATES:** 53 new ACT-owned witnesses, all passing | context suite 1132
+passed / 0 failed | typecheck 108 (baseline 109, ZERO ACT-owned) | SDK build
+PASS | Biome PASS | git diff --check CLEAN | VSIX packaging NOT EXECUTED |
+installed-live NOT EXECUTED | NEW_REGRESSIONS 0 (the 17 failing SDK files
+were verified against the stashed predecessor: the same 113 tests fail there)

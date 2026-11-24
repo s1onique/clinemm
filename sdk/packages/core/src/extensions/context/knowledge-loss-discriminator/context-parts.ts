@@ -25,6 +25,12 @@ const EVIDENCE_BEGIN = "<!-- cline-evidence:begin -->";
 const EVIDENCE_END = "<!-- cline-evidence:end -->";
 const ADJUDICATION_BEGIN = "<!-- cline-adjudication:begin -->";
 const ADJUDICATION_END = "<!-- cline-adjudication:end -->";
+// ACT-CLINEMM-COMPACTION-TASK-CONDITIONED-EVIDENCE-SELECTION-01 (C2.4): the
+// SOURCE-BOUND EVIDENCE section. It is a RUNTIME-ASSEMBLED section of verbatim
+// canonical excerpts, NOT the summarizer's prose, so it must be attributed to
+// its own mechanism rather than to `generated_summary`.
+const SOURCE_BOUND_EVIDENCE_BEGIN = "<!-- cline-source-evidence:begin -->";
+const SOURCE_BOUND_EVIDENCE_END = "<!-- cline-source-evidence:end -->";
 
 export function messageText(message: MessageWithMetadata): string {
 	if (typeof message.content === "string") {
@@ -84,6 +90,15 @@ export function generatedSummaryProse(summaryText: string): string {
 		[TASK_CONTRACT_BEGIN, TASK_CONTRACT_END],
 		[EVIDENCE_BEGIN, EVIDENCE_END],
 		[ADJUDICATION_BEGIN, ADJUDICATION_END],
+		// ACT-CLINEMM-COMPACTION-TASK-CONDITIONED-EVIDENCE-SELECTION-01 (C2.4):
+		// the source-bound evidence section is RUNTIME-ASSEMBLED, so counting
+		// it as the summarizer's prose would attribute verbatim canonical
+		// excerpts to the MODEL. The factual-consistency scorer runs over
+		// `generatedSummary`, so leaving the section in would make the scorer
+		// credit the model for bytes the model never wrote — and would hide a
+		// real contradiction introduced by the summarizer behind the carried
+		// section's own text.
+		[SOURCE_BOUND_EVIDENCE_BEGIN, SOURCE_BOUND_EVIDENCE_END],
 	]) {
 		const section = extractSection(prose, begin, end);
 		if (section) {
@@ -140,6 +155,13 @@ export function decomposeCompactedState(
 			summaryText,
 			ADJUDICATION_BEGIN,
 			ADJUDICATION_END,
+		),
+		// ACT-CLINEMM-COMPACTION-TASK-CONDITIONED-EVIDENCE-SELECTION-01 (C2.4):
+		// the source-bound evidence section is its OWN mechanism.
+		sourceBoundEvidence: extractSection(
+			summaryText,
+			SOURCE_BOUND_EVIDENCE_BEGIN,
+			SOURCE_BOUND_EVIDENCE_END,
 		),
 		retainedTail: tailText,
 		evidenceBodies,

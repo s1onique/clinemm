@@ -964,26 +964,32 @@ describe("ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01 — negative controls", ()
 		//
 		// The section's OWN markers are the only UNESCAPED occurrences: they
 		// appear on a line of their own, at the start and the end of the
-		// section, with no preceding backslash.
+		// section, with no preceding escape prefix.
+		//
+		// ACT-CLINEMM-COMPACTION-TASK-CONDITIONED-EVIDENCE-SELECTION-01 (C2.1):
+		// the escape prefix is the shared zero-width-space convention, not
+		// the predecessor's backslash. The backslash convention was one the
+		// PARSER did not recognise, so the strip ended at the escaped marker
+		// and the text after it survived the strip.
 		const unescapedBegin = section
 			?.split("\n")
 			.filter(
 				(line) =>
 					line.includes("<!-- cline-file-facts:begin -->") &&
-					!line.includes("\\<!-- cline-file-facts:begin -->"),
+					!line.includes("\u200b<!-- cline-file-facts:begin -->"),
 			);
 		const unescapedEnd = section
 			?.split("\n")
 			.filter(
 				(line) =>
 					line.includes("<!-- cline-file-facts:end -->") &&
-					!line.includes("\\<!-- cline-file-facts:end -->"),
+					!line.includes("\u200b<!-- cline-file-facts:end -->"),
 			);
 		expect(unescapedBegin?.length).toBe(1);
 		expect(unescapedEnd?.length).toBe(1);
 		// The adversarial marker survives ONLY in its escaped form.
-		expect(section).toContain("\\<!-- cline-file-facts:begin -->");
-		expect(section).toContain("\\<!-- cline-file-facts:end -->");
+		expect(section).toContain("\u200b<!-- cline-file-facts:begin -->");
+		expect(section).toContain("\u200b<!-- cline-file-facts:end -->");
 	});
 
 	it("CONTROL 12: a SECRET in ARBITRARY COMMAND output is not carried into the model-visible projection", () => {

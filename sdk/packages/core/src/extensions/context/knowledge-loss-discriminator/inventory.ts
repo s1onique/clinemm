@@ -33,6 +33,7 @@ export const SUPPLY_MECHANISMS = [
 	"task_contract",
 	"verified_outcome",
 	"adjudication",
+	"source_bound_evidence",
 	"retained_tail",
 	"evidence_body",
 ] as const;
@@ -51,6 +52,18 @@ export interface KnowledgeContext {
 	readonly verifiedOutcome: string;
 	/** The carried adjudication section. */
 	readonly adjudication: string;
+	/**
+	 * The carried SOURCE-BOUND EVIDENCE section.
+	 *
+	 * ACT-CLINEMM-COMPACTION-TASK-CONDITIONED-EVIDENCE-SELECTION-01 (C2.4):
+	 * it is a RUNTIME-ASSEMBLED section of verbatim canonical excerpts. It
+	 * is its OWN mechanism, because attributing it to `generatedSummary`
+	 * would credit the MODEL with bytes the model never wrote, and because
+	 * the factual-consistency scorer runs over `generatedSummary` — so a
+	 * carried excerpt would otherwise MASK a contradiction the summarizer
+	 * actually introduced.
+	 */
+	readonly sourceBoundEvidence: string;
 	/** The retained canonical tail, serialised. */
 	readonly retainedTail: string;
 	/** Any tool-result bodies that survived into the context. */
@@ -64,6 +77,7 @@ const MECHANISM_TEXT: Readonly<
 	task_contract: "taskContract",
 	verified_outcome: "verifiedOutcome",
 	adjudication: "adjudication",
+	source_bound_evidence: "sourceBoundEvidence",
 	retained_tail: "retainedTail",
 	evidence_body: "evidenceBodies",
 };

@@ -185,6 +185,11 @@
 
 import type { MessageWithMetadata } from "@cline/shared";
 import { canonicalSourceMessages } from "../../session/models/session-compaction";
+import {
+	escapeSectionDelimiters,
+	joinStrippedSection,
+	stripAllDelimitedSections,
+} from "./section-delimiters";
 
 /**
  * The maximum number of verified outcomes carried into one summary.
@@ -1764,13 +1769,21 @@ function findCallInput(
  * Anti-spoofing: an occurrence of a delimiter inside a carried excerpt is
  * escaped before the excerpt is embedded, so tool output can never open or
  * close the generated section and thereby forge a new authority.
+ *
+ * ACT-CLINEMM-COMPACTION-TASK-CONDITIONED-EVIDENCE-SELECTION-01 (C2.1): the
+ * predecessor escaped with a BACKSLASH PREFIX while the stripper searched
+ * with a PLAIN `indexOf`. The escaped marker still CONTAINED the literal
+ * marker, so the stripper found it and terminated the section INSIDE the
+ * excerpt. The escape convention was one the parser did not recognise.
+ *
+ * The escape and the search now use the SHARED primitive in
+ * `section-delimiters.ts`, so the writer and the reader agree.
  */
 function escapeDelimiters(text: string): string {
-	return text
-		.split(EVIDENCE_BEGIN_MARKER)
-		.join(`\\${EVIDENCE_BEGIN_MARKER}`)
-		.split(EVIDENCE_END_MARKER)
-		.join(`\\${EVIDENCE_END_MARKER}`);
+	return escapeSectionDelimiters(text, [
+		EVIDENCE_BEGIN_MARKER,
+		EVIDENCE_END_MARKER,
+	]);
 }
 
 /**
@@ -1831,35 +1844,14 @@ export function renderEvidenceSection(
  * function exists to prevent.
  */
 export function stripEvidenceSection(summaryText: string): string {
-	const begin = summaryText.indexOf(EVIDENCE_BEGIN_MARKER);
-	if (begin === -1) {
-		return summaryText;
-	}
-	const end = summaryText.indexOf(EVIDENCE_END_MARKER, begin);
-	// The section's own heading, when present, sits immediately before the
-	// begin marker.
-	const headingIndex = summaryText.lastIndexOf(EVIDENCE_SECTION_HEADING, begin);
-	const sectionStart =
-		headingIndex !== -1 &&
-		summaryText
-			.slice(headingIndex + EVIDENCE_SECTION_HEADING.length, begin)
-			.trim() === ""
-			? headingIndex
-			: begin;
-	if (end === -1) {
-		// A malformed (truncated) section is removed to its end so a partial
-		// record can never be presented as a complete one.
-		return summaryText.slice(0, sectionStart).trimEnd();
-	}
-	const before = summaryText.slice(0, sectionStart).trimEnd();
-	const after = summaryText.slice(end + EVIDENCE_END_MARKER.length).trimStart();
-	if (!before) {
-		return after;
-	}
-	if (!after) {
-		return before;
-	}
-	return `${before}\n\n${after}`;
+	return joinStrippedSection(
+		stripAllDelimitedSections({
+			text: summaryText,
+			beginMarker: EVIDENCE_BEGIN_MARKER,
+			endMarker: EVIDENCE_END_MARKER,
+			heading: EVIDENCE_SECTION_HEADING,
+		}),
+	);
 }
 
 /**
@@ -1906,11 +1898,10 @@ export const MAX_CARRIED_FILE_FACTS = 12;
  * authority.
  */
 function escapeFileFactDelimiters(text: string): string {
-	return text
-		.split(SOURCE_FILE_FACT_BEGIN_MARKER)
-		.join(`\\${SOURCE_FILE_FACT_BEGIN_MARKER}`)
-		.split(SOURCE_FILE_FACT_END_MARKER)
-		.join(`\\${SOURCE_FILE_FACT_END_MARKER}`);
+	return escapeSectionDelimiters(text, [
+		SOURCE_FILE_FACT_BEGIN_MARKER,
+		SOURCE_FILE_FACT_END_MARKER,
+	]);
 }
 
 /**
@@ -2050,36 +2041,14 @@ export function renderSourceFileFactSection(
  * section rather than appending a second copy.
  */
 export function stripSourceFileFactSection(summaryText: string): string {
-	const begin = summaryText.indexOf(SOURCE_FILE_FACT_BEGIN_MARKER);
-	if (begin === -1) {
-		return summaryText;
-	}
-	const end = summaryText.indexOf(SOURCE_FILE_FACT_END_MARKER, begin);
-	const headingIndex = summaryText.lastIndexOf(
-		SOURCE_FILE_FACT_SECTION_HEADING,
-		begin,
+	return joinStrippedSection(
+		stripAllDelimitedSections({
+			text: summaryText,
+			beginMarker: SOURCE_FILE_FACT_BEGIN_MARKER,
+			endMarker: SOURCE_FILE_FACT_END_MARKER,
+			heading: SOURCE_FILE_FACT_SECTION_HEADING,
+		}),
 	);
-	const sectionStart =
-		headingIndex !== -1 &&
-		summaryText
-			.slice(headingIndex + SOURCE_FILE_FACT_SECTION_HEADING.length, begin)
-			.trim() === ""
-			? headingIndex
-			: begin;
-	if (end === -1) {
-		return summaryText.slice(0, sectionStart).trimEnd();
-	}
-	const before = summaryText.slice(0, sectionStart).trimEnd();
-	const after = summaryText
-		.slice(end + SOURCE_FILE_FACT_END_MARKER.length)
-		.trimStart();
-	if (!before) {
-		return after;
-	}
-	if (!after) {
-		return before;
-	}
-	return `${before}\n\n${after}`;
 }
 
 /**

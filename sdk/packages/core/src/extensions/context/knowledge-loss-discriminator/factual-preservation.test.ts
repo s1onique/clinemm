@@ -39,6 +39,7 @@ function contextWith(summary: string): KnowledgeContext {
 		taskContract: "",
 		verifiedOutcome: "",
 		adjudication: "",
+		sourceBoundEvidence: "",
 		retainedTail: "",
 		evidenceBodies: "",
 	};

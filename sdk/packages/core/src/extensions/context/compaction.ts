@@ -67,6 +67,7 @@ import {
 	runPckAttempt,
 } from "./precompaction-knowledge-checkpoint/runtime";
 import { applySourceBoundEvidenceToCompactedMessages } from "./source-bound-evidence";
+import { selectTaskConditionedEvidenceAtBoundary } from "./task-conditioned-evidence-selection";
 import { applyTaskContractToCompactedMessages } from "./task-contract";
 
 export interface ContextPipelinePrepareTurnInput {
@@ -2070,11 +2071,23 @@ export function createCompactionStateAwarePrepareTurn(input: {
 				// cannot distort them. It is DEFAULT OFF, and it is applied
 				// AFTER the task contract and the verified outcomes so the
 				// carry-forwards compose without overwriting one another.
+				//
+				// ACT-CLINEMM-COMPACTION-TASK-CONDITIONED-EVIDENCE-SELECTION-01:
+				// the SELECTION is task-conditioned. The predecessor applied
+				// the fragment budget BEFORE the selection, so the decisive
+				// fragments were never offered to any selector; the budget is
+				// now spent AFTER the selection.
 				const sourceBound = applySourceBoundEvidenceToCompactedMessages(
 					evidenced.messages,
 					context.messages,
 					{
 						sourceMessageCount: countCanonicalSourceMessages(context.messages),
+						selectedFragments: selectTaskConditionedEvidenceAtBoundary({
+							messages: context.messages,
+							sourceMessageCount: countCanonicalSourceMessages(
+								context.messages,
+							),
+						}).fragments,
 					},
 				);
 				// ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01:
@@ -2160,7 +2173,16 @@ export function createCompactionStateAwarePrepareTurn(input: {
 				applySourceBoundEvidenceToCompactedMessages(
 					restoredWithEvidence.messages,
 					context.messages,
-					{ sourceMessageCount: existingState.source_message_count },
+					{
+						sourceMessageCount: existingState.source_message_count,
+						// ACT-CLINEMM-COMPACTION-TASK-CONDITIONED-EVIDENCE-SELECTION-01:
+						// the same task-conditioned selection, scoped to the
+						// sidecar's OWN boundary.
+						selectedFragments: selectTaskConditionedEvidenceAtBoundary({
+							messages: context.messages,
+							sourceMessageCount: existingState.source_message_count,
+						}).fragments,
+					},
 				);
 			// ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01:
 			// carry an ACCEPTED adjudication candidate forward from the
@@ -2250,11 +2272,19 @@ export function createCompactionStateAwarePrepareTurn(input: {
 			// ACT-CLINEMM-COMPACTION-FACTUAL-PRESERVATION-REPAIR-01: the same
 			// source-bound evidence carry-forward, applied on the FIRST
 			// compaction of a session.
+			//
+			// ACT-CLINEMM-COMPACTION-TASK-CONDITIONED-EVIDENCE-SELECTION-01:
+			// the SELECTION is task-conditioned, and the budget is spent AFTER
+			// the selection.
 			const sourceBound = applySourceBoundEvidenceToCompactedMessages(
 				evidenced.messages,
 				context.messages,
 				{
 					sourceMessageCount: countCanonicalSourceMessages(context.messages),
+					selectedFragments: selectTaskConditionedEvidenceAtBoundary({
+						messages: context.messages,
+						sourceMessageCount: countCanonicalSourceMessages(context.messages),
+					}).fragments,
 				},
 			);
 			// ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01:
