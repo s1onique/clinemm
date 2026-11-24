@@ -1125,7 +1125,22 @@ export class LocalRuntimeHost implements RuntimeHost {
 						signal,
 					});
 				},
-				decisionId: () => sessionId,
+				// ACT-CLINEMM-PCK-GENERATION-ELIGIBILITY-REPAIR-01: the
+				// decision identity is NOT supplied here.
+				//
+				// The session id is not a decision identity: two
+				// eligibility decisions inside the SAME iteration (a
+				// re-compaction attempt after a failed summarizer call,
+				// for example) share a session id, and a session-scoped
+				// identity could not tell them apart. The seam that OWNS
+				// the compaction eligibility decision mints the
+				// authoritative identity — the per-session monotonic
+				// decision-ordinal identity the diagnostics and the
+				// private candidate capture already use — so the
+				// checkpoint attempt, the diagnostics record and the
+				// captured candidate all agree on ONE identity per
+				// decision.
+				decisionId: () => "",
 				deadlineMs: () => resolvePckDeadlineMs(),
 			},
 			logger: configWithProvider.logger,
