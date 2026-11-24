@@ -405,6 +405,32 @@ function buildGatewayRequest(
 		messages: toGatewayRequestMessages(messages),
 		tools: toGatewayTools(tools),
 		maxTokens: config.maxOutputTokens,
+		// ACT-CLINEMM-PCK-QWEN-INFERENCE-POLICY-01:
+		//
+		// The EXPLICIT, request-scoped inference policy. It is ABSENT for
+		// every request that did not opt in, so those requests keep their
+		// pre-ACT shape exactly.
+		//
+		// The policy's numeric parameters — the sampling temperature and the
+		// hard output budget — are applied HERE, at the point where the
+		// request is built, and ONLY when the policy is present. They are
+		// deliberately NOT read from `config.temperature` /
+		// `config.maxOutputTokens`: a general propagation of those fields
+		// would change the body of every ordinary request that happens to
+		// carry them, which is outside this ACT's scope. The predecessor's
+		// behaviour — the configured temperature is NOT forwarded by this
+		// seam — is preserved for every request that did not opt in.
+		...(config.inferencePolicy
+			? {
+					inferencePolicy: config.inferencePolicy,
+					...(config.inferencePolicy.temperature !== undefined
+						? { temperature: config.inferencePolicy.temperature }
+						: {}),
+					...(config.inferencePolicy.maxTokens !== undefined
+						? { maxTokens: config.inferencePolicy.maxTokens }
+						: {}),
+				}
+			: {}),
 		reasoning:
 			config.thinking !== undefined ||
 			config.reasoningEffort ||

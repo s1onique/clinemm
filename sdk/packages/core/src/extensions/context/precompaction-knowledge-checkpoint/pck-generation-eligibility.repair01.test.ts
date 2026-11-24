@@ -107,9 +107,20 @@ const ACCEPTED_CHECKPOINT_RESPONSE = JSON.stringify({
  * "summarizer" is the ordinary agentic compaction's provider call.
  * "checkpoint" is the PCK's provider call.
  *
- * The positive control asserts `checkpoint` appears AFTER `summarizer`,
- * which is only true if the generation happens INSIDE the eligible
- * compaction path and not before it.
+ * ACT-CLINEMM-PCK-QWEN-INFERENCE-POLICY-01 (bounded predecessor
+ * test-strength improvement 4): the comment that described this order
+ * CONTRADICTED the assertion that reads it. The comment claimed the
+ * positive control asserted that `checkpoint` appears AFTER `summarizer`,
+ * while the assertion checks the OPPOSITE — `checkpoint` appears BEFORE
+ * `summarizer`.
+ *
+ * The production order is the latter, and it is load-bearing: the
+ * checkpoint is derived from the working agent's FULL context, so it must
+ * be generated BEFORE the summarizer rewrites that context into a lossy
+ * summary. A checkpoint generated after the summarizer would be derived
+ * from the very lossy representation the checkpoint exists to preserve.
+ *
+ * The comment now states the order the assertion actually checks.
  */
 const invocationOrder: string[] = [];
 
@@ -168,10 +179,25 @@ afterEach(() => {
 /**
  * A canonical history with ONE verified tool outcome, so the closed
  * publication gate has real evidence to admit a record from.
+ *
+ * ACT-CLINEMM-PCK-QWEN-INFERENCE-POLICY-01 (bounded predecessor
+ * test-strength improvement 4): the fixture uses the EXISTING
+ * PRODUCTION-SHAPED POSITIVE COMMAND, `make build`.
+ *
+ * `make build` is the only allowlisted command classification that
+ * establishes the `build` argument (see
+ * `evidence.ts` — `build: Object.freeze(["make build"])`), so it is the
+ * fixture that produces a DETERMINISTICALLY ESTABLISHED operation and the
+ * stronger `tool_observed` assurance. The predecessor's `kc.sh build` is
+ * NOT on the allowlist, so with it the published record was DOWNGRADED to
+ * `model_reported` and the fixture did not exercise the production
+ * positive path at all.
  */
 function canonicalHistory(options: {
 	readonly paddingPairs?: number;
+	readonly command?: string;
 }): MessageWithMetadata[] {
+	const command = options.command ?? "make build";
 	const messages: MessageWithMetadata[] = [
 		{
 			role: "user",
@@ -186,7 +212,7 @@ function canonicalHistory(options: {
 					type: "tool_use",
 					id: "tool_call_r4",
 					name: "run_commands",
-					input: { command: "kc.sh build" },
+					input: { command },
 				},
 			],
 		} as unknown as MessageWithMetadata,
@@ -199,7 +225,7 @@ function canonicalHistory(options: {
 					tool_use_id: "tool_call_r4",
 					content: [
 						{
-							query: "kc.sh build",
+							query: command,
 							result: "build completed successfully",
 							success: true,
 						},
@@ -293,11 +319,24 @@ function createGenerationSpy(options?: {
  * limit, which is the limit the OUTER wrapper's own budget accounting uses;
  * `innerMaxInputTokens` is the limit the INNER seam's eligibility
  * arithmetic uses.
+ *
+ * ACT-CLINEMM-PCK-QWEN-INFERENCE-POLICY-01 (bounded predecessor
+ * test-strength improvement 1): the composition is created ONCE and can
+ * then be driven for MANY successive turns.
+ *
+ * The reason is that the composition OWNS per-session state that a fresh
+ * composition would reset: the inner seam's per-session monotonic
+ * DECISION-ORDINAL counter. Driving ten successive turns through ten
+ * FRESH compositions measured ten independent first decisions, which is
+ * NOT the same thing as ten successive decisions inside ONE runtime. The
+ * counter is what makes two decisions inside the same iteration
+ * distinguishable, so the production behaviour under test — "one decision
+ * identity per decision, and the checkpoint is paid for only by a
+ * decision that was actually eligible" — is only observable when the
+ * composition persists.
  */
-async function runProductionComposition(input: {
-	readonly messages: MessageWithMetadata[];
+function createProductionComposition(input: {
 	readonly mode: "auto" | "manual" | "overflow_recovery";
-	readonly overflowRecovery?: boolean;
 	readonly outerMaxInputTokens: number;
 	readonly innerMaxInputTokens: number;
 	readonly strategy: "agentic" | "basic";
@@ -309,7 +348,11 @@ async function runProductionComposition(input: {
 	readonly onDecisionId?: (decisionId: string) => void;
 	readonly logger?: BasicLogger;
 	readonly generation: ReturnType<typeof createGenerationSpy>;
-}): Promise<{
+}): (context: {
+	readonly messages: MessageWithMetadata[];
+	readonly overflowRecovery?: boolean;
+	readonly iteration?: number;
+}) => Promise<{
 	readonly result: unknown;
 	readonly messages: MessageWithMetadata[];
 }> {
@@ -373,25 +416,55 @@ async function runProductionComposition(input: {
 				}),
 	});
 
-	const result = await prepareTurn({
-		agentId: "agent-1",
-		conversationId: "conv-1",
-		parentAgentId: null,
-		iteration: 1,
-		abortSignal: new AbortController().signal,
-		systemPrompt: "You are a helpful coding assistant.",
-		tools: [],
+	return async (context) => {
+		const result = await prepareTurn({
+			agentId: "agent-1",
+			conversationId: "conv-1",
+			parentAgentId: null,
+			iteration: context.iteration ?? 1,
+			abortSignal: new AbortController().signal,
+			systemPrompt: "You are a helpful coding assistant.",
+			tools: [],
+			messages: context.messages,
+			apiMessages: context.messages,
+			model: outerModel,
+			overflowRecovery: context.overflowRecovery,
+		});
+		return {
+			result,
+			messages: (result as { messages?: MessageWithMetadata[] } | undefined)
+				?.messages ?? [],
+		};
+	};
+}
+
+/**
+ * Drive ONE turn through a production composition.
+ */
+async function runProductionComposition(input: {
+	readonly messages: MessageWithMetadata[];
+	readonly mode: "auto" | "manual" | "overflow_recovery";
+	readonly overflowRecovery?: boolean;
+	readonly outerMaxInputTokens: number;
+	readonly innerMaxInputTokens: number;
+	readonly strategy: "agentic" | "basic";
+	readonly compactionEnabled?: boolean;
+	readonly checkpointEnabled?: boolean;
+	readonly existingState?: unknown;
+	readonly onSaveState?: (state: unknown) => void;
+	readonly decisionId?: () => string;
+	readonly onDecisionId?: (decisionId: string) => void;
+	readonly logger?: BasicLogger;
+	readonly generation: ReturnType<typeof createGenerationSpy>;
+}): Promise<{
+	readonly result: unknown;
+	readonly messages: MessageWithMetadata[];
+}> {
+	const composition = createProductionComposition(input);
+	return await composition({
 		messages: input.messages,
-		apiMessages: input.messages,
-		model: outerModel,
 		overflowRecovery: input.overflowRecovery,
 	});
-
-	return {
-		result,
-		messages: (result as { messages?: MessageWithMetadata[] } | undefined)
-			?.messages ?? [],
-	};
 }
 
 describe("ACT-CLINEMM-PCK-GENERATION-ELIGIBILITY-REPAIR-01 — generation ordering", () => {
@@ -435,22 +508,40 @@ describe("ACT-CLINEMM-PCK-GENERATION-ELIGIBILITY-REPAIR-01 — generation orderi
 		expect(generation.count()).toBe(0);
 	});
 
-	it("C1.2: TEN successive ineligible turns generate NO checkpoint", async () => {
+	it("C1.2: TEN successive ineligible turns in ONE runtime generate NO checkpoint", async () => {
 		process.env.CLINEMM_PCK_CLOSED_ENABLED = "1";
 		const generation = createGenerationSpy();
+		// ACT-CLINEMM-PCK-QWEN-INFERENCE-POLICY-01 (bounded predecessor
+		// test-strength improvement 1): ONE PERSISTENT production
+		// composition drives all ten turns.
+		//
+		// The composition owns the inner seam's per-session monotonic
+		// DECISION-ORDINAL counter, so ten successive turns through it are
+		// ten successive decisions inside ONE runtime — the situation the
+		// production behaviour is actually about. Ten FRESH compositions
+		// would each have restarted the counter at zero, so every turn
+		// would have been a first decision and the ordinal would never
+		// have advanced.
+		const composition = createProductionComposition({
+			mode: "auto",
+			outerMaxInputTokens: 128_000,
+			innerMaxInputTokens: 128_000,
+			strategy: "agentic",
+			checkpointEnabled: true,
+			existingState: undefined,
+			generation,
+		});
 		for (let turn = 0; turn < 10; turn += 1) {
 			// The canonical history EVOLVES across turns.
 			const messages = canonicalHistory({ paddingPairs: turn + 1 });
-			await runProductionComposition({
+			const outcome = await composition({
 				messages,
-				mode: "auto",
-				outerMaxInputTokens: 128_000,
-				innerMaxInputTokens: 128_000,
-				strategy: "agentic",
-				checkpointEnabled: true,
-				existingState: undefined,
-				generation,
+				iteration: turn + 1,
 			});
+			// Every turn really was INELIGIBLE: the REAL eligibility
+			// decision declined compaction, so no compaction messages were
+			// produced. Without this the row could pass vacuously.
+			expect(outcome.messages).toEqual([]);
 		}
 		expect(generation.count()).toBe(0);
 	});
@@ -572,30 +663,62 @@ describe("ACT-CLINEMM-PCK-GENERATION-ELIGIBILITY-REPAIR-01 — conservation matr
 		expect(generation.count()).toBe(0);
 	});
 
-	it("C3.5: RE-COMPACTION — 0 generations", async () => {
+	it("C3.5: RE-COMPACTION — ordinary summarization runs, PCK generation stays 0", async () => {
 		process.env.CLINEMM_PCK_CLOSED_ENABLED = "1";
 		const generation = createGenerationSpy();
-		const sourceMessages = canonicalHistory({ paddingPairs: 4 });
+		const sourceMessages = canonicalHistory({ paddingPairs: 120 });
 		// A PRIOR compaction state exists, so this turn is the SECOND
-		// compaction of the session: the re-compaction path re-compacts an
-		// already summarised transcript, whose checkpoint would be derived
-		// from a lossy summary rather than from the working agent's
-		// context.
+		// compaction of the session.
+		//
+		// ACT-CLINEMM-PCK-QWEN-INFERENCE-POLICY-01 (bounded predecessor
+		// test-strength improvement 4): the predecessor's comment claimed
+		// the re-compaction path "re-compacts an already summarised
+		// transcript", but the fixture built the sidecar with the FULL
+		// CANONICAL history as its compacted messages, so the projected
+		// transcript was the canonical history itself, not a summary.
+		// The comment now states what the fixture actually builds: the
+		// re-compaction path is entered because a PRIOR sidecar exists,
+		// and the checkpoint seam is not forwarded into that path.
 		const existingState = createSessionCompactionState({
 			sourceMessages,
 			compactedMessages: sourceMessages,
 			conversationId: "conv-1",
 		});
-		await runProductionComposition({
+		const outcome = await runProductionComposition({
 			messages: sourceMessages,
 			mode: "auto",
 			outerMaxInputTokens: 128_000,
+			// The TIGHT inner limit makes the REAL eligibility arithmetic
+			// say "compact" for the RE-COMPACTION candidate as well.
+			//
+			// ACT-CLINEMM-PCK-QWEN-INFERENCE-POLICY-01 (bounded predecessor
+			// test-strength improvement 2): the predecessor's row used a
+			// LOOSE inner limit, so the re-compaction candidate was
+			// INELIGIBLE, the ordinary summarizer NEVER RAN, and the row
+			// asserted a generation count of zero against a seam that was
+			// never reached at all. The row was VACUOUS: it would have
+			// passed for a production that generated a checkpoint on every
+			// re-compaction, because the re-compaction never reached the
+			// generation point either way.
+			//
+			// The control is now NON-VACUOUS: the ordinary summarizer is
+			// asserted to have ACTUALLY run, so the re-compaction really
+			// happened and ONLY the checkpoint generation was skipped.
 			innerMaxInputTokens: 16_000,
 			strategy: "agentic",
 			checkpointEnabled: true,
 			existingState,
 			generation,
 		});
+		// The ordinary summarizer ACTUALLY ran: the re-compaction really
+		// happened.
+		expect(invocationOrder).toContain("summarizer");
+		// And the checkpoint generation was skipped — the re-compaction
+		// path does not forward the checkpoint seam.
+		expect(invocationOrder).not.toContain("checkpoint");
+		// The compaction produced its transcript.
+		expect(outcome.messages.length).toBeGreaterThan(0);
+		// And the checkpoint generation is still zero.
 		expect(generation.count()).toBe(0);
 	});
 
@@ -754,5 +877,62 @@ describe("ACT-CLINEMM-PCK-GENERATION-ELIGIBILITY-REPAIR-01 — conservation matr
 		// session id.
 		expect(loggedDecisionIds[0]).toContain("#");
 		expect(loggedDecisionIds[0].split("#").length).toBe(3);
+	});
+
+	it("C3.11: successive decisions in ONE runtime carry DISTINCT authoritative identities", async () => {
+		process.env.CLINEMM_PCK_CLOSED_ENABLED = "1";
+		const generation = createGenerationSpy();
+		const loggedDecisionIds: string[] = [];
+		const logger = {
+			debug: (message: string, meta?: Record<string, unknown>): void => {
+				if (
+					message === "Pre-compaction knowledge checkpoint attempt" &&
+					typeof meta?.decisionId === "string"
+				) {
+					loggedDecisionIds.push(meta.decisionId);
+				}
+			},
+			log: (): void => {},
+		} as unknown as BasicLogger;
+		// ACT-CLINEMM-PCK-QWEN-INFERENCE-POLICY-01 (bounded predecessor
+		// test-strength improvement 3): the identities are DISTINCT.
+		//
+		// The predecessor asserted the SHAPE of ONE identity. That shape
+		// holds for every identity, including a CONSTANT one, so it could
+		// not distinguish "one authoritative identity per decision" from
+		// "the same identity every time". A shared identity would make two
+		// decisions inside the same runtime indistinguishable — exactly
+		// the failure the decision-ordinal identity exists to prevent.
+		//
+		// The composition PERSISTS across the turns, so the inner seam's
+		// per-session monotonic counter advances and each decision gets
+		// its own identity.
+		const composition = createProductionComposition({
+			mode: "auto",
+			outerMaxInputTokens: 128_000,
+			innerMaxInputTokens: 16_000,
+			strategy: "agentic",
+			checkpointEnabled: true,
+			existingState: undefined,
+			generation,
+			decisionId: () => "",
+			logger,
+		});
+		for (let turn = 0; turn < 3; turn += 1) {
+			await composition({
+				messages: canonicalHistory({ paddingPairs: 120 }),
+				iteration: turn + 1,
+			});
+		}
+		// Every turn was ELIGIBLE, so every turn generated a checkpoint.
+		expect(generation.count()).toBe(3);
+		expect(loggedDecisionIds.length).toBe(3);
+		// The identities are DISTINCT.
+		expect(new Set(loggedDecisionIds).size).toBe(3);
+		// And each one is the per-session monotonic DECISION-ORDINAL
+		// identity.
+		for (const identity of loggedDecisionIds) {
+			expect(identity.split("#").length).toBe(3);
+		}
 	});
 });

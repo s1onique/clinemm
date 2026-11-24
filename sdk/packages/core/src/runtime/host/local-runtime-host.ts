@@ -32,7 +32,14 @@ import {
 	createImportedHistoryCompactionPrepareTurn,
 } from "../../extensions/context/compaction";
 import { resolveSummarizerConfig } from "../../extensions/context/compaction-shared";
-import { resolvePckDeadlineMs } from "../../extensions/context/precompaction-knowledge-checkpoint/runtime";
+import {
+	applyPckInferencePolicy,
+	resolvePckInferencePolicy,
+} from "../../extensions/context/precompaction-knowledge-checkpoint/inference-policy";
+import {
+	isPckClosedEnabled,
+	resolvePckDeadlineMs,
+} from "../../extensions/context/precompaction-knowledge-checkpoint/runtime";
 import { generateSummary } from "../../extensions/context/summary-generation";
 import { resolveConnectionProviderConfig } from "../../services/llms/handler-factory";
 import type {
@@ -1118,8 +1125,36 @@ export class LocalRuntimeHost implements RuntimeHost {
 						},
 						summarizer: configWithProvider.compaction?.summarizer,
 					});
+					// ACT-CLINEMM-PCK-QWEN-INFERENCE-POLICY-01.
+					//
+					// The optimized inference policy is resolved AFTER the
+					// summarizer configuration resolution, so the EFFECTIVE
+					// model is the model that will ANSWER the checkpoint
+					// request — not the working agent's model.
+					//
+					// The resolver is pure and the application produces a NEW
+					// configuration, so the shared summarizer/agent
+					// configuration is never mutated and the policy can
+					// never leak into an unrelated request.
+					//
+					// With the policy not applied — which is the case for
+					// every model, every provider and every operator who did
+					// not opt in — the configuration handed to the transport
+					// is the resolved summarizer configuration ITSELF, so
+					// the request is byte-identical to the pre-ACT shape.
+					const policyResolution = resolvePckInferencePolicy({
+						purpose: "pck",
+						featureEnabled: isPckClosedEnabled(),
+						effectiveProviderConfig: checkpointProviderConfig,
+					});
+					const effectiveCheckpointProviderConfig = policyResolution.applied
+						? applyPckInferencePolicy(
+								checkpointProviderConfig,
+								policyResolution.parameters,
+							)
+						: checkpointProviderConfig;
 					return await generateSummary({
-						providerConfig: checkpointProviderConfig,
+						providerConfig: effectiveCheckpointProviderConfig,
 						systemPrompt,
 						request,
 						signal,

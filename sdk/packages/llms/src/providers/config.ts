@@ -8,6 +8,7 @@
 import type {
 	BasicLogger,
 	ExtensionContext,
+	GatewayRequestInferencePolicy,
 	ReasoningEffort,
 } from "@cline/shared";
 import type { ModelInfo, ProviderClient } from "../catalog/types";
@@ -271,6 +272,20 @@ export interface ProviderOptions {
 	openRouterProviderSorting?: string;
 	/** Runtime model catalog refresh configuration */
 	modelCatalog?: ModelCatalogConfig;
+	/**
+	 * ACT-CLINEMM-PCK-QWEN-INFERENCE-POLICY-01.
+	 *
+	 * An EXPLICIT, request-scoped inference policy.
+	 *
+	 * It is populated ONLY by an operator-opted-in, model-specific policy
+	 * resolver, and it is ABSENT for every other request. The shape is
+	 * ENUMERATED, so a caller cannot smuggle an arbitrary wire field through
+	 * it.
+	 *
+	 * It never mutates a shared provider configuration: a policy is applied
+	 * by producing a NEW configuration that carries it.
+	 */
+	inferencePolicy?: GatewayRequestInferencePolicy;
 }
 
 /**

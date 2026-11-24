@@ -256,6 +256,55 @@ export interface GatewayProviderContext {
 	telemetry?: ITelemetryService;
 }
 
+/**
+ * ACT-CLINEMM-PCK-QWEN-INFERENCE-POLICY-01.
+ *
+ * The EXPLICIT, request-scoped inference constraints that a policy resolver
+ * may request.
+ *
+ * Every field is OPTIONAL and every field is ENUMERATED: the shape cannot
+ * carry an arbitrary wire field, so a policy resolver cannot smuggle an
+ * unbounded provider option through the shared request type.
+ */
+export interface GatewayRequestInferencePolicy {
+	/**
+	 * The reasoning level to request VERBATIM.
+	 *
+	 * `"none"` asks the endpoint to not reason at all. It is the only value
+	 * the ACT qualifies, because it is the only one whose effect can be
+	 * OBSERVED on the qualified endpoint (the reported reasoning output goes
+	 * to zero).
+	 */
+	readonly reasoningEffort?: "none";
+	/**
+	 * The JSON-object response constraint.
+	 *
+	 * The endpoint then constrains the completion to a JSON object, which is
+	 * what the checkpoint's closed output shape requires.
+	 */
+	readonly responseFormat?: {
+		readonly type: "json_object";
+	};
+	/**
+	 * The sampling temperature.
+	 *
+	 * It is carried INSIDE the policy, rather than being read from the
+	 * provider configuration, so that a request WITHOUT a policy keeps the
+	 * predecessor's body EXACTLY. A general temperature propagation would
+	 * change every ordinary request that happens to carry a temperature,
+	 * which is outside this ACT's scope.
+	 */
+	readonly temperature?: number;
+	/**
+	 * The hard output budget, in tokens.
+	 *
+	 * It is carried INSIDE the policy for the same reason as the
+	 * temperature: the request's own `maxTokens` stays untouched for every
+	 * request that did not opt in.
+	 */
+	readonly maxTokens?: number;
+}
+
 export interface GatewayStreamRequest {
 	providerId: string;
 	modelId: string;
@@ -275,6 +324,23 @@ export interface GatewayStreamRequest {
 	 */
 	defaultedMaxTokens?: boolean;
 	metadata?: Record<string, unknown>;
+	/**
+	 * ACT-CLINEMM-PCK-QWEN-INFERENCE-POLICY-01.
+	 *
+	 * An EXPLICIT, request-scoped inference policy.
+	 *
+	 * It carries only the constraints that the ordinary request shape cannot
+	 * express, and it is populated ONLY by an operator-opted-in,
+	 * model-specific policy resolver. For every other request — every other
+	 * model, every other request purpose, and every request that did not
+	 * opt in — it is ABSENT, and the request is byte-identical to the
+	 * pre-ACT shape.
+	 *
+	 * It is deliberately NOT a general policy registry: the values it can
+	 * carry are enumerated here, so an unrelated caller cannot smuggle an
+	 * arbitrary wire field through it.
+	 */
+	inferencePolicy?: GatewayRequestInferencePolicy;
 	reasoning?: {
 		enabled?: boolean;
 		effort?: ReasoningEffort;

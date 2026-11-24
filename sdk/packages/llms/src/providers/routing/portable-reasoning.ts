@@ -191,6 +191,26 @@ function resolvePortableLevel(
 	request: GatewayStreamRequest,
 	context: GatewayProviderContext | undefined,
 ): AiSdkReasoning | undefined {
+	// ACT-CLINEMM-PCK-QWEN-INFERENCE-POLICY-01:
+	//
+	// An EXPLICIT, request-scoped inference policy that names the
+	// reasoning level is honoured VERBATIM, before every provider gate.
+	//
+	// The gates below decide whether an ORDINARY request may tell its
+	// provider "none". They exist because an ordinary disable is a DERIVED
+	// state, and a provider whose adapter does not carry the portable level
+	// would silently keep thinking. An explicit policy is a different
+	// thing: the operator asserted, for THIS request and THIS endpoint, that
+	// the level is part of the contract, and the endpoint's own validation
+	// is the authority on whether it accepts it (an endpoint that rejects
+	// the level rejects the REQUEST, which is visible).
+	//
+	// The policy is ENUMERATED, so the only level it can name is the one
+	// the ACT qualified, and it can only be populated by an opted-in,
+	// model-specific resolver.
+	if (request.inferencePolicy?.reasoningEffort === "none") {
+		return "none";
+	}
 	const reasoning = request.reasoning;
 	if (!reasoning) {
 		return undefined;

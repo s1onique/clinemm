@@ -109,5 +109,41 @@ export function composeAiSdkProviderOptions(
 	return mergeProviderOptionPatches([
 		buildBaseProviderOptionsPatch(compatibleOptions, anthropicOptions),
 		...buildProviderOptionRulePatches(matchedRules, buildInput),
+		buildRequestInferencePolicyPatch(normalizedRequest, target),
 	]);
+}
+
+/**
+ * ACT-CLINEMM-PCK-QWEN-INFERENCE-POLICY-01.
+ *
+ * The EXPLICIT, request-scoped response-format constraint.
+ *
+ * The openai-compatible adapter applies its request-body passthrough from
+ * the `openaiCompatible` bucket: every key that is not one of the
+ * adapter's own documented options is spread into the body verbatim. The
+ * constraint therefore reaches the wire as
+ * `response_format: { type: "json_object" }` — the exact shape the
+ * qualified endpoint accepts.
+ *
+ * It is applied ONLY when the request carries the explicit policy, so
+ * every other request keeps its pre-ACT body exactly.
+ */
+function buildRequestInferencePolicyPatch(
+	request: GatewayStreamRequest,
+	target: AiSdkProviderOptionsTarget,
+): ProviderOptionsPatch | undefined {
+	const responseFormat = request.inferencePolicy?.responseFormat;
+	if (!responseFormat) {
+		return undefined;
+	}
+	// The constraint is an OpenAI-compatible wire shape. A provider that
+	// owns a different shape must not receive it.
+	if (target !== "openai-compatible") {
+		return undefined;
+	}
+	return {
+		openaiCompatible: {
+			response_format: { type: responseFormat.type },
+		},
+	};
 }
