@@ -40455,4 +40455,88 @@ M31-R2   MiniMax settings-to-wire qualification     PENDING
 M31-R3   Direct API comparison                      PENDING
 M31-R4   Controlled TTFE benchmark                  PENDING
 A05      Round C convergence                        PENDING
+
+---
+
+## ACT-CLINEMM-REASONING-DEFAULT-NONE-SEMANTICS-REPAIR-01 — A11 closure
+
+The Default/None reasoning semantics are REPAIRED and COMMITTED in commit
+`b7e9bafdc` (entry head `6fdf56079`).
+
+### What the defect was
+
+The settings UI had only TWO reasoning states where the pipeline needed
+THREE:
+
+- **Default** — no explicit effort override; the model/provider applies its
+  own reasoning policy.
+- **None** — the user EXPLICITLY disabled reasoning.
+- an explicit effort.
+
+The absent persisted effort was DISPLAYED as `None` (the callers passed
+`defaultEffort="none"`), every `onEffortChange` handler wrote
+`effort: effort !== "none" ? effort : undefined`, and the provider-config
+store collapsed `"none"` to `undefined` at persistence. The consequence:
+the persisted `effort === "none"` — the ONLY evidence of an explicit user
+selection — could never exist, so `toProviderConfig()`'s
+`reasoningNoneSelected` was permanently false and the production boundary
+could not tell a user selection from a derived disable.
+
+TWO further production defects were reproduced against the real seams:
+
+1. an explicit `None` did NOT reach the qualified Qwen/Kurchatov outbound
+   request: `portable-reasoning.ts`'s `PORTABLE_REASONING_PROVIDERS` is a
+   PROVIDER-ID list that excluded the OpenAI-compatible adapter, which
+   forwards the level verbatim as `reasoning_effort`; and
+2. the UI sentinel `"default"` WAS serialized as
+   `reasoning_effort: "default"`.
+
+### What the repair does
+
+- The shared storage types own the `"default"` sentinel, its user-visible
+  label, and the provider-config patch mapping. The sentinel is UI-LEVEL
+  only: it is never persisted and never a provider reasoning effort.
+- `Default` REMOVES the explicit override; `None` PERSISTS
+  `effort: "none"`. The existing `reasoningNoneSelected` / `disableReason`
+  provenance machinery carries the explicit selection end to end.
+- The compat request builder carries the explicit-None provenance onto the
+  gateway request.
+- The portable-reasoning gate honours an explicit `None` for an adapter
+  that forwards the level VERBATIM, while a DERIVED (anonymous) disable
+  keeps the predecessor's provider-gated behaviour.
+- The settings-to-wire boundary DROPS the `"default"` sentinel instead of
+  serializing it.
+
+The derived-disable semantics, the mandatory-reasoning typed rejection, the
+positive reasoning levels, the MiniMax reasoning controls and the PCK
+eligibility invariants are all conserved. Legacy configurations behave
+exactly as before until explicitly edited.
+
+### Witnesses
+
+- 10 settings-to-wire cases (`sdk/packages/core/src/services/llms/reasoning-default-none-semantics01.test.ts`):
+  the REAL transport, the REAL outbound body.
+- 7 persistence cases (`apps/vscode/src/sdk/model-catalog/reasoning-default-none-persistence01.test.ts`):
+  the REAL provider-config store.
+- 6 settings-UI cases (`apps/vscode/webview-ui/src/components/settings/ReasoningEffortSelector.test.tsx`):
+  the REAL selector component.
+- The two stale `openai-compatible.wire.test.ts` diagnostics are corrected
+  to the repaired distinction and now pass (they failed at baseline).
+
+### The updated epic board
+
+```text
+A02b-R2  Generation eligibility repair              CLOSED
+A02b-R4a Qwen non-thinking feasibility              PASS_LIVE
+A02b-R4b JSON-mode feasibility                      PASS_LIVE
+A02b-R4c Qwen inference policy                      CLOSED_WITH_REVIEW_CORRECTION
+A11      General Default/None semantics             CLOSED
+A02b-R3  Exact-head repackaging                     BLOCKED
+M31-R1   Historical MiniMax evidence reconciliation  REOPENED
+M31-R2   MiniMax settings-to-wire qualification     PENDING
+M31-R3   Direct API comparison                      PENDING
+M31-R4   Controlled TTFE benchmark                  PENDING
+A05      Round C convergence                        PENDING
+```
+
 ```
