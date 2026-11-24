@@ -40873,3 +40873,220 @@ A05      Round C convergence                        PENDING
 A10      Evidence-continuity confidentiality         SECURITY_BACKLOG
 B06      Completion-continuation quiescence         RECON_PENDING
 ```
+
+## ACT-CLINEMM-COMPACTION-INCREMENTAL-KNOWLEDGE-LOSS-DISCRIMINATOR-01 — closure
+
+```text
+ACT_ID: ACT-CLINEMM-COMPACTION-INCREMENTAL-KNOWLEDGE-LOSS-DISCRIMINATOR-01
+TYPE:  bounded executable recon (no production change)
+ENTRY_HEAD: 1566567e154e063561effe214473ec4a87d4a474
+VERDICT: GO_SEMANTIC_MEMORY_CONTRACT_RECON
+EVIDENCE: .factory/evidence/ACT-CLINEMM-COMPACTION-INCREMENTAL-KNOWLEDGE-LOSS-DISCRIMINATOR-01/
+  00-entry-and-workload-identity.md
+  01-production-compaction-boundary-map.md
+  02-semantic-oracle-and-conservation.md
+  03-behavioral-discriminator.md
+  04-inference-economics.md
+  05-exit-report.md
+  verification/
+```
+
+### What was asked
+
+Whether ordinary agentic compaction loses task-relevant knowledge acquired
+during an investigation, whether that loss affects subsequent agent
+behaviour, and whether a separate pre-compaction knowledge checkpoint (PCK)
+is justified. The primary purpose was RECON — an executable discrimination —
+not a PCK optimisation.
+
+### The workloads — REAL, and cryptographically exact
+
+Two REAL persisted sessions were recovered from the operator-local,
+gitignored session store and frozen:
+
+| | W1 (PRIMARY) | W2 (SECONDARY) |
+| --- | --- | --- |
+| session | `1795491524406_mutdb` | `1795489471969_tachv` |
+| extension | `4.1.26-821b20e7a` | `4.1.26-6fdf56079` |
+| canonical messages | 246 | 114 |
+| compaction boundary | **244** | **76** |
+| prefix hash matches the sidecar | **YES** | **YES** |
+| raw-file SHA-256 (history) | `ac74e332…f3cc5` | `25f51cca…f0d4a` |
+| raw-file SHA-256 (sidecar) | `73324de5…463fd` | `19150f6d…4e575` |
+| canonical-array SHA-256 | `a46e2034…a61c7d` | `3d398ad2…b9b27` |
+
+W1's raw-file digests are IDENTICAL to the values the ACT quoted, and W2's
+canonical-array digest is identical to the ACT's quoted
+`3d398ad2…db9b27`. The W1 244-message prefix is an
+`EXACT_HISTORICAL_SOURCE_PREFIX`: the production `sourcePrefixHash()`
+recomputed over `canonical[0..243]` EQUALS the sidecar's own
+`source_prefix_hash` (`sha256:00720111f28d…`).
+
+### The oracle — independent, frozen before any treatment
+
+12 semantic propositions, all `tool_observed`, all ACQUIRED (none in the
+commissioned brief), 8 of them critical. Built from the source prefix's own
+tool output — NOT from the PCK vocabulary and NOT from any candidate's
+summary. The ACT's executable witness `W3` asserts the closed PCK atom
+labels name none of the oracle's subjects.
+
+**A MATERIAL METHODOLOGICAL FINDING.** The task contract carries the
+inherited findings VERBATIM as INITIAL HYPOTHESES. A matcher that credited
+it would have scored the preservation of the INITIAL TASK as the preservation
+of ACQUIRED KNOWLEDGE — a circular, self-confirming result. The matcher
+therefore does NOT credit the task contract for an acquired proposition
+(executable witness `W4`).
+
+### The conservation result
+
+| arm | preserved | partial | omitted | CRITICAL omitted |
+| --- | --- | --- | --- | --- |
+| W1 S1_HISTORICAL | 3 | 5 | 4 | **4** |
+| W1 S2_RECONSTRUCTED | 6 | 3 | 3 | **3** |
+| W2 S1_HISTORICAL | 2 | 5 | 5 | **5** |
+| W2 S2_RECONSTRUCTED | 3 | 6 | 3 | **3** |
+
+Two INDEPENDENT real workloads reproduce the same loss direction and
+magnitude. `DISTORTED`, `CONTRADICTED` and `UNSUPPORTED_STRENGTHENING` are
+all **ZERO**: the loss is OMISSION, not distortion.
+
+### The loss boundary — MEASURED
+
+```text
+LOSS_BOUNDARY=SUMMARIZER_INPUT_SELECTION
+```
+
+`renderStructuredToolPayload()` —
+`sdk/packages/core/src/extensions/context/compaction-shared.ts:258-280`.
+
+The production rendering of the W1 prefix reaches the summarizer as **90
+`[succeeded]` markers and 90 `[result omitted]` markers** — every successful
+command body replaced by the omission marker, and the command identity lost
+to the `cd <path> && <cmd>` allowlist miss, so all 90 lines are identical:
+
+```text
+[Tool result]: [succeeded] #1: [result omitted]
+```
+
+Every downstream mechanism is DOWNSTREAM of the loss: the task contract
+carries the initial brief, the verified-outcome ledger carries call status
+without substance, the adjudication section is empty.
+
+### The behavioural discriminator — the decisive result
+
+Same model, same question, same request policy; only the CONTEXT differs.
+
+```text
+A0 (ordinary compaction)   3 correct, 5 partial, 4 incorrect
+H  (REAL historical state)  4 correct, 4 partial, 4 incorrect
+A1 (revised instruction)    3 correct, 4 partial, 5 incorrect
+M  (evidence restored)      5 correct, 6 partial, 1 incorrect
+```
+
+**TWO failure modes, separated:**
+
+1. **3 items `INFORMATION_MISSING_AFTER_COMPACTION`** (O1, O4, O7) in BOTH
+   A0 and H. Restoring the ORIGINAL evidence flips O4 and O7 from
+   `INCORRECT` to `CORRECT` and O1 to `PARTIALLY_CORRECT`. **The lost
+   INFORMATION, not model capability, is the cause.**
+   `COMPACTION_BEHAVIORAL_CAUSALITY=ESTABLISHED`.
+2. **6 items `INFORMATION_AVAILABLE_BUT_IGNORED`** (O3, O6, O8, O9, O10,
+   O12). The information IS present; the model does not use it. **This is a
+   MODEL failure, and the ACT does not attempt to repair compaction for it.**
+
+### A1 — the revised ordinary summarization instruction
+
+A1 changed ONLY the summarizer's system prompt: **ZERO additional inference
+requests** (1 vs 1), a larger summary (9 260 vs 5 784 chars), **better S2
+conservation** (5 preserved / 3 critical omitted vs A0's 3 / 4) and **NO
+behavioural improvement** (3 correct in both; A1 scored one more item
+incorrect).
+
+**The reason is structural: the revised instruction asks the summarizer to
+preserve knowledge THE SUMMARIZER'S INPUT NEVER CONTAINED.** A prompt cannot
+preserve a value that is not in the request. **This is what separates Outcome
+B from Outcome C.**
+
+### The decision
+
+```text
+ORDINARY_COMPACTION_KNOWLEDGE_CONSERVATION=NOT_ESTABLISHED
+PCK_GENERAL_RETIREMENT=NOT_AUTHORIZED
+PCK_INCREMENTAL_UTILITY=NOT_ESTABLISHED
+SEPARATE_PCK_INFERENCE_JUSTIFIED=NOT_JUSTIFIED_ON_THIS_EVIDENCE
+PREFERRED_ARCHITECTURE=REPAIR_THE_SUMMARIZER_INPUT_SELECTION
+VERDICT=GO_SEMANTIC_MEMORY_CONTRACT_RECON
+```
+
+**THE SIMPLEST NEXT ENGINEERING ACTION IS TO REPAIR THE SUMMARIZER INPUT
+SELECTION — NOT TO ADD A REQUEST.** The summarizer already runs and the
+`[result omitted]` policy already has bounded, attributed exceptions
+(`buildSourceFileFact()`), so a repaired input costs NO additional inference
+request.
+
+**THE SUCCESSOR'S FIRST OBLIGATION IS THE MISSING KNOWLEDGE CONTRACT, NOT A
+MECHANISM.** The contract, as this ACT establishes it: *a specific observed
+value, a distinction between counting or measurement definitions, a scope
+qualification, and a negative fact* — carried in the ordinary summarizer's
+input. **The existing PCK closed vocabulary is NOT to be revived or
+expanded**; R7 already bounds its incremental utility at effectively zero,
+and this ACT shows the INPUT boundary, not the checkpoint request, is where
+the knowledge dies.
+
+**The successor must NOT:** change the summarizer's request count, model,
+output budget or deadline; widen the PCK vocabulary; publish raw stdout,
+arguments, URLs or secrets into the summarizer input without a bounded
+attributed rule; or treat the six `INFORMATION_AVAILABLE_BUT_IGNORED` items
+as a compaction defect.
+
+### The gates
+
+```text
+ACT-OWNED WITNESSES:     10/10 PASS (1 file)
+EXISTING CONTEXT SUITE:  70 files passed | 1 skipped; 994 tests passed | 2 skipped
+                         (INCLUDES the PCK eligibility and publication tests)
+TYPECHECK:               45 -> 45 (zero delta); 0 ACT-OWNED diagnostics
+BIOME:                   14 files checked, no diagnostics
+git diff --check:        clean
+PRODUCTION DELTA:        NONE — all 7 changed paths are new untracked files
+NEW_REGRESSIONS:         0
+CONFIDENTIALITY:         raw histories, sidecars, rendered contexts, raw prompts
+                         and raw model answers live ONLY in the gitignored
+                         tmp/ tree; no credential value is reproduced; the
+                         oracle abstracts every subject
+VSIX PACKAGING:          NOT EXECUTED
+INSTALLED-LIVE:          NOT EXECUTED
+```
+
+### The updated epic board
+
+```text
+A02b-R2  Generation eligibility repair              CLOSED
+A02b-R4a Qwen non-thinking feasibility              PASS_LIVE
+A02b-R4b JSON-mode feasibility                      PASS_LIVE
+A02b-R4c Qwen inference policy                      CLOSED_WITH_REVIEW_CORRECTION
+A11      General Default/None semantics             CLOSED
+A02b-R8  Physical-request cardinality repair        CLOSED
+A02b-R8a SSE and empty-response verification        CLOSED
+A02b-R7  Evidence-first input optimization          CLOSED — NO_INCREMENTAL_UTILITY
+A02b-R9  Generation-time record budget              HIGH_PRIORITY — FIRST-ORDER_DEFECT
+A02b-R5  Auxiliary cache isolation                  RECON_PENDING
+A02b-R6  Source-prefix freshness                    UNRESOLVED
+A02b-R3  Exact-head repackaging                     BLOCKED
+A02b-R10 Compaction knowledge-conservation recon    CLOSED — GO_SEMANTIC_MEMORY_CONTRACT_RECON
+A11a     Adaptive-thinking UI consistency           FOLLOW_UP
+A11b     Installed settings round trip              LIVE_PENDING
+M31-R1   Historical MiniMax evidence reconciliation  REOPENED
+M31-R2   MiniMax settings-to-wire qualification     PENDING
+M31-R3   Direct API comparison                      PENDING
+M31-R4   Controlled TTFE benchmark                  PENDING
+A05      Round C convergence                        PENDING
+A10      Evidence-continuity confidentiality         SECURITY_BACKLOG
+B06      Completion-continuation quiescence         RECON_PENDING
+```
+
+**A10 IS NOT TOUCHED.** The evidence-continuity reference-trust defect
+remains an INDEPENDENT security work item. This ACT does not close it, does
+not repair it and does not use it as a substitute explanation.
+
+**NO NEW REVIEW CYCLE IS REQUIRED** unless a new P0 appears.
