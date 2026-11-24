@@ -41090,3 +41090,142 @@ remains an INDEPENDENT security work item. This ACT does not close it, does
 not repair it and does not use it as a substitute explanation.
 
 **NO NEW REVIEW CYCLE IS REQUIRED** unless a new P0 appears.
+
+# ACT-CLINEMM-COMPACTION-BOUNDED-EVIDENCE-INPUT-CONTRACT-RECON-01 — GO_BOUNDED_SUMMARIZER_INPUT_REPAIR — 2026-11-24
+
+```text
+ACT_ID: ACT-CLINEMM-COMPACTION-BOUNDED-EVIDENCE-INPUT-CONTRACT-RECON-01
+TYPE: bounded executable recon (no production repair)
+VERDICT: GO_BOUNDED_SUMMARIZER_INPUT_REPAIR
+ENTRY_HEAD: 4e805223786212b8a17ef40c2a74c617475cc776
+EVIDENCE: .factory/evidence/ACT-CLINEMM-COMPACTION-BOUNDED-EVIDENCE-INPUT-CONTRACT-RECON-01/
+  01-production-source-recon.md   02-reviewer-corrections.md
+  03-trust-boundary.md            04-candidate-comparison.md
+  05-exit-report.md               06-limitations-and-mistranscription.md
+  07-gates.md
+```
+
+**THE FOUR REVIEWER CORRECTIONS ARE IMPLEMENTED AND EXECUTABLE.**
+
+```text
+SOURCE_PREFIX_CONSERVATION=VERIFIED_EXECUTABLE
+  The frozen prefix hash equals the sidecar's recorded source_prefix_hash
+  (sha256:00720111f28d…). The continuation reconstructed at the boundary is
+  BYTE-IDENTICAL with and without a synthetic post-boundary observation
+  (cleanLength 92555 == contaminatedLength 92555, marker absent from both).
+  W1 contamination window: 2 messages. W2: 38.
+
+MINIMAL_RESTORATION_CONTROL=CONSTRUCTED_A0_PLUS_FRAGMENT
+  The M arm is replaced by A0+O4 and A0+O7, whose base is A0's own rendered
+  continuation, byte for byte. Each restoration flips ONLY its own item:
+    A0    O1 INCORRECT  O4 INCORRECT  O7 INCORRECT
+    A0O4  O1 INCORRECT  O4 CORRECT    O7 INCORRECT
+    A0O7  O1 INCORRECT  O4 INCORRECT  O7 CORRECT
+
+PER_ARM_AVAILABILITY=PER_ARM_OWN_SCORES
+  Only PRESERVED is AVAILABLE; PARTIALLY_PRESERVED is PARTIAL; UNOBSERVABLE
+  is not available. One map per arm, from that arm's own S2 scores. The
+  over-strong "information available but ignored" is replaced by
+  MODEL_INTERPRETATION_FAILURE_CANDIDATE.
+
+W2_QUALIFICATION=INDEPENDENTLY_QUALIFIED
+  W2's OWN prefix established 7 of 12 W1 propositions. O4 and O7 are NOT
+  among them — W2 never acquired them. The predecessor's "W2 S2 = 3 critical
+  omitted" was an artefact of applying W1's oracle to a session that had not
+  acquired W1's knowledge.
+```
+
+**THE S2 CONSERVATION LADDER — the budget-ORDER finding.**
+
+The boundary prefix holds 123 structured payloads. A first-come budget of 24
+reaches only the first tenth of the investigation, so the decisive evidence
+(at canonical indexes 65, 67, 187, 189) is never offered. Two refinements
+fix it with NO new inference request: a LINE-WINDOW selection that keeps the
+informative lines, and a RELEVANCE-ORDERED budget.
+
+```text
+arm   evidence policy                       critOmitted  requests  promptChars
+A0    production omission (baseline)              5           1        46902
+BE    bounded evidence, TRANSCRIPT order          3           1        82219
+BR    bounded evidence, RELEVANCE order            1           1        89347
+```
+
+**THE HONEST BEHAVIOURAL PICTURE.** The S2 gain is large; the behavioural
+flip is NOT established for the bounded-evidence arms.
+
+```text
+arm   behavioural correct  partial  incorrect
+A0            0               0        3
+A0O4          1               0        2
+A0O7          1               0        2
+BE            0               2        3
+BR            0               3        3
+```
+
+**THE INPUT IS NECESSARY BUT NOT SUFFICIENT.** The predecessor proved the
+first half — a prompt cannot preserve a value the input never contained.
+This ACT proves the second half — the summarizer must also PRESERVE the
+value, with its subject and its material qualifications, THROUGH the
+compression. The restoration arms put the evidence in the RESUMED MODEL's
+context; the bounded-evidence arms put it in the SUMMARIZER's input.
+
+**THE MIS-TRANSCRIPTION FINDING.** The BR summary records the socket timeout
+as "500 ms / 1500 ms" when the observed value is "500 ms / 1000 ms" — it
+took the unrelated KC_NS_KAFKA_SEND_TIMEOUT_MS that was also in the input. A
+mis-transcription is NOT an omission, and it is a failure mode the production
+omission policy does not have. It is the strongest reason this ACT remains a
+RECON.
+
+**THE CONFIDENTIALITY WORK IS NOT UNDONE — IT IS MEASURED.** Against the
+REAL prefix: 5 secret-shaped tokens, 0 leaked into either admitted set; the
+live-looking REDSMS_API_KEY value is carried by neither projection; the
+credential-bearing source paths are refused entirely.
+
+```text
+CONFIDENTIALITY_CONSERVATION=ZERO_LEAKAGE_MEASURED
+AUTHORITY_CONSERVATION=PRESERVED
+A10_DEPENDENCY=NONE
+ADDITIONAL_PRODUCTION_INFERENCE_REQUESTS=0
+PRODUCTION_DELTA=NONE
+```
+
+**A PRODUCTION DEFECT WAS FOUND AND IS REPORTED, NOT REPAIRED.** The
+production sanitizeOutcomeText() backtracks catastrophically on a long body
+with no match — a 500 000-character run does not terminate. The contract
+BOUNDS BEFORE it REDACTS, which is the safe direction. The production
+sanitizer is shared with the evidence-continuity module, so its repair is a
+separate, wider change.
+
+### The gates
+
+```text
+ACT-OWNED WITNESSES:     34/34 PASS
+EXISTING CONTEXT SUITE:  71 files passed | 1 skipped; 1028 tests passed
+FULL CORE SUITE:         BASELINE (ACT files removed) 113 failed / 6119 passed
+                         WITH THE ACT               113 failed / 6153 passed
+                         IDENTICAL failure count, IDENTICAL failing file set,
+                         +34 passing = the ACT's 34 witnesses. NEW_REGRESSIONS=0
+TYPECHECK:               72 -> 72 (zero delta); 0 ACT-OWNED diagnostics
+BIOME:                   8 files checked, 0 errors
+git diff --check:        clean
+PRODUCTION DELTA:        NONE — all 14 changed paths are new untracked files
+VSIX PACKAGING:          NOT EXECUTED
+INSTALLED-LIVE:          NOT EXECUTED
+```
+
+### The updated epic board
+
+```text
+A02b-R11 Bounded summarizer evidence-input contract GO_BOUNDED_SUMMARIZER_INPUT_REPAIR
+A02b-R12 Compression-step preservation obligation   RECON_PENDING — NEXT
+A10      Evidence-continuity confidentiality         SECURITY — RED_REPRODUCED
+```
+
+**THE IMPLEMENTER'S OBLIGATION, STATED EXPLICITLY.** The compression step,
+not the input selection, is now the binding constraint. The successor MUST:
+carry the value WITH ITS SUBJECT and its MATERIAL QUALIFICATIONS in a form
+that cannot be merged with a neighbouring value; measure the
+mis-transcription mode rather than assume it absent; and remain at ONE
+inference request.
+
+**A10 IS NOT TOUCHED** and remains an INDEPENDENT security work item.
