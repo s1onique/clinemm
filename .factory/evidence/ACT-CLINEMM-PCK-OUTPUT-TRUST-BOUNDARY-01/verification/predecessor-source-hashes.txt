@@ -1,0 +1,17 @@
+# Predecessor source-file SHA-256 (re-verified at entry of ACT-CLINEMM-PCK-OUTPUT-TRUST-BOUNDARY-01)
+# Path: sdk/packages/core/src/extensions/context/source-visibility-discriminator/<file>
+# Generated: 2026-11-23T23:17:22Z
+
+ef0476b3d13f12137a269fa2c310c32fd9ea939d951817fcaa306c41b9247cd2  projection.ts
+f25d78dfd0817672708035cd8bb884b346fbddba06dc6f6a5badee8176f43975  trust.ts
+c643cd977e7ce5484766c06dfa82e391a79d7f55a0016d23fdf3ef0471cd822e  candidate-views.ts
+6d30b2ff0e52f6a7b59b525a24f91d1641e2e63770fd8a6277c8877fd4134a3e  content-origin.ts
+31a23a75929ff6e860733e14410b4687d0d307b69d5f93f638f80b43a5f91e0f  selection.ts
+6be1c73f220d3815211bcf1d2edbbf9d9dcce496a433048d6ea6d7acb5074d41  discriminator.fixture.ts
+ebe50ada6cd8898b7cb385b2d3435a3f994a07b10802d41267ff426255d9a97a  security-controls.test.ts
+8a1f9ed38631d1f0de0e2a071942e80361647449f3adefe441c289b2b258fafa  trust-provenance.test.ts
+064c645abdfbc818030d9472acbd04c2071cf2980ab12ccb0e60a0d55613cffe  causal-ablation.test.ts
+2456a702806228a3f51b636fe58c95ea3c6e653b7aabb1c17068361697c46ae3  visibility-red.test.ts
+34f650aa571ccbc5e1d0ee19e483a7f53ee7c30907ec3c3354e6b55c64ff6963  selection.test.ts
+ba774ee88cd60a34c38771fb65e4ef730588df18756869b69efa262a3ab17fcf  reasoning-boundary.test.ts
+14f9c87f867afd8091c3673d91f90ca4457330c8c9ce80b949cfd056abe256a8  model-evaluation.test.ts

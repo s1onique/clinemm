@@ -1,0 +1,19 @@
+# Frozen private artefact hash verification (operator-local, NOT committed content)
+# Session: 1795466566666_uzla2   Capture run: cap_run_Nw2dRTjG
+# Date: 2026-11-23T23:22:51Z
+# Root: ~/clinemm-private-captures/1795466566666_uzla2/
+
+53161e6b3b4190951442dc37e89016a7d1b7e67898a01bc29d2bd250fe83efe1  pre.json
+c938f0e2174a3edf74ddb0580bc1918d25acd722d6d4e73c6c45c00c8463e191  post.json
+40a60baf6ca1fadf0cfe2d6bcfc2538b6e653dcf948af7c4bc98f91dfd3070e2  second-pre.json
+666c87977416a08fc54cffe7563b012866e40d790d1c57c227d6a76ecd05a807  second-post.json
+49bff441c6cbcb0aa904aae8a80dcb567e6897a878986834764322b072fd845d  first-compaction.json
+6bc0f6f9dfab122229dc52bc3954144db403ae234c63e26233dcbb02cd43b069  second-compaction.json
+
+# Expected (from the predecessor ACT):
+53161e6b3b4190951442dc37e89016a7d1b7e67898a01bc29d2bd250fe83efe1  pre.json
+c938f0e2174a3edf74ddb0580bc1918d25acd722d6d4e73c6c45c00c8463e191  post.json
+40a60baf6ca1fadf0cfe2d6bcfc2538b6e653dcf948af7c4bc98f91dfd3070e2  second-pre.json
+666c87977416a08fc54cffe7563b012866e40d790d1c57c227d6a76ecd05a807  second-post.json
+49bff441c6cbcb0aa904aae8a80dcb567e6897a878986834764322b072fd845d  first-compaction.json
+6bc0f6f9dfab122229dc52bc3954144db403ae234c63e26233dcbb02cd43b069  second-compaction.json

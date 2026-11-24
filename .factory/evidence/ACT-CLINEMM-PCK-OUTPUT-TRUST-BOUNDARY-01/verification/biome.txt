@@ -1,0 +1,6 @@
+# Biome
+# Command: bun x --bun @biomejs/biome check sdk/packages/core/src/extensions/context/output-trust-boundary/
+# Date: 2026-11-23T23:22:04Z
+
+Checked 10 files in 37ms. No fixes applied.
+EXIT_CODE=

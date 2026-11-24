@@ -1,0 +1,17 @@
+# Production-source delta
+# Date: 2026-11-23T23:22:04Z
+
+$ git diff --stat HEAD
+(empty above = zero tracked modifications)
+
+$ git status --porcelain=v1
+?? .factory/evidence/ACT-CLINEMM-PCK-OUTPUT-TRUST-BOUNDARY-01/
+?? .factory/evidence/ACT-CLINEMM-PCK-SOURCE-VISIBILITY-DISCRIMINATOR-01/
+?? sdk/packages/core/scripts/source-visibility-discriminator.generate.ts
+?? sdk/packages/core/src/extensions/context/output-trust-boundary/
+?? sdk/packages/core/src/extensions/context/source-visibility-discriminator/
+
+$ git stash list
+(empty above = no stashes)
+
+PRODUCTION_DELTA: NONE — every ACT path is a NEW untracked file.

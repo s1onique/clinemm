@@ -1,0 +1,25 @@
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core
+
+ ✓ src/extensions/context/output-trust-boundary/injection-red.test.ts > ACT-CLINEMM-PCK-OUTPUT-TRUST-BOUNDARY-01 — G2.3 injection RED > G2.3.1: the original text was TOOL-RESULT DATA, not an instruction channel 1ms
+ ✓ src/extensions/context/output-trust-boundary/injection-red.test.ts > ACT-CLINEMM-PCK-OUTPUT-TRUST-BOUNDARY-01 — G2.3 injection RED > G2.3.2: DEFECT — the REAL exported renderer carries the instruction-shaped string 0ms
+ ✓ src/extensions/context/output-trust-boundary/injection-red.test.ts > ACT-CLINEMM-PCK-OUTPUT-TRUST-BOUNDARY-01 — G2.3 injection RED > G2.3.3: DEFECT — the instruction reaches the persisted summary projection 0ms
+ ✓ src/extensions/context/output-trust-boundary/injection-red.test.ts > ACT-CLINEMM-PCK-OUTPUT-TRUST-BOUNDARY-01 — G2.3 injection RED > G2.3.4: a model-authored banner does NOT by itself block publication 0ms
+ ✓ src/extensions/context/output-trust-boundary/injection-red.test.ts > ACT-CLINEMM-PCK-OUTPUT-TRUST-BOUNDARY-01 — G2.3 injection RED > G2.3.5: NON-VACUITY — removing the injected text stops the assertion while the record still renders 0ms
+ ✓ src/extensions/context/output-trust-boundary/injection-red.test.ts > ACT-CLINEMM-PCK-OUTPUT-TRUST-BOUNDARY-01 — G2.3 injection RED > G2.3.6: the injection is ALSO carried when it is hidden in a qualification 0ms
+ ✓ src/extensions/context/output-trust-boundary/injection-red.test.ts > ACT-CLINEMM-PCK-OUTPUT-TRUST-BOUNDARY-01 — G2.3 injection RED > G2.3.7: DOWNSTREAM_UNAUTHORIZED_ACTION is NOT_EXECUTED — the suite contains no instrumented consumer 0ms
+ ✓ src/extensions/context/output-trust-boundary/confidentiality-red.test.ts > ACT-CLINEMM-PCK-OUTPUT-TRUST-BOUNDARY-01 — G2 confidentiality RED > G2.1.1: the synthetic reference resolves, its semantic support is NOT verified, and the assurance is bounded 1ms
+ ✓ src/extensions/context/output-trust-boundary/confidentiality-red.test.ts > ACT-CLINEMM-PCK-OUTPUT-TRUST-BOUNDARY-01 — G2 confidentiality RED > G2.1.2: the dummy secret IS in the synthetic tool result and IS in the model-authored candidate 0ms
+ ✓ src/extensions/context/output-trust-boundary/confidentiality-red.test.ts > ACT-CLINEMM-PCK-OUTPUT-TRUST-BOUNDARY-01 — G2 confidentiality RED > G2.1.3: DEFECT — the REAL exported renderCheckpointSection carries the dummy secret into the rendered section 0ms
+ ✓ src/extensions/context/output-trust-boundary/confidentiality-red.test.ts > ACT-CLINEMM-PCK-OUTPUT-TRUST-BOUNDARY-01 — G2 confidentiality RED > G2.1.4: DEFECT — the secret reaches the PERSISTED SUMMARY projection 0ms
+ ✓ src/extensions/context/output-trust-boundary/confidentiality-red.test.ts > ACT-CLINEMM-PCK-OUTPUT-TRUST-BOUNDARY-01 — G2 confidentiality RED > G2.1.5: NON-VACUITY — removing the secret from the candidate stops the leak assertion 0ms
+ ✓ src/extensions/context/output-trust-boundary/confidentiality-red.test.ts > ACT-CLINEMM-PCK-OUTPUT-TRUST-BOUNDARY-01 — G2 confidentiality RED > G2.1.6: NON-VACUITY — the same content in a DIFFERENT field is still detected 0ms
+ ✓ src/extensions/context/output-trust-boundary/confidentiality-red.test.ts > ACT-CLINEMM-PCK-OUTPUT-TRUST-BOUNDARY-01 — G2 confidentiality RED > G2.1.7: the OPAQUE dummy (no recognisable keyword) leaks too — the decisive case against a secret-pattern scanner 0ms
+ ✓ src/extensions/context/output-trust-boundary/confidentiality-red.test.ts > ACT-CLINEMM-PCK-OUTPUT-TRUST-BOUNDARY-01 — G2 confidentiality RED > G2.1.8: the leak is not an artefact of the record id or the reference text 0ms
+ ✓ src/extensions/context/output-trust-boundary/confidentiality-red.test.ts > ACT-CLINEMM-PCK-OUTPUT-TRUST-BOUNDARY-01 — G2 confidentiality RED > G2.1.9: the section is appended to, not substituted for, the ordinary summary — the ordinary content is not lost 0ms
+
+ Test Files  2 passed (2)
+      Tests  16 passed (16)
+   Start at  02:19:21
+   Duration  82ms (transform 50ms, setup 0ms, import 64ms, tests 6ms, environment 0ms)
+
