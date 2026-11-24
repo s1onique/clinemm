@@ -1,5 +1,6 @@
 import { QwenApiRegions } from "@shared/api"
-import { Mode } from "@shared/storage/types"
+import { type Mode, REASONING_EFFORT_SELECTOR_DEFAULT, toReasoningConfigPatch } from "@shared/storage/types"
+
 import { VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useProviderConfig } from "@/hooks/useProviderConfig"
@@ -108,11 +109,11 @@ export const QwenProvider = ({ showModelOptions, isPopup, currentMode }: QwenPro
 					{selectedModelInfo.supportsReasoning === true && (
 						<ReasoningEffortSelector
 							currentMode={currentMode}
-							defaultEffort="none"
+							defaultEffort={REASONING_EFFORT_SELECTOR_DEFAULT}
 							description="Use None to disable extended thinking. Higher effort improves depth, but uses more tokens."
 							onEffortChange={(effort) => {
 								void write({
-									reasoning: { enabled: effort !== "none", effort: effort !== "none" ? effort : undefined },
+									reasoning: toReasoningConfigPatch(effort),
 								}).catch((err) => console.error("Failed to update Qwen reasoning effort:", err))
 							}}
 						/>

@@ -439,6 +439,27 @@ function buildGatewayRequest(
 						enabled: config.thinking,
 						effort: config.reasoningEffort,
 						budgetTokens: config.thinkingBudgetTokens,
+						// ACT-CLINEMM-REASONING-DEFAULT-NONE-SEMANTICS-REPAIR-01.
+						//
+						// The EXPLICIT, user-visible `None` selection is recorded
+						// here. The `ProviderConfig` carries it as
+						// `reasoningNoneSelected`, which is derived from the
+						// PERSISTED effort — the only evidence of an explicit
+						// user selection. Without it the request would reach
+						// the production boundary as an ANONYMOUS disable, and
+						// the user's explicit `None` would be silently
+						// replaced by the model's own default.
+						//
+						// A disable with no explicit selection keeps the
+						// pre-existing behaviour: `"unknown"`, so the model
+						// applies its own default.
+						...(config.thinking === false
+							? {
+									disableReason: config.reasoningNoneSelected
+										? ("none" as const)
+										: ("unknown" as const),
+								}
+							: {}),
 					}
 				: undefined,
 		signal,

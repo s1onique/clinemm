@@ -1,5 +1,11 @@
 import VertexData from "@shared/providers/vertex.json"
-import type { Mode } from "@shared/storage/types"
+import {
+	type Mode,
+	REASONING_EFFORT_SELECTOR_DEFAULT,
+	ReasoningEffortSelection,
+	toReasoningConfigPatch,
+} from "@shared/storage/types"
+
 import { isClaudeOpusAdaptiveThinkingModel, resolveClaudeOpusAdaptiveThinking } from "@shared/utils/reasoning-support"
 import { VSCodeCheckbox, VSCodeDropdown, VSCodeLink, VSCodeOption } from "@vscode/webview-ui-toolkit/react"
 import { useCallback, useEffect, useRef, useState } from "react"
@@ -190,11 +196,8 @@ export const VertexProvider = ({ showModelOptions, isPopup, currentMode }: Verte
 
 	const adaptiveThinkingDefaultEffort =
 		resolveClaudeOpusAdaptiveThinking(modeFields.reasoningEffort, modeFields.thinkingBudgetTokens).effort ?? "none"
-	const handleReasoningEffortChange = (effort: string) => {
-		writeProviderConfig(
-			{ reasoning: { enabled: effort !== "none", effort: effort !== "none" ? effort : undefined } },
-			"reasoning effort",
-		)
+	const handleReasoningEffortChange = (effort: ReasoningEffortSelection) => {
+		writeProviderConfig({ reasoning: toReasoningConfigPatch(effort) }, "reasoning effort")
 	}
 
 	return (
@@ -331,7 +334,7 @@ export const VertexProvider = ({ showModelOptions, isPopup, currentMode }: Verte
 					) : selectedModelInfo.supportsReasoning === true ? (
 						<ReasoningEffortSelector
 							currentMode={currentMode}
-							defaultEffort="none"
+							defaultEffort={REASONING_EFFORT_SELECTOR_DEFAULT}
 							description="Use None to disable extended thinking. Higher effort improves depth, but uses more tokens."
 							onEffortChange={handleReasoningEffortChange}
 						/>

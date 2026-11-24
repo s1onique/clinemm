@@ -20,6 +20,7 @@ import type {
 	ModelReasoningOption,
 } from "@cline/shared";
 import { describe, expect, it } from "vitest";
+import { isUnsupportedReasoningConfigurationError } from "../errors";
 import { createGateway } from "../gateway";
 
 const PROVIDER_ID = "nvidia";
@@ -146,19 +147,38 @@ describe("OpenAI-compatible reasoning effort wire contract", () => {
 });
 
 describe("OpenAI-compatible reasoning disable wire contract", () => {
-	it("sends none for a model the catalog does not list", async () => {
+	// ACT-CLINEMM-REASONING-DEFAULT-NONE-SEMANTICS-REPAIR-01.
+	//
+	// The disable wire contract distinguishes the two user-visible states:
+	//
+	//   - an EXPLICIT `None` selection (`disableReason: "none"`) — the user
+	//     CHOSE to disable reasoning. It must reach the wire as
+	//     `reasoning_effort: "none"`, so the endpoint applies the user's
+	//     policy instead of its own default.
+	//
+	//   - a DERIVED (anonymous) disable (`disableReason: "unknown"`) —
+	//     reasoning was disabled for some other reason. It keeps the
+	//     predecessor's provider-gated behavior: only a provider whose
+	//     portable top-level option carries a reasoning level may be told
+	//     "none", so the model keeps its own default.
+	//
+	// The predecessor asserted that EVERY disable reached the wire. That
+	// assertion was already stale against the fork's provider gate; the
+	// repair restores the explicit-selection case and keeps the derived
+	// case gated.
+	it("sends none for an EXPLICIT `None` on a model the catalog does not list", async () => {
 		const body = await wireBody({
 			modelId: "example/reasoning-model",
-			reasoning: { enabled: false },
+			reasoning: { enabled: false, disableReason: "none" },
 			reasoningOptions: undefined,
 		});
 		expect(body.reasoning_effort).toBe("none");
 	});
 
-	it("sends none for a model that advertises it", async () => {
+	it("sends none for an EXPLICIT `None` on a model that advertises it", async () => {
 		const body = await wireBody({
 			modelId: "example/reasoning-model",
-			reasoning: { enabled: false },
+			reasoning: { enabled: false, disableReason: "none" },
 			reasoningOptions: [{ type: "effort", values: ["none", "low", "high"] }],
 		});
 		expect(body.reasoning_effort).toBe("none");
@@ -181,5 +201,32 @@ describe("OpenAI-compatible reasoning disable wire contract", () => {
 			capabilities: ["text"],
 		});
 		expect(body).not.toHaveProperty("reasoning_effort");
+	});
+
+	it("sends nothing to a model known not to reason, even for an EXPLICIT `None`", async () => {
+		// A model the catalog says does not reason cannot be switched off,
+		// so the disable is dropped rather than sent to an endpoint that
+		// would reject it.
+		const body = await wireBody({
+			modelId: "example/non-reasoning-model",
+			reasoning: { enabled: false, disableReason: "none" },
+			reasoningOptions: undefined,
+			capabilities: ["text"],
+		});
+		expect(body).not.toHaveProperty("reasoning_effort");
+	});
+
+	it("REJECTS an EXPLICIT `None` on a model whose catalog has no off option", async () => {
+		// The model mandates reasoning: it advertises no off option. The
+		// production boundary REJECTS the explicit selection with the typed
+		// error rather than silently letting the model's mandatory default
+		// replace the user's choice.
+		await expect(
+			wireBody({
+				modelId: KIMI_K3_ID,
+				reasoning: { enabled: false, disableReason: "none" },
+				reasoningOptions: KIMI_K3_EFFORTS,
+			}),
+		).rejects.toSatisfy(isUnsupportedReasoningConfigurationError);
 	});
 });

@@ -69,9 +69,20 @@ export const AuthSettingsSchema = z.object({
 
 export type AuthSettings = z.infer<typeof AuthSettingsSchema>;
 
+/**
+ * ACT-CLINEMM-REASONING-DEFAULT-NONE-SEMANTICS-REPAIR-01.
+ *
+ * The persisted reasoning settings.
+ *
+ * `effort` accepts the `"default"` sentinel in addition to the reasoning
+ * levels, so a hand-built or legacy settings object can name it. The
+ * sentinel is NOT a persisted reasoning effort — the persistence layer
+ * REMOVES the explicit override instead of writing it — so the boundary
+ * treats it as the absent state (see `toProviderConfig()`).
+ */
 export const ReasoningSettingsSchema = z.object({
 	enabled: z.boolean().optional(),
-	effort: ReasoningLevelSchema.optional(),
+	effort: z.union([ReasoningLevelSchema, z.literal("default")]).optional(),
 	budgetTokens: z.number().int().positive().optional(),
 });
 
@@ -208,7 +219,25 @@ export function toProviderConfig(
 	const providerId = settings.provider as ProviderId;
 	const normalizedProviderId = normalizeProviderId(providerId);
 	const includeKnownModels = options.includeKnownModels !== false;
-	const unifiedReasoningLevel = settings.reasoning?.effort || "none";
+	// ACT-CLINEMM-REASONING-DEFAULT-NONE-SEMANTICS-REPAIR-01.
+	//
+	// The persisted effort is the user's EXPLICIT selection. Three states are
+	// distinguishable:
+	//
+	//   - ABSENT          — "Default": no explicit override. The model keeps
+	//     its own reasoning policy. NOTHING is named on the wire.
+	//   - `"none"`         — an EXPLICIT disable. It must reach the wire as
+	//     the provider's own `reasoning_effort: "none"`, so the endpoint
+	//     knows the user asked for it.
+	//   - a positive effort — an EXPLICIT effort.
+	//
+	// The `"default"` sentinel is a UI-level value and is never a persisted
+	// reasoning effort. If one ever reached this boundary it would name a
+	// reasoning effort no endpoint knows, so it is DROPPED here and treated
+	// as the absent state.
+	const persistedEffort = settings.reasoning?.effort;
+	const unifiedReasoningLevel =
+		persistedEffort === "default" ? undefined : persistedEffort || "none";
 	const reasoningEffort =
 		unifiedReasoningLevel === "none" ? undefined : unifiedReasoningLevel;
 	// ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01 (D2 correction).
@@ -230,7 +259,7 @@ export function toProviderConfig(
 	// `effort === "none"` is evidence of an explicit selection; an
 	// anonymous disable must stay anonymous so the model keeps its own
 	// default behavior.
-	const reasoningNoneSelected = settings.reasoning?.effort === "none";
+	const reasoningNoneSelected = persistedEffort === "none";
 
 	const providerDefaults = OPENAI_COMPATIBLE_PROVIDERS[normalizedProviderId];
 	const generatedKnownModels =

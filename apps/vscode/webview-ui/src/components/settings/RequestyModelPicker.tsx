@@ -1,7 +1,13 @@
 import { requestyDefaultModelId, requestyDefaultModelInfo } from "@shared/api"
 import { toRequestyServiceUrl } from "@shared/clients/requesty"
 import { EmptyRequest } from "@shared/proto/cline/common"
-import { Mode } from "@shared/storage/types"
+import {
+	type Mode,
+	REASONING_EFFORT_SELECTOR_DEFAULT,
+	ReasoningEffortSelection,
+	toReasoningConfigPatch,
+} from "@shared/storage/types"
+
 import { VSCodeLink, VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
 import Fuse from "fuse.js"
 import React, { KeyboardEvent, useEffect, useMemo, useRef, useState } from "react"
@@ -177,9 +183,9 @@ const RequestyModelPicker: React.FC<RequestyModelPickerProps> = ({ isPopup, base
 	// the live catalog entry — the committed legacy snapshot can be cleared by
 	// provider-config writes, and the safe-default fallback would over-report.
 	const showReasoningEffort = requestyModels[selectedModelId]?.supportsReasoning === true
-	const handleReasoningEffortChange = (effort: string) => {
+	const handleReasoningEffortChange = (effort: ReasoningEffortSelection) => {
 		void write({
-			reasoning: { enabled: effort !== "none", effort: effort !== "none" ? effort : undefined },
+			reasoning: toReasoningConfigPatch(effort),
 		}).catch((err) => console.error("Failed to update Requesty reasoning effort:", err))
 	}
 
@@ -260,7 +266,7 @@ const RequestyModelPicker: React.FC<RequestyModelPickerProps> = ({ isPopup, base
 					{showReasoningEffort && (
 						<ReasoningEffortSelector
 							currentMode={currentMode}
-							defaultEffort="none"
+							defaultEffort={REASONING_EFFORT_SELECTOR_DEFAULT}
 							description="Use None to disable extended thinking. Higher effort improves depth, but uses more tokens."
 							onEffortChange={handleReasoningEffortChange}
 						/>

@@ -1,5 +1,11 @@
 import type { ModelInfo } from "@shared/api"
-import type { Mode } from "@shared/storage/types"
+import {
+	type Mode,
+	REASONING_EFFORT_SELECTOR_DEFAULT,
+	ReasoningEffortSelection,
+	toReasoningConfigPatch,
+} from "@shared/storage/types"
+
 import { isClaudeOpusAdaptiveThinkingModel, resolveClaudeOpusAdaptiveThinking } from "@shared/utils/reasoning-support"
 import { VSCodeLink, VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
 import Fuse from "fuse.js"
@@ -173,9 +179,9 @@ const VercelModelPicker: React.FC<VercelModelPickerProps> = ({ isPopup, currentM
 	// can be cleared by provider-config writes (fallback-source resolutions).
 	const showReasoningEffort =
 		showAdaptiveThinkingEffort || (vercelAiGatewayModels[selectedModelId] ?? selectedModelInfo)?.supportsReasoning === true
-	const handleReasoningEffortChange = (effort: string) => {
+	const handleReasoningEffortChange = (effort: ReasoningEffortSelection) => {
 		void write({
-			reasoning: { enabled: effort !== "none", effort: effort !== "none" ? effort : undefined },
+			reasoning: toReasoningConfigPatch(effort),
 		}).catch((err) => console.error("Failed to update Vercel AI Gateway reasoning effort:", err))
 	}
 
@@ -270,7 +276,9 @@ const VercelModelPicker: React.FC<VercelModelPickerProps> = ({ isPopup, currentM
 					{showReasoningEffort && (
 						<ReasoningEffortSelector
 							currentMode={currentMode}
-							defaultEffort={showAdaptiveThinkingEffort ? adaptiveThinkingDefaultEffort : "none"}
+							defaultEffort={
+								showAdaptiveThinkingEffort ? adaptiveThinkingDefaultEffort : REASONING_EFFORT_SELECTOR_DEFAULT
+							}
 							description={
 								showAdaptiveThinkingEffort
 									? "Use None to disable adaptive thinking. Higher effort increases response detail and token usage."

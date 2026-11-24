@@ -1,5 +1,6 @@
 import { UpdateApiConfigurationRequestNew } from "@shared/proto/index.cline"
-import { Mode } from "@shared/storage/types"
+import { type Mode, toReasoningConfigPatch } from "@shared/storage/types"
+
 import { VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useProviderConfig } from "@/hooks/useProviderConfig"
@@ -117,7 +118,7 @@ export const MoonshotProvider = ({ showModelOptions, isPopup, currentMode }: Moo
 							currentMode={currentMode}
 							onEffortChange={(effort) => {
 								void write({
-									reasoning: { enabled: effort !== "none", effort: effort !== "none" ? effort : undefined },
+									reasoning: toReasoningConfigPatch(effort),
 								}).catch((err) => console.error("Failed to update Moonshot reasoning effort:", err))
 							}}
 						/>

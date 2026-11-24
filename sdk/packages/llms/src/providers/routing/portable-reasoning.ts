@@ -21,6 +21,30 @@ export interface PortableReasoningWire {
 	context: GatewayProviderContext;
 }
 
+/**
+ * ACT-CLINEMM-REASONING-DEFAULT-NONE-SEMANTICS-REPAIR-01.
+ *
+ * Whether the request carries an EXPLICIT, user-visible `None` selection.
+ *
+ * The explicit selection is the record that the user CHOSE to disable
+ * reasoning, as opposed to a disable that was derived for some other
+ * reason. The distinction is load-bearing: an explicit selection must
+ * reach the wire (so the endpoint applies the user's policy) and must be
+ * REJECTED on a model that mandates reasoning (so the user's choice is not
+ * silently replaced by the model's mandatory default). A derived disable
+ * keeps the pre-existing behaviour: the model applies its own default.
+ *
+ * The `disableReason` is the production record of the explicit selection.
+ * It is set by the gateway when the request's reasoning is disabled AND
+ * the persisted/requested selection was an explicit `None`.
+ */
+function hasExplicitNoneSelection(request: GatewayStreamRequest): boolean {
+	return (
+		request.reasoning?.enabled === false &&
+		request.reasoning.disableReason === "none"
+	);
+}
+
 const PORTABLE_REASONING_PROVIDERS = new Set([
 	"anthropic",
 	"bedrock",
@@ -124,6 +148,28 @@ const VERBATIM_REASONING_ADAPTERS = new Set<AiSdkProviderOptionsTarget>([
 ]);
 
 /**
+ * ACT-CLINEMM-REASONING-DEFAULT-NONE-SEMANTICS-REPAIR-01.
+ *
+ * Whether the target adapter forwards the reasoning level to the wire
+ * VERBATIM (as `reasoning_effort`).
+ *
+ * Such an adapter can carry a disable: the level reaches the endpoint
+ * unchanged, so the endpoint applies the requested policy. An adapter that
+ * translates the level through its own per-model effort maps cannot, which
+ * is why the gate below is keyed on the ADAPTER rather than on the
+ * provider id.
+ *
+ * The answer is `false` when the adapter is unknown: an unknown adapter is
+ * not evidence that it can carry the level, so the conservative reading
+ * applies and the disable is dropped.
+ */
+function carriesVerbatimReasoningLevel(
+	wire: PortableReasoningWire | undefined,
+): boolean {
+	return !!wire?.adapter && VERBATIM_REASONING_ADAPTERS.has(wire.adapter);
+}
+
+/**
  * Snap a level to the model's advertised effort ladder when the adapter sends
  * it verbatim, since endpoints reject levels outside their ladder.
  */
@@ -190,6 +236,7 @@ function mayReason(context: GatewayProviderContext | undefined): boolean {
 function resolvePortableLevel(
 	request: GatewayStreamRequest,
 	context: GatewayProviderContext | undefined,
+	wire?: PortableReasoningWire,
 ): AiSdkReasoning | undefined {
 	// ACT-CLINEMM-PCK-QWEN-INFERENCE-POLICY-01:
 	//
@@ -223,6 +270,42 @@ function resolvePortableLevel(
 		return undefined;
 	}
 	if (reasoning.enabled === false) {
+		// ACT-CLINEMM-REASONING-DEFAULT-NONE-SEMANTICS-REPAIR-01.
+		//
+		// An EXPLICIT, user-visible `None` selection is honoured for any
+		// adapter that forwards the reasoning level VERBATIM to the wire
+		// (`reasoning_effort`). The predecessor's `PORTABLE_REASONING_PROVIDERS`
+		// gate is a PROVIDER-ID list, so an OpenAI-compatible endpoint — which
+		// speaks exactly that wire shape — was excluded from it and the user's
+		// explicit selection was silently dropped: the request went out
+		// WITHOUT a `reasoning_effort`, so a default-on reasoning model kept
+		// thinking while the user believed they had disabled it.
+		//
+		// The capability that matters here is the ADAPTER's: an adapter that
+		// puts the level on the wire unchanged can carry a disable. That is
+		// the same fact `VERBATIM_REASONING_ADAPTERS` already records, so
+		// the gate is composed with it rather than duplicated as a new
+		// provider list.
+		//
+		// The DERIVED (anonymous) disable keeps the predecessor's behaviour
+		// exactly: only a provider whose portable top-level option actually
+		// carries a reasoning level may be told "none", and a model whose
+		// catalog entry omits the reasoning capability cannot be switched off.
+		// The explicit selection is additionally fitted to the model's
+		// advertised controls below, so an unsupported disable is dropped
+		// rather than sent to an endpoint that would reject it.
+		if (hasExplicitNoneSelection(request)) {
+			if (NON_PORTABLE_REASONING_PROVIDERS.has(request.providerId)) {
+				return undefined;
+			}
+			if (
+				!PORTABLE_REASONING_PROVIDERS.has(request.providerId) &&
+				!carriesVerbatimReasoningLevel(wire)
+			) {
+				return undefined;
+			}
+			return mayReason(context) ? "none" : undefined;
+		}
 		// Adapters that forward the level verbatim (`reasoning_effort`) would
 		// otherwise send nothing, leaving default-on reasoning models thinking.
 		//
@@ -266,7 +349,10 @@ export function resolvePortableReasoning(
 	request: GatewayStreamRequest,
 	wire?: PortableReasoningWire,
 ): AiSdkReasoning | undefined {
-	const level = resolvePortableLevel(request, wire?.context);
+	// ACT-CLINEMM-REASONING-DEFAULT-NONE-SEMANTICS-REPAIR-01: the wire (and
+	// with it the target adapter) is passed down, so the level resolution can
+	// tell an adapter that forwards the level verbatim from one that cannot.
+	const level = resolvePortableLevel(request, wire?.context, wire);
 	if (!level || !wire) {
 		return level;
 	}

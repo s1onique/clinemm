@@ -13,6 +13,7 @@ import { type ApiConfiguration, type ApiProvider, type ModelInfo, openAiModelInf
 import { Logger } from "@shared/services/Logger"
 import { getProviderModelIdKey } from "@shared/storage/provider-keys"
 import { isSecretKey, isSettingsKey, type SecretKey, type SettingsKey } from "@shared/storage/state-keys"
+import { REASONING_EFFORT_SELECTOR_DEFAULT } from "@shared/storage/types"
 import { StateManager } from "@/core/storage/StateManager"
 import { getProviderSettingsManager } from "../provider-migration"
 import type {
@@ -676,6 +677,28 @@ function writeProviderSettingsFields(providerId: ProviderId, patch: ProviderConf
 	}
 
 	// Handle reasoning patch separately — maps to ProviderSettings.reasoning
+	//
+	// ACT-CLINEMM-REASONING-DEFAULT-NONE-SEMANTICS-REPAIR-01.
+	//
+	// The patch carries the user's EXPLICIT selection, and the three
+	// selections are distinct:
+	//
+	//   - an EFFORT (`"low"` …)     — the user selected that effort.
+	//   - `"none"`                  — the user EXPLICITLY disabled reasoning.
+	//   - the `"default"` sentinel   — the user REMOVED the explicit
+	//                                 override, so the model keeps its own
+	//                                 default.
+	//
+	// The predecessor collapsed `"none"` into `effort: undefined`, which
+	// DESTROYED the only evidence of an explicit user selection: the
+	// production boundary could no longer tell "the user chose None" from
+	// "reasoning was disabled for some other reason", so an explicit None on
+	// a model that mandates reasoning was silently replaced by the model's
+	// mandatory default instead of being rejected.
+	//
+	// The `"default"` sentinel is a UI-level value and is NEVER persisted: it
+	// removes the explicit override, so the persisted configuration returns
+	// to the absent state and NO explicit-None provenance is manufactured.
 	if ("reasoning" in patch) {
 		const reasoningPatch = patch.reasoning
 		if (reasoningPatch === null || reasoningPatch === undefined) {
@@ -687,10 +710,19 @@ function writeProviderSettingsFields(providerId: ProviderId, patch: ProviderConf
 				merged.enabled = reasoningPatch.enabled
 			}
 			if (reasoningPatch.effort !== undefined) {
-				merged.effort = reasoningPatch.effort === "none" ? undefined : reasoningPatch.effort
-				// When effort is "none", disable reasoning
-				if (reasoningPatch.effort === "none") {
-					merged.enabled = false
+				if (reasoningPatch.effort === REASONING_EFFORT_SELECTOR_DEFAULT) {
+					// The explicit override was REMOVED: the model keeps its own
+					// default and no explicit-None provenance is manufactured.
+					delete merged.effort
+					delete merged.enabled
+					delete merged.budgetTokens
+				} else {
+					// The explicit selection is PERSISTED, including an explicit
+					// `"none"`: it is the record that the user chose it.
+					merged.effort = reasoningPatch.effort
+					if (reasoningPatch.effort === "none") {
+						merged.enabled = false
+					}
 				}
 			}
 			if (reasoningPatch.budgetTokens !== undefined) {

@@ -271,7 +271,12 @@ message CommittedModelSelection {
 
 message ProviderReasoningPatch {
   optional bool enabled = 1;
-  optional string effort = 2; // "none" | "low" | "medium" | "high" | "xhigh"
+  // "default" | "none" | "low" | "medium" | "high" | "xhigh"
+  //
+  // ACT-CLINEMM-REASONING-DEFAULT-NONE-SEMANTICS-REPAIR-01: "default" is the
+  // UI sentinel that REMOVES the explicit override (the model keeps its own
+  // default); "none" is an EXPLICIT disable and is persisted as such.
+  optional string effort = 2;
   optional int32 budget_tokens = 3;
 }
 

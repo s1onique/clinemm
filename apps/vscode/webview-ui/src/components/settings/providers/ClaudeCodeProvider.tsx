@@ -1,5 +1,6 @@
 import { openAiModelInfoSafeDefaults } from "@shared/api"
-import { Mode } from "@shared/storage/types"
+import { type Mode, REASONING_EFFORT_SELECTOR_DEFAULT, toReasoningConfigPatch } from "@shared/storage/types"
+
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useProviderConfig } from "@/hooks/useProviderConfig"
 import { useProviderModelSelection } from "@/hooks/useProviderModelSelection"
@@ -93,11 +94,11 @@ export const ClaudeCodeProvider = ({ showModelOptions, isPopup, currentMode }: C
 					{selectedModelInfo.supportsReasoning === true && (
 						<ReasoningEffortSelector
 							currentMode={currentMode}
-							defaultEffort="none"
+							defaultEffort={REASONING_EFFORT_SELECTOR_DEFAULT}
 							description="Use None to disable extended thinking. Higher effort improves depth, but uses more tokens."
 							onEffortChange={(effort) => {
 								void write({
-									reasoning: { enabled: effort !== "none", effort: effort !== "none" ? effort : undefined },
+									reasoning: toReasoningConfigPatch(effort),
 								}).catch((err) => console.error("Failed to update Claude Code reasoning effort:", err))
 							}}
 						/>

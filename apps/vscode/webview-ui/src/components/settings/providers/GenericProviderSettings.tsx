@@ -1,4 +1,4 @@
-import { Mode } from "@shared/storage/types"
+import { type Mode, toReasoningConfigPatch } from "@shared/storage/types"
 import { type ProviderId } from "@/context/ExtensionStateContext"
 import { useProviderConfig } from "@/hooks/useProviderConfig"
 import { useProviderModelSelection } from "@/hooks/useProviderModelSelection"
@@ -111,10 +111,7 @@ export const GenericProviderSettings = ({
 							currentMode={currentMode}
 							onEffortChange={(effort) => {
 								void write({
-									reasoning: {
-										enabled: effort !== "none",
-										effort: effort !== "none" ? effort : undefined,
-									},
+									reasoning: toReasoningConfigPatch(effort),
 								}).catch((err) => console.error(`Failed to update ${providerName} reasoning effort:`, err))
 							}}
 						/>

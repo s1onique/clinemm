@@ -134,7 +134,18 @@ export interface EffectiveProviderConfig {
  */
 interface ProviderReasoningPatch {
 	readonly enabled?: boolean
-	readonly effort?: string // "none" | "low" | "medium" | "high" | "xhigh"
+	/**
+	 * The user's EXPLICIT reasoning selection.
+	 *
+	 * ACT-CLINEMM-REASONING-DEFAULT-NONE-SEMANTICS-REPAIR-01:
+	 *
+	 *   - `"default"` — the explicit override was REMOVED. The model keeps
+	 *     its own default and no explicit-None provenance is manufactured.
+	 *   - `"none"`    — the user EXPLICITLY disabled reasoning. This is
+	 *     persisted, because it is the only evidence of the selection.
+	 *   - an effort   — the user EXPLICITLY selected that effort.
+	 */
+	readonly effort?: string // "default" | "none" | "low" | "medium" | "high" | "xhigh"
 	readonly budgetTokens?: number
 }
 

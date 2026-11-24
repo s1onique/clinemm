@@ -1,5 +1,6 @@
 import { openAiModelInfoSafeDefaults } from "@shared/api"
-import { Mode } from "@shared/storage/types"
+import { type Mode, ReasoningEffortSelection, toReasoningConfigPatch } from "@shared/storage/types"
+
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useProviderConfig } from "@/hooks/useProviderConfig"
 import { useProviderModelSelection } from "@/hooks/useProviderModelSelection"
@@ -72,9 +73,9 @@ export const XaiProvider = ({ showModelOptions, isPopup, currentMode }: XaiProvi
 		}).catch((err) => console.error("Failed to commit X AI model selection:", err))
 	}
 
-	const handleReasoningEffortChange = (effort: string) => {
+	const handleReasoningEffortChange = (effort: ReasoningEffortSelection) => {
 		void write({
-			reasoning: { enabled: effort !== "none", effort: effort !== "none" ? effort : undefined },
+			reasoning: toReasoningConfigPatch(effort),
 		}).catch((err) => console.error("Failed to update X AI reasoning effort:", err))
 	}
 

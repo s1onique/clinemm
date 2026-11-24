@@ -2,7 +2,8 @@ import { TooltipContent, TooltipTrigger } from "@radix-ui/react-tooltip"
 import { azureOpenAiDefaultApiVersion, type OpenAiCompatibleModelInfo, openAiModelInfoSafeDefaults } from "@shared/api"
 import { OpenAiModelsRequest } from "@shared/proto/cline/models"
 import { fromProtobufModelInfo } from "@shared/proto-conversions/models/typeConversion"
-import type { Mode } from "@shared/storage/types"
+import { type Mode, REASONING_EFFORT_SELECTOR_DEFAULT, toReasoningConfigPatch } from "@shared/storage/types"
+
 import { VSCodeButton, VSCodeCheckbox, VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Tooltip } from "@/components/ui/tooltip"
@@ -637,13 +638,10 @@ export const OpenAICompatibleProvider = ({
 				<>
 					<ReasoningEffortSelector
 						currentMode={currentMode}
-						defaultEffort="none"
+						defaultEffort={REASONING_EFFORT_SELECTOR_DEFAULT}
 						onEffortChange={(effort) => {
 							void write({
-								reasoning: {
-									enabled: effort !== "none",
-									effort: effort !== "none" ? effort : undefined,
-								},
+								reasoning: toReasoningConfigPatch(effort),
 							}).catch((err) => console.error("Failed to update OpenAI Compatible reasoning effort:", err))
 						}}
 					/>

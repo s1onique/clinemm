@@ -1,5 +1,6 @@
 import { ModelInfo, openAiModelInfoSafeDefaults } from "@shared/api"
-import { Mode } from "@shared/storage/types"
+import { type Mode, REASONING_EFFORT_SELECTOR_DEFAULT, toReasoningConfigPatch } from "@shared/storage/types"
+
 import { VSCodeButton, VSCodeLink } from "@vscode/webview-ui-toolkit/react"
 import { RefreshCwIcon } from "lucide-react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
@@ -128,11 +129,11 @@ export const LiteLlmProvider = ({ showModelOptions, isPopup, currentMode }: Lite
 					{selectedModelInfo?.supportsReasoning && (
 						<ReasoningEffortSelector
 							currentMode={currentMode}
-							defaultEffort="none"
+							defaultEffort={REASONING_EFFORT_SELECTOR_DEFAULT}
 							description="Use None to disable extended thinking. Higher effort improves depth, but uses more tokens."
 							onEffortChange={(effort) => {
 								void write({
-									reasoning: { enabled: effort !== "none", effort: effort !== "none" ? effort : undefined },
+									reasoning: toReasoningConfigPatch(effort),
 								}).catch((err) => console.error("Failed to update LiteLLM reasoning effort:", err))
 							}}
 						/>

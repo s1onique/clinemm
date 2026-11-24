@@ -3,7 +3,8 @@ import { CLINE_RECOMMENDED_MODELS_FALLBACK } from "@shared/cline/recommended-mod
 import { EmptyRequest, StringRequest } from "@shared/proto/cline/common"
 import { type ClineRecommendedModel, ClineRecommendedModelsResponse } from "@shared/proto/cline/models"
 import { fromProtobufModelInfo } from "@shared/proto-conversions/models/typeConversion"
-import type { Mode } from "@shared/storage/types"
+import { type Mode, REASONING_EFFORT_SELECTOR_DEFAULT, toReasoningConfigPatch } from "@shared/storage/types"
+
 import { isClaudeOpusAdaptiveThinkingModel, resolveClaudeOpusAdaptiveThinking } from "@shared/utils/reasoning-support"
 import { VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
 import Fuse from "fuse.js"
@@ -621,7 +622,9 @@ const ClineModelPicker: React.FC<ClineModelPickerProps> = ({
 								showAdaptiveThinkingEffort ? (["none", "low", "medium", "high", "xhigh"] as const) : undefined
 							}
 							currentMode={currentMode}
-							defaultEffort={showAdaptiveThinkingEffort ? adaptiveThinkingDefaultEffort : "medium"}
+							defaultEffort={
+								showAdaptiveThinkingEffort ? adaptiveThinkingDefaultEffort : REASONING_EFFORT_SELECTOR_DEFAULT
+							}
 							description={
 								showAdaptiveThinkingEffort
 									? "Use None to disable adaptive thinking. Higher effort increases response detail and token usage."
@@ -630,10 +633,7 @@ const ClineModelPicker: React.FC<ClineModelPickerProps> = ({
 							label={showAdaptiveThinkingEffort ? "Adaptive Thinking" : undefined}
 							onEffortChange={(effort) => {
 								writeProviderConfig({
-									reasoning: {
-										enabled: effort !== "none",
-										effort: effort !== "none" ? effort : undefined,
-									},
+									reasoning: toReasoningConfigPatch(effort),
 								})
 							}}
 						/>

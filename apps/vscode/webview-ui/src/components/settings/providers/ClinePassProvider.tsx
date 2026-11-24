@@ -3,7 +3,8 @@ import { openAiModelInfoSafeDefaults } from "@shared/api"
 import { CLINE_RECOMMENDED_MODELS_FALLBACK } from "@shared/cline/recommended-models"
 import { EmptyRequest } from "@shared/proto/cline/common"
 import { type ClineRecommendedModel, ClineRecommendedModelsResponse } from "@shared/proto/cline/models"
-import { Mode } from "@shared/storage/types"
+import { type Mode, toReasoningConfigPatch } from "@shared/storage/types"
+
 import { useEffect, useMemo, useState } from "react"
 import styled from "styled-components"
 import { buildClinePassSubscriptionPageUrl } from "@/components/onboarding/clinePassSubscribe"
@@ -217,10 +218,7 @@ export const ClinePassProvider = ({ showModelOptions, isPopup, currentMode }: Cl
 							currentMode={currentMode}
 							onEffortChange={(effort) => {
 								void write({
-									reasoning: {
-										enabled: effort !== "none",
-										effort: effort !== "none" ? effort : undefined,
-									},
+									reasoning: toReasoningConfigPatch(effort),
 								}).catch((err) => console.error("Failed to update ClinePass reasoning effort:", err))
 							}}
 						/>

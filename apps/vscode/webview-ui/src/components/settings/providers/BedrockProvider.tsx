@@ -1,6 +1,12 @@
 import { openAiModelInfoSafeDefaults } from "@shared/api"
 import BedrockData from "@shared/providers/bedrock.json"
-import type { Mode } from "@shared/storage/types"
+import {
+	type Mode,
+	REASONING_EFFORT_SELECTOR_DEFAULT,
+	ReasoningEffortSelection,
+	toReasoningConfigPatch,
+} from "@shared/storage/types"
+
 import { isClaudeOpusAdaptiveThinkingModel, resolveClaudeOpusAdaptiveThinking } from "@shared/utils/reasoning-support"
 import {
 	VSCodeCheckbox,
@@ -76,9 +82,9 @@ export const BedrockProvider = ({ showModelOptions, isPopup, currentMode }: Bedr
 				}
 	const adaptiveThinkingDefaultEffort =
 		resolveClaudeOpusAdaptiveThinking(modeFields.reasoningEffort, modeFields.thinkingBudgetTokens).effort ?? "none"
-	const handleReasoningEffortChange = (effort: string) => {
+	const handleReasoningEffortChange = (effort: ReasoningEffortSelection) => {
 		void write({
-			reasoning: { enabled: effort !== "none", effort: effort !== "none" ? effort : undefined },
+			reasoning: toReasoningConfigPatch(effort),
 		}).catch((err) => console.error("Failed to update Bedrock reasoning effort:", err))
 	}
 	const awsAuthentication =
@@ -613,7 +619,7 @@ export const BedrockProvider = ({ showModelOptions, isPopup, currentMode }: Bedr
 							bedrockModels[customBaseModelId]?.supportsReasoning === true) ? (
 						<ReasoningEffortSelector
 							currentMode={currentMode}
-							defaultEffort="none"
+							defaultEffort={REASONING_EFFORT_SELECTOR_DEFAULT}
 							description="Use None to disable extended thinking. Higher effort improves depth, but uses more tokens."
 							onEffortChange={handleReasoningEffortChange}
 						/>
