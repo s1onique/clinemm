@@ -1,0 +1,10 @@
+# Typecheck diagnostic count — sdk/packages/core (tsconfig.dev.json)
+
+BASELINE (ENTRY_HEAD 821b20e7a, clean tree): 45
+AFTER    (this ACT):                            45
+DELTA:                                          0
+
+The 45 diagnostics are PRE-EXISTING. They were verified by stashing the ACT, running tsc, and comparing the counts (45 == 45).
+
+--- diagnostics mentioning this ACT ---
+(none — the ACT contributes ZERO type errors)

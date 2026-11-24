@@ -79,6 +79,25 @@ export default defineConfig({
 			// The PASSING companion for the same mechanism is
 			// `src/extensions/context/precompaction-knowledge-checkpoint/pck-production-seam.test.ts`.
 			"src/extensions/context/precompaction-knowledge-checkpoint/pck-production-seam.red01.test.ts",
+			// ACT-CLINEMM-PCK-PHYSICAL-REQUEST-CARDINALITY-REPAIR-01: the
+			// RED witness.
+			//
+			// This file asserts that the REAL production transport issues
+			// MORE THAN ONE physical provider request for a checkpoint
+			// request that carries no physical-request policy. It FAILS
+			// against the predecessor behaviour — which is exactly the
+			// receipt of the observed defect — and it is deliberately
+			// EXCLUDED from the default suite so it never blocks the
+			// normal gate.
+			//
+			// It is runnable ON DEMAND through its dedicated config:
+			//
+			//   bun run test:red:pck-physical-request-cardinality
+			//
+			// The PASSING companion for the same mechanism, and for the
+			// causal ablation and the conservation controls, is
+			// `src/extensions/context/precompaction-knowledge-checkpoint/pck-physical-request-cardinality.test.ts`.
+			"src/extensions/context/precompaction-knowledge-checkpoint/pck-physical-request-cardinality.red01.test.ts",
 		],
 		// Process, Git, and SQLite integration coverage shares this suite with
 		// pure unit tests. Windows hosted runners regularly exceed Vitest's 5s

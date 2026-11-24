@@ -40540,3 +40540,108 @@ A05      Round C convergence                        PENDING
 ```
 
 ```
+
+---
+
+## ACT-CLINEMM-PCK-PHYSICAL-REQUEST-CARDINALITY-REPAIR-01 — A02b-R8 closure
+
+The PCK's no-automatic-retry contract is now enforced at the PHYSICAL
+provider-request boundary.
+
+### What the defect was
+
+The PCK's own contract (`runtime.ts` § "NO RETRY LOOP") terminates a failed
+attempt with no automatic second generation. It was enforced ONLY at the
+PCK-ATTEMPT level. The PHYSICAL boundary beneath it carried THREE independent
+retry authorities, and ALL THREE applied to the PCK request unconditionally:
+
+1. `MODEL_REQUEST_MAX_RETRIES = 3` — the AI SDK's request-initiation retry
+   (`maxRetries`).
+2. `MODEL_STREAM_MAX_RETRIES = 3` — the AI SDK's post-stream-start
+   provider-error retry (`streamRetries`).
+3. `withEmptyResponseRetry()` — the empty-response / transient-network
+   middleware, applied as the OUTERMOST wrap at the single AI SDK composition
+   point, default 3 attempts.
+
+Worst case: 3 x 3 x 3 = 27 physical provider requests for one PCK attempt.
+
+### The reproduction
+
+Measured against the REAL production transport (`createHandlerAsync` -> the
+gateway -> `ai-sdk.ts` -> `streamText`) with a stubbed `fetch`:
+
+```text
+PCK_CARDINALITY_DIAGNOSTIC 429=4 500=4 401=1
+```
+
+The 4 is 1 initial request plus 3 request-initiation retries. The 401 case was
+already correct (a non-retryable error terminates).
+
+The retries also cost WALL-CLOCK time: 14 038 ms of backoff in the harness,
+against 3 ms for the repaired request. That is the mechanism behind the
+observed 180 s unsuccessful checkpoint — 180 s is the PCK's own deadline, and
+the retry backoff is what pushed the attempt into it.
+
+The RED witness is an ISOLATED receipt, excluded from the default suite and
+runnable on demand (`bun run test:red:pck-physical-request-cardinality`). Its
+`R1.1` FAILS with `expected 4 to be 1`; that failure IS the receipt.
+
+### What the repair does
+
+A NEW, ENUMERATED, request-scoped channel — deliberately SEPARATE from the
+opt-in `inferencePolicy`, so the Qwen opt-in scope is NOT disturbed:
+
+```ts
+export interface GatewayRequestRetryPolicy {
+    readonly maxRetries?: number;
+    readonly streamRetries?: number;
+    readonly emptyResponseAttempts?: number;
+}
+```
+
+It flows `ProviderConfig.requestPolicy` -> `buildGatewayRequest()` ->
+`GatewayStreamRequest.requestPolicy` -> `ai-sdk.ts`, where the ONE place all
+three authorities are armed resolves the budgets.
+
+The PCK's own policy is `{ maxRetries: 0, streamRetries: 0,
+emptyResponseAttempts: 1 }`, applied UNCONDITIONALLY in the production seam —
+for every PCK model, every provider and every operator — and it produces a NEW
+configuration, so the shared summarizer/agent configuration is never mutated
+and the policy can never leak into an unrelated request.
+
+### Witnesses
+
+- 8 GREEN cases (`sdk/packages/core/src/extensions/context/precompaction-knowledge-checkpoint/pck-physical-request-cardinality.test.ts`):
+  the REAL transport, counting the REAL physical requests.
+- The causal ablation (G1.4): with the policy 1 physical request, without it
+  4 — the GREEN result is caused by the policy, not by the harness.
+- The conservation control (G1.3): an ordinary request keeps its retries.
+- The seam witnesses (G1.7, G1.8): the PRODUCTION seam's own configuration
+  carries the policy, and it coexists with the Qwen INFERENCE policy.
+- Typecheck delta 45 -> 45 (zero); core regression failing file set IDENTICAL
+  to baseline (zero).
+
+### The updated epic board
+
+```text
+A02b-R2  Generation eligibility repair              CLOSED
+A02b-R4a Qwen non-thinking feasibility              PASS_LIVE
+A02b-R4b JSON-mode feasibility                      PASS_LIVE
+A02b-R4c Qwen inference policy                      CLOSED_WITH_REVIEW_CORRECTION
+A11      General Default/None semantics             CLOSED
+A02b-R8  Physical-request cardinality repair        CLOSED
+A02b-R7  Evidence-first input optimization          HIGH_PRIORITY
+A02b-R9  Generation-time record budget              RECON_PENDING
+A02b-R5  Auxiliary cache isolation                  RECON_PENDING
+A02b-R6  Source-prefix freshness                    UNRESOLVED
+A02b-R3  Exact-head repackaging                     BLOCKED
+A11a     Adaptive-thinking UI consistency           FOLLOW_UP
+A11b     Installed settings round trip              LIVE_PENDING
+M31-R1   Historical MiniMax evidence reconciliation  REOPENED
+M31-R2   MiniMax settings-to-wire qualification     PENDING
+M31-R3   Direct API comparison                      PENDING
+M31-R4   Controlled TTFE benchmark                  PENDING
+A05      Round C convergence                        PENDING
+A10      Evidence-continuity confidentiality         SECURITY_BACKLOG
+B06      Completion-continuation quiescence         RECON_PENDING
+```

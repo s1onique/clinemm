@@ -2165,9 +2165,30 @@ export function withEmptyResponseRetry(
 	model: unknown,
 	retryEmptyResponses: ProviderFactoryResult["retryEmptyResponses"],
 	logger: GatewayProviderContext["logger"],
+	/**
+	 * ACT-CLINEMM-PCK-PHYSICAL-REQUEST-CARDINALITY-REPAIR-01.
+	 *
+	 * The request-scoped attempt budget for the middleware.
+	 *
+	 * `1` means the middleware makes a SINGLE attempt: an all-empty turn and
+	 * a mid-stream network interruption before any output both terminate the
+	 * request instead of being re-dialed. `undefined` keeps the middleware's
+	 * own default budget.
+	 */
+	emptyResponseAttempts?: number,
 ): unknown {
 	if (retryEmptyResponses === false) {
 		return model;
+	}
+	if (emptyResponseAttempts !== undefined) {
+		return wrapLanguageModel({
+			model: model as LanguageModelV4,
+			middleware: createRetryEmptyResponseMiddleware({
+				...(retryEmptyResponses ?? {}),
+				maxAttempts: emptyResponseAttempts,
+				logger,
+			}),
+		});
 	}
 	return wrapLanguageModel({
 		model: model as LanguageModelV4,
@@ -2416,6 +2437,22 @@ function createAiSdkProvider(
 				const modelTools = toAiSdkModelToolSet(modelToolAdapters);
 				const tools = mergeAiSdkTools(runtimeTools, modelTools);
 				const systemPrompt = resolveAiSdkSystemPrompt(request);
+				// ACT-CLINEMM-PCK-PHYSICAL-REQUEST-CARDINALITY-REPAIR-01:
+				//
+				// The request-scoped PHYSICAL-REQUEST budget.
+				//
+				// The transport has THREE independent retry authorities, and
+				// this is the ONE place all three are armed. A request that
+				// asserts a policy gets the policy's budgets; every other
+				// request keeps the defaults, so the ordinary working-agent
+				// and summarizer retries are preserved exactly.
+				const retryPolicy = request.requestPolicy?.retryPolicy;
+				const requestMaxRetries =
+					retryPolicy?.maxRetries ?? MODEL_REQUEST_MAX_RETRIES;
+				const streamMaxRetries =
+					retryPolicy?.streamRetries ?? MODEL_STREAM_MAX_RETRIES;
+				const emptyResponseAttempts =
+					retryPolicy?.emptyResponseAttempts ?? undefined;
 				const useSystemOption =
 					typeof systemPrompt === "string" && systemPrompt.trim().length > 0;
 				const messagesSystemPrompt = useSystemOption ? undefined : systemPrompt;
@@ -2491,6 +2528,7 @@ function createAiSdkProvider(
 								provider.operations.language(context.model.id),
 								provider.retryEmptyResponses,
 								context.logger,
+								emptyResponseAttempts,
 							) as never,
 							messages: messages as never,
 							// ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION05-INSTRUCTIONS-TRANSPORT:
@@ -2515,7 +2553,7 @@ function createAiSdkProvider(
 							...(useSystemOption ? { instructions: systemPrompt } : {}),
 							...(tools ? { tools } : {}),
 							abortSignal: request.signal,
-							maxRetries: MODEL_REQUEST_MAX_RETRIES,
+							maxRetries: requestMaxRetries,
 							experimental_repairToolCall: repairMalformedToolCall as never,
 							telemetry: {
 								...aiSdkTelemetry,
@@ -2544,7 +2582,7 @@ function createAiSdkProvider(
 								? { stopWhen: stepCountIs(8) }
 								: {}),
 							...requestConfig,
-							streamRetries: MODEL_STREAM_MAX_RETRIES,
+							streamRetries: streamMaxRetries,
 							...(portableReasoning ? { reasoning: portableReasoning } : {}),
 							onLanguageModelCallStart: () => {
 								capturedError.current = undefined;

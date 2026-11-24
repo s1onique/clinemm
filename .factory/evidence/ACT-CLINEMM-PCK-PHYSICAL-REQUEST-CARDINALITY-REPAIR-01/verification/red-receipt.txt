@@ -1,0 +1,43 @@
+[0m[2m[35m$[0m [2m[1mvitest run --config vitest.red.pck-physical-request-cardinality.config.ts[0m
+(node:23599) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core
+
+(node:23615) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stdout | src/extensions/context/precompaction-knowledge-checkpoint/pck-physical-request-cardinality.red01.test.ts > ACT-CLINEMM-PCK-PHYSICAL-REQUEST-CARDINALITY-REPAIR-01 — R1 RED > R1.2 DIAGNOSTIC: which failure class produces how many physical requests
+PCK_CARDINALITY_DIAGNOSTIC 429=4 500=4 401=1
+
+ ❯ src/extensions/context/precompaction-knowledge-checkpoint/pck-physical-request-cardinality.red01.test.ts (2 tests | 1 failed) 42101ms
+     × R1.1 RED: WITHOUT the policy a PCK request issues MORE THAN ONE physical request 14041ms
+     ✓ R1.2 DIAGNOSTIC: which failure class produces how many physical requests  28059ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/extensions/context/precompaction-knowledge-checkpoint/pck-physical-request-cardinality.red01.test.ts > ACT-CLINEMM-PCK-PHYSICAL-REQUEST-CARDINALITY-REPAIR-01 — R1 RED > R1.1 RED: WITHOUT the policy a PCK request issues MORE THAN ONE physical request
+AssertionError: expected 4 to be 1 // Object.is equality
+
+- Expected
++ Received
+
+- 1
++ 4
+
+ ❯ src/extensions/context/precompaction-knowledge-checkpoint/pck-physical-request-cardinality.red01.test.ts:169:28
+    167|   // TERMINATES. The physical boundary must therefore see ONE request.
+    168|   // The predecessor saw FOUR.
+    169|   expect(physicalRequests).toBe(1);
+       |                            ^
+    170|  });
+    171|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed (2)
+   Start at  06:52:17
+   Duration  43.44s (transform 808ms, setup 0ms, import 1.24s, tests 42.10s, environment 0ms)
+
+[0m[31merror[0m[2m:[0m script [1m"test:red:pck-physical-request-cardinality"[0m exited with code 1[0m

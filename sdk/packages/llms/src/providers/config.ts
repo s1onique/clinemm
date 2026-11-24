@@ -9,6 +9,7 @@ import type {
 	BasicLogger,
 	ExtensionContext,
 	GatewayRequestInferencePolicy,
+	GatewayRequestPhysicalPolicy,
 	ReasoningEffort,
 } from "@cline/shared";
 import type { ModelInfo, ProviderClient } from "../catalog/types";
@@ -286,6 +287,19 @@ export interface ProviderOptions {
 	 * by producing a NEW configuration that carries it.
 	 */
 	inferencePolicy?: GatewayRequestInferencePolicy;
+	/**
+	 * ACT-CLINEMM-PCK-PHYSICAL-REQUEST-CARDINALITY-REPAIR-01.
+	 *
+	 * An EXPLICIT, request-scoped PHYSICAL-REQUEST policy.
+	 *
+	 * It names how many physical provider requests the request is allowed to
+	 * make. It is ABSENT for every request that does not assert one, so those
+	 * requests keep the transport's default retry budgets.
+	 *
+	 * It never mutates a shared provider configuration: a policy is applied
+	 * by producing a NEW configuration that carries it.
+	 */
+	requestPolicy?: GatewayRequestPhysicalPolicy;
 }
 
 /**

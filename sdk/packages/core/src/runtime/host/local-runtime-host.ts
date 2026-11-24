@@ -36,6 +36,7 @@ import {
 	applyPckInferencePolicy,
 	resolvePckInferencePolicy,
 } from "../../extensions/context/precompaction-knowledge-checkpoint/inference-policy";
+import { applyPckPhysicalRequestPolicy } from "../../extensions/context/precompaction-knowledge-checkpoint/physical-request-policy";
 import {
 	isPckClosedEnabled,
 	resolvePckDeadlineMs,
@@ -1153,8 +1154,28 @@ export class LocalRuntimeHost implements RuntimeHost {
 								policyResolution.parameters,
 							)
 						: checkpointProviderConfig;
+					// ACT-CLINEMM-PCK-PHYSICAL-REQUEST-CARDINALITY-REPAIR-01.
+					//
+					// The PCK's NO-AUTOMATIC-RETRY contract is enforced at the
+					// PHYSICAL provider-request boundary, not merely at the
+					// PCK-attempt boundary.
+					//
+					// The policy is applied UNCONDITIONALLY — for every PCK
+					// model, every provider and every operator — because the
+					// contract belongs to the PCK's own failure semantics and
+					// is NOT part of the Qwen inference-policy opt-in scope.
+					// The inference policy above stays restricted to its own
+					// opt-in scope; the two policies are independent
+					// channels on the SAME configuration.
+					//
+					// The application produces a NEW configuration, so the
+					// shared summarizer/agent configuration is never mutated
+					// and the ordinary summarizer's and the working agent's
+					// retries are preserved exactly.
+					const pckCheckpointProviderConfig =
+						applyPckPhysicalRequestPolicy(effectiveCheckpointProviderConfig);
 					return await generateSummary({
-						providerConfig: effectiveCheckpointProviderConfig,
+						providerConfig: pckCheckpointProviderConfig,
 						systemPrompt,
 						request,
 						signal,

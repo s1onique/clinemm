@@ -431,6 +431,13 @@ function buildGatewayRequest(
 						: {}),
 				}
 			: {}),
+		// ACT-CLINEMM-PCK-PHYSICAL-REQUEST-CARDINALITY-REPAIR-01:
+		//
+		// The EXPLICIT, request-scoped PHYSICAL-REQUEST policy. It is ABSENT
+		// for every request that does not assert one, so those requests keep
+		// their pre-ACT behaviour exactly: the transport's default retry
+		// budgets stay armed.
+		...(config.requestPolicy ? { requestPolicy: config.requestPolicy } : {}),
 		reasoning:
 			config.thinking !== undefined ||
 			config.reasoningEffort ||

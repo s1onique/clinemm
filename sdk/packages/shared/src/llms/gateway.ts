@@ -305,6 +305,69 @@ export interface GatewayRequestInferencePolicy {
 	readonly maxTokens?: number;
 }
 
+/**
+ * ACT-CLINEMM-PCK-PHYSICAL-REQUEST-CARDINALITY-REPAIR-01.
+ *
+ * The EXPLICIT, request-scoped PHYSICAL-REQUEST POLICY.
+ *
+ * It is a SEPARATE channel from `GatewayRequestInferencePolicy` on purpose:
+ * the inference policy is an operator-OPT-IN, MODEL-SPECIFIC contract, while
+ * the physical-request policy is a HOST-ASSERTED contract about how many
+ * physical provider requests a request is allowed to make. Conflating them
+ * would drag the Qwen opt-in scope over the request-cardinality contract, and
+ * the two contracts have different owners and different lifetimes.
+ *
+ * Like the inference policy, every field is OPTIONAL and ENUMERATED, so a
+ * caller cannot smuggle an arbitrary transport knob through the shared
+ * request type.
+ */
+export interface GatewayRequestPhysicalPolicy {
+	/**
+	 * The PHYSICAL-REQUEST CARDINALITY contract for this request.
+	 *
+	 * The transport has THREE independent retry authorities — the AI SDK's
+	 * request-initiation retry, the AI SDK's post-stream-start provider-error
+	 * retry, and the empty-response / transient-network middleware. This
+	 * policy names the budget each of them is allowed.
+	 */
+	readonly retryPolicy?: GatewayRequestRetryPolicy;
+}
+
+/**
+ * ACT-CLINEMM-PCK-PHYSICAL-REQUEST-CARDINALITY-REPAIR-01.
+ *
+ * The bounded retry budget for ONE request.
+ *
+ * The values are COUNTS, not durations: the contract the Pre-Compaction
+ * Knowledge Checkpoint asserts is "this request makes exactly ONE physical
+ * provider request", which is a count of requests, not a wall-clock budget.
+ */
+export interface GatewayRequestRetryPolicy {
+	/**
+	 * The AI SDK's request-INITIATION retry budget (`maxRetries`).
+	 *
+	 * `0` means the request is issued exactly once: a failure at request
+	 * initiation terminates the request instead of re-dialing the endpoint.
+	 */
+	readonly maxRetries?: number;
+	/**
+	 * The AI SDK's POST-STREAM-START provider-error retry budget
+	 * (`streamRetries`).
+	 *
+	 * `0` means a provider error reported after streaming started terminates
+	 * the request instead of re-opening the stream.
+	 */
+	readonly streamRetries?: number;
+	/**
+	 * The empty-response / transient-network middleware's attempt budget.
+	 *
+	 * `1` means the middleware makes a single attempt: an all-empty turn and
+	 * a mid-stream network interruption before any output both terminate the
+	 * request.
+	 */
+	readonly emptyResponseAttempts?: number;
+}
+
 export interface GatewayStreamRequest {
 	providerId: string;
 	modelId: string;
@@ -341,6 +404,16 @@ export interface GatewayStreamRequest {
 	 * arbitrary wire field through it.
 	 */
 	inferencePolicy?: GatewayRequestInferencePolicy;
+	/**
+	 * ACT-CLINEMM-PCK-PHYSICAL-REQUEST-CARDINALITY-REPAIR-01.
+	 *
+	 * An EXPLICIT, request-scoped PHYSICAL-REQUEST policy.
+	 *
+	 * It is ABSENT for every request that does not assert one, so those
+	 * requests keep their pre-ACT behaviour exactly: the transport's default
+	 * retry budgets stay armed.
+	 */
+	requestPolicy?: GatewayRequestPhysicalPolicy;
 	reasoning?: {
 		enabled?: boolean;
 		effort?: ReasoningEffort;

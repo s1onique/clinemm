@@ -1,0 +1,16 @@
+(node:21316) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core
+
+(node:21335) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/extensions/context/precompaction-knowledge-checkpoint/pck-physical-request-cardinality.test.ts (8 tests) 28072ms
+     ✓ G1.3 CONSERVATION: an ORDINARY request keeps its retries  14015ms
+     ✓ G1.4 NON-VACUITY: removing the policy RESTORES the defect  14018ms
+
+ Test Files  1 passed (1)
+      Tests  8 passed (8)
+   Start at  06:51:44
+   Duration  29.62s (transform 962ms, setup 0ms, import 1.44s, tests 28.07s, environment 0ms)
+
