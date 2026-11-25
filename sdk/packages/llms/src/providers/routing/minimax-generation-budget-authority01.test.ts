@@ -200,13 +200,31 @@ describe("Discriminator A: generation-budget authority (MiniMax Low)", () => {
 		expect(GATEWAY_SYNTHESIZED_DEFAULT).not.toBe(CATALOG_MAX_OUTPUT_TOKENS);
 	});
 
-	it("A0: with NO requested limit the serialized body carries the synthesized gateway default (157286)", async () => {
+	it("A0: with NO requested limit the serialized body carries the BUILT-IN MiniMax LOW default", async () => {
+		// ACT-CLINEMM-MINIMAX-LOW-OUTPUT-DEFAULT-01.
+		//
+		// The synthesized default (157286) was the value in the frozen
+		// historical capture. It is now the default for every model that is
+		// NOT MiniMax-M3.1-Flash at LOW effort; for THIS model and effort the
+		// built-in default is the 8192 allowance.
 		const { body } = await captureGatewayBody({
 			reasoning: { enabled: true, effort: "low" },
 		});
-		expect(body?.max_tokens).toBe(GATEWAY_SYNTHESIZED_DEFAULT);
+		expect(body?.max_tokens).toBe(8_192);
 		// Low effort is preserved in every case.
 		expect(body?.output_config).toEqual({ effort: "low" });
+	});
+
+	it("A0-catalog: the SYNTHESIZED default still applies to another model", async () => {
+		// The synthesized default is NOT gone: it is the default for every
+		// model that does not carry a model-specific allowance. The sibling
+		// `MiniMax-M3` generation exposes a thinking toggle instead of an
+		// effort ladder, so it keeps the synthesized default.
+		const { body } = await captureGatewayBody({
+			modelId: "MiniMax-M3",
+			reasoning: { enabled: true, effort: "low" },
+		});
+		expect(body?.max_tokens).toBe(GATEWAY_SYNTHESIZED_DEFAULT);
 	});
 
 	it("A1: a requested limit of 8192 REACHES the serialized body unchanged", async () => {
