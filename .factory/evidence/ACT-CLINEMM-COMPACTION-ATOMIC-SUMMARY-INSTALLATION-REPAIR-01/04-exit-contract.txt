@@ -1,0 +1,61 @@
+ENTRY_HEAD=071305731a4a85acc71cea5bd77dbae49d959d51
+SUBJECT_HEAD=7d57559acdfb4f030ab45e2ad8bc43febb01f234
+
+PREDECESSOR_EVIDENCE_CLASSIFICATIONS=CORRECTED
+O4_ORACLE_CONSISTENCY=CONSISTENT_ON_ITS_OWN_EVIDENCE_SET (O4_OBSERVED_SET={47,73}; the predecessor's {42,43,47,73} was rejected because 42 and 43 are NOT in the O4 oracle's evidence set [7,65,67]; the oracle was NOT changed)
+A10_UNCHANGED=YES
+
+PRIMARY_INCOMPLETE_INSTALLATION_RED=REPRODUCED_AND_REPAIRED (the witness passed 3/3 at ENTRY_HEAD asserting the defect was present; it is now a permanent regression gate asserting the repaired behaviour)
+PROVIDER_LENGTH_SIGNAL_PROPAGATION=ESTABLISHED (finish_reason "length" -> mapFinishReason() ai-sdk.ts:1041 -> "max-tokens" -> toApiStreamChunk() compat.ts:651 -> incompleteReason "max_tokens" -> generateSummary(); proven against the REAL gateway and the REAL adapter with a deterministic SSE substitute)
+FAILED_NONEMPTY_SUMMARY_RED=REPRODUCED_AND_REPAIRED (success=false with no error string and non-empty partial text)
+
+KNOWN_INCOMPLETE_SUMMARY_REJECTED=YES (R1, R4, and the content-filter, contradictory-success and contradictory-failure rows)
+FAILED_SUMMARY_REJECTED=YES (R3)
+EMPTY_SUMMARY_CONSERVATION=YES (the long-standing empty-summary diagnostic and its likelyCause are unchanged; the pre-existing CLINE-2911 assertion still passes)
+CANCELLATION_CONSERVATION=YES (the compaction-level cancellation semantics are unchanged; a cancellation inside the transport still propagates and is re-thrown rather than fallen back)
+
+PRIOR_COMPACTION_STATE_CONSERVATION=YES
+SOURCE_BOUNDARY_CONSERVATION=YES (source_message_count and source_prefix_hash unchanged)
+RETAINED_TAIL_CONSERVATION=YES (the prior state's messages are byte-identical)
+REJECTED_TEXT_PROVIDER_PROJECTION=ABSENT
+FALSE_SUCCESS_PUBLICATION=ABSENT
+
+VALID_SUMMARY_POSITIVE_CONTROL=YES
+LATER_ATTEMPT_RECOVERY=YES (R6)
+CONTEXT_BUDGET_FAILURE_HANDLING=UNCHANGED (the existing bounded fallback to basic compaction is reused; a rejected candidate never dispatches a request known to exceed the provider budget)
+NECESSITY_ABLATION=CONFIRMED (removing the acceptance guard restores 19 RED failures including the primary invalid-installation RED; restoring it returns 32 GREEN)
+
+SUMMARY_TERMINAL_STATUS_PROPAGATION=ALREADY_CORRECT (incompleteReason, failed and usedTools already propagated through generateSummary(); only the completion-event observation was added, as `completed`)
+PREMATURE_STREAM_TERMINATION_HANDLING=CLASSIFIED_AND_REJECTED (a stream that ended without its completion event is not installable; it is distinct from the legacy shape)
+CONFLICTING_TERMINAL_SIGNAL_HANDLING=A_KNOWN_NEGATIVE_SIGNAL_OVERRIDES_SUCCESS_AND_NON_EMPTY_TEXT
+LEGACY_COMPLETION_CONSERVATION=YES (a normally-ended transport with no finish-reason metadata stays installable)
+
+REJECTED_CANDIDATE_SAVE_INVOCATIONS=0
+VALID_CANDIDATE_SAVE_POSITIVE_CONTROL=1
+PRIOR_STATE_REPROJECTION=YES (the prior state is re-projected unchanged after a rejected re-compaction)
+DURABLE_PERSISTENCE_QUALIFICATION=ESTABLISHED_OVER_REAL_FILES (the real SessionManifestStore, a real temporary directory, and a reload through the store's own reader; CALLBACK-level state installation is established separately and is NOT conflated with it)
+
+FAILED_SUMMARIZATION_USAGE_CONSERVATION=UNCHANGED (no usage accounting path was added, removed or rewritten; the rejected candidate's tokens are never turned into an accounting figure)
+SUCCESSFUL_COMPACTION_ACCOUNTING_CONSERVATION=UNCHANGED (captureCompactionSkipped, not captureCompactionExecuted; the skipped notice carries phase "skipped" and no tokensAfter/tokensSaved/messagesAfter)
+REJECTED_DECISION_PROGRESS_SAFETY=BOUNDED (the summarizer is asked exactly ONCE per prepare-turn; there is no retry loop)
+
+O1_ADJUDICATION_CORRECTED=YES (five separated criteria; the PROD verdict INCORRECT stands; a stated requirement is not an observed successful operation)
+O4_ADJUDICATION_CORRECTED=YES (PROD INCORRECT for answering 43; TARGETED_SOURCE and FULL_SOURCE CORRECT for answering 47)
+MEASURED_RUN_SOURCE_BINDING=UNESTABLISHED (the sidecar's source-prefix hash is read without verification; current filesystem equality is not promoted into historical execution identity)
+PRODUCTION_ARM_SUMMARY_COMPLETENESS=UNAVAILABLE_FROM_TRACE (the predecessor's replay accepted non-empty text without inspecting terminal completeness; completion is not inferred from prose)
+EXPERIMENTAL_CACHE_AUTHORITY_CORRECTED=YES (PREFIX_COMPARISON_BASIS=HTTP_BODY_STRING_CODE_UNITS; ENGINE_TOKEN_EQUALITY=NOT_ESTABLISHED; DEMONSTRATED_KV_CACHE_REUSE=NOT_ESTABLISHED; the native summarizer recorded ZERO cached tokens; LAST_WORKING produced no completion and no usage; the single resumed transition demonstrates cache recovery for that transition only)
+EXPERIMENTAL_INFERENCE_ACCOUNTING_CORRECTED=YES (one request per question does not establish equal total compaction cost across arms; the summary generation, the nine question-answering requests and the five cache-discriminator requests are counted separately)
+
+LIVE_INFERENCE_REQUESTS=0
+NEW_AUTOMATIC_RETRIES=0
+
+PCK_DEFAULT_OFF=UNCHANGED
+SOURCE_BOUND_EVIDENCE_DEFAULT_OFF=UNCHANGED
+
+ACT_OWNED_DIAGNOSTICS=0
+NEW_REGRESSIONS=0
+
+VSIX_PACKAGING=NOT_EXECUTED
+INSTALLED_LIVE=NOT_EXECUTED
+
+VERDICT=GO_COMPACTION_FIDELITY_REPAIR

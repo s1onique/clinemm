@@ -1,3 +1,134 @@
+# ACT-CLINEMM-COMPACTION-ATOMIC-SUMMARY-INSTALLATION-REPAIR-01 — GO_COMPACTION_FIDELITY_REPAIR — 2026-11-25
+
+```text
+ACT_ID:       ACT-CLINEMM-COMPACTION-ATOMIC-SUMMARY-INSTALLATION-REPAIR-01
+TYPE:         bounded repair (summary acceptance contract)
+VERDICT:      GO_COMPACTION_FIDELITY_REPAIR
+ENTRY_HEAD:   071305731a4a85acc71cea5bd77dbae49d959d51
+SUBJECT_HEAD: 7d57559acdfb4f030ab45e2ad8bc43febb01f234
+BRANCH:       main
+EPIC:         CMP-04
+EVIDENCE:     .factory/evidence/ACT-CLINEMM-COMPACTION-ATOMIC-SUMMARY-INSTALLATION-REPAIR-01/
+                 01-predecessor-evidence-corrections.md
+                 02-completion-status-ownership-recon.md
+                 03-repair-and-verification.md
+                 04-exit-contract.txt
+                 05-exit-report.md
+```
+
+**CMP-04 is CLOSED.** The ordinary (agentic) compactor asked only whether a
+summary EXISTS. `generateSummary()` already collected the provider-reported
+terminal signals (`incompleteReason`, `failed`), but **NO DECISION was made
+on them**: a summary the provider reported as INCOMPLETE — cut off
+mid-sentence by the output budget — or a generation it reported as FAILED
+passed straight through and REPLACED the compacted history exactly like a
+complete one, with no warning, no marker, and the previously usable working
+context gone. The EMPTY case was already handled correctly (skip + warn); the
+INCOMPLETE and FAILED cases were the dangerous ones.
+
+**The invariant is now `KNOWN_INCOMPLETE_SUMMARY_MUST_NOT_REPLACE_USABLE_CONTEXT`.**
+The decision is taken at the boundary that OWNS the summary installation —
+before the replacement compacted history is built, before the authoritative
+compaction state is updated, before a replacement summary is persisted, before
+a successful compaction result is published, and before the compacted source
+boundary advances. Rejecting there leaves the prior valid state and the
+canonical history untouched **by construction**.
+
+A provider-reported successful TRANSPORT is **not** sufficient when a
+separate completion signal reports truncation: a known negative terminal
+signal overrides the success flag and the non-empty text. The
+conflicting-signal rule and the order of authority live in one place, in the
+new `summary-acceptance.ts`.
+
+**This ACT does not claim that a normal model termination proves semantic
+completeness.** No textual heuristic, no keyword scoring, no additional
+inference, no new semantic validation framework, no new public enum, and
+**no automatic retry**: a rejected candidate returns "no compaction" and the
+summarizer is asked exactly once.
+
+**THE PRIMARY RED WAS REPRODUCED AND REPAIRED.** The predecessor's
+defect-positive witness passed 3/3 at ENTRY_HEAD asserting the defect was
+present. It is now a **permanent regression gate** asserting the repaired
+behaviour, driven with an **observable state-owning fixture** (`getState()`
+returns the installed state; `saveState()` records its actual invocation and
+installs what it was handed; the projection consumes the observed installed
+state). Durable persistence is qualified **separately**, over REAL files
+through the REAL store's own reader — the two claims are not conflated.
+
+**EVERY RED-MATRIX ROW REPRODUCED** — R1 (provider-reported incompleteness),
+R2 (the OpenAI-compatible `finish_reason: "length"` signal), R3
+(`success=false` with non-empty partial text), R4 (apparently complete prose
+with an authoritative incomplete signal), R5 (a failed generation with a valid
+prior compaction state), R6 (the positive control: a later valid attempt
+still installs). None is `NOT_REPRODUCED`. The A3 extended rows (content
+filtering, contradictory signals, tool-call termination, whitespace-only
+output, premature stream termination, legacy completion) and the A4
+accounting rows are covered too.
+
+**THE PROVIDER-SIGNAL PROPAGATION WAS ALREADY CORRECT** and was therefore NOT
+modified, per the A2 rule: `finish_reason "length"` -> `mapFinishReason()`
+(`ai-sdk.ts:1041`) -> `"max-tokens"` -> `toApiStreamChunk()` (`compat.ts:651`)
+-> `incompleteReason: "max_tokens"` -> `generateSummary()`. The one signal
+that WAS lost — whether the transport's completion event arrived at all — was
+added as `completed`, so a premature stream termination is distinguishable
+from the legacy shape that stays installable.
+
+**THE PREDECESSOR'S EVIDENCE CLASSIFICATIONS WERE CORRECTED OFFLINE**, from
+existing artifacts only, with **no campaign re-run and no inference request**.
+The material corrections: the **O4 adjudication** (the predecessor adjudicated
+O4 against the observed set {42,43,47,73}; the O4 oracle's own evidence set
+[7,65,67] establishes {47,73}, so 47 IS the smallest and the oracle is
+consistent — the oracle was NOT changed); the **O1 criteria**, now five
+separated criteria, with a stated requirement not treated as an observed
+successful operation; the **cache authority**
+(`PREFIX_COMPARISON_BASIS=HTTP_BODY_STRING_CODE_UNITS` — string comparison,
+NOT engine-token equality, NOT demonstrated KV-cache reuse; the native
+summarizer recorded ZERO cached tokens; LAST_WORKING produced no completion
+and no usage); the **production arm**
+(`PRODUCTION_ARM=RECONSTRUCTED_PRODUCTION_HELPER_COMPOSITION`, and
+`CANDIDATE_SUMMARY_FIDELITY=NOT_ESTABLISHED`); the **historical source
+binding** (`MEASURED_RUN_SOURCE_BINDING=UNESTABLISHED`); the **production-arm
+summary completeness** (`UNAVAILABLE_FROM_TRACE`); the **inference
+accounting** (one request per question does not establish equal total
+compaction cost across arms); the **experimental cache/latency authority**
+(`LATENCY_BASIS=INSTRUMENTED_REPLAY`, `RESUMED_CACHE_CONTROL=SYNTHETIC_CONTEXT_LIVE_PROVIDER`);
+and the **production integration gate summary** (G1, G4 and G6 are all NOT
+SATISFIED, agreeing with the detailed gate).
+`COMMAND_CLASSIFICATION_IS_NOT_CONFIDENTIALITY_AUTHORIZATION` is recorded and
+the classifier-only result-body publication was **NOT** implemented. The
+predecessor's research scripts were **NOT executed** during this ACT.
+
+**UPSTREAM:** #14732 is OPEN; #14741 is OPEN and UNMERGED at
+`34c104e6fc49781cda4adcd73ffdccd8f029fef9`. The upstream PR was **NOT merged
+wholesale**: its behaviour is retry-and-warn-and-**install** ("if the retry
+truncates too, the summary is still installed"), which is **not** equivalent
+to this ACT's invariant. Its retry authority was **not** taken either.
+
+**VERIFICATION:** the five new/converted suites **32 passed**; the context
+suite **1 216 passed / 2 skipped** (88 files) — was 1 187 / 2 skipped before
+this ACT — with **zero new regressions**; the `llms` package suite **1 176
+passed** with **17 pre-existing failures whose identities are IDENTICAL** to
+the baseline (verified by stash-and-rerun, not assumed); typecheck **45
+errors, unchanged from the baseline**, with **zero** in the ACT-owned files;
+**SDK build SUCCEEDED**; Biome clean; `git diff --check` clean; the
+repository's own gitleaks hook reported **no leaks found**.
+**ACT_OWNED_DIAGNOSTICS=0, NEW_REGRESSIONS=0.** No VSIX packaging and no
+installation.
+
+**SCOPE EXCLUSIONS RESPECTED:** no live inference request, no PCK revival or
+vocabulary expansion, no source-bound evidence activation, no raw
+command-result publication expansion, no new evidence-selection heuristics,
+no sanitizer or command-classification expansion, no native-message
+summarizer integration, no model comparison or configuration change, no
+Kurchatov or Strata modification, no LEAMAS repair, no B06 repair, no general
+retry-policy redesign.
+
+**CMP-02 and CMP-03 are preserved as independent work. No successor ACT is
+started automatically.** The recommended successor remains the
+`renderStructuredToolPayload()`-scoped fidelity repair, still subject to a
+formal confidentiality decision.
+
+
 # ACT-CLINEMM-ORDINARY-COMPACTION-UPSTREAM-AND-FIDELITY-REPAIR-01 — HALT_FACTUAL_PRESERVATION_NOT_ESTABLISHED — 2026-11-25
 
 ```text
