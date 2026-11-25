@@ -287,11 +287,39 @@ describe("ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01 (AMENDMENT-01) / A4 ob
 				} catch {
 					// A frozen observation is also acceptable.
 				}
+				// ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01
+				// (AMENDMENT-01): the observer tries to mutate the SHARED
+				// reference arrays of the PARSED PROPOSAL. The validator
+				// RETAINS those exact arrays, so an un-detached observation
+				// would let the observer rewrite the ALREADY-VALIDATED
+				// objective and its revalidation.
+				const proposal = observation.parsedProposal as
+					| {
+							obligationReferences?: string[];
+							evidenceReferences?: string[];
+					  }
+					| undefined;
+				proposal?.obligationReferences?.push("parent-task:SYNTHETIC-A1");
+				proposal?.evidenceReferences?.push(
+					"An observation that was never established",
+				);
 			},
 		});
 		expect(observed).toHaveLength(1);
 		// The mutation attempt did not corrupt the runtime's own record.
 		expect(observed[0]?.disposition).toBe("valid");
+		// The observer's synthetic reference is confined to the observer's
+		// OWN copy: the observation it was handed carries the synthetic
+		// entry, but the runtime-owned proposal does not.
+		const observedProposal = observed[0]?.parsedProposal as
+			| {
+					obligationReferences?: string[];
+					evidenceReferences?: string[];
+			  }
+			| undefined;
+		expect(observedProposal?.obligationReferences).toContain(
+			"parent-task:SYNTHETIC-A1",
+		);
 		// The DISPATCHED request still carries the runtime's own objective
 		// projection — the observer did not alter it.
 		const dispatched = model.requests.filter((request) =>
@@ -302,6 +330,20 @@ describe("ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01 (AMENDMENT-01) / A4 ob
 		expect(dispatched.length).toBeGreaterThan(0);
 		expect(dispatched[0]?.systemPrompt).toContain(
 			"Add an exception boundary around reportUsage() inside finalizeUsage()",
+		);
+		// ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01 (AMENDMENT-01):
+		// the ACTUAL subsequent privileged objective request contains
+		// NEITHER synthetic mutation — neither the fabricated obligation
+		// reference nor the fabricated evidence reference.
+		const privileged = dispatched[0]?.systemPrompt ?? "";
+		expect(privileged).not.toContain("parent-task:SYNTHETIC-A1");
+		expect(privileged).not.toContain(
+			"An observation that was never established",
+		);
+		// The ORIGINAL validated references are preserved.
+		expect(privileged).toContain("parent-task:A1");
+		expect(privileged).toContain(
+			"The last 3 consecutive execution round(s) produced no productive step",
 		);
 	});
 });

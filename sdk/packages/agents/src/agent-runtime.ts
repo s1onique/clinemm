@@ -3381,7 +3381,21 @@ export class AgentRuntime {
 			return;
 		}
 		try {
-			const result = report.call(sink, observation);
+			// ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01 (AMENDMENT-01):
+			// DETACH the observation before it reaches the observer.
+			//
+			// The observation carries the runtime-owned PARSED PROPOSAL, and
+			// the validator RETAINS that proposal's `obligationReferences` and
+			// `evidenceReferences` arrays — the very arrays it validated. A
+			// structural clone breaks the aliasing, so an observer that
+			// mutates those arrays cannot alter the already-validated
+			// objective, its revalidation, or the rendered privileged
+			// instruction.
+			//
+			// The clone is DEEP, so nested structures are detached too. The
+			// observation's own contract is a plain JSON-shaped record, so
+			// `structuredClone` covers it.
+			const result = report.call(sink, structuredClone(observation));
 			// The sink MAY return a Promise. A rejection must never escape
 			// as an unhandled rejection, so the runtime attaches its own
 			// rejection handler. The runtime does NOT await it: the
