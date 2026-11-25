@@ -190,6 +190,7 @@ import {
 	joinStrippedSection,
 	stripAllDelimitedSections,
 } from "./section-delimiters";
+import { resolvePublishedToolLabel } from "./trusted-tool-labels";
 
 /**
  * The maximum number of verified outcomes carried into one summary.
@@ -2221,7 +2222,26 @@ export function renderEvidenceSection(
 		// The name is additionally reduced to a SINGLE LINE, because a line
 		// break in a transcript-supplied name would forge an additional
 		// carried outcome. See `escapePublishedIdentifier()`.
-		const safeToolName = escapePublishedIdentifier(outcome.toolName);
+		//
+		// ACT-CLINEMM-ORDINARY-COMPACTION-UPSTREAM-AND-FIDELITY-REPAIR-01:
+		// the name is now RESOLVED to a RUNTIME-OWNED label before it is
+		// published. A name that is a member of the runtime's trusted tool
+		// vocabulary is published under that name; any other name is
+		// published under the neutral runtime-owned label.
+		//
+		// Escaping is NOT sufficient against this channel: the escaping
+		// neutralises the section's delimiters and the line structure,
+		// but the name's BYTES are still transcript-supplied and still
+		// reach the published artifact — a credential-shaped name carries
+		// its payload through the escaping unchanged. The published form
+		// must therefore not be the transcript form at all.
+		//
+		// The INTERNAL canonical identity is untouched: the outcome record,
+		// the call/result join and the rejection ledger still use the
+		// canonical name. Only the PUBLISHED REPRESENTATION changes.
+		const safeToolName = escapePublishedIdentifier(
+			resolvePublishedToolLabel(outcome.toolName),
+		);
 		const line = `- ${safeToolName} (${aliasFor(outcome.toolUseId)}): succeeded${suffix}`;
 		lines.push(
 			line.length > MAX_CARRIED_OUTCOME_CHARS

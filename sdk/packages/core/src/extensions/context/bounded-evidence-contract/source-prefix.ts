@@ -222,6 +222,40 @@ export const POST_BOUNDARY_TOOL_NAME =
 	"synthetic-post-boundary-observation-tool";
 
 /**
+ * The COMMAND the synthetic observation declares.
+ *
+ * ACT-CLINEMM-ORDINARY-COMPACTION-UPSTREAM-AND-FIDELITY-REPAIR-01: the
+ * command CLASSIFICATION is the detection route that survives the
+ * tool-label correction.
+ *
+ * The predecessor's detection route was the published tool NAME. That route
+ * is now closed by design: a transcript-supplied tool name is published
+ * under a NEUTRAL, runtime-owned label unless it is a member of the
+ * runtime's trusted tool vocabulary, and the synthetic tool name is
+ * deliberately NOT a member (it is a synthetic name, so making it trusted
+ * would weaken the correction for the sake of a test).
+ *
+ * The command CLASSIFICATION is the route that remains: it is drawn from the
+ * FINITE, runtime-owned classification allowlist, so it is published
+ * verbatim and is a property of the OBSERVATION rather than of the
+ * transcript-supplied name.
+ *
+ * The synthetic history's PRE-BOUNDARY messages carry no tool outcomes at
+ * all, so the synthetic observation is the ONLY outcome the carry-forward
+ * can publish, and the classification identifies it unambiguously.
+ */
+export const POST_BOUNDARY_COMMAND =
+	"helm dependency synthetic-post-boundary-observation";
+
+/**
+ * The runtime-owned CLASSIFICATION of {@link POST_BOUNDARY_COMMAND}.
+ *
+ * It is the allowlist label the production classifier derives from the
+ * synthetic command.
+ */
+export const POST_BOUNDARY_COMMAND_CLASSIFICATION = "helm dependency";
+
+/**
  * Build a synthetic post-boundary assistant/tool message pair.
  *
  * The message carries the marker in BOTH a text block and a tool-result body,
@@ -241,7 +275,7 @@ export function buildSyntheticPostBoundaryMessages(): MessageWithMetadata[] {
 					type: "tool_use",
 					id: POST_BOUNDARY_TOOL_USE_ID,
 					name: POST_BOUNDARY_TOOL_NAME,
-					input: { commands: ["echo synthetic-post-boundary-observation"] },
+					input: { commands: [POST_BOUNDARY_COMMAND] },
 				},
 			],
 			ts: 0,
@@ -256,7 +290,7 @@ export function buildSyntheticPostBoundaryMessages(): MessageWithMetadata[] {
 					content: [
 						{
 							success: true,
-							result: `${POST_BOUNDARY_MARKER}: echo synthetic-post-boundary-observation`,
+							result: `${POST_BOUNDARY_MARKER}: ${POST_BOUNDARY_COMMAND}`,
 						} as unknown as TextContent,
 					],
 					is_error: false,

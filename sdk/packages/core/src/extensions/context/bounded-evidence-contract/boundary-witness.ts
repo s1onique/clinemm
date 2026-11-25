@@ -61,8 +61,8 @@ import type { MessageWithMetadata } from "@cline/shared";
 import {
 	buildSyntheticPostBoundaryMessages,
 	computeSourcePrefixHash,
+	POST_BOUNDARY_COMMAND_CLASSIFICATION,
 	POST_BOUNDARY_MARKER,
-	POST_BOUNDARY_TOOL_NAME,
 	POST_BOUNDARY_TOOL_USE_ID,
 } from "./source-prefix";
 
@@ -71,21 +71,36 @@ import {
  *
  * The observation is detectable through EITHER of its published forms:
  * the marker text (carried by the message content and by the payload's own
- * `result`) or the tool-call id / tool name (carried by the
+ * `result`) or the tool-call id / command classification (carried by the
  * verified-outcome section). Checking all of them makes the witness
  * independent of WHICH route publishes the observation.
  *
  * ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01: the
  * verified-outcome section no longer publishes the canonical tool-call id —
- * it publishes an OPAQUE alias — so the tool NAME is now the route by
- * which the carried evidence identifies the observation. The tool-call id
- * is still checked, because the canonical TAIL carries it verbatim.
+ * it publishes an OPAQUE alias — so a RUNTIME-OWNED identifier is now the
+ * route by which the carried evidence identifies the observation. The
+ * tool-call id is still checked, because the canonical TAIL carries it
+ * verbatim.
+ *
+ * ACT-CLINEMM-ORDINARY-COMPACTION-UPSTREAM-AND-FIDELITY-REPAIR-01: the
+ * tool NAME route is CLOSED. A transcript-supplied tool name is published
+ * under a neutral, runtime-owned label unless it is a member of the
+ * runtime's trusted tool vocabulary, so the synthetic tool name is no
+ * longer published.
+ *
+ * The route that REMAINS is the command CLASSIFICATION: it is drawn from
+ * the finite, runtime-owned classification allowlist, so it is published
+ * verbatim, and it is a property of the OBSERVATION rather than of the
+ * transcript-supplied name. The synthetic history's pre-boundary messages
+ * carry no tool outcomes at all, so the synthetic observation is the ONLY
+ * outcome the carry-forward can publish and the classification identifies
+ * it unambiguously.
  */
 export function carriesSyntheticObservation(output: string): boolean {
 	return (
 		output.includes(POST_BOUNDARY_MARKER) ||
 		output.includes(POST_BOUNDARY_TOOL_USE_ID) ||
-		output.includes(POST_BOUNDARY_TOOL_NAME)
+		output.includes(POST_BOUNDARY_COMMAND_CLASSIFICATION)
 	);
 }
 
