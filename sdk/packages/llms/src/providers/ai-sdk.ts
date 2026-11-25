@@ -1014,7 +1014,7 @@ function buildRecoverableToolErrorMetadata(input: {
 	toolName: string;
 }): Record<string, unknown> {
 	return buildToolCallMetadata({
-		metadata: mergeToolCallMetadata(extractGoogleThoughtMetadata(input.part), {
+		metadata: mergeToolCallMetadata(extractReasoningMetadata(input.part), {
 			inputParseError: `Tool call ${input.toolName} was rejected before execution: ${input.errorMessage}`,
 			aiSdkToolError: input.errorMessage,
 		}),
@@ -1421,7 +1421,29 @@ function suppressDanglingStreamPromises(
 	}
 }
 
-function extractGoogleThoughtMetadata(
+/**
+ * ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01.
+ *
+ * The provider-owned reasoning METADATA carried by a stream part.
+ *
+ * Two families exist and BOTH are required for reasoning continuity:
+ *
+ *   - GOOGLE / VERTEX `thoughtSignature` — the opaque signature the Gemini
+ *     family attaches to a thought block. It travels in
+ *     `providerMetadata.google` / `providerMetadata.vertex`.
+ *   - ANTHROPIC `signature` / `redactedData` — the opaque signature the
+ *     Anthropic family attaches to a thinking block. It travels in
+ *     `providerMetadata.anthropic`.
+ *
+ * The Anthropic family is the Anthropic-COMPATIBLE transport too, so the
+ * MiniMax M3 / M3.1 Flash routes deliver their thinking signature through
+ * this bucket.
+ *
+ * The metadata is OPAQUE and PROVIDER-OWNED: it is carried verbatim, it is
+ * never synthesized, and it is never carried across a provider transition
+ * (the outbound conversion reads it per provider bucket).
+ */
+function extractReasoningMetadata(
 	part: AiSdkStreamPart,
 ): Record<string, unknown> | undefined {
 	const metadata: Record<string, unknown> = {};
@@ -1445,6 +1467,11 @@ function extractGoogleThoughtMetadata(
 		providerMetadata?.vertex && typeof providerMetadata.vertex === "object"
 			? (providerMetadata.vertex as Record<string, unknown>)
 			: undefined;
+	const anthropicMetadata =
+		providerMetadata?.anthropic &&
+		typeof providerMetadata.anthropic === "object"
+			? (providerMetadata.anthropic as Record<string, unknown>)
+			: undefined;
 
 	if (
 		typeof metadata.thoughtSignature !== "string" &&
@@ -1460,6 +1487,25 @@ function extractGoogleThoughtMetadata(
 		typeof googleMetadata?.thought_signature === "string"
 	) {
 		metadata.thought_signature = googleMetadata.thought_signature;
+	}
+
+	// ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01: the Anthropic
+	// thinking-block signature and the redacted-thinking payload.
+	//
+	// These are carried verbatim under the SAME key names the outbound
+	// conversion reads (`metadata.signature` / `metadata.redactedData`), so
+	// the round trip needs no provider-specific branch at the send boundary.
+	if (
+		typeof metadata.signature !== "string" &&
+		typeof anthropicMetadata?.signature === "string"
+	) {
+		metadata.signature = anthropicMetadata.signature;
+	}
+	if (
+		typeof metadata.redactedData !== "string" &&
+		typeof anthropicMetadata?.redactedData === "string"
+	) {
+		metadata.redactedData = anthropicMetadata.redactedData;
 	}
 
 	return Object.keys(metadata).length > 0 ? metadata : undefined;
@@ -1584,13 +1630,37 @@ async function* emitAiSdkEvents(
 					const text =
 						(part.textDelta as string | undefined) ??
 						(part.text as string | undefined) ??
-						(part.reasoning as string | undefined);
-					if (text) {
-						sawVisibleContent = true;
+						(part.reasoning as string | undefined) ??
+						(part.delta as string | undefined) ??
+						"";
+					// ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01.
+					//
+					// The Anthropic family streams a thinking block's SIGNATURE
+					// as a SEPARATE event whose text is EMPTY. The resolved
+					// `@ai-sdk/anthropic` surfaces it as a `reasoning-delta`
+					// with `delta: ""` and the signature in
+					// `providerMetadata.anthropic`.
+					//
+					// Dropping such an event (the previous `if (text)` guard)
+					// discarded the signature, so the accumulated reasoning part
+					// carried no signature and the NEXT request serialized the
+					// reasoning WITHOUT one. The Anthropic serializer then
+					// emitted `unsupported reasoning metadata` and DROPPED the
+					// reasoning block from the request entirely.
+					//
+					// A metadata-bearing reasoning event is therefore FORWARDED
+					// even when its text is empty, so the provider-owned metadata
+					// survives to the accumulated reasoning part. An event with
+					// neither text nor metadata remains a no-op.
+					const metadata = extractReasoningMetadata(part);
+					if (text || metadata) {
+						if (text) {
+							sawVisibleContent = true;
+						}
 						yield {
 							type: "reasoning-delta",
 							text,
-							metadata: extractGoogleThoughtMetadata(part),
+							metadata,
 						};
 					}
 					continue;
@@ -1714,7 +1784,7 @@ async function* emitAiSdkEvents(
 						input: typeof input === "string" ? undefined : input,
 						inputText,
 						metadata: buildToolCallMetadata({
-							metadata: extractGoogleThoughtMetadata(part),
+							metadata: extractReasoningMetadata(part),
 							request,
 							context,
 						}),
