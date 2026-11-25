@@ -178,10 +178,18 @@ export function buildClineSystemPrompt(
 		return trimmed;
 	}
 
+	// ACT-CLINEMM-ACT-MODE-EXECUTION-TRANSITION-01: Act mode and Plan mode
+	// render DIFFERENT base prompts. The reconnaissance-to-execution
+	// transition contract is an Act-mode instruction; Plan mode is an
+	// explore-and-align contract that forbids execution, so the Act-mode
+	// contract must not leak into it. Plan mode keeps its pre-ACT base text
+	// byte-for-byte.
 	const basePrompt =
 		mode === "yolo"
 			? DEFAULT_CLINE_SYSTEM_PROMPTS.YOLO
-			: DEFAULT_CLINE_SYSTEM_PROMPTS.ACT;
+			: mode === "plan"
+				? DEFAULT_CLINE_SYSTEM_PROMPTS.PLAN
+				: DEFAULT_CLINE_SYSTEM_PROMPTS.ACT;
 
 	// Keep mode semantics shared across hosts, but omit the plan/act workflow
 	// instructions in YOLO mode. Caller rules apply in every mode.
