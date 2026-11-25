@@ -115,11 +115,31 @@ function doneFinishReason(chunk: ApiStreamDoneChunk): AgentModelFinishReason {
 	// The adapter therefore preserves the terminal reason on the done chunk
 	// so the distinction survives, and this mapping uses it. A legacy
 	// handler that reports no reason at all keeps the previous behaviour.
-	if (chunk.finishReason !== undefined) {
-		return chunk.finishReason as AgentModelFinishReason;
-	}
+	//
+	// The NEGATIVE SIGNAL PRECEDENCE is preserved: a chunk that reports a
+	// FAILED stream (`success: false`) with an error message is a FAILURE
+	// (`error`), not the `unknown` it would otherwise carry. The reported
+	// reason is authoritative about the TERMINAL FACT, but it must not
+	// override an explicit failure signal — otherwise a genuine failure would
+	// be laundered into an "unestablished completion" and would lose the
+	// runtime's error recovery.
+	//
+	// `unknown` is preserved AS `unknown`. It is not converted into a normal
+	// completion, and it is not converted into an invented provider failure:
+	// it means exactly what the shared contract says it means — the response
+	// may be cut off and an authoritative successful completion has NOT been
+	// established.
 	if (chunk.success === false) {
-		return "error";
+		// A reported error message is a FAILURE. A reported `unknown` is not:
+		// it is an UNEStablished completion, which the runtime handles as an
+		// incomplete turn rather than as an error.
+		if (chunk.error !== undefined || chunk.finishReason === undefined) {
+			return "error";
+		}
+		return chunk.finishReason;
+	}
+	if (chunk.finishReason !== undefined) {
+		return chunk.finishReason;
 	}
 	if (
 		chunk.incompleteReason === "max_output_tokens" ||

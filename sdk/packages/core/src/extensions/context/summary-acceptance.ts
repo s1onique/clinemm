@@ -51,6 +51,8 @@
  * so the reason is diagnosable rather than implicit.
  */
 
+import type { AgentModelFinishReason } from "@cline/shared";
+
 /**
  * The TERMINAL STATUS of a summary generation.
  *
@@ -63,6 +65,11 @@
  *   incomplete (output budget exhausted, content filtered, or another
  *   provider-reported incompleteness reason).
  * - `known_failed` — the transport reported a failure.
+ * - `unestablished_completion` — the transport reported that the provider
+ *   never ESTABLISHED a successful completion (the terminal reason is
+ *   `unknown`). The response may be cut off, so it must not be installed.
+ *   This is NOT the same fact as a known failure: the stream did not fail,
+ *   it ended without an authoritative terminal reason.
  * - `premature_stream_termination` — the stream ended WITHOUT the completion
  *   event the transport contract requires. The response may be cut off, so it
  *   must not be treated as a successful completion.
@@ -75,6 +82,7 @@ export type SummaryTerminalStatus =
 	| "known_complete"
 	| "known_incomplete"
 	| "known_failed"
+	| "unestablished_completion"
 	| "premature_stream_termination"
 	| "legacy_completion_status_unavailable";
 
@@ -94,6 +102,20 @@ export interface SummaryTerminalSignals {
 	readonly completed?: boolean;
 	/** Whether the generation was cancelled. */
 	readonly cancelled?: boolean;
+	/**
+	 * ACT-CLINEMM-CMP04-TERMINAL-ACCEPTANCE-CONSERVATION-01: the terminal
+	 * reason the transport reported.
+	 *
+	 * It is what separates an UNEStablished completion (`unknown` — the
+	 * provider never established a successful completion, so the response may
+	 * be cut off) from a KNOWN failure (the stream failed). Both arrive as a
+	 * non-successful terminal completion, so without the reported reason the
+	 * two are indistinguishable.
+	 *
+	 * `unknown` is preserved AS `unknown`: it is not turned into a normal
+	 * completion, and it is not turned into an invented provider failure.
+	 */
+	readonly finishReason?: AgentModelFinishReason;
 }
 
 /**
@@ -116,6 +138,7 @@ export interface SummaryAcceptanceDecision {
 		| "provider_reported_failure"
 		| "cancelled"
 		| "empty_output"
+		| "unestablished_completion"
 		| "premature_stream_termination"
 		| "legacy_completion_status_unavailable";
 }
@@ -138,6 +161,26 @@ export interface SummaryAcceptanceDecision {
  *      the LEGACY shape. It stays installable — the existing contract already
  *      tolerated it, and its absence of metadata is not evidence of
  *      truncation.
+ *
+ * ACT-CLINEMM-CMP04-TERMINAL-ACCEPTANCE-CONSERVATION-01 — THE UNEStablished
+ * COMPLETION.
+ *
+ * A non-successful terminal completion covers TWO different facts:
+ *
+ *   - the stream FAILED (the provider reported an error), and
+ *   - the provider never ESTABLISHED a successful completion (the terminal
+ *     reason is `unknown`: the response may be cut off).
+ *
+ * The reported terminal reason is what tells them apart, and the runtime
+ * treats them differently: a failure is an error, while an unestablished
+ * completion is an incomplete turn. Both are correctly NOT installable, so
+ * this refinement changes the DIAGNOSIS, never the acceptance verdict.
+ *
+ * The precedence is preserved: a candidate that reports a KNOWN negative
+ * signal (an incompleteness reason, a cancellation, or a reported failure
+ * with an error) is classified by that signal. Only a non-successful
+ * completion whose terminal reason is `unknown` — with no stronger negative
+ * signal — is classified as an unestablished completion.
  */
 export function classifySummaryTerminalStatus(
 	signals: SummaryTerminalSignals,
@@ -154,6 +197,25 @@ export function classifySummaryTerminalStatus(
 		};
 	}
 	if (signals.failed) {
+		// ACT-CLINEMM-CMP04-TERMINAL-ACCEPTANCE-CONSERVATION-01: an
+		// UNEStablished completion is not a known failure.
+		//
+		// The transport reports BOTH as a non-successful terminal
+		// completion. The reported reason separates them: `unknown` means
+		// the provider never established a successful completion (the
+		// response may be cut off), which is NOT the same fact as a stream
+		// that failed.
+		//
+		// `unknown` is preserved AS `unknown`: it is not converted into a
+		// normal completion, and it is not converted into an invented
+		// provider failure.
+		if (signals.finishReason === "unknown") {
+			return {
+				status: "unestablished_completion",
+				installable: false,
+				reason: "unestablished_completion",
+			};
+		}
 		return {
 			status: "known_failed",
 			installable: false,

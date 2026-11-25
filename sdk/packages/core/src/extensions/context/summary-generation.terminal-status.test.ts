@@ -159,4 +159,58 @@ describe("ACT-CLINEMM-COMPACTION-ATOMIC-SUMMARY-INSTALLATION-REPAIR-01 — the s
 			}),
 		).rejects.toThrow("Provider failed");
 	});
+
+	// ACT-CLINEMM-CMP04-TERMINAL-ACCEPTANCE-CONSERVATION-01 — THE PRESERVED
+	// TERMINAL REASON.
+	it("propagates an UNKNOWN terminal reason verbatim", async () => {
+		// The transport distinguishes an UNEStablished completion from a
+		// KNOWN failure. Both arrive as `success: false`, so the reported
+		// reason is the only fact that can tell them apart, and it must
+		// survive the transport.
+		respond([
+			text("Partial summary"),
+			{ ...done, success: false, finishReason: "unknown" },
+		]);
+
+		const result = await generateSummary({
+			providerConfig,
+			systemPrompt: "sys",
+			request: "req",
+		});
+
+		expect(result.finishReason).toBe("unknown");
+		expect(result.failed).toBe(true);
+		expect(result.completed).toBe(true);
+		// No incompleteness is MANUFACTURED for it: the provider did not
+		// report one.
+		expect(result.incompleteReason).toBeUndefined();
+	});
+
+	it("propagates a normal terminal reason", async () => {
+		respond([text("A complete summary."), { ...done, finishReason: "stop" }]);
+
+		const result = await generateSummary({
+			providerConfig,
+			systemPrompt: "sys",
+			request: "req",
+		});
+
+		expect(result.finishReason).toBe("stop");
+		expect(result.failed).toBe(false);
+	});
+
+	it("reports NO terminal reason for a LEGACY handler that reports none", async () => {
+		// A legacy handler that finishes without a terminal reason is NOT
+		// the same claim as one that REPORTED an unestablished completion.
+		respond([text("A complete summary."), { ...done }]);
+
+		const result = await generateSummary({
+			providerConfig,
+			systemPrompt: "sys",
+			request: "req",
+		});
+
+		expect(result.finishReason).toBeUndefined();
+		expect(result.failed).toBe(false);
+	});
 });

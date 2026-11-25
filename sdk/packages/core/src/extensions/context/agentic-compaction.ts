@@ -225,6 +225,15 @@ export async function runAgenticCompaction(options: {
 		incompleteReason: summaryResult.incompleteReason,
 		failed: summaryResult.failed,
 		completed: summaryResult.completed,
+		// ACT-CLINEMM-CMP04-TERMINAL-ACCEPTANCE-CONSERVATION-01: the
+		// reported terminal reason.
+		//
+		// It is what separates an UNEStablished completion (the provider
+		// never established a successful completion — the response may be
+		// cut off) from a KNOWN failure (the stream failed). The verdict is
+		// the same for both — not installable — but the diagnosis is not,
+		// and the diagnosis is what an operator reads.
+		finishReason: summaryResult.finishReason,
 	});
 	// ACT-CLINEMM-COMPACTION-ATOMIC-SUMMARY-INSTALLATION-REPAIR-01: an
 	// unexpected TOOL CALL is not a summary. The summarizer is a text-only
@@ -273,6 +282,10 @@ export async function runAgenticCompaction(options: {
 				summarizerMaxOutputTokens: summarizerProviderConfig.maxOutputTokens,
 				reasoningChars: summaryResult.reasoningChars,
 				incompleteReason: summaryResult.incompleteReason,
+				// ACT-CLINEMM-CMP04-TERMINAL-ACCEPTANCE-CONSERVATION-01: the
+				// reported terminal reason, so the diagnosis names the actual
+				// terminal fact (an unestablished completion is not a failure).
+				finishReason: summaryResult.finishReason,
 				summaryTerminalStatus: acceptance.status,
 				rejectionReason: acceptance.reason,
 				summaryChars: rawSummary.length,

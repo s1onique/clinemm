@@ -63,7 +63,18 @@ import {
 
 const createHandlerMock = vi.fn();
 
-vi.mock("@cline/llms", () => ({
+// ACT-CLINEMM-CMP04-TERMINAL-ACCEPTANCE-CONSERVATION-01: the REAL
+// `@cline/llms` module is retained, and only `createHandlerAsync` is
+// intercepted.
+//
+// The Gemini rows below drive the REAL compatibility adapter — the one the
+// production summarizer transport reaches through `createHandlerAsync()` —
+// so the terminal facts under test are the ones the production code
+// actually receives. Only the EXTERNAL PROVIDER BOUNDARY (the HTTP
+// `fetch`) is substituted; everything between the adapter and the
+// acceptance decision is the real production code.
+vi.mock("@cline/llms", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@cline/llms")>()),
 	createHandlerAsync: (config: unknown) => createHandlerMock(config),
 }));
 
@@ -114,6 +125,59 @@ function completedChunks(text: string): Record<string, unknown>[] {
 		{ type: "text", id: "summary-1", text },
 		{ type: "done", id: "summary-1", success: true },
 	];
+}
+
+// ---------------------------------------------------------------------------
+// ACT-CLINEMM-CMP04-TERMINAL-ACCEPTANCE-CONSERVATION-01
+// The Gemini SSE fixtures.
+//
+// These are the SAME fixtures the transport probe established in
+// `sdk/packages/llms/src/providers/compat.gemini-terminal-authority.test.ts`:
+// a Gemini SSE body whose candidate carries the given finish reason.
+//
+// `finishReason: undefined` is the premature case: the stream ends after
+// producing text, without the provider ever reporting a terminal reason.
+// ---------------------------------------------------------------------------
+
+/**
+ * A Gemini SSE body whose candidate carries the given finish reason.
+ */
+function geminiSse(finishReason: string | undefined, content: string): string {
+	const candidate: Record<string, unknown> = {
+		content: { parts: [{ text: content }], role: "model" },
+		index: 0,
+	};
+	if (finishReason !== undefined) {
+		candidate.finishReason = finishReason;
+	}
+	return `data: ${JSON.stringify({ candidates: [candidate] })}\n\n`;
+}
+
+/**
+ * Route the REAL compatibility adapter to a deterministic Gemini SSE body.
+ *
+ * `createHandlerAsync()` reaches the REAL compatibility adapter
+ * (`createGatewayApiHandlerAsync`) for any provider without a registered
+ * handler, and that adapter passes `config.fetch` straight to the gateway.
+ * Substituting the `fetch` therefore substitutes EXACTLY ONE thing — the
+ * external provider boundary — and leaves the adapter, the gateway, the
+ * summarizer transport and the acceptance decision all real.
+ */
+function useGeminiSse(finishReason: string | undefined, content: string): void {
+	createHandlerMock.mockImplementation(async (config: unknown) => {
+		const providerConfig = config as LlmsProviders.ProviderConfig;
+		const fetchStub = (async () =>
+			new Response(geminiSse(finishReason, content), {
+				status: 200,
+				headers: { "content-type": "text/event-stream" },
+			})) as typeof fetch;
+		const actual =
+			await vi.importActual<typeof import("@cline/llms")>("@cline/llms");
+		return actual.createHandlerAsync({
+			...providerConfig,
+			fetch: fetchStub,
+		});
+	});
 }
 
 // ---------------------------------------------------------------------------
@@ -178,13 +242,29 @@ interface SeamOptions {
 	readonly canonical?: readonly MessageWithMetadata[];
 	/** The abort signal, for the cancellation rows. */
 	readonly abortSignal?: AbortSignal;
+	/**
+	 * ACT-CLINEMM-CMP04-TERMINAL-ACCEPTANCE-CONSERVATION-01: the provider
+	 * the summarizer transport runs against.
+	 *
+	 * The Gemini rows use the real provider id so the production code takes
+	 * the real Gemini path; the default keeps the historical fixture.
+	 */
+	readonly providerId?: string;
+	/**
+	 * ACT-CLINEMM-CMP04-TERMINAL-ACCEPTANCE-CONSERVATION-01: the provider
+	 * config the summarizer transport receives.
+	 *
+	 * It carries the substituted `fetch`, so the REAL compatibility adapter
+	 * reaches the deterministic Gemini SSE body.
+	 */
+	readonly providerConfig?: Record<string, unknown>;
 }
 
 /**
  * Drive the REAL composed production seam.
  */
 async function runProductionSeam(options: SeamOptions = {}): Promise<SeamRun> {
-	const providerId = "anthropic";
+	const providerId = options.providerId ?? "anthropic";
 	const modelId = "mock-model";
 	const innerModel = {
 		id: modelId,
@@ -218,7 +298,11 @@ async function runProductionSeam(options: SeamOptions = {}): Promise<SeamRun> {
 		{
 			providerId,
 			modelId,
-			providerConfig: { providerId, modelId } as LlmsProviders.ProviderConfig,
+			providerConfig: {
+				providerId,
+				modelId,
+				...(options.providerConfig ?? {}),
+			} as LlmsProviders.ProviderConfig,
 			compaction: {
 				enabled: true,
 				strategy: "agentic",
@@ -769,5 +853,176 @@ describe("ACT-CLINEMM-COMPACTION-ATOMIC-SUMMARY-INSTALLATION-REPAIR-01 — the f
 		const handlerCalls = createHandlerMock.mock.results.length;
 		expect(handlerCalls).toBe(1);
 		expect(seam.saveCalls).toHaveLength(0);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// ACT-CLINEMM-CMP04-TERMINAL-ACCEPTANCE-CONSERVATION-01
+//
+// THE GEMINI TERMINAL AUTHORITY THROUGH THE PRODUCTION ACCEPTANCE PATH.
+//
+// WHY THIS BLOCK EXISTS
+// ---------------------
+//
+// The Gemini transport repair (the predecessor ACT) established that a
+// Gemini stream which ends WITHOUT the provider reporting a terminal
+// reason produces gateway `finish.reason === "unknown"`, and that the
+// compatibility adapter must not report such a stream as a SUCCESSFUL
+// completion.
+//
+// That repair was proven at the COMPATIBILITY BOUNDARY. What it did NOT
+// establish is the consequence that matters for the compaction contract: a
+// summary produced by such a stream must not be INSTALLED as the
+// replacement for the compacted history.
+//
+// This block drives the ACTUAL production composition:
+//
+//   createCompactionStateAwarePrepareTurn()   (the state-aware wrapper)
+//     -> createContextCompactionPrepareTurn()  (the real compaction seam)
+//       -> runAgenticCompaction()              (the owning boundary)
+//         -> generateSummary()                 (the real summarizer transport)
+//           -> createHandlerAsync()             (the REAL handler factory)
+//             -> createGatewayApiHandlerAsync() (the REAL compatibility adapter)
+//               -> the gateway                  (the REAL gateway)
+//                 -> the Gemini SSE body        (a deterministic substitute)
+//
+// ONLY THE EXTERNAL PROVIDER BOUNDARY IS SUBSTITUTED: the HTTP `fetch`.
+// The adapter, the gateway, the summarizer transport, the acceptance
+// contract, the compaction decision and the state installation are ALL the
+// real production code.
+//
+// The claim this block makes is deliberately NARROWER than the transport
+// repair's: it claims that an UNEStablished Gemini completion is not
+// installed, and that the previously installed valid state survives the
+// rejection.
+// ---------------------------------------------------------------------------
+
+/** The Gemini provider id, so the production code takes the real path. */
+const GEMINI_PROVIDER_ID = "gemini";
+
+/**
+ * The substituted EXTERNAL PROVIDER BOUNDARY.
+ *
+ * The body is supplied per call by the fixture that installed it.
+ */
+let geminiSseBody = "";
+
+function geminiFetchStub(): typeof fetch {
+	return (async () =>
+		new Response(geminiSseBody, {
+			status: 200,
+			headers: { "content-type": "text/event-stream" },
+		})) as typeof fetch;
+}
+
+/**
+ * Run the production seam against the Gemini provider with the substituted
+ * `fetch`.
+ */
+async function runGeminiSeam(options: SeamOptions = {}): Promise<SeamRun> {
+	return runProductionSeam({
+		...options,
+		providerId: GEMINI_PROVIDER_ID,
+		providerConfig: {
+			apiKey: "test-key",
+			baseUrl: "https://stub.invalid/v1",
+			fetch: geminiFetchStub(),
+		},
+	});
+}
+
+describe("ACT-CLINEMM-CMP04-TERMINAL-ACCEPTANCE-CONSERVATION-01 — the Gemini terminal authority through the production acceptance path", () => {
+	it("CMP04: a Gemini summary from an UNEStablished completion is NOT installed", async () => {
+		// The premature stream: the provider produces text and never
+		// reports a terminal reason.
+		geminiSseBody = geminiSse(undefined, COMPLETE_LOOKING_SUMMARY);
+		useGeminiSse(undefined, COMPLETE_LOOKING_SUMMARY);
+
+		const seam = await runGeminiSeam();
+
+		// The candidate is NOT installed.
+		expect(seam.providerVisibleText).not.toContain(COMPLETE_LOOKING_SUMMARY);
+		expect(seam.saveCalls).toHaveLength(0);
+		expect(seam.installedState).toBeUndefined();
+		expect(publishedSuccess(seam)).toBeUndefined();
+
+		// The rejection is DIAGNOSED as what it is: an unestablished
+		// completion, NOT a normal completion and NOT an invented
+		// provider failure.
+		expect(rejectionDiagnostics(seam)).toContain("unestablished_completion");
+		expect(rejectionDiagnostics(seam)).toContain("unknown");
+		// ...and it is NOT reported as a successful completion.
+		expect(rejectionDiagnostics(seam)).not.toContain("known_complete");
+	});
+
+	it("CMP04: a Gemini summary from a NORMAL STOP completion IS installed", async () => {
+		geminiSseBody = geminiSse("STOP", COMPLETE_LOOKING_SUMMARY);
+		useGeminiSse("STOP", COMPLETE_LOOKING_SUMMARY);
+
+		const seam = await runGeminiSeam();
+
+		// The normally completed summary IS installed.
+		expect(seam.providerVisibleText).toContain(COMPLETE_LOOKING_SUMMARY);
+		expect(seam.saveCalls).toHaveLength(1);
+		expect(publishedSuccess(seam)).toBeDefined();
+		// ...and it is not rejected for any reason.
+		expect(rejectionDiagnostics(seam)).not.toContain(
+			"unestablished_completion",
+		);
+		expect(rejectionDiagnostics(seam)).not.toContain("known_failed");
+	});
+
+	it("CMP04: the MAX-TOKEN rejection is conserved for a Gemini stream", async () => {
+		geminiSseBody = geminiSse("MAX_TOKENS", TRUNCATED_SUMMARY);
+		useGeminiSse("MAX_TOKENS", TRUNCATED_SUMMARY);
+
+		const seam = await runGeminiSeam();
+
+		// The established max-token rejection still rejects.
+		expect(seam.providerVisibleText).not.toContain(TRUNCATED_SUMMARY);
+		expect(seam.saveCalls).toHaveLength(0);
+		expect(publishedSuccess(seam)).toBeUndefined();
+		expect(rejectionDiagnostics(seam)).toContain("max_tokens");
+		expect(rejectionDiagnostics(seam)).toContain("known_incomplete");
+	});
+
+	it("CMP04: the CONTENT-FILTER rejection is conserved for a Gemini stream", async () => {
+		geminiSseBody = geminiSse("SAFETY", TRUNCATED_SUMMARY);
+		useGeminiSse("SAFETY", TRUNCATED_SUMMARY);
+
+		const seam = await runGeminiSeam();
+
+		// The established content-filter rejection still rejects.
+		expect(seam.providerVisibleText).not.toContain(TRUNCATED_SUMMARY);
+		expect(seam.saveCalls).toHaveLength(0);
+		expect(publishedSuccess(seam)).toBeUndefined();
+		expect(rejectionDiagnostics(seam)).toContain("content_filter");
+		expect(rejectionDiagnostics(seam)).toContain("known_incomplete");
+	});
+
+	it("CMP04: a rejected unestablished Gemini candidate leaves the installed valid state unchanged", async () => {
+		const canonical = canonicalHistory();
+		const prior = priorCompactionState(canonical);
+
+		geminiSseBody = geminiSse(undefined, COMPLETE_LOOKING_SUMMARY);
+		useGeminiSse(undefined, COMPLETE_LOOKING_SUMMARY);
+
+		const seam = await runGeminiSeam({ existingState: prior, canonical });
+
+		// The previously installed summary is STILL the one that is used.
+		expect(seam.providerVisibleText).toContain(PRIOR_VALID_SUMMARY);
+		// The rejected candidate is nowhere.
+		expect(seam.providerVisibleText).not.toContain(COMPLETE_LOOKING_SUMMARY);
+		// No replacement state was persisted, and the installed state is
+		// the very object that was there before.
+		expect(seam.saveCalls).toHaveLength(0);
+		expect(seam.installedState).toBe(prior);
+		expect(seam.installedState?.source_message_count).toBe(
+			prior.source_message_count,
+		);
+		expect(seam.installedState?.source_prefix_hash).toBe(
+			prior.source_prefix_hash,
+		);
+		expect(publishedSuccess(seam)).toBeUndefined();
 	});
 });
