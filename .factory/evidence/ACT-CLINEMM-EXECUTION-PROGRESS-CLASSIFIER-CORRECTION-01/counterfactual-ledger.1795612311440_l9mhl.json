@@ -1,0 +1,81 @@
+{
+  "sessionId": "1795612311440_l9mhl",
+  "roundsReplayed": 34,
+  "missingResults": 0,
+  "observedRuntimeNotices": [
+    {
+      "index": 28,
+      "rounds": {
+        "unproductiveRounds": 5,
+        "toolNames": [
+          "read_files",
+          "run_commands"
+        ],
+        "editAttempts": 0
+      }
+    },
+    {
+      "index": 57,
+      "rounds": {
+        "unproductiveRounds": 5,
+        "toolNames": [
+          "run_commands"
+        ],
+        "editAttempts": 0
+      }
+    }
+  ],
+  "predecessorInjections": [
+    {
+      "run": 2,
+      "iter": 8,
+      "msgIndex": 26,
+      "streak": 5,
+      "tools": [
+        "read_files"
+      ]
+    },
+    {
+      "run": 2,
+      "iter": 22,
+      "msgIndex": 55,
+      "streak": 5,
+      "tools": [
+        "run_commands"
+      ]
+    }
+  ],
+  "repairedInjections": [
+    {
+      "run": 2,
+      "iter": 8,
+      "msgIndex": 26,
+      "streak": 5,
+      "tools": [
+        "read_files"
+      ]
+    },
+    {
+      "run": 2,
+      "iter": 22,
+      "msgIndex": 55,
+      "streak": 5,
+      "tools": [
+        "run_commands"
+      ]
+    }
+  ],
+  "firstR1Eligibility": {
+    "run": 2,
+    "iter": 8,
+    "msgIndex": 26
+  },
+  "secondR1Eligibility": {
+    "run": 2,
+    "iter": 22,
+    "msgIndex": 55
+  },
+  "r2EntryReachable": false,
+  "falseProductivityRounds": [],
+  "conservedProgressRounds": 34
+}

@@ -42305,3 +42305,118 @@ authorises the next isolated R2 dogfood build. The R2 entry condition is
 reachable under the corrected classifier, but NEITHER replayed session
 reaches it, and no model behaviour was observed.
 
+
+# ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01 — AMENDMENT-01 — GO_EXECUTION_PROGRESS_CLASSIFIER_DOGFOOD — 2026-11-25
+
+```text
+ACT_ID: ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01
+TYPE: bounded implementation (AMENDMENT-01)
+VERDICT: GO_EXECUTION_PROGRESS_CLASSIFIER_DOGFOOD
+ENTRY_HEAD: 1708f1e8f34ec71b24a5b625b64a51a2a40c92f8
+PREDECESSOR: 1708f1e8f34ec71b24a5b625b64a51a2a40c92f8
+PREDECESSOR_EVIDENCE: ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01
+EVIDENCE: .factory/evidence/ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01/
+  CAUSAL-SUMMARY.amendment01.md
+  counterfactual-ledger.amendment01.json
+  round-ledger.amendment01.json
+  replay/replay-amendment01.ts
+  replay/final/**
+  replay/defective/**
+SCOPE: classifier only. R2 NOT redesigned. R3 NOT implemented.
+  Compaction UNCHANGED. PLAN UNCHANGED. R2 default OFF UNCHANGED.
+  Command authorization / sandbox UNCHANGED. Shared / agents / runtime
+  source UNCHANGED.
+```
+
+**THE SURVIVING DEFECT WAS THE DESCRIPTOR DUPLICATION, NOT SSH.** The
+reviewer reconstructed the exact corrected production classifier (Git blob
+`b8029cada039e371cdf2d0a2dc2b987dfc1926c4` — byte-identical to the
+predecessor HEAD's file) and executed the original Session A command inputs.
+All nine reconnaissance commands at transcript indices 29-45 remained
+classified as executed; removing the trailing `2>&1 | tail -N` suffix changed
+EIGHT of the nine to inspected.
+
+```text
+DESCRIPTOR_DUPLICATION=REPAIRED
+  grep foo bar 2>&1 | tail -10                       : executed -> inspected
+  grep foo bar >&2                                   : executed -> inspected
+  SSH_AUTH_SOCK=... ssh -o BatchMode=yes host '...' 2>&1 | tail -10
+                                                      : executed -> inspected
+  The `&` of a DESCRIPTOR DUPLICATION is a REDIRECTION, not a command
+  separator. The four `&` shapes are discriminated: `&&` (logical AND),
+  `&` (background), `&>` (output redirection) and `N>&M` / `>&M`
+  (duplication). Only the duplication stays inside the segment.
+  Actual output redirection to a workspace file, actual background
+  execution, `&&`/`||`/`;`/pipeline boundaries, quoted and escaped
+  separators, and remote build/installation/mutation classification are all
+  CONSERVED. The repair does not remove all ampersands, does not globally
+  strip redirections and does not introduce a shell interpreter.
+  The NINTH historical command (transcript index 37) carries a COMMAND
+  SUBSTITUTION and keeps the conservative UNKNOWN disposition.
+
+BOUNDED_MUTATION=REPAIRED
+  git tag -a new-tag -m msg : inspected -> executed
+  git tag -d new-tag        : inspected -> executed
+  mount /dev/sda /mnt       : inspected -> executed
+  cd /tmp > file            : inspected -> executed
+  export X=1 > file         : inspected -> executed
+  `git tag` is a LISTING only when it carries a listing flag; `mount` is a
+  listing only with no arguments; a SETUP form carrying an output
+  redirection is a MUTATION. The EXISTING command guard remains the
+  authority for "writes a file". Ordinary `git tag` listing and ordinary
+  environment setup are CONSERVED.
+
+MISSING_EXECUTION_OUTCOME=REPAIRED
+  output: null : executed -> failed
+  output: []   : executed -> failed
+  output: {}   : executed -> failed
+  The real production result contract was inspected: `CommandStatusOutput`
+  (`ok`, `state`, `exitCode`) and `ToolOperationResult[]` (`success`,
+  `result`, `error`). `{ ok: true }` ALONE does NOT establish a terminal
+  outcome — `ok` reports that the OBSERVATION was taken, not that the
+  COMMAND ran and succeeded. A terminal outcome is established by an explicit
+  `exitCode`, by the production `success` flag, or by a terminal `state`.
+  A legitimate background wait, explicit negative observations and the
+  documented plain-text legacy limitation are CONSERVED.
+```
+
+**THE ACTUAL R2 ENTRY WITNESS IS NOW ESTABLISHED.** The predecessor witness
+configured R1 ONLY and never observed R2's activation. The strengthened
+witness drives a SHORT trajectory of the HISTORICAL remote inspection shape
+— WITH the descriptor duplication — through the REAL `AgentRuntime` with R2
+CONFIGURED, reusing the EXISTING R2 scripted-model fixture, policy and
+selection-rejection control. It establishes: (1) the R1 allowance is
+consumed (exactly TWO corrective instructions); (2) the subsequent qualifying
+round reaches the EXISTING R2 entry branch (the R1 `allowance_exhausted`
+branch, the ONLY R2 entry point); (3) EXACTLY ONE selection inference
+executes; (4) NO additional selection allowance is manufactured. The RED
+drives the ACTUAL defective predecessor production classifier, frozen
+VERBATIM under
+`sdk/packages/core/src/extensions/tools/__fixtures__/defective-execution-progress-classifier.ts`
+— NO test-local predecessor whitelist was created. With the defective
+predecessor the witness FAILS; with the repaired classifier it PASSES.
+
+**THE HISTORICAL REPLAY WAS RUN ONCE, AGAINST THE FINAL CLASSIFIER.**
+Session A: 10 rounds changed (transcript message indices 29, 31, 33, 35, 39,
+41, 43, 45, 64, 66), all reconnaissance. First R1 eligibility at run 2,
+round 8, message index 26 (streak 5); second at run 2, round 22, message
+index 55 (streak 5); `allowance_exhausted` NOT reached; 34 of 34 rounds
+conserved. Session B: 2 rounds changed relative to the previous repaired
+classifier (message indices 11, 38 — the `2>/dev/null | head` form), 14
+cumulatively relative to the original predecessor classifier; first R1
+eligibility at run 2, round 25, message index 68 (streak 5); second NOT
+reached; `allowance_exhausted` NOT reached; 220 of 232 rounds conserved.
+Session B's 53 successful-edit rounds are classified IDENTICALLY by all three
+classifiers, and ZERO of the changed rounds carried a successful edit: the
+genuine compiler installation, builds, tests and edits are CONSERVED.
+The historical replay does NOT reach R2 — reported as observed, not forced.
+Counterfactual behaviour remains HYPOTHESIS_ONLY.
+
+**THE GO VERDICT DOES NOT ESTABLISH LIVE BEHAVIORAL EFFECTIVENESS.** It
+authorises immediate isolated dogfood. The historical replay does not reach
+R2; the R2 entry witness is a deterministic trajectory that reports WHEN the
+detector WOULD intervene.
+
+FINAL_HEAD: (this commit)
+TRACKED_DIRT: (none beyond this ACT's own files)
+```

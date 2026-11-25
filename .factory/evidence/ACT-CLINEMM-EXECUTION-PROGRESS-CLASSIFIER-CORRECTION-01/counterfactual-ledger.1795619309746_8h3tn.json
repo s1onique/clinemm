@@ -1,0 +1,171 @@
+{
+  "sessionId": "1795619309746_8h3tn",
+  "roundsReplayed": 232,
+  "missingResults": 0,
+  "observedRuntimeNotices": [],
+  "predecessorInjections": [],
+  "repairedInjections": [
+    {
+      "run": 2,
+      "iter": 25,
+      "msgIndex": 68,
+      "streak": 5,
+      "tools": [
+        "run_commands"
+      ]
+    }
+  ],
+  "firstR1Eligibility": {
+    "run": 2,
+    "iter": 25,
+    "msgIndex": 68
+  },
+  "r2EntryReachable": false,
+  "falseProductivityRounds": [
+    {
+      "run": 2,
+      "iter": 9,
+      "msgIndex": 36,
+      "tools": [
+        "run_commands"
+      ],
+      "before": "executed",
+      "after": "inspected",
+      "beforeStreak": 0,
+      "afterStreak": 1
+    },
+    {
+      "run": 2,
+      "iter": 14,
+      "msgIndex": 46,
+      "tools": [
+        "run_commands"
+      ],
+      "before": "executed",
+      "after": "inspected",
+      "beforeStreak": 0,
+      "afterStreak": 1
+    },
+    {
+      "run": 2,
+      "iter": 21,
+      "msgIndex": 60,
+      "tools": [
+        "run_commands"
+      ],
+      "before": "executed",
+      "after": "inspected",
+      "beforeStreak": 0,
+      "afterStreak": 1
+    },
+    {
+      "run": 2,
+      "iter": 22,
+      "msgIndex": 62,
+      "tools": [
+        "run_commands"
+      ],
+      "before": "executed",
+      "after": "inspected",
+      "beforeStreak": 0,
+      "afterStreak": 2
+    },
+    {
+      "run": 2,
+      "iter": 23,
+      "msgIndex": 64,
+      "tools": [
+        "run_commands"
+      ],
+      "before": "executed",
+      "after": "inspected",
+      "beforeStreak": 0,
+      "afterStreak": 3
+    },
+    {
+      "run": 2,
+      "iter": 24,
+      "msgIndex": 66,
+      "tools": [
+        "run_commands"
+      ],
+      "before": "executed",
+      "after": "inspected",
+      "beforeStreak": 0,
+      "afterStreak": 4
+    },
+    {
+      "run": 2,
+      "iter": 25,
+      "msgIndex": 68,
+      "tools": [
+        "run_commands"
+      ],
+      "before": "executed",
+      "after": "inspected",
+      "beforeStreak": 0,
+      "afterStreak": 5
+    },
+    {
+      "run": 2,
+      "iter": 26,
+      "msgIndex": 70,
+      "tools": [
+        "run_commands"
+      ],
+      "before": "executed",
+      "after": "inspected",
+      "beforeStreak": 0,
+      "afterStreak": 1
+    },
+    {
+      "run": 2,
+      "iter": 29,
+      "msgIndex": 76,
+      "tools": [
+        "run_commands"
+      ],
+      "before": "executed",
+      "after": "inspected",
+      "beforeStreak": 0,
+      "afterStreak": 1
+    },
+    {
+      "run": 2,
+      "iter": 32,
+      "msgIndex": 82,
+      "tools": [
+        "run_commands"
+      ],
+      "before": "executed",
+      "after": "inspected",
+      "beforeStreak": 0,
+      "afterStreak": 1
+    },
+    {
+      "run": 2,
+      "iter": 72,
+      "msgIndex": 162,
+      "tools": [
+        "run_commands"
+      ],
+      "before": "executed",
+      "after": "inspected",
+      "beforeStreak": 0,
+      "afterStreak": 1
+    },
+    {
+      "run": 2,
+      "iter": 79,
+      "msgIndex": 176,
+      "tools": [
+        "run_commands"
+      ],
+      "before": "executed",
+      "after": "inspected",
+      "beforeStreak": 0,
+      "afterStreak": 1
+    }
+  ],
+  "conservedProgressRounds": 220
+}

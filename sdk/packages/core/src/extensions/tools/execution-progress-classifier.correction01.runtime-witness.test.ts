@@ -43,21 +43,39 @@ import type {
 	AgentTool,
 } from "@cline/shared";
 import { describe, expect, it } from "vitest";
+import { createHostExecutionProgressClassifier as createDefectivePredecessorClassifier } from "./__fixtures__/defective-execution-progress-classifier";
 import { createHostExecutionProgressClassifier } from "./execution-progress-classifier";
 
 /**
  * A deterministic scripted model. Every step is a canned response.
+ *
+ * ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01 — AMENDMENT-01:
+ * the model also serves the R2 SELECTION INFERENCE. The selection inference
+ * carries NO tools (it names an objective; it executes nothing), while every
+ * execution request carries the runtime's tool set — that is the SAME
+ * discriminator the existing R2 suite uses.
  */
 class ScriptedModel implements AgentModel {
 	readonly requests: AgentModelRequest[] = [];
+	readonly selectionRequests: AgentModelRequest[] = [];
 	constructor(
 		private readonly steps: Array<
 			(request: AgentModelRequest) => Iterable<AgentModelEvent>
 		>,
+		private readonly selectionReply?: Record<string, unknown>,
 	) {}
 	async stream(
 		request: AgentModelRequest,
 	): Promise<AsyncIterable<AgentModelEvent>> {
+		const isSelectionRequest = (request.tools ?? []).length === 0;
+		if (isSelectionRequest) {
+			this.selectionRequests.push(request);
+			const reply = JSON.stringify(this.selectionReply ?? {});
+			return (async function* () {
+				yield { type: "text-delta", text: reply } as AgentModelEvent;
+				yield { type: "finish", reason: "stop" } as AgentModelEvent;
+			})();
+		}
 		this.requests.push(request);
 		const step = this.steps.shift();
 		if (!step) {
@@ -130,6 +148,30 @@ const REMOTE_INSPECTION_COMMANDS: readonly string[] = [
 	'ssh host \'grep -rn "proc_open" "$L/"\'',
 ];
 
+/**
+ * The HISTORICAL REMOTE INSPECTION commands WITH the DESCRIPTOR DUPLICATION
+ * suffix the frozen session actually used.
+ *
+ * ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01 — AMENDMENT-01:
+ * every historical reconnaissance command of the frozen Session A transcript
+ * ends with `2>&1 | tail -N`. That suffix is a DESCRIPTOR DUPLICATION, not a
+ * command separator, and the defective predecessor classifier read it as a
+ * separator.
+ *
+ * These are the EXACT historical command strings — CLASSIFICATION INPUTS
+ * ONLY. The witness never executes them and never opens an SSH connection.
+ */
+const HISTORICAL_REMOTE_INSPECTION_COMMANDS: readonly string[] = [
+	'SSH_AUTH_SOCK=/private/tmp/com.apple.launchd.d79HgW0fyF/Listeners ssh -o BatchMode=yes 192.168.50.111 \'N=~/nim/nim-2.2.4; ls $N/lib | grep -E "^(sha2|monotimes|httpclient|osproc|json|unittest|times|posix)\\.nimle?$"; grep -n "proc fsync" $N/lib/posix/posix_linux_amd64.nim | head -3; grep -rn "flock" $N/lib/posix/*.nim | head -5; grep -n "proc sha256" $N/lib/pure/sha2.nim | head -3; grep -n "proc getMonoTime" $N/lib/std/monotimes.nim | head -3\' 2>&1 | tail -30',
+	'SSH_AUTH_SOCK=/private/tmp/com.apple.launchd.d79HgW0fyF/Listeners ssh -o BatchMode=yes 192.168.50.111 \'N=~/nim/nim-2.2.4; ls $N/lib $N/lib/pure $N/lib/std | grep -iE "sha|http|mono|proc|json|unit" ; echo ---; grep -rn "sha256" $N/lib/pure/*.nim | head -5; echo ---; grep -rn "proc fsync\\|proc open\\b" $N/lib/posix/posix_linux_amd64.nim | head\' 2>&1 | tail -40',
+	'SSH_AUTH_SOCK=/private/tmp/com.apple.launchd.d79HgW0fyF/Listeners ssh -o BatchMode=yes 192.168.50.111 \'N=~/nim/nim-2.2.4; grep -rn "fsync\\|proc open\\*\\|O_CREAT" $N/lib/posix/*.nim | head -20; echo ---; grep -rn "proc readFile\\|proc writeFile" $N/lib/system/io.nim | head\' 2>&1 | tail -30',
+	"SSH_AUTH_SOCK=/private/tmp/com.apple.launchd.d79HgW0fyF/Listeners ssh -o BatchMode=yes 192.168.50.11 'N=~/nim/nim-2.2.4; grep -n \"streamOut\\|streamErr\\|proc startProcess\\|proc running\\|proc terminate\\|proc waitFor\\|proc close\\|type Process\\*\\|poStdErrToStdOut\\|proc execCmdEx\\|proc peekExitCode\" $N/lib/pure/osproc.nim | head -40' 2>&1 | tail -45",
+	'SSH_AUTH_SOCK=/private/tmp/com.apple.launchd.d79HgW0fyF/Listeners ssh -o BatchMode=yes 192.168.50.111 \'N=~/nim/nim-2.2.4; sed -n "330,420p" $N/lib/pure/osproc.nim; echo =====; sed -n "955,1060p" $N/lib/pure/osproc.nim\' 2>&1 | tail -140',
+	'SSH_AUTH_SOCK=/private/tmp/com.apple.launchd.d79HgW0fyF/Listeners ssh -o BatchMode=yes 192.168.50.111 \'N=~/nim/nim-2.2.4; sed -n "55,120p" $N/lib/pure/osproc.nim; echo =====; sed -n "780,830p" $N/lib/pure/osproc.nim\' 2>&1 | tail -120',
+	'SSH_AUTH_SOCK=/private/tmp/com.apple.launchd.d79HgW0fyF/Listeners ssh -o BatchMode=yes 192.168.50.111 \'N=~/nim/nim-2.2.4; grep -n "^  proc \\\\(fcntl\\|poll\\|waitpid\\|kill\\|dup2\\|execv\\|execve\\|pipe\\|fork\\|read\\|write\\|close\\|open\\|fcntl\\)\\b" $N/lib/posix/posix.nim | head -40; echo ---; grep -n "O_NONBLOCK\\|F_SETFL\\|SIGKILL\\|WNOHANG" $N/lib/posix/posix_linux_amd64_consts.nim | head -10\' 2>&1 | tail -50',
+	'SSH_AUTH_SOCK=/private/tmp/com.apple.launchd.d79HgW0fyF/Listeners ssh -o BatchMode=yes 192.168.50.111 \'N=~/nim/nim-2.2.4; grep -n "proc \\\\(waitpid\\|kill\\|dup2\\|execv\\|execve\\|pipe\\|fork\\|read\\|write\\|close\\|fcntl\\|open\\)\\*" $N/lib/posix/posix.nim | head -40; echo ---; grep -n "proc \\\\(waitpid\\|kill\\|dup2\\|execv\\|pipe\\|fork\\|read\\|write\\|close\\|fcntl\\)\\*" $N/lib/posix/posix_linux_amd64.nim | head -40\' 2>&1 | tail -60',
+];
+
 /** A GENUINE REMOTE BUILD command — real work, not reconnaissance. */
 const REMOTE_BUILD_COMMANDS: readonly string[] = [
 	"ssh host 'nim c -d:release src/main.nim'",
@@ -137,59 +179,37 @@ const REMOTE_BUILD_COMMANDS: readonly string[] = [
 ];
 
 /**
- * The PREDECESSOR's inspection-program whitelist and its first-token-only
- * classification.
+ * The FROZEN DEFECTIVE PREDECESSOR production classifier.
  *
- * The predecessor's decision shape was
- *   `isInspectionCommandInput(input) ? "inspected" : "executed"`
- * with a whitelist that did not include `ssh`, and it read only the LOCAL
- * first token of each segment. The predecessor therefore classified every
- * remote inspection as a productive execution.
+ * ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01 — AMENDMENT-01:
+ * the predecessor the witness compares against is the ACTUAL production
+ * classifier at commit 1708f1e8f (Git blob
+ * b8029cada039e371cdf2d0a2dc2b987dfc1926c4), frozen verbatim under
+ * `./__fixtures__/defective-execution-progress-classifier.ts`.
+ *
+ * This file does NOT re-implement the predecessor's logic and does NOT carry
+ * a test-local program whitelist: it drives the real predecessor module.
  */
-const PREDECESSOR_INSPECTION_PROGRAMS: ReadonlySet<string> = new Set([
-	"cat",
-	"echo",
-	"file",
-	"find",
-	"git",
-	"grep",
-	"head",
-	"ls",
-	"nl",
-	"od",
-	"printenv",
-	"pwd",
-	"rg",
-	"sed",
-	"stat",
-	"tail",
-	"tree",
-	"type",
-	"wc",
-	"which",
-	"whoami",
-]);
-
-/** Whether the PREDECESSOR classifier classified the call as an inspection. */
-function predecessorClassifiesAsInspection(
-	commands: readonly string[],
-): boolean {
-	for (const command of commands) {
-		const program = command.split(/\s+/)[0]?.split("/").pop()?.toLowerCase();
-		if (!PREDECESSOR_INSPECTION_PROGRAMS.has(program ?? "")) {
-			return false;
-		}
-	}
-	return commands.length > 0;
-}
+const DEFECTIVE_PREDECESSOR_CLASSIFIER = createDefectivePredecessorClassifier();
 
 describe("ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01 / principal production runtime witness", () => {
-	it("the PREDECESSOR classifier misclassifies the remote inspections as execution", () => {
-		// (1) The predecessor's own logic classifies every remote inspection
-		// as a productive execution, because `ssh` is not in its whitelist.
-		expect(predecessorClassifiesAsInspection(REMOTE_INSPECTION_COMMANDS)).toBe(
-			false,
-		);
+	it("the DEFECTIVE PREDECESSOR production classifier already recognises the SSH transport shape", () => {
+		// The frozen defective predecessor is the production classifier at
+		// commit 1708f1e8f. It already recognises the SSH TRANSPORT
+		// wrapper: the remote payload is classified, not the local first
+		// token. This witness pins that fact so the amendment's own
+		// discriminator is unambiguous: the defect this ACT repairs is the
+		// DESCRIPTOR DUPLICATION, not the SSH transport.
+		for (const command of REMOTE_INSPECTION_COMMANDS) {
+			expect(
+				DEFECTIVE_PREDECESSOR_CLASSIFIER(
+					"run_commands",
+					{ commands: [command] },
+					{ output: [{ ok: true, exitCode: 0 }] },
+				),
+				`command: ${command}`,
+			).toBe("inspected");
+		}
 	});
 
 	it("the CORRECTED classifier recognises the remote inspections as inspections", () => {
@@ -336,5 +356,167 @@ describe("ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01 / principal pr
 		expect(
 			notices.filter((n) => n.includes("execution stagnation detected")),
 		).toHaveLength(0);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01 — AMENDMENT-01
+//
+// THE ACTUAL R2 ENTRY WITNESS.
+//
+// The predecessor witness above configures R1 ONLY: it proves that the
+// corrected classifier increments the stagnation streak and that the EXISTING
+// R1 allowance is consumed. It never configures R2 and never observes R2's
+// activation.
+//
+// This block closes that gap. It drives a SHORT trajectory of the HISTORICAL
+// remote inspection shape — WITH the descriptor duplication the frozen
+// session actually used — through the REAL `AgentRuntime` with R2 CONFIGURED,
+// and establishes the ACTUAL R2 entry witness.
+// ---------------------------------------------------------------------------
+
+/**
+ * The R2 SELECTION REPLY the scripted model returns for the ONE selection
+ * inference.
+ *
+ * It is the EXISTING R2 selection-rejection control: the reply cites an
+ * obligation that is NOT outstanding and an observation that was never
+ * established, so the runtime's validator REJECTS it. The rejection consumes
+ * the selection-inference allowance and MUST NOT start another attempt.
+ */
+const REJECTED_SELECTION_REPLY: Record<string, unknown> = {
+	objective: "Do something unauthorised",
+	firstStep: "Touch an unauthorised path",
+	mutationScope: "/etc",
+	verificationCondition: "nothing is verified",
+	obligationReferences: ["An obligation that was never outstanding"],
+	evidenceReferences: ["An observation that was never established"],
+	successCondition: "never",
+	failureCondition: "always",
+};
+
+/** The R2 policy, reusing the EXISTING R2 activation and selection limits. */
+const R2_POLICY = {
+	enabled: true,
+	maxActivations: 2,
+	maxObjectiveRounds: 8,
+	maxSelectionInferences: 1,
+} as const;
+
+describe("ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01 (AMENDMENT-01) / actual R2 entry witness", () => {
+	it("the DEFECTIVE PREDECESSOR production classifier does NOT reach the R2 entry branch", () => {
+		// The RED condition, driven by the ACTUAL defective production
+		// classifier: the historical inspection shape carries the trailing
+		// `2>&1 | tail -N` DESCRIPTOR DUPLICATION, so the predecessor reads
+		// it as a command separator and reports the reconnaissance as a
+		// productive execution.
+		for (const command of HISTORICAL_REMOTE_INSPECTION_COMMANDS) {
+			expect(
+				DEFECTIVE_PREDECESSOR_CLASSIFIER(
+					"run_commands",
+					{ commands: [command] },
+					{ output: [{ ok: true, exitCode: 0 }] },
+				),
+				`command: ${command}`,
+			).toBe("executed");
+		}
+	});
+
+	it("the REPAIRED production classifier recognises the historical inspection shape", () => {
+		const classify = createHostExecutionProgressClassifier();
+		for (const command of HISTORICAL_REMOTE_INSPECTION_COMMANDS) {
+			expect(
+				classify(
+					"run_commands",
+					{ commands: [command] },
+					{ output: [{ ok: true, exitCode: 0 }] },
+				),
+				`command: ${command}`,
+			).toBe("inspected");
+		}
+	});
+
+	it("reaches the EXISTING R2 entry branch, runs EXACTLY ONE selection inference and manufactures NO further selection allowance", async () => {
+		const calls = { count: 0 };
+		const steps: Array<
+			(request: AgentModelRequest) => Iterable<AgentModelEvent>
+		> = [];
+		// A short trajectory of the HISTORICAL remote inspection shape. The
+		// R1 threshold (2) is below the production default (5) so the
+		// witness stays SHORT; the R1 allowance (2) and the R2 limits are
+		// the EXISTING ones.
+		for (const [
+			index,
+			command,
+		] of HISTORICAL_REMOTE_INSPECTION_COMMANDS.entries()) {
+			steps.push(
+				toolCallStep(`h${index}`, "run_commands", { commands: [command] }),
+			);
+		}
+		steps.push(() => finishStep());
+		const model = new ScriptedModel(steps, REJECTED_SELECTION_REPLY);
+		const runtime = new AgentRuntime({
+			model,
+			tools: [createCommandTool(calls)],
+			executionStagnationPolicy: {
+				unproductiveRoundThreshold: 2,
+				maxRecoveryInstructions: 2,
+				enabled: true,
+				classifyToolCall: createHostExecutionProgressClassifier(),
+			},
+			boundedObjectivePolicy: R2_POLICY,
+		});
+		const notices: string[] = [];
+		runtime.subscribe((event: AgentRuntimeEvent) => {
+			if (event.type === "status-notice") {
+				notices.push(event.message);
+			}
+		});
+		await runtime.run("inspect the remote sources");
+
+		// (1) The R1 allowance is CONSUMED: exactly TWO corrective
+		// instructions are injected, and no more.
+		const stagnationNotices = notices.filter((n) =>
+			n.includes("execution stagnation detected"),
+		);
+		expect(stagnationNotices).toHaveLength(2);
+		expect(stagnationNotices[0]).toContain(
+			"injecting a recovery instruction (attempt 1/2)",
+		);
+		expect(stagnationNotices[1]).toContain(
+			"injecting a recovery instruction (attempt 2/2)",
+		);
+
+		// (2) The SUBSEQUENT QUALIFYING ROUND reaches the EXISTING R2 entry
+		// branch — the R1 `allowance_exhausted` branch, which is the ONLY
+		// R2 entry point.
+		const r2Notices = notices.filter((n) =>
+			n.includes("R1 recovery allowance exhausted"),
+		);
+		expect(r2Notices).toHaveLength(1);
+		expect(r2Notices[0]).toContain("selecting a bounded objective");
+
+		// (3) EXACTLY ONE selection inference executes.
+		expect(model.selectionRequests).toHaveLength(1);
+
+		// (4) NO ADDITIONAL selection allowance is manufactured: the
+		// rejection consumed the ONE permitted selection inference and was
+		// never retried.
+		expect(
+			notices.filter((n) => n.includes("bounded objective selection rejected")),
+		).toHaveLength(1);
+		expect(
+			notices.filter((n) =>
+				n.includes("bounded objective recovery outcome: failed"),
+			),
+		).toHaveLength(1);
+		// No bounded objective was ever dispatched.
+		for (const request of model.requests) {
+			expect(
+				(request.systemPrompt ?? "").includes(
+					"[SYSTEM] Active bounded objective (runtime authority):",
+				),
+			).toBe(false);
+		}
 	});
 });

@@ -130,13 +130,27 @@ const ENVIRONMENT_INSPECTION_PROGRAMS: ReadonlySet<string> = new Set([
 	"id",
 	"lscpu",
 	"lsblk",
-	"mount",
 	"printenv",
 	"uname",
 	"uptime",
 	"who",
 	"whoami",
 ]);
+
+/**
+ * ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01 — AMENDMENT-01.
+ *
+ * The `mount` program.
+ *
+ * `mount` with NO arguments LISTS the mounted filesystems: it reads the
+ * system's mount table and changes nothing. `mount <device> <mountpoint>`
+ * MOUNTS a filesystem: it changes the system's state, which is real work.
+ *
+ * `mount` therefore cannot be a member of the closed environment-inspection
+ * program set. It gets a bounded, explicit rule instead: the listing form is
+ * an inspection and every other form is an execution.
+ */
+const MOUNT_PROGRAM = "mount";
 
 /**
  * The `git` SUBCOMMANDS that are pure inspection.
@@ -173,8 +187,58 @@ const INSPECTION_GIT_SUBCOMMANDS: ReadonlySet<string> = new Set([
  *
  * `git tag <name>` creates a tag; `git tag` alone lists them. The listing
  * form is the only inspection.
+ *
+ * ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01 — AMENDMENT-01:
+ * the LISTING forms are now recognised EXPLICITLY, instead of by the absence
+ * of a flag.
+ *
+ * The absence-of-a-flag rule let the CREATING and DELETING forms through as
+ * inspections, because both carry a flag:
+ *
+ *   - `git tag -a new-tag -m msg`  (annotated tag creation)
+ *   - `git tag -d new-tag`         (tag deletion)
+ *
+ * A flag-bearing `git tag` is therefore only an inspection when the flag is
+ * one of the LISTING flags (`-l`, `--list`). Every other form — including a
+ * form whose flag this module does not recognise — keeps the conservative
+ * UNKNOWN disposition rather than claiming an inspection it cannot justify.
  */
 const GIT_MUTATING_TAG_SUBCOMMANDS: ReadonlySet<string> = new Set(["tag"]);
+
+/**
+ * The `git tag` flags whose presence makes the invocation a LISTING.
+ *
+ * `-l` and `--list` are the two listing flags. Any other flag selects a
+ * different operation: `-a` creates an annotated tag, `-d` deletes one,
+ * `-s` creates a signed tag, `-v` verifies one.
+ */
+const GIT_TAG_LISTING_FLAGS: ReadonlySet<string> = new Set(["-l", "--list"]);
+
+/**
+ * Whether a `git tag` invocation is a pure LISTING.
+ *
+ * The listing form is `git tag` with no arguments, or `git tag` followed only
+ * by listing flags (and, optionally, a PATTERN to filter by — `git tag -l
+ * 'v*'` still only reads the tag namespace).
+ */
+function gitTagIsListing(args: string[]): boolean {
+	const rest = args.slice(1);
+	if (rest.length === 0) {
+		return true;
+	}
+	let sawListingFlag = false;
+	for (const arg of rest) {
+		if (arg.startsWith("-")) {
+			if (!GIT_TAG_LISTING_FLAGS.has(arg)) {
+				// A non-listing flag selects a mutating operation.
+				return false;
+			}
+			sawListingFlag = true;
+		}
+		// A bare argument is a PATTERN that filters the listing.
+	}
+	return sawListingFlag;
+}
 
 /**
  * Wrapper programs that only invoke the command that follows them, and the
@@ -199,19 +263,45 @@ const WRAPPER_PROGRAMS: ReadonlyMap<string, number> = new Map([
 ]);
 
 /**
+ * ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01 — AMENDMENT-01.
+ *
+ * The DESCRIPTOR DUPLICATION forms.
+ *
+ * `2>&1`, `>&2` and `1>&2` redirect one file descriptor onto another. They
+ * are NOT a command separator and NOT a file mutation: the `&` in them does
+ * not start a new command, and no file is written.
+ *
+ * The historical reconnaissance commands of the frozen Session A transcript
+ * ALL carry the trailing `2>&1 | tail -N` shape. Reading the `&` of the
+ * duplication as a separator fragmented the read-only reconnaissance into an
+ * extra, unrecognised segment, so the classifier reported the reconnaissance
+ * as a productive execution. That is the defect this form set repairs.
+ *
+ * A BACKGROUND separator (`cmd &`) and an actual OUTPUT REDIRECTION
+ * (`cmd > file`) are DIFFERENT constructs and keep their own behaviour: the
+ * `&` still splits the command, and the `>` still writes a file.
+ */
+/**
  * Split a command string into its simple-command segments.
  *
  * The split is QUOTE- and ESCAPE-aware: a `|` inside a quoted argument (for
  * example the grep pattern `"type: \"done\"\|type: 'done'"`) is part of the
  * argument, not a command separator. Splitting it would fragment the
  * command and misclassify a read-only inspection.
+ *
+ * ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01 — AMENDMENT-01:
+ * the split is also DESCRIPTOR-DUPLICATION-aware. The `&` of a duplication
+ * (`2>&1`, `>&2`) is part of the redirection, not a command separator, so it
+ * does not split the segment. The `&` of a BACKGROUND separator and the
+ * `&` of an output redirection (`&> file`) still split it.
  */
 function splitSegments(command: string): string[] {
 	const segments: string[] = [];
 	let current = "";
 	let quote: '"' | "'" | undefined;
 	let escaped = false;
-	for (const char of command) {
+	for (let index = 0; index < command.length; index += 1) {
+		const char = command[index];
 		if (escaped) {
 			current += char;
 			escaped = false;
@@ -238,12 +328,52 @@ function splitSegments(command: string): string[] {
 			char === "\n" ||
 			char === ";" ||
 			char === "|" ||
-			char === "&" ||
 			char === "(" ||
 			char === ")"
 		) {
 			segments.push(current);
 			current = "";
+			continue;
+		}
+		if (char === "&") {
+			// The `&` has FOUR distinct shapes, and only ONE of them is a
+			// descriptor duplication:
+			//
+			//   `&&`            the logical AND separator
+			//   `&`             the background separator
+			//   `&>`            the output redirection (`&> file`)
+			//   `N>&M` / `>&M`  the DESCRIPTOR DUPLICATION
+			//
+			// Only the duplication stays inside the segment.
+			const next = command[index + 1];
+			if (next === "&") {
+				// `&&` — the logical AND separator.
+				segments.push(current);
+				current = "";
+				continue;
+			}
+			if (next === ">") {
+				// `&>` — the output redirection to a file.
+				segments.push(current);
+				current = "";
+				continue;
+			}
+			if (next === undefined) {
+				// A trailing `&` — the background separator.
+				segments.push(current);
+				current = "";
+				continue;
+			}
+			if (next !== ">" && !/^[0-9]$/.test(next)) {
+				// The `&` is followed by whitespace or an ordinary
+				// character: this is the BACKGROUND separator.
+				segments.push(current);
+				current = "";
+				continue;
+			}
+			// The `&` is followed by `>` or a descriptor digit: this is the
+			// duplication form `2>&1` or `>&1`. It is NOT a separator.
+			current += char;
 			continue;
 		}
 		current += char;
@@ -470,6 +600,15 @@ const SHELL_ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*\+?=/;
  *   - `unset NAME`
  *   - `cd <dir>` (the shell's working directory only)
  *   - a `VAR=value` prefix on the FOLLOWING command
+ *
+ * ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01 — AMENDMENT-01:
+ * a setup form that carries an OUTPUT REDIRECTION is NOT setup.
+ *
+ * `cd /tmp > file` and `export X=1 > file` write a file. The setup action
+ * itself changes nothing, but the redirection writes a deliverable, so the
+ * segment is a MUTATION and not an inspection. The command guard is the
+ * authority for the file-writing question, exactly as it is for `sed -i` and
+ * `find -delete`.
  */
 function segmentIsSetup(segment: string): boolean {
 	const tokens = splitTokens(segment);
@@ -478,20 +617,33 @@ function segmentIsSetup(segment: string): boolean {
 	}
 	const first = tokens[0];
 	if (first === "export" || first === "unset") {
-		return true;
+		return !segmentWritesAFile(segment);
 	}
 	if (first === "cd") {
 		// `cd` only changes the shell's working directory: it is setup, not
-		// work.
-		return true;
+		// work — unless it also writes a file.
+		return !segmentWritesAFile(segment);
 	}
 	if (SHELL_ASSIGNMENT.test(first)) {
 		// `L=/tmp` on its own is setup. `L=/tmp cmd` is a command WITH an
 		// assignment prefix, which is handled by the prefix stripping, not
 		// here — a bare assignment segment has exactly one token.
-		return tokens.length === 1;
+		return tokens.length === 1 && !segmentWritesAFile(segment);
 	}
 	return false;
+}
+
+/**
+ * Whether a command segment WRITES A FILE.
+ *
+ * The existing command guard is the authority for this question: it already
+ * distinguishes an output redirection to a real file from a descriptor
+ * duplication (`2>&1`) and from an allowed temporary sink. This module
+ * reuses that authority rather than inventing a second notion of "writes a
+ * file".
+ */
+function segmentWritesAFile(segment: string): boolean {
+	return findFileEditingCommand(segment) !== undefined;
 }
 
 /**
@@ -632,10 +784,10 @@ function classifySegment(segment: string): SegmentClassification {
 		}
 		if (
 			GIT_MUTATING_TAG_SUBCOMMANDS.has(subcommand) &&
-			args.length > 1 &&
-			!args.slice(1).some((arg) => arg.startsWith("-"))
+			!gitTagIsListing(args)
 		) {
-			// `git tag <name>` CREATES a tag: a mutation.
+			// `git tag <name>` CREATES a tag and `git tag -d <name>` DELETES
+			// one: a mutation. Only the LISTING form is an inspection.
 			return "execution";
 		}
 		// A recognised inspection subcommand can still be a MUTATION when
@@ -646,6 +798,14 @@ function classifySegment(segment: string): SegmentClassification {
 			return "execution";
 		}
 		return "inspection";
+	}
+	// ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01 — AMENDMENT-01.
+	//
+	// `mount` with NO arguments LISTS the mounted filesystems; every other
+	// form MOUNTS one and changes the system's state. The listing form is an
+	// inspection; the mutating form is an execution.
+	if (program === MOUNT_PROGRAM) {
+		return args.length === 0 ? "inspection" : "execution";
 	}
 	if (
 		!INSPECTION_PROGRAMS.has(program) &&
@@ -799,16 +959,116 @@ export function createHostExecutionProgressClassifier(): NonNullable<
 		if (result?.isError === true || observationReportsFailure(result?.output)) {
 			return "failed";
 		}
-		if (result === undefined || result.output === undefined) {
+		if (result === undefined || !observationEstablishesOutcome(result.output)) {
 			// The observation carries NO execution outcome: either the result
-			// is absent entirely, or it carries no output at all. Neither a
-			// successful dispatch nor an absent result establishes that the
-			// command ran and succeeded, so this is not positive evidence of
-			// progress.
+			// is absent entirely, or it carries no output at all, or the
+			// output is EMPTY.
+			//
+			// ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01 —
+			// AMENDMENT-01: an EMPTY observation (`null`, `[]`, `{}`) is a
+			// MISSING outcome too. The previous check only rejected an
+			// ABSENT `output` property, so an empty array or an empty
+			// object fell through to the command-shape reading and was
+			// reported as a productive EXECUTION. An observation that
+			// carries no evidence at all cannot establish that the command
+			// ran and produced a deliverable.
+			//
+			// Neither a successful dispatch nor an empty observation
+			// establishes that the command ran and succeeded, so this is not
+			// positive evidence of progress.
 			return "failed";
 		}
 		return isInspectionCommandInput(input) ? "inspected" : "executed";
 	};
+}
+
+/**
+ * ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01 — AMENDMENT-01.
+ *
+ * Whether an observation ESTABLISHES a terminal execution outcome.
+ *
+ * The real production result contract is the `command_status` snapshot
+ * (`CommandStatusOutput`) and the `run_commands` array envelope
+ * (`ToolOperationResult[]`):
+ *
+ *   - the `command_status` snapshot carries `ok` (the OBSERVATION succeeded),
+ *     `state` (the command's lifecycle state) and `exitCode` (the command's
+ *     terminal status);
+ *   - the `run_commands` operation result carries `success`, `result` and
+ *     `error`.
+ *
+ * `{ ok: true }` ALONE does NOT establish a terminal outcome: `ok` reports
+ * that the OBSERVATION was taken, not that the COMMAND ran and succeeded. A
+ * still-running job reports `ok: true` with `state: "running"` and no exit
+ * code at all.
+ *
+ * A terminal outcome is therefore established by an explicit `exitCode`, or
+ * by the production operation-result `success` flag, or by a `state` that
+ * names a terminal state.
+ *
+ * A PLAIN-TEXT observation is the documented residual limitation: the
+ * classifier cannot distinguish a completed command with no structured
+ * envelope from a command whose outcome was never reported, so it treats a
+ * plain-text observation as a COMPLETED observation, classified by the
+ * command's shape. That limitation is unchanged by this repair.
+ *
+ * An EMPTY observation (`null`, `[]`, `{}`) carries no evidence at all and
+ * therefore establishes no outcome.
+ */
+function observationEstablishesOutcome(output: unknown): boolean {
+	if (output === null || output === undefined) {
+		return false;
+	}
+	if (typeof output === "string") {
+		// The production `run_commands` RUNNING envelope is a JSON STRING.
+		// It is parsed and read structurally. A non-JSON string is the
+		// documented plain-text legacy shape.
+		try {
+			return observationEstablishesOutcome(JSON.parse(output));
+		} catch {
+			// A plain-text observation is treated as a COMPLETED
+			// observation: the documented residual limitation.
+			return true;
+		}
+	}
+	if (typeof output !== "object") {
+		// A non-object, non-string observation (a number, a boolean) is a
+		// plain-text-equivalent observation.
+		return true;
+	}
+	if (Array.isArray(output)) {
+		// The production array envelope. An EMPTY array carries no
+		// evidence; a non-empty array is established when any ENTRY
+		// establishes a terminal outcome.
+		return output.some((entry) => observationEstablishesOutcome(entry));
+	}
+	const record = output as Record<string, unknown>;
+	// The explicit terminal status of the command.
+	if (typeof record.exitCode === "number") {
+		return true;
+	}
+	// The production operation-result success flag.
+	if (typeof record.success === "boolean") {
+		return true;
+	}
+	// A terminal lifecycle state names the command's terminal outcome.
+	if (typeof record.state === "string") {
+		const state = record.state.toLowerCase();
+		if (
+			state === "exited" ||
+			state === "failed" ||
+			state === "completed" ||
+			state === "done" ||
+			state === "terminated" ||
+			state === "killed" ||
+			state === "aborted"
+		) {
+			return true;
+		}
+	}
+	// The `ok` flag alone is the OBSERVATION's success, not the command's
+	// terminal outcome, so it does not establish one.
+	return false;
 }
 
 /**
