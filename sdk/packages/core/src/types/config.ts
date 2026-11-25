@@ -107,6 +107,30 @@ export interface CoreCompactionContext {
 	 * or recovering turn is not blocked on a stalled compaction.
 	 */
 	abortSignal?: AbortSignal;
+	/**
+	 * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01.
+	 *
+	 * The channel through which a compaction reports the PROVIDER-REPORTED
+	 * USAGE of the auxiliary inferences it performed — today, the
+	 * summarization request.
+	 *
+	 * WHY IT IS A CHANNEL AND NOT A RETURN VALUE
+	 * -------------------------------------------
+	 *
+	 * The compaction's RESULT describes the transcript it produced. A
+	 * compaction that REJECTED its candidate, was CANCELLED, or was refused
+	 * at the persistence boundary produces NO transcript — so a usage field
+	 * on the result would be lost exactly in the cases where the inference
+	 * was still paid for.
+	 *
+	 * A rejected summary is not free inference. The channel is therefore
+	 * OUT OF BAND: it carries the usage out of the compaction whatever the
+	 * compaction's outcome, and it carries nothing when no usage was
+	 * reported.
+	 */
+	reportAuxiliaryUsage?: (
+		usage: CoreCompactionSummarizationUsage & { inferenceId: string },
+	) => void;
 }
 
 // Mirrors BudgetPolicyIntent in extensions/context/budget-projection/types.ts.
@@ -135,6 +159,37 @@ export interface CoreCompactionBudgetMetadata {
 export interface CoreCompactionResult {
 	messages: MessageWithMetadata[];
 	budget?: CoreCompactionBudgetMetadata;
+	/**
+	 * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01.
+	 *
+	 * The PROVIDER-REPORTED USAGE of the summarization inference this
+	 * compaction performed.
+	 *
+	 * A rejected summary is not free inference: the provider request was
+	 * dispatched and paid for whether the candidate was installed or not.
+	 * The usage is therefore reported with the compaction's own result, and
+	 * it is ABSENT when the provider reported no usage — an absent provider
+	 * metric stays unknown and is never turned into a zero-cost inference.
+	 *
+	 * DELTA semantics: the usage of THIS request, not a running total.
+	 */
+	summarizationUsage?: CoreCompactionSummarizationUsage;
+}
+
+/**
+ * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01.
+ *
+ * The provider-reported usage of ONE summarization inference.
+ */
+export interface CoreCompactionSummarizationUsage {
+	/** What the inference was for. */
+	kind: "summarization";
+	inputTokens: number;
+	outputTokens: number;
+	cacheReadTokens?: number;
+	cacheWriteTokens?: number;
+	totalCost?: number;
+	reasoningTokenCount?: number;
 }
 
 export interface CoreCompactionSummarizerConfig {

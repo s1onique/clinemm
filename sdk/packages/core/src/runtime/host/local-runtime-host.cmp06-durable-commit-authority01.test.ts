@@ -346,20 +346,56 @@ function buildPrepareTurnContext(input: {
 }
 
 /**
- * The provider-visible projection of a seam's RETURNED transcript.
+ * The EFFECTIVE provider-visible projection of a seam's preparation result.
  *
- * The returned transcript is what the runtime actually sends to the
+ * The provider-visible transcript is what the runtime actually sends to the
  * provider on the next turn. A candidate that was refused must be ABSENT
  * from it: the refusal has to hold not only in the persisted sidecar but
  * also in the transcript the provider sees.
+ *
+ * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 (AMENDMENT-01 A2) —
+ * THE PRODUCTION CONSUMER'S FALLBACK.
+ *
+ * The previous form read `result?.messages ?? []`. That is VACUOUS for a
+ * metadata-only preparation result: the CMP-06/CMP-07 refusal path returns
+ * `publishWorkingContextEstimateMetadataOnly(...)`, which publishes the
+ * working-context estimate and NOTHING else. `result.messages` is
+ * therefore `undefined`, `?? []` produced an EMPTY transcript, and the
+ * assertion "the rejected candidate is absent" passed vacuously — it
+ * excluded the candidate by excluding EVERYTHING.
+ *
+ * The production consumer is the agent runtime's
+ * `prepareTurnForModelRequest()` (agent-runtime.ts), and it reads:
+ *
+ *     let next = request;
+ *     if (result.messages) { next = { ...next, messages: cloneMessages(result.messages) }; }
+ *     if (result.systemPrompt !== undefined) { next = { ...next, systemPrompt: result.systemPrompt }; }
+ *     return next;
+ *
+ * So when the preparation result carries METADATA BUT NO REPLACEMENT
+ * MESSAGES, the consumer keeps the ORIGINAL request messages. The
+ * effective projection is therefore the ORIGINAL history, not an empty
+ * transcript.
+ *
+ * This helper reproduces that fallback EXACTLY: it takes the original
+ * request messages and replaces them with the result's messages only when
+ * the result actually carries some.
  *
  * The projection is produced by the REAL `MessageBuilder`, so it is the
  * same projection the production runtime builds.
  */
 function providerVisibleProjection(
 	result: Record<string, unknown> | undefined,
+	originalMessages: readonly MessageWithMetadata[],
 ): string {
-	const messages = (result?.messages ?? []) as unknown as Parameters<
+	const replacement = result?.messages as
+		| readonly MessageWithMetadata[]
+		| undefined;
+	const effective =
+		replacement !== undefined && replacement !== null
+			? replacement
+			: originalMessages;
+	const messages = effective as unknown as Parameters<
 		MessageBuilder["buildForApi"]
 	>[0];
 	return JSON.stringify(new MessageBuilder().buildForApi(messages));
@@ -541,8 +577,39 @@ describe("ACT-CLINEMM-CMP06-DURABLE-COMMIT-AUTHORITY-01 — the durable commit a
 		// sends to the provider, not only in the persisted sidecar. The
 		// REJECTED candidate must be ABSENT from the projection the refused
 		// installation returned.
-		const refusedProjection = providerVisibleProjection(secondResult);
+		// ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01
+		// (AMENDMENT-01 A2) — THE EFFECTIVE PROJECTION.
+		//
+		// The preparation result of a refused installation is METADATA-ONLY:
+		// it carries the working-context estimate and no replacement
+		// messages. The production consumer therefore KEEPS the original
+		// request messages, so the effective projection is the ORIGINAL
+		// history — not an empty transcript.
+		//
+		// The refused candidate must be absent from it, AND the original
+		// history must be PRESENT. Asserting only the absence would pass
+		// vacuously against an empty projection.
+		const secondRequestMessages = [
+			...messages,
+			...canonicalMessagesFrom(messages.length, 2),
+		];
+		const refusedProjection = providerVisibleProjection(
+			secondResult,
+			secondRequestMessages,
+		);
 		expect(refusedProjection).not.toContain("CANDIDATE SUMMARY 2");
+
+		// The projection is NOT EMPTY. An empty transcript would exclude the
+		// rejected candidate vacuously, so the absence assertion above would
+		// prove nothing. The projection must carry the original history.
+		expect(refusedProjection).not.toBe("[]");
+
+		// The ORIGINAL history is conserved: the user's task and the
+		// authorized working history are both still there.
+		expect(refusedProjection).toContain("canonical message 0");
+		expect(refusedProjection).toContain("canonical message 3");
+		expect(refusedProjection).toContain("canonical message 4");
+		expect(refusedProjection).toContain("canonical message 5");
 
 		// No successful compaction may be published for the refused
 		// installation: only the FIRST (legitimately committed)
@@ -709,8 +776,25 @@ describe("ACT-CLINEMM-CMP06-DURABLE-COMMIT-AUTHORITY-01 — the durable commit a
 		//
 		// The rejected candidate must be absent from the transcript the
 		// runtime actually sends to the provider.
-		const rejectedProjection = providerVisibleProjection(rejectedResult);
+		// ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01
+		// (AMENDMENT-01 A2) — THE EFFECTIVE PROJECTION.
+		//
+		// The rejected candidate is absent from the transcript the runtime
+		// actually sends to the provider, and the ORIGINAL history is
+		// PRESENT in it. The presence assertions are what make the absence
+		// assertion non-vacuous.
+		const rejectedRequestMessages = [
+			...messages,
+			...canonicalMessagesFrom(messages.length, 2),
+		];
+		const rejectedProjection = providerVisibleProjection(
+			rejectedResult,
+			rejectedRequestMessages,
+		);
 		expect(rejectedProjection).not.toContain("SUMMARY 2");
+		expect(rejectedProjection).not.toBe("[]");
+		expect(rejectedProjection).toContain("canonical message 0");
+		expect(rejectedProjection).toContain("canonical message 5");
 
 		// The prior valid persisted state remains BYTE-IDENTICAL: the
 		// rejected replacement was never exposed.
@@ -944,10 +1028,7 @@ describe("ACT-CLINEMM-CMP06-DURABLE-COMMIT-AUTHORITY-01 — the durable commit a
 		const second = prepareTurn(
 			buildPrepareTurnContext({
 				sessionId,
-				messages: [
-					...messages,
-					...canonicalMessagesFrom(messages.length, 4),
-				],
+				messages: [...messages, ...canonicalMessagesFrom(messages.length, 4)],
 				abortSignal: controller.signal,
 				emitStatusNotice: notice,
 			}),
@@ -983,7 +1064,19 @@ describe("ACT-CLINEMM-CMP06-DURABLE-COMMIT-AUTHORITY-01 — the durable commit a
 		//
 		// The refused candidate must be absent from the transcript the
 		// runtime actually sends to the provider.
-		const refusedProjection = providerVisibleProjection(secondResult);
+		// ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01
+		// (AMENDMENT-01 A2) — THE EFFECTIVE PROJECTION.
+		const thirdRequestMessages = [
+			...messages,
+			...canonicalMessagesFrom(messages.length, 4),
+		];
+		const refusedProjection = providerVisibleProjection(
+			secondResult,
+			thirdRequestMessages,
+		);
 		expect(refusedProjection).not.toContain("SUMMARY 3");
+		expect(refusedProjection).not.toBe("[]");
+		expect(refusedProjection).toContain("canonical message 0");
+		expect(refusedProjection).toContain("canonical message 7");
 	});
 });

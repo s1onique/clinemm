@@ -1323,7 +1323,12 @@ export class LocalRuntimeHost implements RuntimeHost {
 					return {
 						installed: result.updated,
 						...(result.reason ? { reason: result.reason } : {}),
-					};
+					} as
+						| { installed: true }
+						| {
+								installed: false;
+								reason: "cancelled" | "persistence_failed" | "stale_state";
+						  };
 				} catch (error) {
 					configWithProvider.logger?.error?.(
 						"Failed to persist session compaction state",
@@ -2478,7 +2483,10 @@ export class LocalRuntimeHost implements RuntimeHost {
 		 * installation check, not a second cancellation authority.
 		 */
 		abortSignal?: AbortSignal,
-	): Promise<{ updated: boolean; reason?: "cancelled" | "persistence_failed" }> {
+	): Promise<{
+		updated: boolean;
+		reason?: "cancelled" | "persistence_failed" | "stale_state";
+	}> {
 		if (
 			!(await this.canPersistCompactionState(
 				session.sessionId,
@@ -2496,6 +2504,17 @@ export class LocalRuntimeHost implements RuntimeHost {
 			// candidate was rejected as unprojectable — and the two facts
 			// have different remedies. Reporting it as a cancellation
 			// misleads an operator into thinking the user stopped the turn.
+			//
+			// ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01
+			// (AMENDMENT-01 A1): the refusal is named `persistence_failed`
+			// because the durable replacement did not happen. The state was
+			// refused before the commit boundary, so nothing was written.
+			//
+			// It is deliberately NOT reported as a FILESYSTEM failure here:
+			// no filesystem operation was attempted. The reason names the
+			// outcome that actually occurred — the replacement was not
+			// durably installed — and it does not claim a cause the host did
+			// not observe.
 			return { updated: false, reason: "persistence_failed" };
 		}
 		return await this.enqueueCompactionStateWrite(session, async () => {
@@ -2540,7 +2559,17 @@ export class LocalRuntimeHost implements RuntimeHost {
 					? isIncomingCompactionStateStale(state, currentState)
 					: Date.parse(state.updated_at) < Date.parse(currentState.updated_at))
 			) {
-				return { updated: false };
+				// ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01
+				// (AMENDMENT-01 A1): the STALE-STATE refusal is named.
+				//
+				// The incoming state is OLDER than the state already installed,
+				// so the newer state won and this write was SKIPPED. That is
+				// neither a cancellation nor a fault: nothing went wrong, and
+				// the newer state remains in force.
+				//
+				// Reporting it as a cancellation would tell an operator the
+				// user stopped the turn when the user did nothing wrong.
+				return { updated: false, reason: "stale_state" as const };
 			}
 			await this.invoke<void>(
 				"persistSessionCompactionState",

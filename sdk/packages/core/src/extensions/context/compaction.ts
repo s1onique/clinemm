@@ -32,6 +32,7 @@ import type {
 	CoreCompactionMode,
 	CoreCompactionResult,
 	CoreCompactionStrategy,
+	CoreCompactionSummarizationUsage,
 	CoreSessionConfig,
 } from "../../types/config";
 import type { ProviderConfig } from "../../types/provider-settings";
@@ -150,6 +151,25 @@ export interface ContextPipelinePrepareTurnInput {
 		decisionId: () => string;
 		deadlineMs?: () => number;
 	};
+	/**
+	 * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01.
+	 *
+	 * The channel through which the compaction reports the
+	 * PROVIDER-REPORTED USAGE of the auxiliary inferences it performed.
+	 *
+	 * It is OUT OF BAND on purpose: a compaction that rejected its
+	 * candidate, was cancelled, or was refused at the persistence boundary
+	 * produced no transcript, so a usage field on the compaction's RESULT
+	 * would be lost exactly in the cases where the inference was still paid
+	 * for.
+	 *
+	 * It is forwarded into the compaction invocation VERBATIM, so the
+	 * summarizer's usage reaches the accounting owner whatever the
+	 * compaction's outcome.
+	 */
+	reportAuxiliaryUsage?: (
+		usage: CoreCompactionSummarizationUsage & { inferenceId: string },
+	) => void;
 }
 
 export interface ContextPipelinePrepareTurnResult {
@@ -336,25 +356,63 @@ function isInstallationCancelled(
 }
 
 /**
- * ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01 — THE
- * INSTALLATION OUTCOME.
+ * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 (AMENDMENT-01 A1) —
+ * THE INSTALLATION OUTCOME.
  *
  * What the host reports about a compaction installation.
  *
- * - `installed: true` — the state was durably installed.
- * - `installed: false` with `reason: "cancelled"` — the durable commit
- *   boundary refused the replacement because the turn was cancelled.
- * - `installed: false` with `reason: "persistence_failed"` — the durable
- *   replacement FAILED.
+ * The outcome is a DISCRIMINATED UNION: a successful installation and an
+ * unsuccessful one are DISTINCT typed variants, and an unsuccessful one
+ * ALWAYS carries an ESTABLISHED refusal reason.
  *
- * The reason exists so a PERSISTENCE FAILURE is not reported as a
- * cancellation. The two are DIFFERENT facts: a cancellation is the user's
- * intent and is not retried; a persistence failure is a fault and may be.
+ * - `{ installed: true }` — the state was durably installed.
+ * - `{ installed: false, reason: "cancelled" }` — the durable commit
+ *   boundary refused the replacement because the turn was cancelled.
+ * - `{ installed: false, reason: "persistence_failed" }` — the durable
+ *   replacement FAILED, or the state was refused before the commit
+ *   boundary because it does not project onto the session's messages.
+ * - `{ installed: false, reason: "stale_state" }` — the incoming state is
+ *   OLDER than the state already installed, so it was skipped.
+ *
+ * WHY THE REASONS ARE DISTINCT
+ * -----------------------------
+ *
+ * The three refusals are THREE DIFFERENT FACTS with three different
+ * remedies:
+ *
+ *   - a CANCELLATION is the user's intent and is not retried;
+ *   - a PERSISTENCE FAILURE is a fault and may be retried or surfaced;
+ *   - a STALE STATE is a benign skip: the newer state already won, and
+ *     nothing is wrong at all.
+ *
+ * Reporting a stale-state skip as a cancellation is a MISDIAGNOSIS: it
+ * tells an operator the user stopped the turn when the user did nothing
+ * wrong. Reporting it as a persistence failure is equally wrong: it
+ * invents a fault that did not occur.
+ *
+ * A cancellation is therefore NEVER reported without cancellation
+ * authority, and a filesystem failure is NEVER reported for a
+ * non-filesystem refusal.
  */
-export interface CompactionInstallationOutcome {
-	readonly installed: boolean;
-	readonly reason?: "cancelled" | "persistence_failed";
-}
+export type CompactionInstallationOutcome =
+	| { readonly installed: true }
+	| {
+			readonly installed: false;
+			readonly reason: CompactionInstallationRefusalReason;
+	  };
+
+/**
+ * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 (AMENDMENT-01 A1) —
+ * THE ESTABLISHED REFUSAL REASONS.
+ *
+ * Every unsuccessful installation names one of these. There is no
+ * "unspecified" refusal: an outcome without an established reason is not a
+ * well-formed report.
+ */
+export type CompactionInstallationRefusalReason =
+	| "cancelled"
+	| "persistence_failed"
+	| "stale_state";
 
 /**
  * ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01 — THE HOST'S
@@ -372,23 +430,39 @@ export type CompactionInstallationReport =
 	| CompactionInstallationOutcome;
 
 /**
- * ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01 — THE OUTCOME
- * NORMALIZER.
+ * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 (AMENDMENT-01 A1) —
+ * THE OUTCOME NORMALIZER.
  *
  * It maps the host's return value onto ONE shape, and it is deliberately
- * CONSERVATIVE:
+ * CONSERVATIVE about the HISTORICAL contract:
  *
  * - `undefined` / `void` — the host reports no outcome, which is the
  *   HISTORICAL contract: the installation is treated as committed;
  * - `true` — installed;
  * - `false` — refused, with the reason UNKNOWN. The refusal is reported as
- *   a cancellation, which is the pre-existing behaviour, so no existing
+ *   a cancellation, which is the PRE-EXISTING behaviour, so no existing
  *   host's diagnosis changes;
- * - the object form — installed or refused, with the host's own reason.
+ * - the object form — installed or refused, with the host's OWN reason.
+ *
+ * THE LEGACY SHAPES ARE PRESERVED EXACTLY
+ * ----------------------------------------
+ *
+ * The bare `false` and the reason-less object are the LEGACY contracts and
+ * they keep their historical meaning. A reason-less object is a host that
+ * has not opted into the structured form; it is reported as a cancellation
+ * because that is what it meant before.
+ *
+ * The defect this repair closes is DIFFERENT and narrower: the STRUCTURED
+ * form must not be able to express an unsuccessful installation WITHOUT an
+ * established reason. A host that opts into the structured form names the
+ * refusal it actually observed.
  */
 function normalizeInstallationOutcome(
 	outcome: CompactionInstallationReport | undefined,
-): { installed: boolean; reason?: "cancelled" | "persistence_failed" } {
+): {
+	installed: boolean;
+	reason?: CompactionInstallationRefusalReason;
+} {
 	if (outcome === undefined || outcome === null) {
 		return { installed: true };
 	}
@@ -397,9 +471,67 @@ function normalizeInstallationOutcome(
 			? { installed: true }
 			: { installed: false, reason: "cancelled" };
 	}
-	return outcome.installed
-		? { installed: true }
-		: { installed: false, reason: outcome.reason ?? "cancelled" };
+	if (outcome.installed) {
+		return { installed: true };
+	}
+	// The STRUCTURED form always names its refusal. A host that reports an
+	// unsuccessful installation without an established reason is reporting
+	// an ill-formed outcome; the conservative reading of an UNNAMED refusal
+	// is the historical one (a cancellation), and it is NOT an invented
+	// filesystem failure.
+	const reason: CompactionInstallationRefusalReason =
+		outcome.reason ?? "cancelled";
+	return { installed: false, reason };
+}
+
+/**
+ * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 (AMENDMENT-01 A1) —
+ * THE REFUSAL DIAGNOSIS.
+ *
+ * The three refusals are three DIFFERENT facts, and each one is named by
+ * the fact it actually is:
+ *
+ *   - a CANCELLATION names the user's intent;
+ *   - a PERSISTENCE FAILURE names the fault;
+ *   - a STALE STATE names the benign skip: the newer state already won.
+ *
+ * A stale-state skip is never reported as a cancellation, and it is never
+ * reported as a filesystem failure.
+ */
+function describeInstallationRefusal(
+	reason: CompactionInstallationRefusalReason,
+): string {
+	switch (reason) {
+		case "cancelled":
+			return "Skipped agentic compaction: the turn was cancelled before the compaction was durably installed";
+		case "stale_state":
+			return "Skipped agentic compaction: a newer compaction state is already installed";
+		case "persistence_failed":
+			return "Skipped agentic compaction: the compaction could not be durably installed";
+	}
+}
+
+/**
+ * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 (AMENDMENT-01 A1) —
+ * THE REFUSAL KIND.
+ *
+ * The published kind names the refusal boundary and the refusal reason, so
+ * a consumer can tell the three refusals apart without parsing prose.
+ */
+function describeInstallationRefusalKind(
+	reason: CompactionInstallationRefusalReason,
+):
+	| "cancelled_before_durable_commit"
+	| "persistence_failed_at_durable_commit"
+	| "stale_state_at_durable_commit" {
+	switch (reason) {
+		case "cancelled":
+			return "cancelled_before_durable_commit";
+		case "stale_state":
+			return "stale_state_at_durable_commit";
+		case "persistence_failed":
+			return "persistence_failed_at_durable_commit";
+	}
 }
 
 /**
@@ -1315,6 +1447,13 @@ export function createContextCompactionPrepareTurn(
 			model: context.model,
 			mode: effectiveMode,
 			abortSignal: context.abortSignal,
+			// ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01: the
+			// usage channel is forwarded into the compaction context, so the
+			// summarizer's provider-reported usage leaves the compaction
+			// whatever the compaction's outcome.
+			...(context.reportAuxiliaryUsage
+				? { reportAuxiliaryUsage: context.reportAuxiliaryUsage }
+				: {}),
 			budget: {
 				request: {
 					inputTokens: requestInputTokens,
@@ -2108,9 +2247,7 @@ export function createCompactionStateAwarePrepareTurn(input: {
 		state: SessionCompactionState,
 		sourceMessages: CoreCompactionContext["messages"],
 		abortSignal?: AbortSignal,
-	) =>
-		| CompactionInstallationReport
-		| Promise<CompactionInstallationReport>;
+	) => CompactionInstallationReport | Promise<CompactionInstallationReport>;
 	/**
 	 * ACT-CLINEMM-COMPACTION-TASK-CONTRACT-CONSERVATION-REPAIR01: an
 	 * additional ceiling on the effective request input limit, applied on top
@@ -2298,6 +2435,13 @@ export function createCompactionStateAwarePrepareTurn(input: {
 						messages: projectedMessages,
 						apiMessages: await input.prepareApiMessages(projectedMessages),
 						emitStatusNotice: successPublication.intercept,
+						// ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01:
+						// the usage channel is forwarded into the compaction
+						// invocation, so the summarizer's provider-reported usage
+						// leaves the compaction whatever its outcome.
+						...(context.reportAuxiliaryUsage
+							? { reportAuxiliaryUsage: context.reportAuxiliaryUsage }
+							: {}),
 					})
 				: undefined;
 			if (result?.messages) {
@@ -2455,25 +2599,15 @@ export function createCompactionStateAwarePrepareTurn(input: {
 						// the refusal REASON is reported truthfully. A
 						// PERSISTENCE FAILURE is not a cancellation and is
 						// not reported as one.
-						const refusalReason =
-							installed.reason === "persistence_failed"
-								? "persistence_failed"
-								: "cancelled";
-						input.logger?.log?.(
-							refusalReason === "cancelled"
-								? "Skipped agentic compaction: the turn was cancelled before the compaction was durably installed"
-								: "Skipped agentic compaction: the compaction could not be durably installed",
-							{
-								severity: "warn",
-								rejectionReason: refusalReason,
-								phase: "durable_commit",
-							},
-						);
+						const refusalReason: CompactionInstallationRefusalReason =
+							installed.reason ?? "cancelled";
+						input.logger?.log?.(describeInstallationRefusal(refusalReason), {
+							severity: "warn",
+							rejectionReason: refusalReason,
+							phase: "durable_commit",
+						});
 						successPublication.publishRefused({
-							kind:
-								refusalReason === "cancelled"
-									? "cancelled_before_durable_commit"
-									: "persistence_failed_at_durable_commit",
+							kind: describeInstallationRefusalKind(refusalReason),
 							reason: refusalReason,
 							iteration: context.iteration,
 						});
@@ -2649,6 +2783,13 @@ export function createCompactionStateAwarePrepareTurn(input: {
 						? { knowledgeCheckpoint: input.knowledgeCheckpoint }
 						: {}),
 					emitStatusNotice: successPublication.intercept,
+					// ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01:
+					// the usage channel is forwarded into the compaction
+					// invocation, so the summarizer's provider-reported usage
+					// leaves the compaction whatever its outcome.
+					...(context.reportAuxiliaryUsage
+						? { reportAuxiliaryUsage: context.reportAuxiliaryUsage }
+						: {}),
 				})
 			: undefined;
 		const checkpointRecords = result?.knowledgeCheckpointRecords ?? [];
@@ -2786,25 +2927,15 @@ export function createCompactionStateAwarePrepareTurn(input: {
 				// ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01:
 				// the refusal REASON is reported truthfully. A PERSISTENCE
 				// FAILURE is not a cancellation and is not reported as one.
-				const refusalReason =
-					installed.reason === "persistence_failed"
-						? "persistence_failed"
-						: "cancelled";
-				input.logger?.log?.(
-					refusalReason === "cancelled"
-						? "Skipped agentic compaction: the turn was cancelled before the compaction was durably installed"
-						: "Skipped agentic compaction: the compaction could not be durably installed",
-					{
-						severity: "warn",
-						rejectionReason: refusalReason,
-						phase: "durable_commit",
-					},
-				);
+				const refusalReason: CompactionInstallationRefusalReason =
+					installed.reason ?? "cancelled";
+				input.logger?.log?.(describeInstallationRefusal(refusalReason), {
+					severity: "warn",
+					rejectionReason: refusalReason,
+					phase: "durable_commit",
+				});
 				successPublication.publishRefused({
-					kind:
-						refusalReason === "cancelled"
-							? "cancelled_before_durable_commit"
-							: "persistence_failed_at_durable_commit",
+					kind: describeInstallationRefusalKind(refusalReason),
 					reason: refusalReason,
 					iteration: context.iteration,
 				});

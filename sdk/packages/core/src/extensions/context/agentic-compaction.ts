@@ -29,6 +29,28 @@ import { generateSummary } from "./summary-generation";
 
 const MIN_AGENTIC_SUMMARY_INPUT_TOKENS = 1_024;
 
+/**
+ * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 — THE PHYSICAL
+ * REQUEST IDENTITY OF THE SUMMARIZATION INFERENCE.
+ *
+ * The summarization request is a REAL provider request, distinct from the
+ * main model request, and its usage has to be attributed to THAT request.
+ *
+ * The identity is derived from the compaction invocation itself:
+ * `(conversationId, iteration, agentId)`. It is stable for one summarization
+ * request and distinct across two summarization requests of the same
+ * conversation, so a SECOND summarization request is independently
+ * attributed rather than merged into the first.
+ *
+ * It is NOT the main model's request identity: the summarization request is
+ * a different physical request to the provider, and conflating the two
+ * would make the summarization's cost indistinguishable from the agent's
+ * own turn.
+ */
+function summarizationInferenceId(context: CoreCompactionContext): string {
+	return `summarization:${context.conversationId}:${context.iteration}:${context.agentId}`;
+}
+
 export function buildAgenticSummaryInputBudget(options: {
 	messages: CoreCompactionContext["messages"];
 	targetTokens: number;
@@ -272,6 +294,28 @@ export async function runAgenticCompaction(options: {
 		// IGNORES the cancellation and reports a successful completion.
 		cancellationReporting: "report",
 	});
+	// ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 — THE USAGE
+	// IS REPORTED HERE, BEFORE THE ACCEPTANCE DECISION.
+	//
+	// The provider already DID the work and already reported what it cost.
+	// Whether the candidate is accepted, rejected, cancelled or refused at
+	// the persistence boundary does not change that: a rejected summary is
+	// not free inference.
+	//
+	// The report is therefore made IMMEDIATELY, on the way out of the
+	// summarizer, and it is NOT tied to the acceptance decision, to the
+	// persistence outcome or to the UI publication.
+	//
+	// The usage stays ABSENT when the provider reported none: an absent
+	// provider metric is unknown, and it is never turned into a zero-cost
+	// inference.
+	if (summaryResult.usage) {
+		options.context.reportAuxiliaryUsage?.({
+			inferenceId: summarizationInferenceId(options.context),
+			kind: "summarization",
+			...summaryResult.usage,
+		});
+	}
 	options.logger?.debug("Generated compaction summary", {
 		outputChars: summaryResult.text.length,
 		reasoningChars: summaryResult.reasoningChars,

@@ -760,6 +760,27 @@ export interface AgentRuntimePrepareTurnContext {
 	 * filters it again before anything is written.
 	 */
 	requestOptions?: Readonly<Record<string, unknown>>;
+	/**
+	 * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01.
+	 *
+	 * The channel through which the host reports the PROVIDER-REPORTED USAGE
+	 * of an auxiliary inference it performed OUTSIDE the main model request —
+	 * today, the summarization request the compaction seam dispatches.
+	 *
+	 * The runtime ACCOUNTS for the reported usage through the SAME mechanism
+	 * it uses for the main model's usage: the reported delta is added to the
+	 * runtime's usage state and the resulting `usage-updated` event flows
+	 * through the ordinary production consumer. There is no second ledger.
+	 *
+	 * The usage is reported WHATEVER became of the inference's result. A
+	 * rejected, cancelled or refused summarization request was still paid
+	 * for, and its usage is not free.
+	 *
+	 * The reported usage is a DELTA for the inference it describes. An
+	 * absent report means the provider reported no usage, and it is never
+	 * turned into a zero-cost inference.
+	 */
+	reportAuxiliaryUsage?: (usage: AuxiliaryInferenceUsage) => void;
 	emitStatusNotice?: (
 		message: string,
 		metadata?: Record<string, unknown>,
@@ -813,6 +834,78 @@ export interface AgentRuntimePrepareTurnResult {
 	 * disabled, which is the pre-repair behavior.
 	 */
 	maxRequestTokens?: number;
+	/**
+	 * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01.
+	 *
+	 * The PROVIDER-REPORTED USAGE of an INFERENCE the host performed OUTSIDE
+	 * the main model request — today, the SUMMARIZATION inference the
+	 * compaction seam runs.
+	 *
+	 * WHY IT EXISTS
+	 * -------------
+	 *
+	 * The summarizer is a REAL provider request: it dispatches to the
+	 * provider, it is paid for, and the provider reports its usage. That
+	 * usage was DROPPED on the floor: the summarizer transport consumed the
+	 * provider stream without ever reading its `usage` chunk, and the
+	 * compaction seam had no channel to report what it cost.
+	 *
+	 * A REJECTED summary is not free inference, and a SUCCESSFUL summary
+	 * installation is not the authority for recording provider usage. The
+	 * usage is a fact of the inference, and it is reported whether the
+	 * candidate was accepted, rejected, cancelled or persisted.
+	 *
+	 * THE SEMANTICS
+	 * --------------
+	 *
+	 * The value is a DELTA for the inference(s) this field describes: the
+	 * provider-reported usage of those requests, NOT a running total. It is
+	 * the SAME delta semantics the main model's usage events use, so the
+	 * runtime's existing accumulation treats it identically.
+	 *
+	 * Each entry is attributed to the inference it belongs to, so a SECOND
+	 * summarization request is independently attributed rather than merged
+	 * into the first.
+	 *
+	 * ABSENT means the host performed no such inference, or the provider
+	 * reported no usage for it. It is NEVER synthesized as zero: an absent
+	 * provider metric stays unknown.
+	 */
+	auxiliaryUsage?: readonly AuxiliaryInferenceUsage[];
+}
+
+/**
+ * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01.
+ *
+ * The provider-reported usage of ONE auxiliary inference (a provider request
+ * the host dispatched outside the main model request).
+ *
+ * The counters are the provider's own numbers for that request. They are
+ * never estimated and never derived from a character count.
+ */
+export interface AuxiliaryInferenceUsage {
+	/**
+	 * A stable identity for the inference this usage belongs to.
+	 *
+	 * It distinguishes two summarization requests within the same turn, so
+	 * the second one is independently attributed instead of being merged
+	 * into the first.
+	 */
+	inferenceId: string;
+	/** What the inference was for. */
+	kind: "summarization";
+	/** The provider's reported input tokens for this request. */
+	inputTokens: number;
+	/** The provider's reported output tokens for this request. */
+	outputTokens: number;
+	/** The provider's reported cache-read tokens for this request. */
+	cacheReadTokens?: number;
+	/** The provider's reported cache-write tokens for this request. */
+	cacheWriteTokens?: number;
+	/** The provider's reported cost for this request. */
+	totalCost?: number;
+	/** The provider's reported reasoning tokens for this request. */
+	reasoningTokenCount?: number;
 }
 
 /**

@@ -4754,6 +4754,30 @@ export class AgentRuntime {
 					metadata,
 				});
 			},
+			// ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01: the
+			// host reports the provider-reported usage of any auxiliary
+			// inference it performed (today: the summarization request the
+			// compaction seam dispatches).
+			//
+			// The usage is accounted through the SAME mechanism the main
+			// model's usage uses: `updateUsage()` adds the reported delta
+			// to the runtime's usage state, and the resulting
+			// `usage-updated` event flows through the ordinary production
+			// consumer. There is no second ledger.
+			//
+			// The report is applied WHATEVER became of the inference's
+			// result: a rejected, cancelled or refused summarization request
+			// was still paid for.
+			reportAuxiliaryUsage: (usage) => {
+				void this.updateUsage({
+					inputTokens: usage.inputTokens,
+					outputTokens: usage.outputTokens,
+					cacheReadTokens: usage.cacheReadTokens,
+					cacheWriteTokens: usage.cacheWriteTokens,
+					reasoningTokenCount: usage.reasoningTokenCount,
+					totalCost: usage.totalCost,
+				});
+			},
 		});
 		if (overflowRecovery) {
 			// Only retry a provider-rejected overflow with a request that is

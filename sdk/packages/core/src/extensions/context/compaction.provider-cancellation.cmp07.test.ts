@@ -190,6 +190,19 @@ interface SeamOptions {
 	 * a seam whose run REJECTED.
 	 */
 	readonly saveCalls?: unknown[];
+	/**
+	 * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 (AMENDMENT-01 A3):
+	 * the INSTALLATION OUTCOME the host reports.
+	 *
+	 * `undefined` (the default) is the HISTORICAL contract: the host reports
+	 * nothing, and the installation is treated as committed.
+	 */
+	readonly installationOutcome?:
+		| { installed: true }
+		| {
+				installed: false;
+				reason: "cancelled" | "persistence_failed" | "stale_state";
+		  };
 }
 
 /**
@@ -260,6 +273,7 @@ async function runProductionSeam(options: SeamOptions = {}): Promise<SeamRun> {
 		logger: logger as never,
 		saveState: (state) => {
 			saveCalls.push(state);
+			return options.installationOutcome;
 		},
 	});
 
@@ -418,6 +432,16 @@ describe("ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01 — the in-flig
 		const controller = new AbortController();
 		const held = createGate();
 		const partialDelivered = createGate();
+		/**
+		 * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01
+		 * (AMENDMENT-01 A3) — THE CANCELLATION-SIDE GATE.
+		 *
+		 * The held response body waits for THIS gate as well as for the
+		 * ordinary release. The test opens it AT THE MOMENT OF THE
+		 * CANCELLATION, so the local read ends because of the cancellation
+		 * and not because the provider finished.
+		 */
+		const cancelUnblocks = createGate();
 		/** The abort signal the transport's own fetch boundary received. */
 		let transportSignal: AbortSignal | undefined;
 		/** Whether the transport's request was aborted at the fetch boundary. */
@@ -436,6 +460,14 @@ describe("ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01 — the in-flig
 			physicalRequests += 1;
 			transportSignal = init?.signal ?? undefined;
 			const encoder = new TextEncoder();
+			// ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01
+			// (AMENDMENT-01 A3) — THE ABORT-AWARE RESPONSE BODY.
+			//
+			// The body holds the response open after the provider's partial
+			// output, and it UNBLOCKS ITSELF when the request is aborted. The
+			// cancellation therefore terminates the local read on its own;
+			// the test never has to release a normal provider completion to
+			// make the local consumption end.
 			const stream = new ReadableStream<Uint8Array>({
 				async start(controller) {
 					controller.enqueue(
@@ -452,30 +484,41 @@ describe("ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01 — the in-flig
 										finish_reason: null,
 									},
 								],
-							})}\n\n`,
+							})}nn\n`,
 						),
 					);
 					// The provider's partial output has been delivered and the
 					// stream is still OPEN. The test is now in control.
 					partialDelivered.open();
-					await held.wait;
-					controller.enqueue(
-						encoder.encode(
-							`data: ${JSON.stringify({
-								id: "chunk-2",
-								object: "chat.completion.chunk",
-								created: 0,
-								model: "stub-model",
-								choices: [
-									{
-										index: 0,
-										delta: {},
-										finish_reason: "stop",
-									},
-								],
-							})}\n\n`,
-						),
-					);
+					// The body waits for the CANCELLATION to arrive, not for an
+					// ordinary provider completion.
+					await Promise.race([held.wait, cancelUnblocks.wait]);
+					// The provider's NORMAL completion is reached only when the
+					// test releases it. On the cancellation path the body ends on
+					// the abort instead.
+					if (init?.signal?.aborted !== true) {
+						controller.enqueue(
+							encoder.encode(
+								`data: ${JSON.stringify({
+									id: "chunk-2",
+									object: "chat.completion.chunk",
+									created: 0,
+									model: "stub-model",
+									choices: [
+										{
+											index: 0,
+											delta: {},
+											finish_reason: "stop",
+										},
+									],
+								})}nn\n`,
+							),
+						);
+						controller.close();
+						return;
+					}
+					// The request was aborted: the response body ends HERE, on
+					// the cancellation, without a normal provider completion.
 					controller.close();
 				},
 			});
@@ -529,6 +572,16 @@ describe("ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01 — the in-flig
 		// Signal the cancellation while the provider stream is HELD.
 		controller.abort(new Error("cmp07: the user cancelled mid-summary"));
 
+		// ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01
+		// (AMENDMENT-01 A3) — THE CANCELLATION UNBLOCKS THE HELD READ.
+		//
+		// The held response body waits for the cancellation, so the
+		// cancellation itself ends the local read. The test does NOT release
+		// a normal provider completion to make the local consumption end:
+		// that would prove the seam ends when the provider finishes, which
+		// is a different claim.
+		cancelUnblocks.open();
+
 		// The transport's own cancellation boundary now fires: the fetch
 		// request's signal is aborted, which is what terminates the local
 		// stream consumption.
@@ -536,10 +589,6 @@ describe("ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01 — the in-flig
 			expect(transportSignal?.aborted).toBe(true);
 		});
 		transportAborted = true;
-
-		// Release the held provider stream. The transport will observe the
-		// aborted request and end the local consumption.
-		held.open();
 
 		// The EXISTING cancellation contract: the cancelled compaction is
 		// re-thrown by the seam — it is NOT fallen back to basic compaction —
@@ -635,6 +684,144 @@ describe("ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01 — the adversa
 		return { requests: () => requests };
 	}
 
+	/**
+	 * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 (AMENDMENT-01 A3)
+	 * — THE PERSISTENCE-FAILURE DIAGNOSIS, POSITIVELY ASSERTED.
+	 *
+	 * A durable replacement that FAILS is not a cancellation, and the
+	 * diagnosis says so. The turn was not cancelled here, so reporting a
+	 * cancellation would be false.
+	 *
+	 * The witness asserts the diagnosis POSITIVELY: the refusal is named as
+	 * a persistence failure, and the cancellation reason is absent.
+	 */
+	it("diagnoses a PERSISTENCE FAILURE as a persistence failure, not a cancellation", async () => {
+		const controller = new AbortController();
+		const notices: { message: string; metadata: unknown }[] = [];
+		const saveCalls: unknown[] = [];
+
+		// The host reports that the durable replacement FAILED.
+		const seam = await runProductionSeam({
+			abortSignal: controller.signal,
+			notices,
+			saveCalls,
+			installationOutcome: {
+				installed: false,
+				reason: "persistence_failed",
+			},
+		});
+
+		// The installation was ATTEMPTED and REFUSED, and no successful
+		// compaction was published for it.
+		//
+		// `saveCalls` records the ATTEMPT — the state the seam handed to the
+		// host — so it has one entry. What matters is that the host REFUSED
+		// it and no success was published.
+		expect(saveCalls).toHaveLength(1);
+		expect(notices.some((notice) => notice.message.endsWith("compacted"))).toBe(
+			false,
+		);
+
+		// THE POSITIVE DIAGNOSIS: the refusal is named as a persistence
+		// failure.
+		const refusals = seam.logs.filter((line) =>
+			line.includes("could not be durably installed"),
+		);
+		expect(refusals.length).toBeGreaterThan(0);
+		for (const line of refusals) {
+			expect(line).toContain("persistence_failed");
+			expect(line).not.toContain('"rejectionReason":"cancelled"');
+		}
+
+		// The turn was NOT cancelled, so the cancellation diagnosis must be
+		// absent from the compaction's own diagnostics.
+		expect(controller.signal.aborted).toBe(false);
+	});
+
+	/**
+	 * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 (AMENDMENT-01 A3)
+	 * — THE REPORTED-CANCELLATION CONTRACT.
+	 *
+	 * `cancellationReporting: "report"` reports the cancellation the
+	 * transport OBSERVED while the stream was under way. It does NOT catch a
+	 * cancellation that the transport THREW: a thrown transport cancellation
+	 * still propagates, and the seam still re-throws it.
+	 *
+	 * The distinction matters because the two are different facts:
+	 *
+	 *   - a REPORTED cancellation is a terminal fact the CALLER's own
+	 *     acceptance authority decides about;
+	 *   - a THROWN cancellation is the transport refusing to continue, and
+	 *     it ends the caller's turn.
+	 *
+	 * The witness below drives BOTH shapes through the REAL transport and
+	 * asserts the established caller behaviour of each.
+	 */
+	it("REPORTS an observed cancellation and THROWS a transport cancellation", async () => {
+		// ── SHAPE 1: the transport THROWS the cancellation. ────────────────
+		{
+			const controller = new AbortController();
+			createHandlerMock.mockImplementation(async () => ({
+				createMessage: vi.fn(async function* () {
+					yield {
+						type: "text",
+						id: "summary-1",
+						text: PARTIAL_SUMMARY,
+					};
+					controller.abort(new Error("cmp07: the transport threw"));
+					throw new Error("cmp07: the transport threw");
+				}),
+			}));
+			const seamPromise = runProductionSeam({
+				abortSignal: controller.signal,
+			});
+			// A THROWN transport cancellation PROPAGATES. It is not turned
+			// into a reported terminal fact.
+			await expect(seamPromise).rejects.toThrow(/transport threw/i);
+		}
+
+		// ── SHAPE 2: the transport REPORTS the cancellation. ───────────────
+		{
+			const controller = new AbortController();
+			const reported = createGate();
+			createHandlerMock.mockImplementation(async () => ({
+				createMessage: vi.fn(async function* () {
+					yield {
+						type: "text",
+						id: "summary-1",
+						text: PARTIAL_SUMMARY,
+					};
+					controller.abort(new Error("cmp07: observed cancellation"));
+					reported.open();
+					yield { type: "done", id: "summary-1", success: true };
+				}),
+			}));
+			const notices: { message: string; metadata: unknown }[] = [];
+			const saveCalls: unknown[] = [];
+			const seam = await runProductionSeam({
+				abortSignal: controller.signal,
+				notices,
+				saveCalls,
+			});
+			await reported.wait;
+
+			// A REPORTED cancellation is NOT thrown: the caller's own
+			// acceptance authority decided about it, and it REFUSED the
+			// candidate. Nothing was installed and no success was published.
+			expect(seam.saveCalls).toHaveLength(0);
+			expect(
+				seam.notices.some((notice) => notice.message.endsWith("compacted")),
+			).toBe(false);
+			// The rejection is DIAGNOSED as a cancellation, not as a provider
+			// failure and not as an empty response.
+			expect(rejectionDiagnostics(seam)).toContain("cancelled");
+			expect(rejectionDiagnostics(seam)).not.toContain(
+				"provider_reported_failure",
+			);
+			expect(rejectionDiagnostics(seam)).not.toContain("empty_response");
+		}
+	});
+
 	it("refuses the LATE provider success of a cancelled compaction", async () => {
 		const controller = new AbortController();
 		const partialDelivered = createGate();
@@ -693,9 +880,15 @@ describe("ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01 — the adversa
 		/**
 		 * The usage the provider reported BEFORE the cancellation.
 		 *
-		 * The transport delivers it as a stream chunk, and the provider-usage
-		 * recorder consumes it from the SAME stream. The summarizer
-		 * transport does not collect usage, so it cannot discard it.
+		 * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01: the usage
+		 * is now a REAL chunk of the provider stream, in the transport's own
+		 * shape. The previous witness appended a synthetic event to a
+		 * test-local array and never yielded it, so it proved only that the
+		 * test could push to its own array.
+		 *
+		 * The chunk is yielded on the SAME stream the summary text arrives
+		 * on, so the production summarizer transport reads it exactly as it
+		 * reads a provider's usage.
 		 */
 		const reportedUsage: Array<Record<string, unknown>> = [];
 
@@ -708,16 +901,18 @@ describe("ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01 — the adversa
 						id: "summary-1",
 						text: PARTIAL_SUMMARY,
 					};
-					// The provider reports its usage for the work it did.
+					// The provider reports its usage for the work it did. It is
+					// a REAL chunk of the stream, in the transport's shape.
 					const usage = {
 						type: "usage",
 						id: "summary-1",
-						usage: {
-							inputTokens: 120,
-							outputTokens: 34,
-							totalTokens: 154,
-						},
+						inputTokens: 120,
+						outputTokens: 34,
+						cacheReadTokens: 7,
+						cacheWriteTokens: 3,
+						totalCost: 0.0025,
 					};
+					yield usage;
 					reportedUsage.push(usage);
 					partialDelivered.open();
 					// The turn is cancelled WHILE the generation is under way.
@@ -738,10 +933,11 @@ describe("ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01 — the adversa
 			abortSignal: controller.signal,
 		});
 
-		// The usage the provider had ALREADY reported was delivered and was
-		// not discarded: it reached the consumer of the stream, exactly once.
+		// The usage the provider had ALREADY reported was delivered on the
+		// stream and was not discarded.
 		expect(reportedUsage).toHaveLength(1);
-		expect(reportedUsage[0].usage).toMatchObject({
+		expect(reportedUsage[0]).toMatchObject({
+			type: "usage",
 			inputTokens: 120,
 			outputTokens: 34,
 		});

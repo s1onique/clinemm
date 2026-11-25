@@ -35,6 +35,83 @@ import type { ProviderConfig } from "../../types/provider-settings";
  */
 export type SummaryCancellationReporting = "throw" | "report";
 
+/**
+ * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01.
+ *
+ * The PROVIDER-REPORTED USAGE of ONE summarization inference.
+ *
+ * The counters are the provider's own numbers for that request. They are
+ * never estimated, never derived from a character count, and never invented:
+ * an absent provider metric stays ABSENT.
+ *
+ * The semantics are DELTA — the usage of THIS request — not a running
+ * total. That is the same semantics the main model's usage events use, so
+ * the existing accounting mechanism treats a summarization request exactly
+ * like any other provider request.
+ */
+export interface SummaryUsage {
+	inputTokens: number;
+	outputTokens: number;
+	cacheReadTokens?: number;
+	cacheWriteTokens?: number;
+	totalCost?: number;
+	reasoningTokenCount?: number;
+}
+
+/**
+ * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 — THE USAGE
+ * COLLECTOR.
+ *
+ * It reads the provider's `usage` chunk from the summarizer stream and
+ * returns the provider's own numbers.
+ *
+ * WHY THE COLLECTION IS NOT OPTIONAL
+ * ----------------------------------
+ *
+ * The usage is a fact of the INFERENCE, not of its acceptance. A summary
+ * that is rejected, cancelled or refused at the persistence boundary was
+ * still PAID FOR. So the collection happens on the way OUT of the stream,
+ * before any acceptance decision is taken, and it is independent of whether
+ * the candidate is installed.
+ *
+ * The chunk is a per-request REPORT. A provider MAY report more than one
+ * usage chunk for one request (the transport contract does not forbid it),
+ * and each chunk reports the usage of the request it belongs to, so the
+ * collector SUMS them. It does not take the last one: taking the last
+ * would silently discard usage a provider already reported.
+ */
+function collectUsageChunk(
+	accumulated: SummaryUsage | undefined,
+	chunk: {
+		inputTokens?: number;
+		outputTokens?: number;
+		cacheReadTokens?: number;
+		cacheWriteTokens?: number;
+		totalCost?: number;
+		thoughtsTokenCount?: number;
+	},
+): SummaryUsage {
+	const inputTokens =
+		(chunk.inputTokens ?? 0) + (accumulated?.inputTokens ?? 0);
+	const outputTokens =
+		(chunk.outputTokens ?? 0) + (accumulated?.outputTokens ?? 0);
+	const cacheReadTokens =
+		(chunk.cacheReadTokens ?? 0) + (accumulated?.cacheReadTokens ?? 0);
+	const cacheWriteTokens =
+		(chunk.cacheWriteTokens ?? 0) + (accumulated?.cacheWriteTokens ?? 0);
+	const totalCost = (chunk.totalCost ?? 0) + (accumulated?.totalCost ?? 0);
+	const reasoningTokenCount =
+		(chunk.thoughtsTokenCount ?? 0) + (accumulated?.reasoningTokenCount ?? 0);
+	return {
+		inputTokens,
+		outputTokens,
+		...(cacheReadTokens > 0 ? { cacheReadTokens } : {}),
+		...(cacheWriteTokens > 0 ? { cacheWriteTokens } : {}),
+		...(totalCost > 0 ? { totalCost } : {}),
+		...(reasoningTokenCount > 0 ? { reasoningTokenCount } : {}),
+	};
+}
+
 export async function generateSummary(options: {
 	providerConfig: ProviderConfig;
 	systemPrompt: string;
@@ -133,6 +210,18 @@ export async function generateSummary(options: {
 	// terminal facts, so the caller's own acceptance authority can decide
 	// what it means. It is never silently dropped.
 	let cancelled = false;
+	// ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01: the
+	// PROVIDER-REPORTED USAGE of this inference.
+	//
+	// It is collected ON THE WAY OUT of the provider stream, so it is
+	// captured whether the candidate is later accepted, rejected, cancelled
+	// or refused at the persistence boundary. A rejected summary is not
+	// free inference.
+	//
+	// It stays ABSENT when the provider reported no usage: an absent
+	// provider metric is unknown, and it is never turned into a
+	// zero-cost inference.
+	let usage: SummaryUsage | undefined;
 	/**
 	 * The cancellation check performed at a point where the stream is
 	 * already under way.
@@ -176,6 +265,13 @@ export async function generateSummary(options: {
 			completed = true;
 		} else if (chunk.type === "tool_calls") {
 			usedTools = true;
+		} else if (chunk.type === "usage") {
+			// ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01: the
+			// provider's own numbers for this request.
+			//
+			// The chunk is read BEFORE any acceptance decision is taken, so
+			// the usage survives every outcome of the generation.
+			usage = collectUsageChunk(usage, chunk);
 		}
 	}
 	observeCancellation();
@@ -189,5 +285,9 @@ export async function generateSummary(options: {
 		completed,
 		finishReason,
 		cancelled,
+		// ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01: the
+		// provider-reported usage travels with the result, whatever became
+		// of the summary.
+		usage,
 	};
 }
