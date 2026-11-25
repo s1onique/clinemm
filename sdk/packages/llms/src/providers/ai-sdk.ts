@@ -73,6 +73,10 @@ import {
 	recordProviderRequestCapture,
 	wrapFetchForProviderRequestCapture,
 } from "./provider-request-capture";
+// ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION03: the
+// repository's PUBLISHED BUILTIN ROUTES, which are the only routes whose
+// reasoning origin authority may be established.
+import { isPublishedBuiltinRoute } from "./published-routes";
 import {
 	appendRequestId,
 	extractResponseRequestId,
@@ -1618,10 +1622,20 @@ function buildReasoningOriginAuthority(input: {
 	//   - a URL that does not parse — an invalid endpoint, and therefore
 	//     an unresolved route.
 	//
-	// The PATH is RETAINED IN FULL, because it is route identity under this
-	// repository's configuration contract (credentials travel in `apiKey`
-	// and `headers`, never in the path). Retaining it is what keeps a
-	// same-host / different-path pair two DISTINCT routes.
+	// The PATH is RETAINED IN FULL for an ESTABLISHED route, because it is
+	// route identity under this repository's configuration contract
+	// (credentials travel in `apiKey` and `headers`, never in the path).
+	// Retaining it is what keeps a same-host / different-path pair two
+	// DISTINCT routes.
+	//
+	// ESTABLISHMENT IS THE GATE (CORRECTION03). The authority is established
+	// ONLY for an EXACT match against the repository's PUBLISHED BUILTIN
+	// ROUTES (the builtin spec's default base URL and its per-API-line base
+	// URLs). An UNESTABLISHED route — an operator-configured base URL, a
+	// self-hosted or proxied endpoint, an extension-registered provider —
+	// has NO published fact behind it, so it is WITHHELD authority: it
+	// produces NO authority at all, and nothing about it (host, path, or a
+	// credential in either) can reach the persisted record.
 	//
 	// LIMITATION (stated explicitly): route identity establishes the ROUTE
 	// that issued a payload. It does NOT by itself prove every account-,
@@ -1653,6 +1667,29 @@ function buildReasoningOriginAuthority(input: {
 	}
 	const origin = url.origin;
 	if (!origin || origin === "null") {
+		return undefined;
+	}
+	// ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION03.
+	//
+	// ESTABLISHMENT IS THE GATE. The authority is established ONLY for an
+	// EXACT match against the repository's PUBLISHED BUILTIN ROUTES (the
+	// builtin spec's default base URL and its per-API-line base URLs).
+	//
+	// An UNESTABLISHED route — an operator-configured base URL, a
+	// self-hosted or proxied endpoint, an extension-registered provider —
+	// has NO published fact behind it. Its path is operator-supplied and
+	// may carry a secret, and there is no published statement that the
+	// path is route identity rather than a credential. Such a route is
+	// therefore WITHHELD authority: it produces NO authority at all, so
+	// nothing about it — not the host, not the path, not a credential in
+	// either — reaches the persisted record.
+	//
+	// A PUBLISHED route, by contrast, IS established by the repository:
+	// its paths are the repository's own (deployment ids, API versions),
+	// never operator-placed secrets. Its COMPLETE route identity is
+	// therefore preserved, including the FULL path, because the path is
+	// what keeps a same-host / different-path pair two DISTINCT routes.
+	if (!isPublishedBuiltinRoute({ providerId, baseUrl: rawBaseUrl })) {
 		return undefined;
 	}
 	const path = url.pathname.replace(/\/+$/, "");

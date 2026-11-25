@@ -513,20 +513,71 @@ describe("route authority discriminators (CORRECTION02 A1/A2)", () => {
 		expect(authority).toBeUndefined();
 	});
 
-	it("A2: a base URL with a CREDENTIAL-BEARING PATH COMPONENT keeps the PATH and no other component", async () => {
-		// The path is ROUTE IDENTITY under this repository's configuration
-		// contract (credentials travel in `apiKey` and `headers`), so it is
-		// RETAINED IN FULL. It is therefore the ONE component that can
-		// carry an operator-placed secret, and the disposition is stated
-		// explicitly rather than hidden behind a lossy transform.
+	it("A2: a base URL with a CREDENTIAL-BEARING PATH COMPONENT persists NO credential", async () => {
+		// ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION03.
 		//
-		// The discriminator proves the RETAINED component is the PATH and
-		// that the rest of the URL never leaks into the record.
+		// A base URL that is NOT one of the repository's PUBLISHED BUILTIN
+		// ROUTES is an UNESTABLISHED route. Its path is operator-supplied
+		// and may carry a secret, and there is no published fact that says
+		// the path is route identity rather than a credential.
+		//
+		// The disposition is therefore: NO AUTHORITY AT ALL. Nothing about
+		// the route is persisted, so the credential cannot reach the
+		// persisted record.
+		//
+		// The acceptance authority is the COMPLETE SERIALIZED PERSISTED
+		// RECORD — the whole production content block, not merely the
+		// absence of the `originAuthority` field. A credential that leaked
+		// through any other field of the record would still be caught.
+		const { createGateway } = await import("@cline/llms");
+		const { fetchImpl } = makeFetch([anthropicTurn, plainTurn]);
+		const gateway = createGateway({
+			providerConfigs: [
+				{
+					providerId: "anthropic",
+					apiKey: "test-key",
+					baseUrl: `https://api.anthropic.com/v1/${SYNTHETIC_CREDENTIAL}`,
+					fetch: fetchImpl,
+				},
+			],
+		});
+		const runtime = createAgentRuntime({
+			model: gateway.createAgentModel({
+				providerId: "anthropic",
+				modelId: MODEL_ID,
+			}),
+			tools: [makeTool([])],
+			requestToolApproval: () => ({ approved: true }),
+			telemetry: telemetryMock(),
+		});
+		const result = await runtime.run("SYNTHETIC-PROMPT");
+		const persisted = result.messages.map(agentMessageToMessageWithMetadata);
+
+		// The credential appears NOWHERE in the complete serialized record.
+		const serialized = JSON.stringify(persisted);
+		expect(serialized).not.toContain(SYNTHETIC_CREDENTIAL);
+		// And no authority was established for the unestablished route.
+		expect(persistedAuthority(persisted)).toBeUndefined();
+	});
+
+	it("A2: an UNESTABLISHED custom route persists NO authority at all", async () => {
+		// A custom route that is not a published builtin route is withheld
+		// authority, so nothing of it — not the host, not the path, not a
+		// credential in either — reaches the persisted record.
 		const authority = await persistedForBaseUrl(
-			`https://api.anthropic.com/v1/${SYNTHETIC_CREDENTIAL}`,
+			"https://api.anthropic.com/tenant-b/v1",
 		);
+		expect(authority).toBeUndefined();
+	});
+
+	it("A2: a PUBLISHED BUILTIN route keeps its COMPLETE route identity", async () => {
+		// The published builtin route IS established by the repository, so
+		// its COMPLETE route identity is preserved: the provider id, the
+		// URL origin and the FULL path. The path is what keeps a
+		// same-host / different-path pair two DISTINCT routes.
+		const authority = await persistedForBaseUrl(ANTHROPIC_BASE_URL);
 		expect(typeof authority).toBe("string");
-		// The credential-free parts are present and exact.
+		expect(authority).toContain("anthropic");
 		expect(authority).toContain("api.anthropic.com");
 		expect(authority).toContain("/v1");
 		// The USER INFORMATION / QUERY / FRAGMENT forms never appear.
