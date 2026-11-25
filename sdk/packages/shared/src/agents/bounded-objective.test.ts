@@ -11,9 +11,13 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+	buildParentObligationReferences,
 	DEFAULT_BOUNDED_OBJECTIVE_POLICY,
+	describeBoundedObjectiveRejection,
 	isBoundedObjectiveInstruction,
+	isParentObligationReferenceId,
 	MAX_BOUNDED_OBJECTIVE_FIELD_LENGTH,
+	PARENT_TASK_ORIGINAL_REFERENCE_ID,
 	parseBoundedObjectiveInstruction,
 	renderBoundedObjectiveInstruction,
 	validateBoundedObjective,
@@ -117,7 +121,10 @@ describe("ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 / pure contract", () =
 		});
 	});
 
-	it("P7: a candidate citing an obligation that is NOT outstanding is rejected", () => {
+	it("P7: a candidate citing an obligation that is NOT outstanding is rejected as a REFERENCE failure", () => {
+		// ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01: this is a
+		// REFERENCE-VALIDATION failure, not evidence of a false completion
+		// claim. The two are now distinct findings.
 		const result = validateBoundedObjective(
 			{
 				...VALID_CANDIDATE,
@@ -127,7 +134,7 @@ describe("ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 / pure contract", () =
 		);
 		expect(result).toEqual({
 			valid: false,
-			reason: "unsupported_completion_claim",
+			reason: "unknown_obligation_reference",
 		});
 	});
 
@@ -364,5 +371,365 @@ describe("ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 / authorization regres
 		expect(parseBoundedObjectiveInstruction(rendered)).toEqual(
 			result.objective,
 		);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01
+//
+// THE SELECTION-CONTRACT CORRECTION WITNESSES.
+//
+// THE FROZEN LIVE WITNESS
+// -----------------------
+// The captured live selector request
+// (`cap_run_kR2y9UwW_ca62cf1370aaed21.ai_sdk_prompt.1.provider-request.json`)
+// is the ACTUAL selection context of the failed live run. Its parent task
+// carried three concrete engineering requirements (A1, A2, A3), and its
+// "Outstanding parent acceptance obligations" list contained exactly ONE
+// entry: the runtime's terminal-completion sentence.
+//
+// The reproduced defects (against the PRODUCTION validator, on the ACTUAL
+// captured context) were:
+//
+//   D1  a useful intermediate objective citing the supplied terminal
+//       obligation            -> ACCEPTED   (correct)
+//   D2  the same objective citing actual requirement A1
+//                                  -> REJECTED unsupported_completion_claim
+//                                      (DEFECT: A1 was never offered)
+//   D3  a future-oriented success condition containing the recognised
+//       completion phrase      -> REJECTED   (DEFECT: it asserts nothing
+//                                               about the present)
+//   D4  a negated completion claim containing that phrase
+//                                  -> ACCEPTED   (DEFECT: the historical
+//                                               substring check missed it)
+//   D5  an unrelated objective citing the supplied terminal obligation
+//                                  -> ACCEPTED   (DEFECT: an unrelated
+//                                               objective was authorised)
+//
+// The witnesses below execute the PRODUCTION validator against the ACTUAL
+// captured obligation text and the PROJECTED reference vocabulary.
+// ---------------------------------------------------------------------------
+
+/**
+ * The ACTUAL outstanding obligation from the frozen live witness.
+ */
+const LIVE_TERMINAL_OBLIGATION =
+	"Call the terminal completion tool submit_and_exit only after every parent obligation is satisfied";
+
+/**
+ * The ACTUAL parent-task text shape from the frozen live witness.
+ *
+ * The three requirement headings are the parent's OWN text.
+ */
+const LIVE_PARENT_TASK = [
+	"# CMP-08 — Terminal bounded correction",
+	"",
+	"C1: GO. CMP-08 architecture accepted.",
+	"",
+	"Close two independently reproduced P1 defects. Do not reopen accounting architecture.",
+	"",
+	"## A1 — Preserve original exception authority",
+	"",
+	"The actual finalizeUsage() invokes reportUsage() without an exception boundary.",
+	"",
+	"## A2 — Preserve explicit optional zero metrics",
+	"",
+	"The collector currently defaults optional counters to zero and emits them only when greater than zero.",
+	"",
+	"## A3 — Small witness correction",
+	"",
+	"In the existing composed witness:",
+	"- Assert exact accumulated cost.",
+].join("\n");
+
+/**
+ * The PROJECTED reference vocabulary for the live parent task.
+ */
+const LIVE_REFERENCES = buildParentObligationReferences(LIVE_PARENT_TASK);
+
+/**
+ * The validation context the runtime actually offers for the live parent.
+ */
+const LIVE_CONTEXT = {
+	parentTaskId: "run_kR2y9UwW",
+	parentMutationScope: "the CMP-08 task",
+	parentMutationScopePaths: [] as string[],
+	parentConstraints: [] as string[],
+	parentObligationReferences: LIVE_REFERENCES,
+	outstandingObligations: [LIVE_TERMINAL_OBLIGATION],
+	establishedObservations: [
+		"The last 5 consecutive execution round(s) produced no productive step",
+	],
+};
+
+/**
+ * A useful intermediate objective derived from the live parent's A1.
+ */
+const LIVE_USEFUL_CANDIDATE = {
+	objective:
+		"Add an exception boundary around reportUsage() inside finalizeUsage()",
+	firstStep:
+		"Edit the finalizeUsage() implementation to wrap the reportUsage() call in try/catch",
+	mutationScope: "the usage accounting module",
+	verificationCondition: "the focused CMP-08 test reports PASS",
+	obligationReferences: ["parent-task:A1"],
+	evidenceReferences: [
+		"The last 5 consecutive execution round(s) produced no productive step",
+	],
+	successCondition: "the focused CMP-08 test reports PASS",
+	failureCondition: "the module cannot be edited or the test cannot run",
+};
+
+describe("ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01 / parent-reference projection", () => {
+	it("R1: the reference vocabulary carries the ORIGINAL parent task and every labelled heading", () => {
+		// The live parent's OWN text names four labelled headings: its title
+		// ("# CMP-08 — ...") and its three requirements. Each is the
+		// parent's own label, so each yields a stable reference.
+		expect(LIVE_REFERENCES.map((entry) => entry.id)).toEqual([
+			"parent-task:original",
+			"parent-task:CMP-08",
+			"parent-task:A1",
+			"parent-task:A2",
+			"parent-task:A3",
+		]);
+	});
+
+	it("R2: a requirement label is the parent's OWN text, reproduced verbatim", () => {
+		expect(LIVE_REFERENCES[2]?.label).toBe(
+			"A1 — Preserve original exception authority",
+		);
+		expect(LIVE_REFERENCES[3]?.label).toBe(
+			"A2 — Preserve explicit optional zero metrics",
+		);
+		expect(LIVE_REFERENCES[4]?.label).toBe("A3 — Small witness correction");
+	});
+
+	it("R3: a parent with NO labelled requirement still gets exactly ONE explicit reference", () => {
+		const references = buildParentObligationReferences(
+			"Fix the bug in the parser and report the result.",
+		);
+		expect(references).toHaveLength(1);
+		expect(references[0]?.id).toBe(PARENT_TASK_ORIGINAL_REFERENCE_ID);
+	});
+
+	it("R4: a heading with NO requirement label contributes NO reference — the runtime invents none", () => {
+		const references = buildParentObligationReferences(
+			["## Verification", "", "## Notes", "", "## A1 — Real requirement"].join(
+				"\n",
+			),
+		);
+		expect(references.map((entry) => entry.id)).toEqual([
+			"parent-task:original",
+			"parent-task:A1",
+		]);
+	});
+
+	it("R5: the projection is STABLE — the same parent text always yields the same ids", () => {
+		const first = buildParentObligationReferences(LIVE_PARENT_TASK);
+		const second = buildParentObligationReferences(LIVE_PARENT_TASK);
+		expect(first).toEqual(second);
+	});
+
+	it("R6: the projection performs NO inference — an empty parent yields only the original reference", () => {
+		expect(buildParentObligationReferences("")).toHaveLength(1);
+		expect(buildParentObligationReferences("")).toEqual([
+			{
+				id: PARENT_TASK_ORIGINAL_REFERENCE_ID,
+				label: "The original authorized parent task (user authority)",
+			},
+		]);
+	});
+
+	it("R7: every projected id is a well-formed parent-obligation reference id", () => {
+		for (const reference of LIVE_REFERENCES) {
+			expect(isParentObligationReferenceId(reference.id)).toBe(true);
+		}
+		expect(isParentObligationReferenceId("parent-task:")).toBe(false);
+		expect(isParentObligationReferenceId("A1")).toBe(false);
+	});
+});
+
+describe("ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01 / selection contract", () => {
+	it("S1: a USEFUL authorised intermediate objective citing requirement A1 is ACCEPTED", () => {
+		const result = validateBoundedObjective(
+			LIVE_USEFUL_CANDIDATE,
+			LIVE_CONTEXT,
+		);
+		expect(result.valid).toBe(true);
+	});
+
+	it("S2: the same objective citing requirement A2 is ACCEPTED", () => {
+		const result = validateBoundedObjective(
+			{ ...LIVE_USEFUL_CANDIDATE, obligationReferences: ["parent-task:A2"] },
+			LIVE_CONTEXT,
+		);
+		expect(result.valid).toBe(true);
+	});
+
+	it("S3: an UNKNOWN obligation reference is rejected ACCURATELY as a reference failure", () => {
+		const result = validateBoundedObjective(
+			{ ...LIVE_USEFUL_CANDIDATE, obligationReferences: ["parent-task:ZZ9"] },
+			LIVE_CONTEXT,
+		);
+		expect(result).toEqual({
+			valid: false,
+			reason: "unknown_obligation_reference",
+		});
+	});
+
+	it("S4: a VERBATIM prose reference is NOT an id and is rejected as a reference failure", () => {
+		const result = validateBoundedObjective(
+			{
+				...LIVE_USEFUL_CANDIDATE,
+				obligationReferences: ["Preserve original exception authority"],
+			},
+			LIVE_CONTEXT,
+		);
+		expect(result).toEqual({
+			valid: false,
+			reason: "unknown_obligation_reference",
+		});
+	});
+
+	it("S5: a FUTURE-ORIENTED success condition is CONSERVED — it establishes nothing about the present", () => {
+		const result = validateBoundedObjective(
+			{
+				...LIVE_USEFUL_CANDIDATE,
+				successCondition: `${LIVE_TERMINAL_OBLIGATION} is satisfied once the focused CMP-08 test reports PASS`,
+			},
+			LIVE_CONTEXT,
+		);
+		expect(result.valid).toBe(true);
+	});
+
+	it("S6: an ASSERTED completion claim is still REJECTED", () => {
+		const result = validateBoundedObjective(
+			{
+				...LIVE_USEFUL_CANDIDATE,
+				successCondition: `${LIVE_TERMINAL_OBLIGATION} is satisfied`,
+			},
+			LIVE_CONTEXT,
+		);
+		expect(result).toEqual({
+			valid: false,
+			reason: "unsupported_completion_claim",
+		});
+	});
+
+	it("S7: a NEGATED completion claim is REJECTED — the historical check accepted it by accident", () => {
+		const result = validateBoundedObjective(
+			{
+				...LIVE_USEFUL_CANDIDATE,
+				successCondition: `${LIVE_TERMINAL_OBLIGATION} is not satisfied until the focused CMP-08 test reports PASS`,
+			},
+			LIVE_CONTEXT,
+		);
+		expect(result).toEqual({
+			valid: false,
+			reason: "unsupported_completion_claim",
+		});
+	});
+
+	it("S8: FABRICATED evidence is still REJECTED", () => {
+		const result = validateBoundedObjective(
+			{
+				...LIVE_USEFUL_CANDIDATE,
+				evidenceReferences: ["An observation that never happened"],
+			},
+			LIVE_CONTEXT,
+		);
+		expect(result).toEqual({ valid: false, reason: "fabricated_evidence" });
+	});
+
+	it("S9: the parent's SCOPE ceiling is still enforced", () => {
+		const result = validateBoundedObjective(
+			{ ...LIVE_USEFUL_CANDIDATE, mutationScope: "/etc/passwd" },
+			{
+				...LIVE_CONTEXT,
+				parentMutationScopePaths: ["/workspace/project"],
+			},
+		);
+		expect(result).toEqual({ valid: false, reason: "scope_expansion" });
+	});
+
+	it("S10: the parent's CONSTRAINTS are still enforced", () => {
+		const result = validateBoundedObjective(
+			{ ...LIVE_USEFUL_CANDIDATE, objective: "edit the forbidden directory" },
+			{
+				...LIVE_CONTEXT,
+				parentConstraints: ["do not edit the forbidden directory"],
+			},
+		);
+		expect(result).toEqual({ valid: false, reason: "constraint_conflict" });
+	});
+
+	it("S11: an accepted objective still round-trips through the render/parse pair", () => {
+		const result = validateBoundedObjective(
+			LIVE_USEFUL_CANDIDATE,
+			LIVE_CONTEXT,
+		);
+		expect(result.valid).toBe(true);
+		if (!result.valid) {
+			return;
+		}
+		const rendered = renderBoundedObjectiveInstruction(result.objective);
+		expect(parseBoundedObjectiveInstruction(rendered)).toEqual(
+			result.objective,
+		);
+	});
+
+	it("S12: the rejection DIAGNOSIS names the failing field and the failing reference", () => {
+		const candidate = {
+			...LIVE_USEFUL_CANDIDATE,
+			obligationReferences: ["parent-task:ZZ9"],
+		};
+		const result = validateBoundedObjective(candidate, LIVE_CONTEXT);
+		expect(result.valid).toBe(false);
+		if (result.valid) {
+			return;
+		}
+		const diagnosis = describeBoundedObjectiveRejection(
+			candidate,
+			result.reason,
+			{
+				parentObligationReferences: LIVE_REFERENCES,
+				outstandingObligations: LIVE_CONTEXT.outstandingObligations,
+			},
+		);
+		expect(diagnosis.failingField).toBe("obligationReferences");
+		expect(diagnosis.failingReference).toBe("parent-task:ZZ9");
+	});
+
+	it("S13: the legacy path (no reference vocabulary) still rejects an unknown reference", () => {
+		const result = validateBoundedObjective(
+			{
+				objective: "Repair the disposable target so its VALUE constant is 2",
+				firstStep: "Edit the disposable target module to set VALUE = 2",
+				mutationScope: "the disposable workspace directory",
+				verificationCondition: "the regression check for VALUE reports PASS",
+				obligationReferences: ["An obligation that was already discharged"],
+				evidenceReferences: [
+					"The last 3 consecutive execution round(s) produced no productive step",
+				],
+				successCondition: "the executable check for VALUE reports PASS",
+				failureCondition: "the editable file cannot be changed",
+			},
+			{
+				parentTaskId: "run_abc",
+				parentMutationScope: "the disposable target module",
+				parentMutationScopePaths: [],
+				parentConstraints: [],
+				outstandingObligations: [
+					"Complete the parent task as authorized by the user",
+				],
+				establishedObservations: [
+					"The last 3 consecutive execution round(s) produced no productive step",
+				],
+			},
+		);
+		expect(result).toEqual({
+			valid: false,
+			reason: "unknown_obligation_reference",
+		});
 	});
 });

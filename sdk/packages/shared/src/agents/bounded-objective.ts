@@ -401,8 +401,428 @@ export type BoundedObjectiveRejectionReason =
 	| "constraint_conflict"
 	/** The objective asserted evidence that was never established. */
 	| "fabricated_evidence"
+	/**
+	 * ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01.
+	 *
+	 * The objective cited a PARENT OBLIGATION REFERENCE that the runtime
+	 * never offered.
+	 *
+	 * This is a REFERENCE-VALIDATION failure. It is deliberately a DISTINCT
+	 * reason from `unsupported_completion_claim`: an unknown reference says
+	 * nothing about whether the objective falsely claims completion. Folding
+	 * the two together made every reference mistake look like an attempted
+	 * completion fabrication, which is both a false diagnosis and a false
+	 * accusation against the model's proposal.
+	 */
+	| "unknown_obligation_reference"
 	/** The objective claimed an outstanding obligation is already satisfied. */
 	| "unsupported_completion_claim";
+
+// ---------------------------------------------------------------------------
+// ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01
+//
+// THE PARENT-OBLIGATION REFERENCE VOCABULARY.
+//
+// WHY THIS EXISTS
+// ---------------
+// The R2 selection context used to enumerate the parent's OUTSTANDING
+// OBLIGATIONS as the runtime's TERMINAL-COMPLETION sentence alone:
+//
+//   "Call the terminal completion tool submit_and_exit only after every
+//    parent obligation is satisfied"
+//
+// That is the parent's COMPLETION MECHANICS, not its ENGINEERING WORK. The
+// parent's concrete requirements (the ones the user actually asked for) were
+// therefore absent from the reference vocabulary, and the selection could not
+// cite them. The frozen live witness
+// (`cap_run_kR2y9UwW_ca62cf1370aaed21.ai_sdk_prompt.1.provider-request.json`)
+// shows exactly that: a parent task carrying requirements A1, A2 and A3, and
+// a selection context whose ONLY outstanding obligation was the terminal
+// completion sentence.
+//
+// The reference vocabulary corrects this WITHOUT introducing a task
+// decomposition subsystem and WITHOUT any additional inference:
+//
+//   - the RUNTIME derives a small, STABLE vocabulary from the parent's OWN
+//     user-authored text,
+//   - the vocabulary is a set of REFERENCES (identifiers), never invented
+//     sub-obligations,
+//   - the selection cites a reference id; the validator resolves that id
+//     against the vocabulary the runtime offered.
+//
+// The vocabulary is therefore a PROJECTION of the parent's own words, not a
+// new statement of what the parent owes.
+//
+// WHAT THE IDENTIFIERS ARE
+// ------------------------
+// A reference id has the shape `parent-task:<key>`:
+//
+//   - `parent-task:original` — the original authorized parent task as a
+//     whole. It is ALWAYS present, so a parent whose text carries no
+//     recognisable requirement headings still has an honest, explicit
+//     reference to its own authorized task.
+//   - `parent-task:<KEY>` — one requirement heading the parent task itself
+//     named, where `<KEY>` is the heading's own label (`A1`, `A2`, `A3`,
+//     ...). The KEY is the parent's own text, not a runtime invention.
+//
+// The KEY is derived STRUCTURALLY from a markdown ATX heading:
+//
+//   ## A1 — Preserve original exception authority
+//   ### A2. Preserve explicit optional zero metrics
+//   ## B1 - Another requirement
+//
+// A heading's label is the leading token of the heading text when it looks
+// like a short requirement label (`A1`, `A2.3`, `B-1`, `REQ-7`). A heading
+// with no such label contributes NO reference: the runtime does not invent an
+// identifier for a requirement the parent did not label.
+//
+// WHAT THE VOCABULARY DOES NOT DO
+// -------------------------------
+//   - it does NOT claim any sub-obligation is satisfied or outstanding in
+//     the model's sense — it only says "this requirement exists in the
+//     parent's own text",
+//   - it does NOT decompose the parent into a task graph,
+//   - it does NOT add inference: it is a structural scan of the parent's
+//     own text,
+//   - it does NOT relax the parent's authority: the parent's scope,
+//     constraints, tools and sandbox remain exactly as they were.
+// ---------------------------------------------------------------------------
+
+/**
+ * The stable id of the ORIGINAL authorized parent task.
+ *
+ * It is always part of the vocabulary, so the reference projection never
+ * degenerates into "no reference at all".
+ */
+export const PARENT_TASK_ORIGINAL_REFERENCE_ID = "parent-task:original";
+
+/**
+ * The prefix every runtime-owned parent-obligation reference id carries.
+ */
+export const PARENT_TASK_REFERENCE_ID_PREFIX = "parent-task:";
+
+/**
+ * ONE reference into the parent's own authored requirements.
+ */
+export interface ParentObligationReference {
+	/**
+	 * The stable identifier the selection cites.
+	 *
+	 * Stable means: the SAME parent text always yields the SAME id, so the
+	 * reference survives a compaction and can be validated by exact
+	 * equality.
+	 */
+	readonly id: string;
+	/**
+	 * The parent's OWN label for the requirement.
+	 *
+	 * It is the heading text the parent authored, reproduced verbatim. It is
+	 * display context for the model; the AUTHORITY of the reference is the
+	 * id, never the label.
+	 */
+	readonly label: string;
+}
+
+/**
+ * The maximum number of requirement references the runtime will offer.
+ *
+ * The vocabulary is deliberately SMALL. It is a reference list, not a
+ * decomposition of the parent: an unbounded list would turn the selection
+ * context into a plan.
+ */
+export const MAX_PARENT_OBLIGATION_REFERENCE_COUNT = 16;
+
+/**
+ * Whether a token looks like a REQUIREMENT LABEL.
+ *
+ * The grammar is intentionally tiny: a short run of letters/digits with
+ * optional separators, of which at least one character is a digit.
+ *
+ * "A1" -> yes, "A2.3" -> yes, "B-1" -> yes, "REQ-7" -> yes,
+ * "Verification" -> no (no digit), "Do" -> no, "12" -> no (no letter).
+ *
+ * It is NOT a natural language engine: it recognises the canonical
+ * requirement-label shape and refuses to guess beyond it.
+ */
+function isRequirementLabel(token: string): boolean {
+	return /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z0-9]+(?:[.\-_][A-Za-z0-9]+)*$/.test(
+		token,
+	);
+}
+
+/**
+ * Extract the requirement label from a markdown ATX heading's text.
+ *
+ * Returns `undefined` when the heading carries no recognisable label.
+ */
+function requirementLabelOf(headingText: string): string | undefined {
+	const trimmed = headingText.trim();
+	if (trimmed.length === 0) {
+		return undefined;
+	}
+	// The label is the leading token, optionally followed by a separator
+	// (`A1 —`, `A1.`, `A1 -`, `A1:`).
+	const match =
+		/^([A-Za-z0-9]+(?:[.\-_][A-Za-z0-9]+)*)\s*(?:[.—–\-:.)]|$)/.exec(trimmed);
+	const token = match?.[1];
+	if (!token || !isRequirementLabel(token)) {
+		return undefined;
+	}
+	return token;
+}
+
+/**
+ * Build the runtime-owned PARENT-OBLIGATION REFERENCE VOCABULARY from the
+ * parent's own user-authored text.
+ *
+ * The function is PURE and never throws.
+ *
+ * It ALWAYS returns at least `parent-task:original`, and it adds one
+ * reference per REQUIREMENT-HEADED section the parent itself labelled.
+ *
+ * It performs NO inference and NO decomposition: it scans the parent's own
+ * text for its own headings. A parent that names no labelled requirement
+ * yields exactly one reference — an honest representation of "the parent's
+ * concrete obligations are not individually enumerable from its text", with
+ * an explicit reference to the original authorized parent task.
+ */
+export function buildParentObligationReferences(
+	parentText: string,
+): ParentObligationReference[] {
+	const references: ParentObligationReference[] = [
+		{
+			id: PARENT_TASK_ORIGINAL_REFERENCE_ID,
+			label: "The original authorized parent task (user authority)",
+		},
+	];
+	if (typeof parentText !== "string" || parentText.trim().length === 0) {
+		return references;
+	}
+	const seenIds = new Set<string>(references.map((entry) => entry.id));
+	const seenLabels = new Set<string>();
+	for (const line of parentText.split(/\r?\n/)) {
+		const heading = /^#{1,6}\s+(.*)$/.exec(line);
+		if (!heading) {
+			continue;
+		}
+		const headingText = (heading[1] ?? "").trim();
+		const label = requirementLabelOf(headingText);
+		if (!label) {
+			continue;
+		}
+		if (seenLabels.has(label)) {
+			// The parent repeated the label: the FIRST occurrence wins, so the
+			// vocabulary stays a set rather than an accumulating list.
+			continue;
+		}
+		seenLabels.add(label);
+		const id = `${PARENT_TASK_REFERENCE_ID_PREFIX}${label}`;
+		if (seenIds.has(id)) {
+			continue;
+		}
+		seenIds.add(id);
+		references.push({ id, label: headingText });
+		if (references.length >= MAX_PARENT_OBLIGATION_REFERENCE_COUNT) {
+			break;
+		}
+	}
+	return references;
+}
+
+/**
+ * Whether a string is a well-formed runtime-owned parent-obligation
+ * reference id.
+ */
+export function isParentObligationReferenceId(value: unknown): value is string {
+	return (
+		typeof value === "string" &&
+		value.startsWith(PARENT_TASK_REFERENCE_ID_PREFIX) &&
+		value.length > PARENT_TASK_REFERENCE_ID_PREFIX.length
+	);
+}
+
+/**
+ * ONE OBSERVED FACT about the R2 selection boundary.
+ *
+ * ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01.
+ *
+ * The frozen live witness proved that the EXISTING provider-request capture
+ * observes the selection REQUEST but not the selection RESPONSE: the live
+ * selector's reply was unavailable, so the historical rejection cause could
+ * not be recovered.
+ *
+ * These facts are the SMALLEST set that makes the next live discriminator
+ * decidable:
+ *
+ *   - the correlation identity of the run,
+ *   - the identity of the selector request that was dispatched,
+ *   - the GENERATED objective text (the model's own reply),
+ *   - the PARSED objective proposal (the JSON object the runtime parsed),
+ *   - the EXACT validation disposition and the failing field or reference.
+ *
+ * What is DELIBERATELY absent:
+ *
+ *   - provider-owned reasoning text or signatures,
+ *   - credentials,
+ *   - unrelated transcript contents,
+ *   - any inference about whether the objective was semantically aligned.
+ */
+export interface BoundedObjectiveSelectionObservation {
+	/** The run id the selection belonged to. */
+	readonly runId?: string;
+	/** The agent id the selection belonged to. */
+	readonly agentId?: string;
+	/** The parent task the selection was derived from. */
+	readonly parentTaskId: string;
+	/**
+	 * The identity of the SELECTOR REQUEST that was dispatched.
+	 *
+	 * It is the runtime's own selection-inference ordinal for the run, so
+	 * it joins the observation to the captured provider request.
+	 */
+	readonly selectionOrdinal: number;
+	/**
+	 * The GENERATED objective text — the model's raw reply to the selector
+	 * request.
+	 *
+	 * It is the model's own output, never provider-owned reasoning.
+	 */
+	readonly generatedText: string;
+	/**
+	 * The PARSED objective proposal, when the runtime could parse one.
+	 */
+	readonly parsedProposal?: unknown;
+	/**
+	 * The EXACT validation disposition.
+	 *
+	 * `"valid"` when the objective was accepted; the rejection reason when
+	 * it was not; `"unparsable"` when the reply yielded no candidate.
+	 */
+	readonly disposition:
+		| "valid"
+		| "unparsable"
+		| BoundedObjectiveRejectionReason;
+	/**
+	 * The failing FIELD or REFERENCE, when the disposition was a rejection.
+	 *
+	 * It names the specific field or reference that failed, so the next
+	 * live discriminator does not have to re-derive it from the proposal.
+	 */
+	readonly failingField?: string;
+	/**
+	 * The failing REFERENCE, when the disposition was a reference
+	 * rejection.
+	 */
+	readonly failingReference?: string;
+}
+
+/**
+ * The OPT-IN, HOST-SUPPLIED observation sink for the R2 selection
+ * boundary.
+ *
+ * ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01.
+ *
+ * DEFAULT OFF: the sink is ABSENT unless a host supplies one, and the
+ * runtime pays a single null check at the boundary.
+ *
+ * It is READ-ONLY: the runtime reports facts and never reads a decision
+ * back, so the sink can never influence the selection, the validation, or
+ * the completion authority.
+ */
+export interface BoundedObjectiveSelectionTraceSink {
+	/**
+	 * Report ONE observed selection-boundary fact.
+	 *
+	 * The implementation MUST NOT throw. A throwing sink is swallowed by
+	 * the runtime.
+	 */
+	onSelectionObservation?: (
+		observation: BoundedObjectiveSelectionObservation,
+	) => void | Promise<void>;
+}
+
+/**
+ * The DIAGNOSIS of a rejected bounded objective: WHICH field or reference
+ * failed.
+ *
+ * ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01.
+ *
+ * The validator reports a REASON; this function reports the SPECIFIC field
+ * or reference that failed, so the next live discriminator does not have to
+ * re-derive it from the proposal.
+ *
+ * It is a PURE function and never throws.
+ */
+export interface BoundedObjectiveRejectionDiagnosis {
+	/** The candidate field that failed, when one can be named. */
+	readonly failingField?: string;
+	/** The candidate reference that failed, when one can be named. */
+	readonly failingReference?: string;
+}
+
+/**
+ * Diagnose WHICH field or reference of a rejected candidate failed.
+ *
+ * The diagnosis is STRUCTURAL: it re-runs the reference checks the
+ * validator performs and reports the first offending entry. It performs no
+ * semantic judgement and never claims that the objective was aligned.
+ */
+export function describeBoundedObjectiveRejection(
+	candidate: unknown,
+	reason: BoundedObjectiveRejectionReason,
+	context: {
+		readonly parentObligationReferences?: readonly ParentObligationReference[];
+		readonly outstandingObligations: readonly string[];
+	},
+): BoundedObjectiveRejectionDiagnosis {
+	if (typeof candidate !== "object" || candidate === null) {
+		return { failingField: "candidate" };
+	}
+	const raw = candidate as Record<string, unknown>;
+	if (reason === "unknown_obligation_reference") {
+		const references = Array.isArray(raw.obligationReferences)
+			? (raw.obligationReferences as unknown[])
+			: [];
+		const offered = context.parentObligationReferences ?? [];
+		const offeredIds = new Set(offered.map((entry) => entry.id));
+		const outstanding = new Set(
+			context.outstandingObligations.map((entry) => entry.trim().toLowerCase()),
+		);
+		for (const reference of references) {
+			if (typeof reference !== "string") {
+				continue;
+			}
+			const trimmed = reference.trim();
+			if (trimmed.length === 0) {
+				continue;
+			}
+			const resolves =
+				offeredIds.size > 0
+					? offeredIds.has(trimmed)
+					: outstanding.has(trimmed.toLowerCase());
+			if (!resolves) {
+				return {
+					failingField: "obligationReferences",
+					failingReference: trimmed,
+				};
+			}
+		}
+		return { failingField: "obligationReferences" };
+	}
+	if (reason === "fabricated_evidence") {
+		return { failingField: "evidenceReferences" };
+	}
+	if (reason === "scope_expansion") {
+		return { failingField: "mutationScope" };
+	}
+	if (reason === "constraint_conflict") {
+		return { failingField: "firstStep" };
+	}
+	if (reason === "unsupported_completion_claim") {
+		return { failingField: "successCondition" };
+	}
+	return { failingField: "candidate" };
+}
 
 /**
  * The maximum number of characters any single bounded-objective field may
@@ -637,6 +1057,23 @@ export function validateBoundedObjective(
 		readonly parentMutationScopePaths?: readonly string[];
 		/** The parent's applicable constraints, verbatim. */
 		readonly parentConstraints: readonly string[];
+		/**
+		 * ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01.
+		 *
+		 * The PARENT-OBLIGATION REFERENCE VOCABULARY the runtime offered to
+		 * the selection.
+		 *
+		 * Each entry is a reference the selection MAY cite. A citation that
+		 * resolves against this vocabulary is an AUTHORISED reference; a
+		 * citation that does not is a REFERENCE-VALIDATION failure, not
+		 * evidence of a false completion claim.
+		 *
+		 * When the vocabulary is absent the reference check is skipped and
+		 * the legacy verbatim-match against `outstandingObligations` applies
+		 * — so a host that has not adopted the projection keeps its existing
+		 * behaviour.
+		 */
+		readonly parentObligationReferences?: readonly ParentObligationReference[];
 		/** The obligations that are STILL OUTSTANDING. */
 		readonly outstandingObligations: readonly string[];
 		/** The observations that were ACTUALLY established. */
@@ -858,21 +1295,78 @@ export function validateBoundedObjective(
 		}
 	}
 
+	// ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01.
+	//
+	// PARENT-OBLIGATION REFERENCE RESOLUTION.
+	//
+	// The historical check compared the cited reference against the
+	// OUTSTANDING-OBLIGATION LIST and reported a mismatch as
+	// `unsupported_completion_claim`. That conflated two unrelated findings:
+	//
+	//   1. "this reference does not exist" — a REFERENCE-VALIDATION failure,
+	//   2. "this objective falsely asserts that an obligation is already
+	//      satisfied" — a COMPLETION-CLAIM failure.
+	//
+	// The conflation was load-bearing and harmful: the live selection could
+	// not cite the parent's real engineering requirement A1 (because A1 was
+	// never offered), and the resulting rejection was diagnosed as a false
+	// completion claim.
+	//
+	// When the runtime offers a REFERENCE VOCABULARY, the citation is
+	// resolved against THAT vocabulary by exact id equality. An id the
+	// runtime never offered is `unknown_obligation_reference` — a distinct,
+	// accurate finding.
+	//
+	// When no vocabulary is offered (a host that has not adopted the
+	// projection), the legacy verbatim match against the outstanding list
+	// applies unchanged.
+	const offeredReferences = context.parentObligationReferences;
+	if (offeredReferences && offeredReferences.length > 0) {
+		const offeredIds = new Set(offeredReferences.map((entry) => entry.id));
+		for (const reference of obligationReferences) {
+			const normalizedReference = reference.trim();
+			if (normalizedReference.length === 0) {
+				continue;
+			}
+			if (!offeredIds.has(normalizedReference)) {
+				return { valid: false, reason: "unknown_obligation_reference" };
+			}
+		}
+	} else {
+		for (const reference of obligationReferences) {
+			const normalizedReference = reference.trim().toLowerCase();
+			if (normalizedReference.length === 0) {
+				continue;
+			}
+			const isOutstanding = context.outstandingObligations.some(
+				(obligation) => obligation.trim().toLowerCase() === normalizedReference,
+			);
+			if (!isOutstanding) {
+				return { valid: false, reason: "unknown_obligation_reference" };
+			}
+		}
+	}
 	// UNSUPPORTED COMPLETION CLAIM: the objective may not assert that an
 	// OUTSTANDING obligation is already satisfied. The obligation the
 	// objective advances is, by definition, still outstanding.
-	for (const reference of obligationReferences) {
-		const normalizedReference = reference.trim().toLowerCase();
-		if (normalizedReference.length === 0) {
-			continue;
-		}
-		const isOutstanding = context.outstandingObligations.some(
-			(obligation) => obligation.trim().toLowerCase() === normalizedReference,
-		);
-		if (!isOutstanding) {
-			return { valid: false, reason: "unsupported_completion_claim" };
-		}
-	}
+	//
+	// ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01.
+	//
+	// The historical check fired on the mere PRESENCE of the completion
+	// phrase next to an obligation's text, which produced three defects:
+	//
+	//   - a FUTURE-ORIENTED success condition ("<obligation> is satisfied
+	//     once the focused test reports PASS") was rejected even though it
+	//     asserts nothing about the present,
+	//   - a NEGATED claim ("<obligation> is NOT satisfied until ...") was
+	//     ACCEPTED even though it names the obligation's completion state,
+	//   - the ENGLISH completion-phrase vocabulary had to grow to cover
+	//     phrasings that the check should never have matched.
+	//
+	// The check now asks a NARROWER and CORRECT question: does the candidate
+	// ASSERT, in the present or the past, that the obligation is complete?
+	// The recognised phrase set is UNCHANGED — it is not extended — but it
+	// is now applied only to ASSERTED completions.
 	const completionClaimHaystack =
 		`${objective}\n${successCondition}\n${verificationCondition}`.toLowerCase();
 	for (const obligation of context.outstandingObligations) {
@@ -881,16 +1375,7 @@ export function validateBoundedObjective(
 			continue;
 		}
 		if (
-			completionClaimHaystack.includes(
-				`${normalizedObligation} is satisfied`,
-			) ||
-			completionClaimHaystack.includes(`${normalizedObligation} is complete`) ||
-			completionClaimHaystack.includes(
-				`${normalizedObligation} is already done`,
-			) ||
-			completionClaimHaystack.includes(
-				`no longer outstanding: ${normalizedObligation}`,
-			)
+			assertsObligationCompletion(completionClaimHaystack, normalizedObligation)
 		) {
 			return { valid: false, reason: "unsupported_completion_claim" };
 		}
@@ -910,6 +1395,218 @@ export function validateBoundedObjective(
 			failureCondition,
 		},
 	};
+}
+
+/**
+ * The RECOGNISED COMPLETION-PHRASE VOCABULARY.
+ *
+ * ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01: this list is UNCHANGED.
+ * The correction does not extend the English phrase vocabulary; it applies
+ * the EXISTING phrases to the RIGHT question (an asserted completion) and
+ * rejects negated claims that the historical check let through.
+ */
+const COMPLETION_PHRASES: readonly string[] = [
+	"is satisfied",
+	"is complete",
+	"is already done",
+];
+
+/**
+ * The RECOGNISED COMPLETION-PHRASE PATTERN.
+ *
+ * It matches any of the EXISTING completion phrases, with an OPTIONAL
+ * NEGATION word permitted between the auxiliary and the participle
+ * ("is NOT satisfied").
+ *
+ * The pattern adds NO new completion phrase: the alternation is exactly the
+ * EXISTING `COMPLETION_PHRASES` list. The optional negation capture group
+ * exists so that a NEGATED claim can be recognised as a negated claim
+ * rather than being missed entirely (which is how the historical check
+ * accepted it).
+ */
+const COMPLETION_PHRASE_PATTERN = new RegExp(
+	`\\b(is)\\s+(not\\s+|never\\s+|no\\s+longer\\s+)?(${COMPLETION_PHRASES.map(
+		(entry) => entry.replace(/^is\s+/, ""),
+	).join("|")})\\b`,
+);
+
+/**
+ * The PREFIX that marks an obligation as no longer outstanding.
+ */
+const NO_LONGER_OUTSTANDING_PREFIX = "no longer outstanding:";
+
+/**
+ * Whether a candidate's text ASSERTS that an obligation is already
+ * complete.
+ *
+ * ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01.
+ *
+ * The historical check asked "does the text CONTAIN `<obligation> is
+ * satisfied`?" — a question about SUBSTRING PRESENCE. That is the wrong
+ * question: it conflated three different statements.
+ *
+ *   1. ASSERTED (past or present): "the obligation is satisfied".
+ *      -> REJECTED. The objective asserts completion it cannot establish.
+ *   2. FUTURE-ORIENTED (conditioned on an observable event that has not
+ *      happened): "the obligation is satisfied once the focused test
+ *      reports PASS".
+ *      -> CONSERVED. A success CONDITION is exactly what the bounded
+ *      objective is supposed to carry, and it asserts nothing about the
+ *      present. It must not establish that completion HAS occurred.
+ *   3. NEGATED: "the obligation is NOT satisfied until the focused test
+ *      reports PASS", "the obligation is not yet satisfied".
+ *      -> REJECTED. A negated completion claim still names the obligation's
+ *      completion state, and it is the shape a candidate uses to assert
+ *      that the completion state is already known. It must not be accepted
+ *      by accident.
+ *
+ * The check is deliberately LEXICAL and bounded: it recognises the
+ * EXISTING phrase list, plus the EXISTING "no longer outstanding:" prefix,
+ * and it classifies the clause in which the phrase occurs. It does not
+ * attempt to understand the sentence, and it does not add new English
+ * phrases.
+ *
+ * The function is PURE and never throws.
+ */
+function assertsObligationCompletion(
+	haystack: string,
+	normalizedObligation: string,
+): boolean {
+	// The "no longer outstanding:" form is a COMPLETION ASSERTION in its own
+	// right and carries no negation/future marker of its own.
+	if (
+		haystack.includes(`${NO_LONGER_OUTSTANDING_PREFIX}${normalizedObligation}`)
+	) {
+		return true;
+	}
+	// The obligation may be separated from the completion phrase by an
+	// optional NEGATION ("<obligation> is NOT satisfied"). The scan
+	// therefore searches for the obligation, then classifies the phrase
+	// that follows it.
+	//
+	// IMPORTANT: the obligation's OWN text frequently already ends in a
+	// completion phrase ("... only after every parent obligation is
+	// satisfied"). The phrase occurrence therefore has to be searched
+	// STRICTLY AFTER the obligation's own text, otherwise every mention
+	// of the obligation would trivially look like a completion claim.
+	//
+	// The NEGATION may sit BETWEEN the auxiliary and the participle
+	// ("is NOT satisfied"), so the search permits an optional negation
+	// word inside the phrase span.
+	let at = haystack.indexOf(normalizedObligation);
+	while (at !== -1) {
+		const obligationEnd = at + normalizedObligation.length;
+		const afterObligation = haystack.slice(obligationEnd);
+		const phraseMatch = COMPLETION_PHRASE_PATTERN.exec(afterObligation);
+		if (phraseMatch) {
+			const phraseAt = phraseMatch.index;
+			const between = afterObligation.slice(0, phraseAt);
+			// Only a short, non-substantive span may sit between the
+			// obligation and the phrase; otherwise the two texts are
+			// unrelated and the match is not a completion claim.
+			const spanIsTight =
+				between.length <= 32 &&
+				!/[a-z0-9]{4,}/.test(between.replace(/\bnot\b/g, ""));
+			if (spanIsTight) {
+				// The negation may be INSIDE the phrase span ("is not
+				// satisfied") or immediately BEFORE it.
+				const negated =
+					phraseMatch[2] !== undefined || containsNegationMarker(between);
+				const conditional = containsFutureConditionMarker(
+					haystack.slice(obligationEnd + phraseAt + phraseMatch[0].length),
+				);
+				// ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01.
+				//
+				// A FUTURE-ORIENTED condition is CONSERVED: it states what
+				// WILL make the objective succeed, and it therefore asserts
+				// nothing about the present. The historical check rejected
+				// it purely because the completion PHRASE was present.
+				//
+				// An ASSERTED completion and a NEGATED completion claim are
+				// both REJECTED. The negated form is rejected because it
+				// still asserts that the obligation's completion state is
+				// already known — and the historical check ACCEPTED it by
+				// accident, because "is not satisfied" does not contain the
+				// substring "is satisfied".
+				if (conditional && !negated) {
+					// Conserve the future-oriented condition; keep scanning
+					// for any other occurrence.
+				} else {
+					return true;
+				}
+			}
+		}
+		at = haystack.indexOf(normalizedObligation, at + 1);
+	}
+	return false;
+}
+
+/**
+ * The NEGATION MARKERS the completion-claim classifier recognises.
+ *
+ * The list is small and explicit. It is NOT extended by this ACT beyond
+ * the canonical English negations of a completion statement.
+ */
+const NEGATION_MARKERS: readonly string[] = ["not", "never", "no longer"];
+
+/**
+ * Whether the text contains a negation marker.
+ *
+ * The marker must appear as a WORD (a token boundary on BOTH sides), so
+ * that an obligation whose own text happens to contain the letters "not"
+ * (for example "canonicalization") is not mistaken for a negation.
+ */
+function containsNegationMarker(text: string): boolean {
+	for (const marker of NEGATION_MARKERS) {
+		let at = text.indexOf(marker);
+		while (at !== -1) {
+			const before = at === 0 ? " " : (text[at - 1] as string);
+			const afterIndex = at + marker.length;
+			const after =
+				afterIndex >= text.length ? " " : (text[afterIndex] as string);
+			if (!/[a-z0-9]/.test(before) && !/[a-z0-9]/.test(after)) {
+				return true;
+			}
+			at = text.indexOf(marker, at + 1);
+		}
+	}
+	return false;
+}
+
+/**
+ * The FUTURE-CONDITION MARKERS the completion-claim classifier recognises.
+ *
+ * A conditional marker makes the completion statement a CONDITION on an
+ * event that has not happened yet. It is therefore not an assertion that
+ * completion HAS occurred.
+ */
+const FUTURE_CONDITION_MARKERS: readonly string[] = [
+	"once ",
+	"when ",
+	"after ",
+	"if ",
+	"unless ",
+	"until ",
+	"whenever ",
+	"as soon as ",
+];
+
+/**
+ * Whether the text carries a future-condition marker.
+ *
+ * The marker must appear at a TOKEN BOUNDARY and must be the FIRST
+ * meaningful word of the continuation, so that a later clause's conditional
+ * ("... is satisfied. The test passes when the module builds") cannot
+ * retroactively turn an asserted completion into a condition.
+ */
+function containsFutureConditionMarker(text: string): boolean {
+	const trimmed = text.replace(/^[\s,;:.]+/, "");
+	for (const marker of FUTURE_CONDITION_MARKERS) {
+		if (trimmed.startsWith(marker)) {
+			return true;
+		}
+	}
+	return false;
 }
 
 /**

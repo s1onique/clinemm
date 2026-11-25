@@ -642,7 +642,9 @@ export interface AgentTool<TInput = unknown, TOutput = unknown>
 	 * auto-generates this from the Zod schema; tools that supply a raw
 	 * JSON schema may set it explicitly.
 	 */
-	validateInput?: (input: unknown) => void | string | Promise<void | string>;
+	validateInput?: (
+		input: unknown,
+	) => undefined | string | Promise<undefined | string>;
 	/**
 	 * Optional tool-scoped input canonicalizer. Invoked by AgentRuntime
 	 * BEFORE `validateInput`, `beforeTool` hooks, approval, execution-plan
@@ -1190,6 +1192,20 @@ export interface AgentRuntimeConfig {
 	 * boundary and behaves bit-identically to a build without this feature.
 	 */
 	modelBehaviorTraceSink?: import("./runtime/model-behavior-trace").ModelBehaviorTraceSink;
+	/**
+	 * ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01: optional read-only
+	 * observation sink for the R2 bounded-objective SELECTION boundary.
+	 *
+	 * The runtime REPORTS the generated objective text, the parsed
+	 * proposal and the exact validation disposition. The runtime never
+	 * reads a decision back, so the sink can never influence the selection,
+	 * the validation, or the completion authority.
+	 *
+	 * DEFAULT OFF: when absent, the runtime pays a single null check at
+	 * the boundary and behaves bit-identically to a build without this
+	 * feature.
+	 */
+	boundedObjectiveSelectionTraceSink?: import("./agents/bounded-objective").BoundedObjectiveSelectionTraceSink;
 	/**
 	 * Extra properties for the `agent.run-finished` / `agent.run-failed`
 	 * telemetry mirror, read once when the run ends. Lets the host attach

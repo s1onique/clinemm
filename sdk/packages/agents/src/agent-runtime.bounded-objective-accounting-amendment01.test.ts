@@ -109,7 +109,7 @@ const VALID_SELECTION_REPLY: Record<string, unknown> = {
 	mutationScope: "/tmp/disposable-target",
 	verificationCondition:
 		"the run_commands regression check `check-value` for VALUE reports PASS",
-	obligationReferences: ["Complete the parent task as authorized by the user"],
+	obligationReferences: ["parent-task:original"],
 	evidenceReferences: [
 		"The last 3 consecutive execution round(s) produced no productive step",
 	],
@@ -138,7 +138,7 @@ function createInspectTool(calls: { count: number }): AgentTool {
 }
 
 /** A command tool whose gate succeeds. */
-function createCommandTool(calls: { count: number }): AgentTool {
+function _createCommandTool(calls: { count: number }): AgentTool {
 	return {
 		name: "run_commands",
 		description: "Runs commands",

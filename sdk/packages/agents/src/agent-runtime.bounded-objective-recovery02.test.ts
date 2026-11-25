@@ -148,6 +148,12 @@ function finishStep(): (request: AgentModelRequest) => AgentModelEvent[] {
  * It names a bounded objective with an OBSERVABLE verification condition,
  * and cites the established observation and the outstanding parent
  * obligation VERBATIM — exactly as the runtime's validator requires.
+ *
+ * ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01: the selection now cites a
+ * runtime-owned PARENT-OBLIGATION REFERENCE ID rather than a verbatim
+ * sentence. The parent task of this witness ("fix the disposable target
+ * module") names no labelled requirement, so the projected vocabulary
+ * contains exactly one entry: `parent-task:original`.
  */
 const SELECTION_REPLY: Record<string, unknown> = {
 	objective: "Repair the disposable target so its VALUE constant is 2",
@@ -155,9 +161,7 @@ const SELECTION_REPLY: Record<string, unknown> = {
 	mutationScope: "the disposable workspace directory",
 	verificationCondition:
 		"the run_commands regression check for VALUE reports PASS",
-	obligationReferences: [
-		"Call the terminal completion tool submit_and_exit only after every parent obligation is satisfied",
-	],
+	obligationReferences: ["parent-task:original"],
 	evidenceReferences: [
 		"The last 3 consecutive execution round(s) produced no productive step",
 	],
@@ -178,7 +182,7 @@ const CONTROL_SELECTION_REPLY: Record<string, unknown> = {
 	mutationScope: "the disposable workspace directory",
 	verificationCondition:
 		"the run_commands regression check for VALUE reports PASS",
-	obligationReferences: ["Complete the parent task as authorized by the user"],
+	obligationReferences: ["parent-task:original"],
 	evidenceReferences: [
 		"The last 3 consecutive execution round(s) produced no productive step",
 	],
@@ -772,7 +776,7 @@ describe("ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 / principal witness", 
 							typeof receipt.command === "string" &&
 							receipt.command.trim() === workspace.checkPath,
 					);
-					return gateReceipt !== undefined && gateReceipt.succeeded;
+					return gateReceipt?.succeeded;
 				},
 			},
 		});
@@ -1333,9 +1337,7 @@ describe("ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 / remaining controls",
 			mutationScope: "none — this objective is read-only",
 			verificationCondition:
 				"the evidence collection command reports the requested evidence",
-			obligationReferences: [
-				"Complete the parent task as authorized by the user",
-			],
+			obligationReferences: ["parent-task:original"],
 			evidenceReferences: [
 				"The last 3 consecutive execution round(s) produced no productive step",
 			],

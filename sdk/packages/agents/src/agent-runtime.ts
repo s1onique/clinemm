@@ -52,7 +52,11 @@ import {
 	type BoundedObjectiveExecutionReceipt,
 	type BoundedObjectiveObservationFacts,
 	type BoundedObjectivePolicy,
+	type BoundedObjectiveSelectionObservation,
 	buildCompletionToolReminderMessage,
+	// ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01: the runtime-owned
+	// parent-obligation reference vocabulary.
+	buildParentObligationReferences,
 	canonicalizeScopePath,
 	captureAgentUnexpectedReasoningTokens,
 	captureSdkError,
@@ -61,6 +65,9 @@ import {
 	createExecutionStagnationAccounting,
 	DEFAULT_BOUNDED_OBJECTIVE_POLICY,
 	decideExecutionStagnation,
+	// ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01: the rejection
+	// diagnosis that names the failing field or reference.
+	describeBoundedObjectiveRejection,
 	describeEditRequest,
 	EDIT_OBSERVATION_APPROVAL_METADATA_KEY,
 	EDIT_OBSERVATION_IDENTITY_METADATA_KEY,
@@ -76,6 +83,9 @@ import {
 	mergeModelOptions,
 	normalizeJsonLikeStringsForSchema,
 	omitUndefinedValues,
+	// ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01: the runtime-owned
+	// parent-obligation reference vocabulary.
+	type ParentObligationReference,
 	renderBoundedObjectiveInstruction,
 	resolveBoundedObjectiveVerification,
 	sanitizeTraceErrorMessage,
@@ -528,14 +538,16 @@ const BOUNDED_OBJECTIVE_SELECTION_SYSTEM_PROMPT = [
 	'  "firstStep": the one actionable first step',
 	'  "mutationScope": the scope the objective is permitted to touch',
 	'  "verificationCondition": an OBSERVABLE condition checkable from tool outcomes',
-	'  "obligationReferences": a non-empty array of the parent obligation references, copied verbatim',
+	'  "obligationReferences": a non-empty array of the parent obligation reference ids, copied EXACTLY',
 	'  "evidenceReferences": a non-empty array of the established observation references, copied verbatim',
 	'  "successCondition": the condition under which the objective succeeds',
 	'  "failureCondition": the condition under which the objective fails',
 	"Rules:",
 	"- Cite established observations VERBATIM from the supplied list. Never invent an observation.",
-	"- Cite only parent obligations that are listed as OUTSTANDING, copied VERBATIM.",
+	"- Cite only parent obligation reference ids that are listed, copied EXACTLY. Never invent a reference id.",
+	"- A parent obligation reference names a requirement in the parent task; it does NOT mean that requirement is already satisfied.",
 	"- Never claim an outstanding obligation is already satisfied.",
+	"- A success condition states what WILL make the objective succeed. Never state that anything is already satisfied.",
 	"- Never widen the parent's mutation scope.",
 	"- The verification condition must be checkable from a command that exits successfully, a file that changes, or an artefact that exists.",
 	"- Do not analyse or request the assistant's private reasoning. Do not include reasoning signatures.",
@@ -565,6 +577,7 @@ function buildBoundedObjectiveSelectionPrompt(context: {
 	parentConstraints: string[];
 	parentMutationScope: string;
 	parentMutationScopePaths: string[];
+	parentObligationReferences: ParentObligationReference[];
 	outstandingObligations: string[];
 	establishedObservations: string[];
 	recentFailedStrategy: string;
@@ -589,6 +602,24 @@ function buildBoundedObjectiveSelectionPrompt(context: {
 		for (const constraint of context.parentConstraints) {
 			lines.push(`- ${constraint}`);
 		}
+	}
+	// ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01.
+	//
+	// The PARENT-OBLIGATION REFERENCE VOCABULARY is projected here.
+	//
+	// Each entry is a reference the selection MAY cite, identified by a
+	// STABLE id. The id is what the validator resolves; the label is the
+	// parent's own heading text, reproduced verbatim, so the selection can
+	// see WHICH requirement it is advancing without having to reproduce a
+	// long sentence verbatim.
+	//
+	// The vocabulary never asserts that a requirement is satisfied or
+	// outstanding: it only names the parent's own requirements.
+	lines.push(
+		"Parent obligation references (cite these ids EXACTLY in obligationReferences):",
+	);
+	for (const reference of context.parentObligationReferences) {
+		lines.push(`- ${reference.id} — ${reference.label}`);
 	}
 	lines.push("Outstanding parent acceptance obligations:");
 	for (const obligation of context.outstandingObligations) {
@@ -2717,9 +2748,31 @@ export class AgentRuntime {
 				maxActivations,
 			},
 		});
-		const candidate =
+		const selection =
 			await this.runBoundedObjectiveSelectionInference(selectionContext);
+		if (selection === undefined) {
+			this.lastBoundedObjectiveOutcome = {
+				kind: "failed",
+				reason: "selection_inference_failed",
+			};
+			await this.emitBoundedObjectiveOutcome("selection_inference_failed");
+			return;
+		}
+		const candidate = selection.candidate;
 		if (candidate === undefined) {
+			// ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01: the model
+			// replied, but the reply yielded no parsable proposal. The
+			// observation records the GENERATED text and the unparsable
+			// disposition, because that is exactly the case the existing
+			// provider-request capture cannot see.
+			this.observeBoundedObjectiveSelection({
+				...(this.state.runId ? { runId: this.state.runId } : {}),
+				...(this.state.agentId ? { agentId: this.state.agentId } : {}),
+				parentTaskId: selectionContext.parentTaskId,
+				selectionOrdinal: this.boundedObjectiveSelectionInferences,
+				generatedText: selection.generatedText,
+				disposition: "unparsable",
+			});
 			this.lastBoundedObjectiveOutcome = {
 				kind: "failed",
 				reason: "selection_inference_failed",
@@ -2732,9 +2785,49 @@ export class AgentRuntime {
 			parentMutationScope: selectionContext.parentMutationScope,
 			parentMutationScopePaths: selectionContext.parentMutationScopePaths,
 			parentConstraints: selectionContext.parentConstraints,
+			parentObligationReferences: selectionContext.parentObligationReferences,
 			outstandingObligations: selectionContext.outstandingObligations,
 			establishedObservations: selectionContext.establishedObservations,
 		});
+		// ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01: the observation
+		// records the EXACT validation disposition and, for a rejection, the
+		// failing field or reference.
+		if (!validation.valid) {
+			const rejection = describeBoundedObjectiveRejection(
+				candidate,
+				validation.reason,
+				{
+					parentObligationReferences:
+						selectionContext.parentObligationReferences,
+					outstandingObligations: selectionContext.outstandingObligations,
+				},
+			);
+			this.observeBoundedObjectiveSelection({
+				...(this.state.runId ? { runId: this.state.runId } : {}),
+				...(this.state.agentId ? { agentId: this.state.agentId } : {}),
+				parentTaskId: selectionContext.parentTaskId,
+				selectionOrdinal: this.boundedObjectiveSelectionInferences,
+				generatedText: selection.generatedText,
+				parsedProposal: candidate,
+				disposition: validation.reason,
+				...(rejection.failingField !== undefined
+					? { failingField: rejection.failingField }
+					: {}),
+				...(rejection.failingReference !== undefined
+					? { failingReference: rejection.failingReference }
+					: {}),
+			});
+		} else {
+			this.observeBoundedObjectiveSelection({
+				...(this.state.runId ? { runId: this.state.runId } : {}),
+				...(this.state.agentId ? { agentId: this.state.agentId } : {}),
+				parentTaskId: selectionContext.parentTaskId,
+				selectionOrdinal: this.boundedObjectiveSelectionInferences,
+				generatedText: selection.generatedText,
+				parsedProposal: candidate,
+				disposition: "valid",
+			});
+		}
 		if (!validation.valid) {
 			// An INVALID selection is rejected and NEVER retried: the
 			// activation's selection-inference allowance is already spent.
@@ -2813,6 +2906,7 @@ export class AgentRuntime {
 				parentConstraints: string[];
 				parentMutationScope: string;
 				parentMutationScopePaths: string[];
+				parentObligationReferences: ParentObligationReference[];
 				outstandingObligations: string[];
 				establishedObservations: string[];
 				recentFailedStrategy: string;
@@ -2853,6 +2947,7 @@ export class AgentRuntime {
 			parentConstraints: parentObjective.constraints,
 			parentMutationScope: parentObjective.mutationScope,
 			parentMutationScopePaths: parentObjective.mutationScopePaths,
+			parentObligationReferences: parentObjective.obligationReferences,
 			outstandingObligations: parentObjective.outstandingObligations,
 			establishedObservations: parentObjective.establishedObservations,
 			recentFailedStrategy: parentObjective.recentFailedStrategy,
@@ -2889,6 +2984,7 @@ export class AgentRuntime {
 				constraints: string[];
 				mutationScope: string;
 				mutationScopePaths: string[];
+				obligationReferences: ParentObligationReference[];
 				outstandingObligations: string[];
 				establishedObservations: string[];
 				recentFailedStrategy: string;
@@ -2958,6 +3054,30 @@ export class AgentRuntime {
 		if (outstandingObligations.length === 0) {
 			return undefined;
 		}
+		// ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01.
+		//
+		// The PARENT-OBLIGATION REFERENCE VOCABULARY.
+		//
+		// The outstanding-obligation list names the parent's TERMINAL
+		// COMPLETION mechanics — it is the runtime's own completion
+		// contract, not the parent's engineering work. The frozen live
+		// witness (`cap_run_kR2y9UwW_ca62cf1370aaed21.ai_sdk_prompt.1.provider-request.json`)
+		// shows a parent task carrying requirements A1, A2 and A3 with a
+		// selection context whose ONLY outstanding obligation was the
+		// terminal completion sentence. The selection therefore had no
+		// authorised reference to any concrete requirement.
+		//
+		// The vocabulary is derived from the parent's OWN user-authored text
+		// by a STRUCTURAL scan of its own headings. It adds NO inference and
+		// NO decomposition: it is a projection of the parent's own words, so
+		// it can neither invent a sub-obligation nor mark one as satisfied.
+		//
+		// When the parent names no labelled requirement the vocabulary
+		// contains exactly ONE entry — an explicit reference to the original
+		// authorized parent task. That is the honest representation of "the
+		// parent's concrete obligations are not individually enumerable from
+		// its text"; it is never represented as an absence of obligations.
+		const obligationReferences = buildParentObligationReferences(objective);
 		// The established observations are the runtime's OWN observable
 		// facts about the trajectory: the tools used, the rounds, the
 		// absence of edits, and the fact that the R1 allowance was spent.
@@ -2968,6 +3088,7 @@ export class AgentRuntime {
 			constraints,
 			mutationScope,
 			mutationScopePaths,
+			obligationReferences,
 			outstandingObligations,
 			establishedObservations,
 			recentFailedStrategy,
@@ -3120,6 +3241,7 @@ export class AgentRuntime {
 		parentConstraints: string[];
 		parentMutationScope: string;
 		parentMutationScopePaths: string[];
+		parentObligationReferences: ParentObligationReference[];
 		outstandingObligations: string[];
 		establishedObservations: string[];
 		recentFailedStrategy: string;
@@ -3129,7 +3251,9 @@ export class AgentRuntime {
 			selectionInferences: number;
 			objectiveRounds: number;
 		};
-	}): Promise<unknown | undefined> {
+	}): Promise<
+		{ readonly generatedText: string; readonly candidate: unknown } | undefined
+	> {
 		this.throwIfAborted();
 		const prompt = buildBoundedObjectiveSelectionPrompt(context);
 		let stream: AsyncIterable<AgentModelEvent>;
@@ -3172,7 +3296,41 @@ export class AgentRuntime {
 			return undefined;
 		}
 		this.throwIfAborted();
-		return parseBoundedObjectiveCandidate(text);
+		// ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01: the GENERATED
+		// text is returned alongside the parsed candidate so the
+		// observation sink can record what the model actually said. It is
+		// the model's own reply — never provider-owned reasoning.
+		return {
+			generatedText: text,
+			candidate: parseBoundedObjectiveCandidate(text),
+		};
+	}
+
+	/**
+	 * Report ONE observed fact about the R2 selection boundary to the
+	 * OPT-IN, host-supplied observation sink.
+	 *
+	 * ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01.
+	 *
+	 * DEFAULT OFF: the sink is absent unless a host supplies one, and this
+	 * method pays a single null check.
+	 *
+	 * The report is READ-ONLY and MUST NOT affect the selection, the
+	 * validation, the dispatch, or the completion authority. A throwing
+	 * sink is swallowed.
+	 */
+	private observeBoundedObjectiveSelection(
+		observation: BoundedObjectiveSelectionObservation,
+	): void {
+		const sink = this.config.boundedObjectiveSelectionTraceSink;
+		if (!sink?.onSelectionObservation) {
+			return;
+		}
+		try {
+			void sink.onSelectionObservation(observation);
+		} catch {
+			// The observation sink must never affect model execution.
+		}
 	}
 
 	/**

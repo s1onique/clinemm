@@ -117,7 +117,7 @@ const SELECTION_REPLY: Record<string, unknown> = {
 	mutationScope: "/tmp/disposable-target",
 	verificationCondition:
 		"the run_commands regression check `check-value` for VALUE reports PASS",
-	obligationReferences: ["Complete the parent task as authorized by the user"],
+	obligationReferences: ["parent-task:original"],
 	evidenceReferences: [
 		"The last 3 consecutive execution round(s) produced no productive step",
 	],
@@ -138,7 +138,7 @@ function objectiveIn(request: AgentModelRequest): string | undefined {
 }
 
 /** The ORIGINAL user task in a dispatched request, if present. */
-function userTaskIn(request: AgentModelRequest): string | undefined {
+function _userTaskIn(request: AgentModelRequest): string | undefined {
 	const messages = request.messages ?? [];
 	for (const message of messages) {
 		if (message.role !== "user") {
@@ -201,7 +201,7 @@ describe("ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 / compaction conservat
 		// The compaction REPLACES the request's messages with a lossy
 		// summary. It carries NO objective, NO recovery instruction and NO
 		// parent task — exactly as a real summarizer may.
-		const prepareTurn = async (context: { messages: unknown }) => {
+		const prepareTurn = async (_context: { messages: unknown }) => {
 			compactionCount += 1;
 			return {
 				messages: [

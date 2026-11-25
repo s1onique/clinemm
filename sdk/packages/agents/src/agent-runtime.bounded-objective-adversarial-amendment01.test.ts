@@ -117,7 +117,7 @@ const SELECTION_REPLY: Record<string, unknown> = {
 	mutationScope: "PLACEHOLDER_SCOPE",
 	verificationCondition:
 		"the run_commands regression check `check-value` for VALUE reports PASS",
-	obligationReferences: ["Complete the parent task as authorized by the user"],
+	obligationReferences: ["parent-task:original"],
 	evidenceReferences: [
 		"The last 3 consecutive execution round(s) produced no productive step",
 	],

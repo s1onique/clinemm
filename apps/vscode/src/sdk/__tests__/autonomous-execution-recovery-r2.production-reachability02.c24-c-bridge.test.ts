@@ -443,7 +443,11 @@ describe("ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 / Q4", () => {
 			firstStep: "Edit the disposable target module to set VALUE = 2",
 			mutationScope: "the disposable workspace directory",
 			verificationCondition: "the run_commands regression check for VALUE reports PASS",
-			obligationReferences: ["Complete the parent task as authorized by the user"],
+			// ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01: the selection
+			// cites a runtime-owned parent-obligation REFERENCE ID. The parent
+			// task of this bridge names no labelled requirement, so the
+			// projected vocabulary contains exactly one entry.
+			obligationReferences: ["parent-task:original"],
 			evidenceReferences: ["The last 2 consecutive execution round(s) produced no productive step"],
 			successCondition: "the executable check for VALUE reports PASS",
 			failureCondition: "the editable file cannot be changed",

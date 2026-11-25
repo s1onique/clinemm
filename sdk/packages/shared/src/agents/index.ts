@@ -4,12 +4,18 @@
 // path) so the runtime obligation is matched by template equality rather
 // than by broad string guessing.
 
+// ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01: the runtime-owned
+// parent-obligation reference vocabulary and the selection-boundary
+// observation sink.
 export type {
 	BoundedObjective,
 	BoundedObjectiveExecutionReceipt,
 	BoundedObjectiveObservationFacts,
 	BoundedObjectivePolicy,
+	BoundedObjectiveRejectionDiagnosis,
 	BoundedObjectiveRejectionReason,
+	BoundedObjectiveSelectionObservation,
+	BoundedObjectiveSelectionTraceSink,
 	BoundedObjectiveValidation,
 	BoundedObjectiveVerificationAuthority,
 } from "./bounded-objective";
@@ -18,14 +24,21 @@ export type {
 // R2 recovery boundary), its validator, and the compaction task-contract
 // conservation path so the active objective's identity survives compaction.
 export {
+	buildParentObligationReferences,
 	type CanonicalScopePath,
 	canonicalizeScopePath,
 	DEFAULT_BOUNDED_OBJECTIVE_POLICY,
+	describeBoundedObjectiveRejection,
 	extractScopePaths,
 	isBoundedObjectiveInstruction,
+	isParentObligationReferenceId,
 	isPathWithinCanonicalRoot,
 	MAX_BOUNDED_OBJECTIVE_FIELD_LENGTH,
 	MAX_BOUNDED_OBJECTIVE_REFERENCE_COUNT,
+	MAX_PARENT_OBLIGATION_REFERENCE_COUNT,
+	PARENT_TASK_ORIGINAL_REFERENCE_ID,
+	PARENT_TASK_REFERENCE_ID_PREFIX,
+	type ParentObligationReference,
 	parseBoundedObjectiveInstruction,
 	renderBoundedObjectiveInstruction,
 	resolveBoundedObjectiveVerification,
