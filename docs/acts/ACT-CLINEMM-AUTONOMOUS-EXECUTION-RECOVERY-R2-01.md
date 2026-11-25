@@ -569,3 +569,189 @@ the dogfood configuration is deliberately selected
 | Actual compaction-delivery controls | GREEN 44/44 |
 | Affected typecheck | `@cline/shared` clean; `@cline/agents` clean; `@cline/core` delta ZERO against the baseline diagnostic set (45 = 45, deduped) |
 | Biome | clean on every changed file |
+
+---
+
+# AMENDMENT-02 — HALT_R2_FALSE_VERIFICATION_AUTHORITY
+
+Predecessor: `2c43074fb7d618eab8318e127ffd2bd8f1f528bb`.
+
+The R2 architecture, the runtime ownership, the experimental opt-in and the
+automatic continuation are ACCEPTED. This amendment removes ONE false
+verification authority, simplifies the authorisation claim, and qualifies the
+result with ONE principal executable witness. No redesign. No R3.
+
+## B1. The halt
+
+The reviewer independently executed the PRODUCTION verification helper and
+reproduced a false verification. AMENDMENT-01 had replaced "any successful
+command proves completion" with "any successful command CONTAINING a
+host-declared substring proves completion". Given a gate of
+`{ toolName: "run_commands", commandSubstring: "check-value" }`:
+
+| Executed production helper | Expected | Returned |
+|---|---|---|
+| successful receipt for `echo check-value` | false | **true** |
+| successful receipt for `CHECK-VALUE` | false | **true** |
+| successful receipt for `check-value` | true | true |
+
+The first counterexample alone establishes the defect: a successful `echo`
+that merely MENTIONS the gate's name authorised objective verification.
+
+**The verification suite concealed the remaining defect.** Its command
+executor implemented the SAME substring mechanism
+(`identity.includes(needle)`) and then either threw or returned a predefined
+PASS string, so it tested the implementation against a fixture that shared its
+underlying incorrect assumption.
+
+## B2. The verification simplification
+
+**Substring-based objective verification is REMOVED as an authority.** The
+`BoundedObjectiveVerificationGate` type and the
+`isBoundedObjectiveGateSatisfied()` helper are deleted from
+`@cline/shared`; the runtime no longer contains a structural fallback.
+
+**No replacement parser.** A command string, a matching substring, a
+successful dispatch and a generic successful exit are not proof of an
+objective-specific verification condition. A more elaborate shell-command
+parser would only widen the same wrong assumption.
+
+**The trusted authority is the HOST's verdict and the host's alone.** The
+host owns the command-policy layer, the sandbox and the workspace, so it is
+the only layer that can know whether the objective's verification condition
+was met. `resolveBoundedObjectiveVerification()` resolves the objective's
+verdict from that callback:
+
+| Host callback | Verdict |
+|---|---|
+| absent | `unverified` |
+| returns `true` | `host_verdict` / verified |
+| returns `false` | `host_verdict` / not verified |
+| returns `undefined` (declines) | `unverified` |
+| throws | `unverified` |
+
+**When no trustworthy verification authority exists, the objective is reported
+as UNVERIFIED, execution returns to the parent automatically, and every
+outstanding parent obligation is preserved.** Useful unverified progress is a
+legitimate recovery outcome and is never represented as verified completion.
+The production host was NOT required to invent a task-specific verification
+callback to make the verdict green.
+
+**The unverified disposition is no longer discardable.** AMENDMENT-01 closed
+an active objective out only at the model's natural finish. A run that ended
+through the parent's terminal completion tool DROPPED the objective without a
+verdict: the runtime had consumed its activation allowance and produced no
+machine-readable fact at all. The terminal-tool boundary now closes the
+objective out too, so the unverified disposition is reported truthfully rather
+than discarded.
+
+## B3. The authorisation simplification
+
+**The objective is an untrusted model proposal.** Existing parent
+authorisation, the tool-policy layer, the sandbox and the native editor
+authority remain the execution authority, unchanged.
+
+- **The lexical path check is no longer described as filesystem
+  canonicalization.** `canonicalizeScopePath` is documented as LEXICAL
+  NORMALIZATION, and the limitation is stated explicitly: a SYMBOLIC LINK
+  inside the authorised root may resolve OUTSIDE it, and a path that does not
+  exist yet cannot be resolved against the filesystem at all. The narrower
+  enforcement this boundary offers is an ADDITIONAL constraint on top of the
+  parent's own authority; the workspace, sandbox, command-policy and approval
+  layers are not relaxed by it.
+- **The English prohibition and escalation vocabulary was NOT extended.** The
+  fixed vocabulary is not a natural-language authorisation engine and is not
+  presented as one.
+- **Model-produced fields grant no permissions.** The objective remains a
+  runtime-owned request projection; the canonical transcript is not mutated.
+- **Unresolved scope is not represented as mechanically authorised.** A
+  relative scope has no canonical meaning and is refused; a prose scope that
+  names no path is refused.
+- **Existing approval and sandbox requirements cannot be bypassed.** The
+  objective scope gate refuses an out-of-scope mutating tool call before
+  approval and before the executor runs, and it applies only while an
+  objective is active.
+
+**Where narrower enforcement is unavailable, the limitation is stated rather
+than engineered around.** The scope gate applies to tool calls carrying an
+EXPLICIT path; the runtime never parses command text, because the
+command-policy layer and the sandbox remain the authority for command
+contents. Experimental qualification is therefore restricted to a disposable,
+isolated workspace with the existing tool restrictions.
+
+## B4. The principal executable witness
+
+**The AMENDMENT-01 witness's test-local regression PASS implementation is
+replaced with an actual executable check in a disposable workspace.** The
+check is a REAL script on disk that READS the disposable file and exits
+non-zero when the value is wrong, and the tool runs it as a REAL SUBPROCESS.
+The verdict is the process's exit status.
+
+The required trajectory is asserted: R1 allowance exhausted → R2 objective
+selected and dispatched → real mutation performed → actual executable check
+runs → execution evidence returned → parent continues automatically.
+
+**The unrelated-command discriminator is added to the principal witness.** An
+unrelated successful command whose text CARRIES the required executable's
+name does NOT establish verified success. The objective is reported
+unverified, the unverified disposition is reported truthfully, and the parent
+continues automatically.
+
+**The host verdict in the witness is deliberately strict.** It requires the
+command to BE the required executable, not to MENTION it — an `echo` of the
+executable's path is not the executable.
+
+## B5. The small conservation controls
+
+- The original parent task remains effective after request preparation, and
+  the completed objective does not reappear (the compaction conservation
+  controls, unchanged).
+- Cancellation prevents further recovery dispatch (unchanged).
+- **R2 remains absent without the explicit dogfood opt-in** — asserted by
+  the production-reachability bridge witness: an ordinary ACT session does NOT
+  activate the R2 policy.
+- **The selection allowance semantics are now stated accurately.** The
+  runtime's counter is RUN-SCOPED, so with the experimental bound of 1 the
+  WHOLE run makes ONE selection inference — not one per activation. The
+  policy documentation, the runtime documentation and the selection prompt
+  now say exactly that, instead of claiming a per-activation allowance the
+  runtime does not implement.
+
+No new scheduling infrastructure was added.
+
+## B6. Verification
+
+| Check | Result |
+|-------|--------|
+| Focused false-verification RED/GREEN | RED 3/10 against the AMENDMENT-01 substring gate (`V1b`/`V1c`/`V4b`); GREEN 10/10 |
+| Principal executable recovery witness | GREEN 29/29 across 5 R2 files |
+| R1 conservation controls | GREEN 22/22 |
+| Production-reachability bridge (dogfood default OFF) | GREEN 5/5 |
+| Affected typecheck | `@cline/shared` clean; `@cline/agents` clean |
+| Biome | clean on every changed file (8 files) |
+| `@cline/agents` full package | 43 failed / 675 total — against a PRE-EXISTING baseline of 44 failed / 670 total; no regression, one pre-existing failure fixed |
+| `apps/vscode` C2.4-C bridge suite | 20 failed / 333 total — IDENTICAL to the pre-existing baseline |
+| `@cline/shared` package | GREEN 682/682 |
+
+No paid inference. No full-suite reruns. No new Factory documents. No R3
+implementation.
+
+## B7. The exit
+
+| Report | Value |
+|---|---|
+| FALSE_VERIFICATION_DENIAL | The substring gate is deleted; a mention of the gate's name, an unrelated successful command, a failed gate and a case-folded mention all resolve to `unverified`. |
+| TRUSTED_VERIFICATION_AUTHORITY | The host's `verifyObjective` verdict, and the host's alone. Absent, declining or throwing means unverified. |
+| UNVERIFIED_PROGRESS_DISPOSITION | Unverified progress is reported truthfully as a failed recovery outcome, execution returns to the parent automatically, and every outstanding parent obligation is preserved. |
+| ACTUAL_EXECUTABLE_EVIDENCE | The principal witness runs a REAL regression script as a REAL SUBPROCESS in a disposable workspace; the exit status is the verdict. |
+| AUTOMATIC_PARENT_CONTINUATION | Verified and unverified objectives both return control to the parent automatically; the terminal-tool boundary no longer discards the disposition. |
+| PARENT_AUTHORITY_CONSERVATION | The parent's obligations, the completion contract, the tool policy, the sandbox and the approval layer are unchanged. |
+| OBJECTIVE_SCOPE_ENFORCEMENT_LIMITS | Lexical normalisation only: symlink containment and native editor schema coverage are NOT established. The limitation is stated, not engineered around. |
+| DOGFOOD_DEFAULT_OFF | R2 is absent from ordinary sessions; the production-reachability bridge witness asserts it. |
+| ACT_OWNED_DIAGNOSTICS | The diagnostics are owned by this ACT: the shared and agents packages, the R2 witness files, and the R2 documentation. |
+| FINAL_HEAD | The commit that carries this amendment. |
+
+**Verdict: `GO_R2_ISOLATED_BEHAVIORAL_DOGFOOD`.**
+
+This verdict authorises an isolated behavioural experiment. It does NOT
+authorise unrestricted production rollout.

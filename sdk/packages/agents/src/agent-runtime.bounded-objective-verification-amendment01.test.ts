@@ -1,23 +1,24 @@
 /**
- * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-01
+ * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-02
  *
  * THE OBJECTIVE-VERIFICATION REGRESSION.
  *
  * WHAT THIS FILE PROVES
  * ---------------------
  * The R2 objective verification boundary accepts an objective as VERIFIED
- * only on EVIDENCE THAT CORRELATES with the objective's own required
- * executable gate.
+ * ONLY on a TRUSTED HOST VERDICT. There is no structural fallback: no
+ * command text, no substring correlation and no generic successful exit
+ * can establish that an objective's verification condition was met.
  *
- *   V1  THE DISCRIMINATOR — an objective requiring a SPECIFIC executable
- *       regression is NOT reported verified after an UNRELATED successful
- *       command. (This is the RED case the reviewer reproduced.)
+ *   V1  THE DISCRIMINATOR — an UNRELATED successful command does NOT
+ *       verify the objective, and NEITHER does a successful command that
+ *       merely MENTIONS the required executable's name. (This is the P0 the
+ *       reviewer reproduced against AMENDMENT-01.)
  *   V2  the required command was executed but FAILED → not verified.
  *   V3  a successful EDIT without verification → not verified.
- *   V4  the host's verification callback is UNAVAILABLE or THROWS, and no
- *       gate was declared → not verified (reported as unverified, never as
- *       a manufactured success).
- *   V5  the ACTUAL required executable gate SUCCEEDS → verified.
+ *   V4  the host's verification callback is UNAVAILABLE or THROWS → not
+ *       verified (reported as unverified, never as a manufactured success).
+ *   V5  the HOST VERDICT is affirmative → verified.
  *
  * EVIDENCE CLASS
  * --------------
@@ -187,17 +188,14 @@ function createCommandTool(
 }
 
 /**
- * Build the R2 policy with the REQUIRED VERIFICATION GATE.
+ * Build the R2 policy with the TRUSTED HOST VERIFICATION AUTHORITY.
  *
- * The gate is the `check-value` regression — the executable the objective's
- * own verification condition refers to.
+ * AMENDMENT-02 removed the substring verification gate: a command that
+ * merely mentions the required executable's name is not evidence that the
+ * executable ran. The ONLY authority is the host's own verdict.
  */
 function gatedPolicy(
 	overrides: {
-		verificationGate?: {
-			commandSubstring: string;
-			toolName?: string;
-		};
 		verifyObjective?: (
 			objective: unknown,
 			facts: unknown,
@@ -209,9 +207,6 @@ function gatedPolicy(
 		maxActivations: 2,
 		maxObjectiveRounds: 8,
 		maxSelectionInferences: 1,
-		...(overrides.verificationGate
-			? { verificationGate: overrides.verificationGate }
-			: {}),
 		...(overrides.verifyObjective
 			? { verifyObjective: overrides.verifyObjective }
 			: {}),
@@ -277,12 +272,7 @@ describe("ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 / V1 discriminator", (
 		const { notices } = await runR2({
 			steps,
 			tools: [createInspectTool(calls), createCommandTool(calls)],
-			policy: gatedPolicy({
-				verificationGate: {
-					commandSubstring: "check-value",
-					toolName: "run_commands",
-				},
-			}),
+			policy: gatedPolicy(),
 		});
 		// The unrelated command DID run and DID succeed.
 		expect(calls.count).toBeGreaterThan(0);
@@ -291,6 +281,55 @@ describe("ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 / V1 discriminator", (
 			notices.filter((n) => n.includes("bounded objective verified")),
 		).toHaveLength(0);
 		// And the failure was reported TRUTHFULLY.
+		expect(
+			notices.filter((n) =>
+				n.includes("bounded objective recovery outcome: failed"),
+			),
+		).toHaveLength(1);
+	});
+
+	it("V1b (THE P0): a successful command that merely MENTIONS the required executable's name does NOT verify the objective", async () => {
+		const calls = { count: 0 };
+		const steps = [
+			...stalledRounds(),
+			// The AMENDMENT-01 counterexample: a trivial `echo` whose text
+			// contains the required executable's name. It SUCCEEDS, it
+			// mentions `check-value`, and the required regression NEVER ran.
+			toolCallStep("u2", "run_commands", { commands: ["echo check-value"] }),
+			finishStep(),
+		];
+		const { notices } = await runR2({
+			steps,
+			tools: [createInspectTool(calls), createCommandTool(calls)],
+			policy: gatedPolicy(),
+		});
+		expect(calls.count).toBeGreaterThan(0);
+		// The objective was NOT reported verified.
+		expect(
+			notices.filter((n) => n.includes("bounded objective verified")),
+		).toHaveLength(0);
+		expect(
+			notices.filter((n) =>
+				n.includes("bounded objective recovery outcome: failed"),
+			),
+		).toHaveLength(1);
+	});
+
+	it("V1c (THE P0): the case-folded mention does NOT verify the objective either", async () => {
+		const calls = { count: 0 };
+		const steps = [
+			...stalledRounds(),
+			toolCallStep("u3", "run_commands", { commands: ["CHECK-VALUE"] }),
+			finishStep(),
+		];
+		const { notices } = await runR2({
+			steps,
+			tools: [createInspectTool(calls), createCommandTool(calls)],
+			policy: gatedPolicy(),
+		});
+		expect(
+			notices.filter((n) => n.includes("bounded objective verified")),
+		).toHaveLength(0);
 		expect(
 			notices.filter((n) =>
 				n.includes("bounded objective recovery outcome: failed"),
@@ -317,12 +356,7 @@ describe("ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 / V2 failed gate", () 
 				createInspectTool(calls),
 				createCommandTool(calls, { "check-value": "failure" }),
 			],
-			policy: gatedPolicy({
-				verificationGate: {
-					commandSubstring: "check-value",
-					toolName: "run_commands",
-				},
-			}),
+			policy: gatedPolicy(),
 		});
 		expect(
 			notices.filter((n) => n.includes("bounded objective verified")),
@@ -354,12 +388,7 @@ describe("ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 / V3 edit only", () =>
 		const { notices } = await runR2({
 			steps,
 			tools: [createInspectTool(calls), createEditTool(calls)],
-			policy: gatedPolicy({
-				verificationGate: {
-					commandSubstring: "check-value",
-					toolName: "run_commands",
-				},
-			}),
+			policy: gatedPolicy(),
 		});
 		expect(
 			notices.filter((n) => n.includes("bounded objective verified")),
@@ -403,7 +432,7 @@ describe("ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 / V4 host verification
 		).toHaveLength(1);
 	});
 
-	it("V4b: with NO gate and NO host verdict, a successful command does not verify the objective", async () => {
+	it("V4b: with NO host verdict, a successful command does not verify the objective", async () => {
 		const calls = { count: 0 };
 		const steps = [
 			...stalledRounds(),
@@ -427,11 +456,11 @@ describe("ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 / V4 host verification
 });
 
 // ---------------------------------------------------------------------------
-// V5 — the ACTUAL required executable gate succeeds
+// V5 — the TRUSTED HOST VERDICT is affirmative
 // ---------------------------------------------------------------------------
 
-describe("ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 / V5 actual gate", () => {
-	it("V5: the ACTUAL required executable gate SUCCEEDS verifies the objective", async () => {
+describe("ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 / V5 host verdict", () => {
+	it("V5: an AFFIRMATIVE host verdict verifies the objective", async () => {
 		const calls = { count: 0 };
 		const steps = [
 			...stalledRounds(),
@@ -442,10 +471,7 @@ describe("ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 / V5 actual gate", () 
 			steps,
 			tools: [createInspectTool(calls), createCommandTool(calls)],
 			policy: gatedPolicy({
-				verificationGate: {
-					commandSubstring: "check-value",
-					toolName: "run_commands",
-				},
+				verifyObjective: () => true,
 			}),
 		});
 		expect(
@@ -454,6 +480,54 @@ describe("ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 / V5 actual gate", () 
 		expect(
 			notices.filter((n) =>
 				n.includes("bounded objective recovery outcome: completed"),
+			),
+		).toHaveLength(1);
+	});
+
+	it("V5b: a NEGATIVE host verdict does not verify the objective", async () => {
+		const calls = { count: 0 };
+		const steps = [
+			...stalledRounds(),
+			toolCallStep("g2", "run_commands", { commands: ["check-value"] }),
+			finishStep(),
+		];
+		const { notices } = await runR2({
+			steps,
+			tools: [createInspectTool(calls), createCommandTool(calls)],
+			policy: gatedPolicy({
+				verifyObjective: () => false,
+			}),
+		});
+		expect(
+			notices.filter((n) => n.includes("bounded objective verified")),
+		).toHaveLength(0);
+		expect(
+			notices.filter((n) =>
+				n.includes("bounded objective recovery outcome: failed"),
+			),
+		).toHaveLength(1);
+	});
+
+	it("V5c: a host verdict that DECLINES (undefined) does not verify the objective", async () => {
+		const calls = { count: 0 };
+		const steps = [
+			...stalledRounds(),
+			toolCallStep("g3", "run_commands", { commands: ["check-value"] }),
+			finishStep(),
+		];
+		const { notices } = await runR2({
+			steps,
+			tools: [createInspectTool(calls), createCommandTool(calls)],
+			policy: gatedPolicy({
+				verifyObjective: () => undefined,
+			}),
+		});
+		expect(
+			notices.filter((n) => n.includes("bounded objective verified")),
+		).toHaveLength(0);
+		expect(
+			notices.filter((n) =>
+				n.includes("bounded objective recovery outcome: failed"),
 			),
 		).toHaveLength(1);
 	});

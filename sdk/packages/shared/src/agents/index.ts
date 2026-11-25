@@ -11,7 +11,7 @@ export type {
 	BoundedObjectivePolicy,
 	BoundedObjectiveRejectionReason,
 	BoundedObjectiveValidation,
-	BoundedObjectiveVerificationGate,
+	BoundedObjectiveVerificationAuthority,
 } from "./bounded-objective";
 // ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01: the runtime
 // bounded-objective contract, shared by its producer (the agent runtime's
@@ -22,13 +22,13 @@ export {
 	canonicalizeScopePath,
 	DEFAULT_BOUNDED_OBJECTIVE_POLICY,
 	extractScopePaths,
-	isBoundedObjectiveGateSatisfied,
 	isBoundedObjectiveInstruction,
 	isPathWithinCanonicalRoot,
 	MAX_BOUNDED_OBJECTIVE_FIELD_LENGTH,
 	MAX_BOUNDED_OBJECTIVE_REFERENCE_COUNT,
 	parseBoundedObjectiveInstruction,
 	renderBoundedObjectiveInstruction,
+	resolveBoundedObjectiveVerification,
 	validateBoundedObjective,
 } from "./bounded-objective";
 // ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01: the FROZEN FAILURE

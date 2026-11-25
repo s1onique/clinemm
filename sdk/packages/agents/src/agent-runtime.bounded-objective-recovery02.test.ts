@@ -42,7 +42,8 @@
  * EVIDENCE CLASS: SYNTHETIC_REAL_PRODUCTION_SEAM.
  */
 
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type {
@@ -233,18 +234,37 @@ function boundedObjectiveIn(request: AgentModelRequest): string | undefined {
  *
  * The witness mutates a real file on disk and verifies it with a real
  * executable check. Nothing touches the repository.
+ *
+ * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-02: the
+ * executable check is a REAL SUBPROCESS that runs a REAL script which
+ * READS the disposable file and exits non-zero when the value is wrong.
+ * The AMENDMENT-01 witness returned a hard-coded PASS string, which proved
+ * only that the tool was called — not that the check ran.
  */
 function createDisposableWorkspace(): {
 	dir: string;
 	targetPath: string;
+	checkPath: string;
 	read: () => string;
 } {
 	const dir = mkdtempSync(join(tmpdir(), "cline-r2-witness-"));
 	const targetPath = join(dir, "target.ts");
+	const checkPath = join(dir, "check-value");
 	writeFileSync(targetPath, "export const VALUE = 1;\n", "utf-8");
+	// The REAL regression executable. It reads the target and exits 0 only
+	// when the repaired value is present.
+	writeFileSync(
+		checkPath,
+		["#!/bin/sh", `grep -q 'VALUE = 2' '${targetPath}'`, "exit $?", ""].join(
+			"\n",
+		),
+		"utf-8",
+	);
+	chmodSync(checkPath, 0o755);
 	return {
 		dir,
 		targetPath,
+		checkPath,
 		read: () => readFileSync(targetPath, "utf-8"),
 	};
 }
@@ -346,15 +366,31 @@ describe("ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 / principal witness", 
 		};
 		// A tool that runs the EXECUTABLE CHECK. It succeeds only when the
 		// disposable file really carries the repaired value.
+		//
+		// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-02:
+		// the check is a REAL SUBPROCESS running the REAL regression script.
+		// The AMENDMENT-01 witness returned a hard-coded PASS string.
 		const verifyTool: AgentTool = {
 			name: "run_commands",
 			description: "Runs commands",
 			inputSchema: { type: "object" },
-			async execute() {
+			async execute(input: unknown) {
 				calls.verify += 1;
-				const content = workspace.read();
-				if (!content.includes("VALUE = 2")) {
-					return "FAILED: expected VALUE = 2";
+				const record = (input ?? {}) as Record<string, unknown>;
+				const commands = Array.isArray(record.commands)
+					? (record.commands as unknown[])
+					: [];
+				const identity = commands
+					.filter((entry): entry is string => typeof entry === "string")
+					.join(" && ");
+				// The REAL regression executable runs as a REAL process. Its
+				// exit status is the verdict.
+				const result = spawnSync(identity, {
+					shell: true,
+					cwd: workspace.dir,
+				});
+				if (result.status !== 0) {
+					return `FAILED: the regression check exited with ${result.status ?? "no status"}`;
 				}
 				return "PASS: the regression check for VALUE succeeded";
 			},
@@ -431,13 +467,15 @@ describe("ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 / principal witness", 
 					new_text: "VALUE = 2",
 				})(request);
 			},
-			// The executable verification of the bounded objective.
+			// The executable verification of the bounded objective. It runs
+			// the REAL regression script that lives in the disposable
+			// workspace.
 			(request) => {
 				if (!boundedObjectiveIn(request)) {
 					return toolCallStep("b2x", "read_files", INSPECT_INPUT)(request);
 				}
 				return toolCallStep("b2", "run_commands", {
-					commands: ["check-value"],
+					commands: [workspace.checkPath],
 				})(request);
 			},
 			// Phase C: the objective is verified and the runtime has
@@ -476,13 +514,35 @@ describe("ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 / principal witness", 
 				maxObjectiveRounds: 8,
 				maxSelectionInferences: 1,
 				// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01
-				// (AMENDMENT-01): the REQUIRED VERIFICATION GATE. The
-				// objective is verified ONLY by the execution of this
-				// specific executable. An unrelated successful command is
-				// not verification evidence.
-				verificationGate: {
-					commandSubstring: "check-value",
-					toolName: "run_commands",
+				// (AMENDMENT-02): the TRUSTED HOST VERIFICATION AUTHORITY.
+				//
+				// The AMENDMENT-01 substring gate is REMOVED. The host owns
+				// the disposable workspace, so it is the only layer that can
+				// know whether the objective's verification condition was
+				// met — and it decides that from the ACTUAL EXECUTION
+				// EVIDENCE: the receipt must show the regression executable
+				// itself ran AND succeeded, and the disposable file must
+				// really carry the repaired value.
+				//
+				// A command that merely MENTIONS the executable's name is
+				// NOT verification evidence.
+				verifyObjective: (_objective, facts) => {
+					const receipts = facts.receipts ?? [];
+					const gateReceipt = receipts.find(
+						(receipt) =>
+							!receipt.wasEdit &&
+							typeof receipt.command === "string" &&
+							receipt.command.includes(workspace.checkPath),
+					);
+					if (!gateReceipt) {
+						return false;
+					}
+					if (!gateReceipt.succeeded) {
+						return false;
+					}
+					// The executable really ran and passed: the disposable
+					// file carries the repaired value.
+					return workspace.read().includes("VALUE = 2");
 				},
 			},
 		});
@@ -571,6 +631,182 @@ describe("ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 / principal witness", 
 			n.message.includes("bounded objective verified"),
 		);
 		expect(objectiveVerifiedIndex).toBeGreaterThanOrEqual(0);
+	});
+
+	// -----------------------------------------------------------------------
+	// THE P0 DISCRIMINATOR IN THE PRINCIPAL WITNESS.
+	//
+	// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-02.
+	//
+	// The witness must ALSO show that an UNRELATED successful command
+	// carrying the required executable's NAME does not establish verified
+	// success, and that TRUTHFUL UNVERIFIED progress is followed by an
+	// AUTOMATIC return to the parent.
+	// -----------------------------------------------------------------------
+	it("A+B+C (P0): an UNRELATED successful command carrying the gate's name does NOT establish verified success; the unverified progress is reported truthfully and the parent continues automatically", async () => {
+		const workspace = createDisposableWorkspace();
+		const calls = { inspect: 0, edit: 0, verify: 0, complete: 0 };
+
+		const inspectTool: AgentTool = {
+			name: "read_files",
+			description: "Reads files (inspection only)",
+			inputSchema: { type: "object" },
+			async execute() {
+				calls.inspect += 1;
+				return "file contents";
+			},
+		};
+		// The edit tool REALLY mutates the disposable file.
+		const editTool: AgentTool = {
+			name: "editor",
+			description: "Edits a file",
+			inputSchema: { type: "object" },
+			async execute(input: unknown) {
+				calls.edit += 1;
+				const record = (input ?? {}) as Record<string, unknown>;
+				if (typeof record.path === "string") {
+					writeFileSync(record.path, "export const VALUE = 2;\n", "utf-8");
+				}
+				return "edited";
+			},
+		};
+		// The command tool runs the REAL command. The unrelated command
+		// SUCCEEDS and its text CARRIES the gate executable's name — the
+		// AMENDMENT-01 counterexample.
+		const commandTool: AgentTool = {
+			name: "run_commands",
+			description: "Runs commands",
+			inputSchema: { type: "object" },
+			async execute(input: unknown) {
+				calls.verify += 1;
+				const record = (input ?? {}) as Record<string, unknown>;
+				const commands = Array.isArray(record.commands)
+					? (record.commands as unknown[])
+					: [];
+				const identity = commands
+					.filter((entry): entry is string => typeof entry === "string")
+					.join(" && ");
+				const result = spawnSync(identity, { shell: true, cwd: workspace.dir });
+				return result.status === 0
+					? "PASS: the command succeeded"
+					: `FAILED: the command exited with ${result.status ?? "no status"}`;
+			},
+		};
+		const completionTool: AgentTool = {
+			name: "submit_and_exit",
+			description: "Completes the task",
+			inputSchema: { type: "object" },
+			lifecycle: { completesRun: true },
+			async execute() {
+				calls.complete += 1;
+				return "done";
+			},
+		};
+
+		const INSPECT_INPUT = { files: [{ path: workspace.targetPath }] };
+
+		const steps: Array<(request: AgentModelRequest) => AgentModelEvent[]> = [
+			toolCallStep("a1", "read_files", INSPECT_INPUT),
+			toolCallStep("a2", "read_files", INSPECT_INPUT),
+			toolCallStep("a3", "read_files", INSPECT_INPUT),
+			toolCallStep("a4", "read_files", INSPECT_INPUT),
+			toolCallStep("a5", "read_files", INSPECT_INPUT),
+			toolCallStep("a6", "read_files", INSPECT_INPUT),
+			toolCallStep("a7", "read_files", INSPECT_INPUT),
+			toolCallStep("a8", "read_files", INSPECT_INPUT),
+			toolCallStep("a9", "read_files", INSPECT_INPUT),
+			// The objective is active: the model performs the REAL mutation.
+			(request) => {
+				if (!boundedObjectiveIn(request)) {
+					return toolCallStep("b0", "read_files", INSPECT_INPUT)(request);
+				}
+				return toolCallStep("b1", "editor", {
+					path: workspace.targetPath,
+					old_text: "VALUE = 1",
+					new_text: "VALUE = 2",
+				})(request);
+			},
+			// The model then runs an UNRELATED successful command whose text
+			// CARRIES the gate executable's name. The required executable
+			// NEVER runs.
+			(request) => {
+				if (!boundedObjectiveIn(request)) {
+					return toolCallStep("b2x", "read_files", INSPECT_INPUT)(request);
+				}
+				return toolCallStep("b2", "run_commands", {
+					commands: [`echo ${workspace.checkPath}`],
+				})(request);
+			},
+			// The parent continues automatically after the unverified
+			// objective.
+			(request) =>
+				toolCallStep("c1", "submit_and_exit", { summary: "final" })(request),
+		];
+
+		const model = new ScriptedModel(steps, CONTROL_SELECTION_REPLY);
+		const runtime = new AgentRuntime({
+			model,
+			tools: [inspectTool, editTool, commandTool, completionTool],
+			executionStagnationPolicy: {
+				unproductiveRoundThreshold: 3,
+				maxRecoveryInstructions: 2,
+				enabled: true,
+			},
+			boundedObjectivePolicy: {
+				enabled: true,
+				maxActivations: 2,
+				maxObjectiveRounds: 8,
+				maxSelectionInferences: 1,
+				// The TRUSTED HOST VERIFICATION AUTHORITY. It requires the
+				// required executable ITSELF to have run and succeeded. The
+				// unrelated `echo` command that merely MENTIONS its name is
+				// not verification evidence.
+				verifyObjective: (_objective, facts) => {
+					const receipts = facts.receipts ?? [];
+					// The host requires the command to BE the required
+					// executable, not to MENTION it. An `echo` of the
+					// executable's path is not the executable.
+					const gateReceipt = receipts.find(
+						(receipt) =>
+							!receipt.wasEdit &&
+							typeof receipt.command === "string" &&
+							receipt.command.trim() === workspace.checkPath,
+					);
+					return gateReceipt !== undefined && gateReceipt.succeeded;
+				},
+			},
+		});
+
+		const p0Notices: Array<{ message: string; metadata?: unknown }> = [];
+		runtime.subscribe((event: AgentRuntimeEvent) => {
+			if (event.type === "status-notice") {
+				p0Notices.push({
+					message: event.message,
+					metadata: event.metadata,
+				});
+			}
+		});
+
+		const p0Result = await runtime.run(
+			"Fix the disposable target module and report the outcome",
+		);
+
+		// The unrelated command really ran and really succeeded.
+		expect(calls.verify).toBe(1);
+		// The objective was NOT reported verified: the mention is not
+		// evidence.
+		expect(
+			p0Notices.filter((n) => n.message.includes("bounded objective verified")),
+		).toHaveLength(0);
+		// The unverified outcome was reported TRUTHFULLY.
+		expect(
+			p0Notices.filter((n) =>
+				n.message.includes("bounded objective recovery outcome: failed"),
+			),
+		).toHaveLength(1);
+		// AUTOMATIC PARENT CONTINUATION: the parent task still completed.
+		expect(calls.complete).toBe(1);
+		expect(p0Result.status).toBe("completed");
 	});
 });
 
@@ -1120,12 +1356,18 @@ describe("ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 / remaining controls",
 				maxObjectiveRounds: 8,
 				maxSelectionInferences: 1,
 				// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01
-				// (AMENDMENT-01): the required verification gate. The
-				// objective is verified by the execution of THIS
-				// executable alone — not by "some command succeeded".
-				verificationGate: {
-					commandSubstring: "collect-evidence",
-					toolName: "run_commands",
+				// (AMENDMENT-02): the TRUSTED HOST VERIFICATION AUTHORITY.
+				// The host owns the workspace, so its verdict is the only
+				// authority — the AMENDMENT-01 substring gate is REMOVED.
+				verifyObjective: (_objective, facts) => {
+					const receipts = facts.receipts ?? [];
+					return receipts.some(
+						(receipt) =>
+							!receipt.wasEdit &&
+							typeof receipt.command === "string" &&
+							receipt.command.includes("collect-evidence") &&
+							receipt.succeeded,
+					);
 				},
 			},
 		});

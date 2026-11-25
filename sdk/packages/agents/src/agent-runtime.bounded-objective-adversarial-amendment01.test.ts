@@ -269,10 +269,11 @@ describe("ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 / adversarial trajecto
 				maxActivations: 2,
 				maxObjectiveRounds: 8,
 				maxSelectionInferences: 1,
-				verificationGate: {
-					commandSubstring: "check-value",
-					toolName: "run_commands",
-				},
+				// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01
+				// (AMENDMENT-02): the TRUSTED HOST VERIFICATION AUTHORITY.
+				// The AMENDMENT-01 substring gate is REMOVED; only the
+				// host's own verdict establishes verification.
+				verifyObjective: () => false,
 			},
 		});
 		const notices: string[] = [];

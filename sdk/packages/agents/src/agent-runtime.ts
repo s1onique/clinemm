@@ -69,7 +69,6 @@ import {
 	estimateTokens,
 	extractScopePaths,
 	foldExecutionRound,
-	isBoundedObjectiveGateSatisfied,
 	isPathWithinCanonicalRoot,
 	isProviderDispatchRecordRequired,
 	MODEL_BEHAVIOR_TRACE_UNAVAILABLE,
@@ -78,6 +77,7 @@ import {
 	normalizeJsonLikeStringsForSchema,
 	omitUndefinedValues,
 	renderBoundedObjectiveInstruction,
+	resolveBoundedObjectiveVerification,
 	sanitizeTraceErrorMessage,
 	TASK_CANCELLED_EVENT,
 	TASK_FIRST_CHUNK_RECEIVED_EVENT,
@@ -2969,6 +2969,14 @@ export class AgentRuntime {
 	/**
 	 * Run the ONE bounded selection inference.
 	 *
+	 * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-02.
+	 *
+	 * The selection-inference allowance is RUN-SCOPED: the counter lives
+	 * on the runtime instance, so with the experimental bound of 1 the
+	 * WHOLE run may make ONE selection inference — not one per activation.
+	 * A second activation in the same run makes no further selection
+	 * inference at all.
+	 *
 	 * The inference uses the SAME authorized model and provider as the
 	 * parent run — never a supervisor process, never a provider switch, and
 	 * never a recursive planner. The request carries NO tools, so the
@@ -3116,30 +3124,27 @@ export class AgentRuntime {
 	 * the verification consults the OBSERVABLE tool outcomes of the
 	 * objective's own execution.
 	 *
-	 * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-01.
+	 * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-02.
 	 *
-	 * The previous fallback — "at least one command executed successfully"
-	 * — is REMOVED. It accepted an UNRELATED successful command as proof
-	 * that the objective's own verification condition had been met, which
-	 * is exactly the failure the reviewer reproduced.
+	 * The AMENDMENT-01 structural gate check is REMOVED. It accepted any
+	 * successful command whose text CONTAINED a host-declared substring,
+	 * so a trivial `echo check-value` satisfied a `check-value` gate and
+	 * the runtime reported the objective as VERIFIED. That is not
+	 * executable verification, and no shell-command parser can repair it:
+	 * a command that merely MENTIONS the gate can succeed while the
+	 * executable the objective names never ran.
 	 *
-	 * The verification now has TWO authorities, in order:
+	 * The verification now has exactly ONE authority:
 	 *
-	 *   1. The HOST's `verifyObjective` callback. It owns the workspace and
-	 *      the executable gates, so its verdict is authoritative. Returning
-	 *      `undefined` means "no opinion" — and a THROWING callback is
-	 *      treated as "no opinion" too.
+	 *   The HOST's `verifyObjective` callback. It owns the workspace, the
+	 *   command-policy layer and the sandbox, so it is the only layer that
+	 *   can know whether the objective's verification condition was met.
+	 *   Returning `undefined` means "no opinion", and a THROWING callback
+	 *   is treated as "no opinion" too.
 	 *
-	 *   2. The RUNTIME'S OWN STRUCTURAL GATE CHECK. It requires an
-	 *      execution receipt whose COMMAND CORRELATES with the host's
-	 *      declared verification gate AND whose outcome was SUCCESS. A
-	 *      successful edit is not sufficient: an edit only shows that the
-	 *      file changed, never that the change is correct. A successful
-	 *      UNRELATED command is not sufficient either.
-	 *
-	 * When the host declared NO gate and its callback declined, the
-	 * objective is UNVERIFIED. The runtime reports that honestly instead
-	 * of manufacturing a success.
+	 * When the host supplies NO verdict, the objective is UNVERIFIED. The
+	 * runtime reports that honestly instead of manufacturing a success:
+	 * useful unverified progress is a legitimate recovery outcome.
 	 */
 	private isBoundedObjectiveVerified(): boolean {
 		const objective = this.activeBoundedObjective;
@@ -3147,26 +3152,12 @@ export class AgentRuntime {
 			return false;
 		}
 		const policy = this.getBoundedObjectivePolicy();
-		if (policy?.verifyObjective) {
-			try {
-				const verdict = policy.verifyObjective(
-					objective,
-					this.boundedObjectiveFacts,
-				);
-				if (verdict !== undefined) {
-					return verdict;
-				}
-			} catch {
-				// A throwing host callback is treated as "no opinion"; the
-				// runtime's own structural gate check applies. A host that
-				// cannot establish the verification is NOT evidence of
-				// verification.
-			}
-		}
-		return isBoundedObjectiveGateSatisfied(
+		const authority = resolveBoundedObjectiveVerification(
+			objective,
 			this.boundedObjectiveFacts,
-			policy?.verificationGate,
+			policy?.verifyObjective,
 		);
+		return authority.kind === "host_verdict" && authority.verified;
 	}
 
 	/**
@@ -3990,6 +3981,18 @@ export class AgentRuntime {
 					toolMessages,
 				);
 				if (terminalToolMessage) {
+					// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01
+					// (AMENDMENT-02): close out an ACTIVE bounded objective
+					// at the TERMINAL-TOOL boundary too.
+					//
+					// A run that ends through the parent's terminal
+					// completion tool would otherwise drop the objective
+					// without a verdict: the runtime would have consumed
+					// its activation allowance and produced no
+					// machine-readable fact at all. The objective's
+					// UNVERIFIED disposition is a legitimate outcome and
+					// must be reported truthfully, not discarded.
+					await this.finalizeActiveBoundedObjective();
 					const result = this.finishRun(
 						"completed",
 						finalAssistantMessage,

@@ -1,5 +1,111 @@
 
-# ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 (AMENDMENT-01) — GO_R2_BOUNDED_OBJECTIVE_DOGFOOD — 2026-11-25
+# ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 (AMENDMENT-02) — GO_R2_ISOLATED_BEHAVIORAL_DOGFOOD — 2026-11-25
+
+```text
+ACT_ID: ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-02
+TYPE: bounded runtime-seam correction (R2 false verification authority removed)
+VERDICT: GO_R2_ISOLATED_BEHAVIORAL_DOGFOOD
+SCOPE: R2 only. R3 identified as the extension point, NOT implemented.
+PREDECESSOR: 2c43074fb7d618eab8318e127ffd2bd8f1f528bb
+BRANCH: main
+EVIDENCE: docs/acts/ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01.md
+```
+
+**THE HALT WAS A FALSE VERIFICATION AUTHORITY.** The reviewer independently
+executed the PRODUCTION verification helper and reproduced it: with a gate of
+`{ toolName: "run_commands", commandSubstring: "check-value" }`, a
+successful receipt for `echo check-value` returned TRUE, and so did one for
+`CHECK-VALUE`. AMENDMENT-01's substring correlation was not executable
+verification — a command that merely MENTIONS the gate's name authorised
+objective completion.
+
+FALSE_VERIFICATION_DENIAL=PASS
+  The substring gate is DELETED, not weakened. `BoundedObjectiveVerificationGate`
+  and `isBoundedObjectiveGateSatisfied()` are removed from `@cline/shared`, and
+  the runtime has NO structural fallback. The AMENDMENT-01 helper was
+  re-executed against the production seam and reproduced the defect; the
+  replacement helper was executed against the same seam and resolves a mention
+  of the gate's name, an unrelated successful command, a failed gate and a
+  case-folded mention to `unverified`.
+
+TRUSTED_VERIFICATION_AUTHORITY=PASS
+  The HOST's `verifyObjective` verdict, and the host's alone. Absent, declining
+  (`undefined`) and throwing all resolve to `unverified`. The production host
+  was NOT required to invent a task-specific verification callback to make the
+  verdict green, and it supplies none today.
+
+UNVERIFIED_PROGRESS_DISPOSITION=PASS
+  Useful unverified progress is a legitimate recovery outcome and is reported
+  truthfully as a failed recovery outcome, never as verified completion. The
+  terminal-tool boundary now closes an active objective out too, so a run that
+  ends through the parent's completion tool no longer DISCARDS the objective's
+  disposition — a gap that silently consumed an activation allowance and
+  produced no machine-readable fact.
+
+ACTUAL_EXECUTABLE_EVIDENCE=PASS
+  The principal witness's test-local PASS string is replaced by a REAL
+  regression SCRIPT ON DISK that READS the disposable file and exits non-zero
+  when the value is wrong, run as a REAL SUBPROCESS. The exit status is the
+  verdict. The unrelated-command discriminator is in the principal witness:
+  a successful command that CARRIES the required executable's name does NOT
+  establish verified success.
+
+AUTOMATIC_PARENT_CONTINUATION=PASS
+  Verified and unverified objectives both return control to the parent
+  automatically, without operator intervention.
+
+PARENT_AUTHORITY_CONSERVATION=PASS
+  The parent's obligations, the completion contract, the tool policy, the
+  sandbox and the approval layer are unchanged. The objective remains a
+  runtime-owned request projection; model-produced fields grant no
+  permissions and the canonical transcript is not mutated.
+
+OBJECTIVE_SCOPE_ENFORCEMENT_LIMITS=STATED
+  `canonicalizeScopePath` is LEXICAL NORMALIZATION and is no longer described
+  as filesystem canonicalization: a SYMBOLIC LINK inside the authorised root
+  may resolve OUTSIDE it, and a non-existent path cannot be resolved against
+  the filesystem at all. The English prohibition/escalation vocabulary was NOT
+  extended. Unresolved scope is not represented as mechanically authorised.
+  Experimental qualification is restricted to a disposable, isolated workspace
+  with the existing tool restrictions.
+
+DOGFOOD_DEFAULT_OFF=PASS
+  The whole `boundedObjectivePolicy` key is absent unless the dogfood opt-in is
+  explicitly selected. The production-reachability bridge witness asserts that
+  an ordinary ACT session does NOT activate the R2 policy.
+
+SELECTION_ALLOWANCE_SEMANTICS=CORRECTED
+  The counter is RUN-SCOPED. The policy documentation, the runtime
+  documentation and the selection prompt now state that the WHOLE run makes
+  ONE selection inference with the experimental bound of 1 — not one per
+  activation, which the runtime never implemented.
+
+FOCUSED_GATE=PASS
+  Focused false-verification RED 3/10 against the AMENDMENT-01 substring gate
+  (`V1b`/`V1c`/`V4b`), GREEN 10/10. Principal executable recovery witness
+  GREEN 29/29 across 5 R2 files. R1 conservation controls GREEN 22/22.
+  Production-reachability bridge GREEN 5/5. `@cline/shared` package GREEN
+  682/682. `@cline/agents` full package 43 failed / 675 total against a
+  PRE-EXISTING baseline of 44 failed / 670 total — no regression, one
+  pre-existing failure fixed. `apps/vscode` C2.4-C bridge suite 20 failed /
+  333 total — IDENTICAL to the pre-existing baseline.
+
+ACT_OWNED_DIAGNOSTICS=NONE
+  Typechecks: `@cline/shared` and `@cline/agents` exit 0. Biome: no findings
+  on any of the 8 changed files. No paid inference. No full-suite reruns. No
+  new Factory documents. No R3 implementation.
+```
+
+**THE NEXT MEANINGFUL LEARNING EVENT IS ACTUAL BEHAVIOURAL RECOVERY.** R2
+AMENDMENT-01 alone introduced four test files totalling 1,508 lines of
+substantially duplicated scripted-model infrastructure. This amendment adds
+NO new test suite: it corrects the existing principal witness, adds ONE
+discriminator case to it, and removes the false authority. The qualification
+target is narrowed to isolated behavioural dogfood rather than unrestricted
+production readiness — deliberately, because the open question is whether
+bounded objective selection materially improves MiniMax's execution, and that
+is not answered by more synthetic qualification.
+
 
 ```text
 ACT_ID: ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-01

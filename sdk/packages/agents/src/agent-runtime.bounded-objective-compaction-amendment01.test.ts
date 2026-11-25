@@ -250,9 +250,23 @@ describe("ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 / compaction conservat
 				maxActivations: 2,
 				maxObjectiveRounds: 8,
 				maxSelectionInferences: 1,
-				verificationGate: {
-					commandSubstring: "check-value",
-					toolName: "run_commands",
+				// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01
+				// (AMENDMENT-02): the TRUSTED HOST VERIFICATION AUTHORITY.
+				// The AMENDMENT-01 substring gate is REMOVED; only the
+				// host's own verdict establishes verification.
+				//
+				// The host here owns the disposable workspace, so it decides
+				// from the ACTUAL EXECUTION EVIDENCE: the regression
+				// command must have run AND succeeded.
+				verifyObjective: (_objective, facts) => {
+					const receipts = facts.receipts ?? [];
+					return receipts.some(
+						(receipt) =>
+							!receipt.wasEdit &&
+							typeof receipt.command === "string" &&
+							receipt.command.includes("check-value") &&
+							receipt.succeeded,
+					);
 				},
 			},
 		});

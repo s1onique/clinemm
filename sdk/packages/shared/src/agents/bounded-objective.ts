@@ -180,12 +180,21 @@ export interface BoundedObjectivePolicy {
 	 */
 	readonly maxObjectiveRounds?: number;
 	/**
-	 * The maximum number of SELECTION INFERENCES per bounded-objective
-	 * activation.
+	 * The maximum number of SELECTION INFERENCES per PARENT RUN.
 	 *
-	 * Experimental bound: 1. A failed selection therefore consumes the
-	 * activation's inference allowance and MUST NOT start an unbounded
-	 * selection retry loop.
+	 * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-02.
+	 *
+	 * EXPERIMENTAL POLICY, and its semantics are stated EXACTLY:
+	 *
+	 * The runtime keeps a RUN-SCOPED selection-inference counter. With the
+	 * experimental bound of 1, the WHOLE run may make ONE selection
+	 * inference — not one per activation. A failed selection therefore
+	 * consumes the run's selection allowance and MUST NOT start an
+	 * unbounded selection retry loop, and a SECOND activation in the same
+	 * run makes NO further selection inference at all.
+	 *
+	 * This is deliberately stated as the IMPLEMENTED policy rather than as
+	 * a per-activation allowance the runtime does not implement.
 	 */
 	readonly maxSelectionInferences?: number;
 	/**
@@ -194,13 +203,14 @@ export interface BoundedObjectivePolicy {
 	 *
 	 * The host may know more than the runtime: it owns the command-policy
 	 * layer, the workspace, and the executable gates. The callback receives
-	 * the observable facts of the objective's execution and returns whether
-	 * the objective's verification condition was MET.
+	 * the objective and the observable facts of the objective's execution
+	 * and returns whether the objective's verification condition was MET.
 	 *
-	 * Returning `undefined` means "no opinion" — the runtime then applies
-	 * its OWN structural check, which requires an execution receipt that
-	 * CORRELATES with the objective's required verification gate. An
-	 * unrelated successful command is NOT verification evidence.
+	 * Returning `undefined` means "no opinion" — the runtime then reports
+	 * the objective as UNVERIFIED. The runtime has NO structural fallback:
+	 * there is no structural rule that can distinguish "the required
+	 * executable ran and passed" from "an unrelated command happened to
+	 * succeed".
 	 *
 	 * The callback MUST be pure and side-effect free. It MUST NOT throw; a
 	 * throwing callback is treated as "no opinion".
@@ -209,53 +219,6 @@ export interface BoundedObjectivePolicy {
 		objective: BoundedObjective,
 		facts: BoundedObjectiveObservationFacts,
 	) => boolean | undefined;
-	/**
-	 * The REQUIRED VERIFICATION GATE of a bounded objective.
-	 *
-	 * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-01.
-	 *
-	 * The gate is the SPECIFIC executable the objective's verification
-	 * condition refers to. It is supplied by the HOST, which owns the
-	 * workspace and the executable gates, and it is expressed as a
-	 * SUBSTRING of the command that must run.
-	 *
-	 * When a gate is supplied, the runtime's own structural verification
-	 * requires an execution receipt whose command CORRELATES with the gate
-	 * AND whose outcome was SUCCESS. An unrelated successful command, a
-	 * command count, or a model's assertion is not verification evidence.
-	 *
-	 * When NO gate is supplied, the host has not established which
-	 * executable proves the objective. The objective is then reported as
-	 * UNVERIFIED unless the host's `verifyObjective` callback returns an
-	 * explicit verdict. The runtime never falls back to "some command
-	 * succeeded".
-	 */
-	readonly verificationGate?: BoundedObjectiveVerificationGate;
-}
-
-/**
- * The REQUIRED VERIFICATION GATE of a bounded objective.
- *
- * The gate identifies ONE executable that proves the objective. It carries
- * no model text and no model authority: the host owns it.
- */
-export interface BoundedObjectiveVerificationGate {
-	/**
-	 * A SUBSTRING that the executed command must contain.
-	 *
-	 * The substring match is structural and case-insensitive. It is a
-	 * HOST-declared identity of the gate, not a model assertion about what
-	 * would prove the objective.
-	 */
-	readonly commandSubstring: string;
-	/**
-	 * The host-defined tool name that runs the gate.
-	 *
-	 * When present, the gate is satisfied only by an execution of THAT
-	 * tool. When absent, any command-executing tool whose command carries
-	 * the substring satisfies the gate.
-	 */
-	readonly toolName?: string;
 }
 
 /**
@@ -322,64 +285,77 @@ export interface BoundedObjectiveObservationFacts {
 }
 
 /**
- * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-01.
+ * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-02.
  *
- * THE STRUCTURAL VERIFICATION GATE CHECK.
+ * THE REMOVAL OF THE STRUCTURAL VERIFICATION GATE CHECK.
  *
- * Decide whether the objective's required gate ACTUALLY RAN and PASSED,
- * using ONLY the objective's structured execution receipts.
+ * AMENDMENT-01 replaced "any successful command proves completion" with
+ * "any successful command CONTAINING a host-declared substring proves
+ * completion". That was still not executable verification: a trivial
+ * `echo check-value` satisfied a gate whose identity was the substring
+ * `check-value`, and the runtime reported the objective as VERIFIED.
  *
- * The rules are:
+ * The substring has been removed because NO structural rule over command
+ * TEXT can establish that a specific executable actually proved the
+ * objective:
  *
- *   - a receipt must be a COMMAND execution (an edit is never a gate),
- *   - the receipt's command must CORRELATE with the gate's identity,
- *   - the receipt must have SUCCEEDED,
- *   - and — critically — a receipt that correlates with the gate but
- *     FAILED means the gate did NOT pass. A later successful UNRELATED
- *     command does not repair it: the gate's own outcome is what counts.
+ *   - a substring match is satisfied by ANY command that mentions the
+ *     substring, including an `echo` of it,
+ *   - the match is case-folded, so `CHECK-VALUE` satisfied a
+ *     `check-value` gate,
+ *   - and a matching command that merely mentions the gate can succeed
+ *     while the executable the objective names never ran at all.
  *
- * With NO gate supplied, the answer is ALWAYS `false`: the host has not
- * established which executable proves the objective, so the objective is
- * UNVERIFIED. The runtime never falls back to "some command succeeded".
+ * Replacing it with a more elaborate shell-command parser would only
+ * widen the same wrong assumption.
+ *
+ * THE TRUSTED AUTHORITY
+ * ---------------------
+ * Verification is now the HOST's verdict and the HOST's alone. The host
+ * owns the command-policy layer, the sandbox and the workspace, so it is
+ * the only layer that can know whether the objective's verification
+ * condition was actually met.
+ *
+ * When the host supplies NO verdict, the objective is UNVERIFIED. There is
+ * no fallback. Useful unverified progress is a legitimate recovery
+ * outcome, and it is reported truthfully.
  */
-export function isBoundedObjectiveGateSatisfied(
+export type BoundedObjectiveVerificationAuthority =
+	| { readonly kind: "host_verdict"; readonly verified: boolean }
+	| { readonly kind: "unverified" };
+
+/**
+ * Resolve the objective's verification verdict from the HOST's authority.
+ *
+ * The ONLY authority is the host's `verifyObjective` callback. A callback
+ * that declines (`undefined`) or throws yields an UNVERIFIED verdict: a
+ * host that cannot establish the verification is NOT evidence of
+ * verification.
+ */
+export function resolveBoundedObjectiveVerification(
+	objective: BoundedObjective,
 	facts: BoundedObjectiveObservationFacts,
-	gate: BoundedObjectiveVerificationGate | undefined,
-): boolean {
-	if (!gate) {
-		return false;
+	verifyObjective:
+		| ((
+				objective: BoundedObjective,
+				facts: BoundedObjectiveObservationFacts,
+		  ) => boolean | undefined)
+		| undefined,
+): BoundedObjectiveVerificationAuthority {
+	if (!verifyObjective) {
+		return { kind: "unverified" };
 	}
-	const needle = gate.commandSubstring.trim().toLowerCase();
-	if (needle.length === 0) {
-		return false;
+	try {
+		const verdict = verifyObjective(objective, facts);
+		if (verdict === undefined) {
+			return { kind: "unverified" };
+		}
+		return { kind: "host_verdict", verified: verdict };
+	} catch {
+		// A throwing host callback is treated as "no opinion"; a host that
+		// cannot establish the verification is NOT evidence of verification.
+		return { kind: "unverified" };
 	}
-	const receipts = facts.receipts ?? [];
-	// Find the receipts that CORRELATE with the gate. A correlated receipt
-	// that FAILED proves the gate did not pass, so the objective is not
-	// verified regardless of what else ran.
-	let sawCorrelatedReceipt = false;
-	for (const receipt of receipts) {
-		if (receipt.wasEdit) {
-			continue;
-		}
-		if (gate.toolName !== undefined && receipt.toolName !== gate.toolName) {
-			continue;
-		}
-		const command = receipt.command;
-		if (typeof command !== "string") {
-			continue;
-		}
-		if (!command.toLowerCase().includes(needle)) {
-			continue;
-		}
-		sawCorrelatedReceipt = true;
-		if (receipt.succeeded) {
-			return true;
-		}
-	}
-	// A correlated-but-failed gate is a definitive negative.
-	void sawCorrelatedReceipt;
-	return false;
 }
 
 /**
@@ -445,28 +421,43 @@ export const MAX_BOUNDED_OBJECTIVE_FIELD_LENGTH = 2000;
 export const MAX_BOUNDED_OBJECTIVE_REFERENCE_COUNT = 16;
 
 /**
- * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-01.
+ * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-02.
  *
- * The CANONICAL PATH AUTHORITY used by the R2 authorisation boundary.
+ * The LEXICAL PATH AUTHORITY used by the R2 authorisation boundary.
  *
- * WHY THIS EXISTS
- * ---------------
+ * WHAT THIS IS
+ * ------------
+ * LEXICAL NORMALIZATION — and only that.
+ *
  * The original scope check was a LEXICAL PREFIX test: a candidate scope was
  * accepted when it started with the authorised root followed by a separator.
  * That accepted every path that ESCAPES the root through a traversal
  * segment, because `/workspace/project/src/../tests/a.ts` literally starts
  * with `/workspace/project/src/`.
  *
- * A lexical prefix test is not an authority test. The authority test is a
- * CANONICAL CONTAINMENT test: the path is first reduced to its canonical
- * form (`.` and `..` segments resolved, duplicate separators collapsed), and
- * the canonical result is then required to be the authorised root itself or
- * to live inside it.
+ * The check is now a CONTAINMENT test over the LEXICALLY canonical form:
+ * the path text is first reduced (`.` and `..` segments resolved, duplicate
+ * separators collapsed), and the reduced result is then required to be the
+ * authorised root itself or to live inside it.
  *
+ * WHAT THIS IS NOT
+ * ----------------
  * This helper is PURE and SYNTACTIC. It resolves the path TEXT; it does not
- * touch the filesystem. A path that cannot be resolved canonically (a
- * RELATIVE path, a path that escapes above the filesystem root) is reported
- * as UNRESOLVABLE and is NEVER treated as "inside the root".
+ * touch the filesystem. It is therefore NOT filesystem canonicalization:
+ *
+ *   - a SYMBOLIC LINK inside the authorised root may resolve to a location
+ *     OUTSIDE it, and this check cannot see that,
+ *   - a path that does not exist yet cannot be resolved against the
+ *     filesystem at all.
+ *
+ * A path that cannot be resolved canonically (a RELATIVE path, a path that
+ * escapes above the filesystem root) is reported as UNRESOLVABLE and is NEVER
+ * treated as "inside the root".
+ *
+ * The narrower enforcement this boundary offers is therefore an
+ * ADDITIONAL constraint on top of the parent's own authority — the
+ * workspace, sandbox, command-policy and approval layers remain the
+ * execution authority, and they are not relaxed by this check.
  */
 export interface CanonicalScopePath {
 	/** The canonical absolute path, or `undefined` when unresolvable. */
