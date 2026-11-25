@@ -294,6 +294,181 @@ function isCompactionCancellation(
 	);
 }
 
+/**
+ * ACT-CLINEMM-CMP05-CANCELLATION-COMMIT-AUTHORITY-01.
+ *
+ * The INSTALLATION AUTHORITY CHECK, at the boundary that OWNS the
+ * installation.
+ *
+ * THE COMMIT POINT
+ * ----------------
+ *
+ * The compaction's installation is committed by the `saveState()` call in
+ * `createCompactionStateAwarePrepareTurn()`. That call is NOT the durable
+ * linearization point on its own: the host's `saveState` implementation
+ * validates the state, enqueues the write behind the session's write queue,
+ * and only then performs the atomic file write that actually replaces the
+ * persisted sidecar. Several ASYNCHRONOUS boundaries sit between the
+ * acceptance decision and that durable write.
+ *
+ * The check therefore belongs IMMEDIATELY BEFORE `saveState` is invoked:
+ * that is the last point at which this seam still has authority to refuse
+ * the installation. After `saveState` is invoked the write is in flight
+ * and cancelling would be a rollback of an already committed compaction,
+ * which this contract does NOT do.
+ *
+ * THE AUTHORITY
+ * -------------
+ *
+ * The SAME abort signal that the acceptance decision consults
+ * (`runAgenticCompaction()`) is consulted here. It is the single
+ * cancellation authority; this is not a second one, and it does not
+ * introduce a new state.
+ *
+ * WHY IT IS NEEDED
+ * ----------------
+ *
+ * The acceptance decision runs BEFORE the enrichment pipeline — the task
+ * contract, the verified-outcome carry-forward, the source-bound evidence
+ * carry-forward and the adjudication carry-forward — and every one of those
+ * is `await`ed. A cancellation signalled during that window arrives AFTER
+ * the summary was accepted and BEFORE the state is written, and without this
+ * check it was simply ignored: the state was written and a successful
+ * compaction was published for work the user had already cancelled.
+ */
+function isInstallationCancelled(
+	abortSignal: AbortSignal | undefined,
+): boolean {
+	return abortSignal?.aborted === true;
+}
+
+/**
+ * ACT-CLINEMM-CMP05-CANCELLATION-COMMIT-AUTHORITY-01.
+ *
+ * THE SUCCESS PUBLICATION GATE.
+ *
+ * THE ORDERING PROBLEM
+ * --------------------
+ *
+ * The compaction's SUCCESS PUBLICATION ("compacted") is emitted by the
+ * inner seam, which runs the compaction strategy and returns the compacted
+ * transcript. The INSTALLATION is performed by the OUTER seam — this one —
+ * which writes the replacement state.
+ *
+ * So the publication naturally PRECEDES the installation. That ordering is
+ * only safe while nothing can refuse the installation between the two.
+ * With the installation authority check in place, something CAN: a
+ * cancellation signalled in the window between the publication and the
+ * installation refuses the write, and a publication that already claimed a
+ * successful compaction would then be a lie — the operator would be told a
+ * compaction happened when nothing was installed.
+ *
+ * THE FIX
+ * -------
+ *
+ * The publication is DEFERRED past the installation and RELEASED only when
+ * the installation actually committed. The interception reuses the seam's
+ * EXISTING `emitStatusNotice` channel — the same channel the imported-
+ * history seam already intercepts — so no new channel and no new contract
+ * are introduced.
+ *
+ * Every OTHER notice is passed through immediately and in order, so the
+ * observable notice sequence is unchanged apart from the success notice
+ * moving after the installation it describes. That is the point: the
+ * success notice now describes an installation that actually happened.
+ *
+ * The buffered notice is RELEASED when the installation committed, and
+ * SUPPRESSED when the installation was refused by the cancellation
+ * authority. In the refused case the outer seam reports the compaction as
+ * SKIPPED, which is the truthful outcome.
+ */
+interface DeferredCompactionSuccessPublication {
+	/** The buffered success notice, when one was published. */
+	readonly pending: {
+		readonly message: string;
+		readonly metadata: unknown;
+	} | null;
+	/** The interception installed on the inner seam's context. */
+	readonly intercept: (
+		message: string,
+		metadata?: Record<string, unknown>,
+	) => void;
+	/**
+	 * Release the buffered success notice, if any.
+	 *
+	 * Called ONLY after the installation committed.
+	 */
+	readonly release: () => void;
+	/**
+	 * Drop the buffered success notice, if any.
+	 *
+	 * Called when the installation was refused, so no successful
+	 * compaction is published for work that was not installed.
+	 */
+	readonly discard: () => void;
+	/**
+	 * Publish the TRUTHFUL outcome of a refused installation.
+	 *
+	 * The buffered success notice is dropped and the compaction is
+	 * reported as SKIPPED with the cancellation reason, so an operator
+	 * sees WHY nothing was installed instead of seeing a compaction that
+	 * appears to have started and then stopped for no reason.
+	 */
+	readonly publishRefused: (metadata: Record<string, unknown>) => void;
+}
+
+function createDeferredCompactionSuccessPublication(input: {
+	emitStatusNotice:
+		| ((message: string, metadata?: Record<string, unknown>) => void)
+		| undefined;
+	/**
+	 * Whether the notice is the compaction SUCCESS publication.
+	 *
+	 * The success notice is the one whose suffix is exactly `compacted`;
+	 * the sibling notices are `compacting`, `compaction-skipped` and
+	 * `compaction-budget-adjusted`.
+	 */
+	isSuccessNotice: (message: string) => boolean;
+}): DeferredCompactionSuccessPublication {
+	let pending: {
+		readonly message: string;
+		readonly metadata: unknown;
+	} | null = null;
+	return {
+		get pending() {
+			return pending;
+		},
+		intercept: (message, metadata) => {
+			if (input.isSuccessNotice(message)) {
+				pending = { message, metadata };
+				return;
+			}
+			input.emitStatusNotice?.(message, metadata);
+		},
+		release: () => {
+			const notice = pending;
+			pending = null;
+			if (notice) {
+				input.emitStatusNotice?.(
+					notice.message,
+					notice.metadata as Record<string, unknown> | undefined,
+				);
+			}
+		},
+		discard: () => {
+			pending = null;
+		},
+		publishRefused: (metadata) => {
+			pending = null;
+			input.emitStatusNotice?.("compaction-skipped", {
+				phase: "skipped",
+				rejectionReason: "cancelled",
+				...metadata,
+			});
+		},
+	};
+}
+
 function describeCompactionError(error: unknown): Record<string, unknown> {
 	return error instanceof Error
 		? { errorName: error.name, errorMessage: error.message }
@@ -1995,11 +2170,21 @@ export function createCompactionStateAwarePrepareTurn(input: {
 			// canonical tail. This keeps automatic turns bounded without rebuilding a
 			// full-transcript summary every turn; manual `/compact` is the path for a
 			// fresh summary from canonical history.
+			//
+			// ACT-CLINEMM-CMP05-CANCELLATION-COMMIT-AUTHORITY-01: the inner
+			// seam's SUCCESS PUBLICATION is deferred until this seam has
+			// actually installed the state, so a successful compaction is
+			// never announced for work that was refused or never written.
+			const successPublication = createDeferredCompactionSuccessPublication({
+				emitStatusNotice: context.emitStatusNotice,
+				isSuccessNotice: (message) => message.endsWith("compacted"),
+			});
 			const result = input.compact
 				? await input.compact({
 						...context,
 						messages: projectedMessages,
 						apiMessages: await input.prepareApiMessages(projectedMessages),
+						emitStatusNotice: successPublication.intercept,
 					})
 				: undefined;
 			if (result?.messages) {
@@ -2105,19 +2290,59 @@ export function createCompactionStateAwarePrepareTurn(input: {
 					countCanonicalSourceMessages(context.messages),
 				);
 				const contractedMessages = adjudicated.messages;
-				const nextState = createSessionCompactionState({
-					sourceMessages: context.messages,
-					compactedMessages: contractedMessages,
-					conversationId: context.conversationId,
-					systemPrompt,
-				});
-				await input.saveState?.(nextState, context.messages);
-				return publishWorkingContextEstimate(
-					contractedMessages,
-					systemPrompt ?? context.systemPrompt,
-					context.tools,
-					contractMaxRequestTokens,
+				// ACT-CLINEMM-CMP05-CANCELLATION-COMMIT-AUTHORITY-01: the
+				// INSTALLATION AUTHORITY CHECK.
+				//
+				// The summary was ACCEPTED above, but the enrichment
+				// pipeline that follows it is `await`ed, so a cancellation
+				// signalled in that window arrives after the acceptance and
+				// before the state is written. This is the last point at
+				// which this seam can refuse the installation.
+				//
+				// A cancelled installation writes NOTHING: the previously
+				// installed valid state is left exactly as it was, the
+				// compacted source boundary does not advance, and no
+				// successful compaction is published.
+				//
+				// The refusal FALLS THROUGH to the restoration path below,
+				// which is exactly what this seam does when the compaction
+				// produced no result: the previously installed sidecar is
+				// projected for the provider. The rejected candidate is
+				// never projected and never persisted.
+				if (!isInstallationCancelled(context.abortSignal)) {
+					const nextState = createSessionCompactionState({
+						sourceMessages: context.messages,
+						compactedMessages: contractedMessages,
+						conversationId: context.conversationId,
+						systemPrompt,
+					});
+					await input.saveState?.(nextState, context.messages);
+					// The installation committed, so the success notice may
+					// now be published.
+					successPublication.release();
+					return publishWorkingContextEstimate(
+						contractedMessages,
+						systemPrompt ?? context.systemPrompt,
+						context.tools,
+						contractMaxRequestTokens,
+					);
+				}
+				input.logger?.log?.(
+					"Skipped agentic compaction: the turn was cancelled before the compaction was installed",
+					{
+						severity: "warn",
+						rejectionReason: "cancelled",
+						phase: "installation",
+					},
 				);
+				// No successful compaction is published for a compaction that
+				// was not installed. The truthful outcome is reported
+				// instead, naming the cancellation.
+				successPublication.publishRefused({
+					kind: "cancelled_before_installation",
+					reason: "cancelled",
+					iteration: context.iteration,
+				});
 			}
 			const projectedSystemPrompt =
 				result?.systemPrompt ?? existingState.system_prompt;
@@ -2228,12 +2453,21 @@ export function createCompactionStateAwarePrepareTurn(input: {
 		// The seam itself is FORWARDED INTO the compaction invocation, so
 		// the seam that OWNS the eligibility decision is the one that
 		// decides whether to pay for the checkpoint.
+		// ACT-CLINEMM-CMP05-CANCELLATION-COMMIT-AUTHORITY-01: the inner
+		// seam's SUCCESS PUBLICATION is deferred until this seam has
+		// actually installed the state, so a successful compaction is never
+		// announced for work that was refused or never written.
+		const successPublication = createDeferredCompactionSuccessPublication({
+			emitStatusNotice: context.emitStatusNotice,
+			isSuccessNotice: (message) => message.endsWith("compacted"),
+		});
 		const result = input.compact
 			? await input.compact({
 					...context,
 					...(input.knowledgeCheckpoint
 						? { knowledgeCheckpoint: input.knowledgeCheckpoint }
 						: {}),
+					emitStatusNotice: successPublication.intercept,
 				})
 			: undefined;
 		const checkpointRecords = result?.knowledgeCheckpointRecords ?? [];
@@ -2308,6 +2542,40 @@ export function createCompactionStateAwarePrepareTurn(input: {
 				checkpointRecords,
 			);
 			const contractedMessages = checkpointed;
+			// ACT-CLINEMM-CMP05-CANCELLATION-COMMIT-AUTHORITY-01: the
+			// INSTALLATION AUTHORITY CHECK.
+			//
+			// The same authority, at the same kind of boundary, on the FIRST
+			// compaction path. The enrichment pipeline between the
+			// acceptance and this point is `await`ed, so a cancellation
+			// signalled in that window arrives after the acceptance and
+			// before the state is written.
+			//
+			// A cancelled installation writes NOTHING and publishes NO
+			// successful compaction.
+			if (isInstallationCancelled(context.abortSignal)) {
+				input.logger?.log?.(
+					"Skipped agentic compaction: the turn was cancelled before the compaction was installed",
+					{
+						severity: "warn",
+						rejectionReason: "cancelled",
+						phase: "installation",
+					},
+				);
+				// No successful compaction is published for a compaction
+				// that was not installed. The truthful outcome is reported
+				// instead, naming the cancellation.
+				successPublication.publishRefused({
+					kind: "cancelled_before_installation",
+					reason: "cancelled",
+					iteration: context.iteration,
+				});
+				return publishWorkingContextEstimateMetadataOnly(
+					context.messages,
+					context.systemPrompt,
+					context.tools,
+				);
+			}
 			const nextState = createSessionCompactionState({
 				sourceMessages: context.messages,
 				compactedMessages: contractedMessages,
@@ -2315,6 +2583,9 @@ export function createCompactionStateAwarePrepareTurn(input: {
 				systemPrompt: result.systemPrompt,
 			});
 			await input.saveState?.(nextState, context.messages);
+			// The installation committed, so the success notice may now be
+			// published.
+			successPublication.release();
 			return publishWorkingContextEstimate(
 				contractedMessages,
 				result.systemPrompt ?? context.systemPrompt,

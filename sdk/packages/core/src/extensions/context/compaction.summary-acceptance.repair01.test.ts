@@ -57,6 +57,10 @@ import {
 } from "../../session/models/session-compaction";
 import { MessageBuilder } from "../../session/services/message-builder";
 import {
+	AdjudicationEvidenceRegistry,
+	buildAcquisitionEvidenceLedger,
+} from "./adjudication-continuity";
+import {
 	createCompactionStateAwarePrepareTurn,
 	createContextCompactionPrepareTurn,
 } from "./compaction";
@@ -258,6 +262,22 @@ interface SeamOptions {
 	 * reaches the deterministic Gemini SSE body.
 	 */
 	readonly providerConfig?: Record<string, unknown>;
+	/**
+	 * ACT-CLINEMM-CMP05-CANCELLATION-COMMIT-AUTHORITY-01: the controllable
+	 * PRODUCTION BOUNDARY that sits AFTER the summary was accepted and
+	 * BEFORE the compaction is installed.
+	 *
+	 * The adjudication carry-forward is `await`ed by the state-aware
+	 * wrapper on BOTH installation paths, and the host's
+	 * `getAcquisitions` callback is awaited inside it. That makes it the
+	 * production boundary at which a cancellation can be signalled in the
+	 * window between the acceptance and the installation.
+	 *
+	 * It is a REAL production seam, not a test hook: the callback is
+	 * awaited by the production code, and the callback only observes and
+	 * signals — it never decides anything.
+	 */
+	readonly onPostAcceptance?: () => void;
 }
 
 /**
@@ -320,9 +340,27 @@ async function runProductionSeam(options: SeamOptions = {}): Promise<SeamRun> {
 			inner?.({ ...context, model: innerModel }) ?? Promise.resolve(undefined),
 		getState: () => installed,
 		prepareApiMessages: async (messages) => messages,
+		// ACT-CLINEMM-CMP05-CANCELLATION-COMMIT-AUTHORITY-01: the state-aware
+		// wrapper's own logger, so the INSTALLATION refusal diagnostic is
+		// observable through the same channel as every other diagnostic.
+		logger: logger as never,
 		saveState: (state) => {
 			saveCalls.push(state);
 			installed = state;
+		},
+		// ACT-CLINEMM-CMP05-CANCELLATION-COMMIT-AUTHORITY-01: the
+		// controllable PRODUCTION BOUNDARY between the acceptance and the
+		// installation. The host callback is awaited by the production
+		// adjudication carry-forward on both installation paths.
+		adjudication: {
+			registry: new AdjudicationEvidenceRegistry({
+				sessionId: "conv-1",
+				secret: "cmp05-cancellation-commit-authority",
+			}),
+			getAcquisitions: async (canonicalMessages) => {
+				options.onPostAcceptance?.();
+				return buildAcquisitionEvidenceLedger(canonicalMessages);
+			},
 		},
 	});
 
@@ -1485,5 +1523,203 @@ describe("ACT-CLINEMM-CMP05-CANCELLATION-AUTHORITY-01 — the cancellation autho
 		expect(accepted.providerVisibleText).toContain(COMPLETE_LOOKING_SUMMARY);
 		expect(accepted.saveCalls).toHaveLength(1);
 		expect(publishedSuccess(accepted)).toBeDefined();
+	});
+});
+
+// ---------------------------------------------------------------------------
+// ACT-CLINEMM-CMP05-CANCELLATION-COMMIT-AUTHORITY-01
+//
+// THE CANCELLATION AUTHORITY AT THE ACTUAL INSTALLATION COMMIT POINT.
+//
+// THE INVARIANT
+// -------------
+//
+//   CANCELLATION_BEFORE_INSTALLATION_MUST_NOT_INSTALL_OR_PUBLISH
+//
+// A compaction that was cancelled AFTER its summary was accepted but
+// BEFORE its installation must not install a replacement summary, must not
+// publish a successful compaction, and must not advance the compacted
+// source boundary.
+//
+// THE ACTUAL INSTALLATION LINEARIZATION POINT
+// -------------------------------------------
+//
+// The INSTALLATION is performed by the `saveState()` call in
+// `createCompactionStateAwarePrepareTurn()`. That call is NOT the durable
+// linearization point on its own: the host's `saveState` implementation
+// validates the state, enqueues the write behind the session's write queue,
+// and only then performs the atomic file write that replaces the persisted
+// sidecar. Several ASYNCHRONOUS boundaries sit between the acceptance
+// decision and that durable write.
+//
+// The authority is therefore exercised IMMEDIATELY BEFORE `saveState`:
+// that is the last point at which the seam can still refuse the
+// installation. Once `saveState` is invoked the write is in flight, and
+// cancelling afterwards would be a rollback of an already committed
+// compaction — which this contract does NOT do.
+//
+// THE SUCCESS PUBLICATION ORDER
+// -----------------------------
+//
+// The compaction's SUCCESS PUBLICATION is emitted by the INNER seam (the one
+// that runs the strategy), and the INSTALLATION is performed by the OUTER
+// seam. The publication therefore naturally PRECEDES the installation.
+//
+// With an installation authority in place, something can refuse the
+// installation between the two, so the publication is DEFERRED past the
+// installation and released only once the installation committed. A
+// successful compaction is never announced for work that was not installed.
+//
+// THE WITNESSES
+// -------------
+//
+// Each witness produces a VALID, SUCCESSFULLY ACCEPTED summary and then
+// signals the cancellation at the REAL production boundary that lies
+// between the acceptance and the installation: the adjudication
+// carry-forward's host callback, which the production code awaits on BOTH
+// installation paths.
+//
+// The cancellation is signalled by the boundary itself, so it is
+// DETERMINISTIC: there is no sleep and no timing-dependent race.
+//
+// The cancellation is NOT signalled inside the provider stream: that
+// boundary is already qualified by
+// ACT-CLINEMM-CMP05-CANCELLATION-AUTHORITY-01.
+// ---------------------------------------------------------------------------
+
+describe("ACT-CLINEMM-CMP05-CANCELLATION-COMMIT-AUTHORITY-01 — the cancellation authority at the installation commit point", () => {
+	it("CMP05-CCA: a cancellation AFTER acceptance and BEFORE the FIRST installation installs nothing", async () => {
+		const controller = new AbortController();
+		// A VALID, SUCCESSFULLY ACCEPTED summary.
+		useProviderChunks(completedChunks(COMPLETE_LOOKING_SUMMARY));
+
+		const seam = await runProductionSeam({
+			abortSignal: controller.signal,
+			// The production boundary between the acceptance and the
+			// installation.
+			onPostAcceptance: () => controller.abort(),
+		});
+
+		// The summary WAS accepted: the summarizer ran and reported a
+		// successful completion.
+		expect(createHandlerMock.mock.results.length).toBe(1);
+
+		// No replacement state was persisted.
+		expect(seam.saveCalls).toHaveLength(0);
+		expect(seam.installedState).toBeUndefined();
+		// No rejected candidate is exposed in the provider-visible history.
+		expect(seam.providerVisibleText).not.toContain(COMPLETE_LOOKING_SUMMARY);
+		// No successful compaction publication.
+		expect(publishedSuccess(seam)).toBeUndefined();
+		expect(
+			compactionNotices(seam).some((notice) =>
+				notice.message.endsWith("compaction-skipped"),
+			),
+		).toBe(true);
+		// The cancellation is DIAGNOSED as a cancellation.
+		expect(rejectionDiagnostics(seam)).toContain("cancelled");
+	});
+
+	it("CMP05-CCA: a cancellation AFTER acceptance and BEFORE a RE-compaction installation conserves the prior valid state", async () => {
+		const canonical = canonicalHistory();
+		const prior = priorCompactionState(canonical);
+		const controller = new AbortController();
+		// A VALID, SUCCESSFULLY ACCEPTED summary.
+		useProviderChunks(completedChunks(COMPLETE_LOOKING_SUMMARY));
+
+		const seam = await runProductionSeam({
+			abortSignal: controller.signal,
+			existingState: prior,
+			canonical,
+			// The production boundary between the acceptance and the
+			// installation.
+			onPostAcceptance: () => controller.abort(),
+		});
+
+		// The summary WAS accepted.
+		expect(createHandlerMock.mock.results.length).toBe(1);
+
+		// No replacement state was persisted, and the installed state is
+		// the very object that was there before.
+		expect(seam.saveCalls).toHaveLength(0);
+		expect(seam.installedState).toBe(prior);
+		// No rejected candidate is exposed in the provider-visible history.
+		expect(seam.providerVisibleText).not.toContain(COMPLETE_LOOKING_SUMMARY);
+		// The previously installed valid summary is STILL the one that is
+		// used.
+		expect(seam.providerVisibleText).toContain(PRIOR_VALID_SUMMARY);
+		// The compacted source boundary did NOT advance.
+		expect(seam.installedState?.source_message_count).toBe(
+			prior.source_message_count,
+		);
+		expect(seam.installedState?.source_prefix_hash).toBe(
+			prior.source_prefix_hash,
+		);
+		expect(seam.installedState?.messages).toEqual(prior.messages);
+		// No successful compaction publication.
+		expect(publishedSuccess(seam)).toBeUndefined();
+		expect(
+			compactionNotices(seam).some((notice) =>
+				notice.message.endsWith("compaction-skipped"),
+			),
+		).toBe(true);
+		// The cancellation is DIAGNOSED as a cancellation.
+		expect(rejectionDiagnostics(seam)).toContain("cancelled");
+	});
+
+	it("CMP05-CCA: the SUCCESS PUBLICATION cannot precede the installation it describes", async () => {
+		// The ordering witness. The success notice is published by the
+		// inner seam, which runs BEFORE the installation, so it is
+		// DEFERRED: it is released only after the installation committed,
+		// and dropped when the installation was refused.
+		const controller = new AbortController();
+		useProviderChunks(completedChunks(COMPLETE_LOOKING_SUMMARY));
+
+		const seam = await runProductionSeam({
+			abortSignal: controller.signal,
+			onPostAcceptance: () => controller.abort(),
+		});
+
+		// The success notice was NOT published for the refused
+		// installation...
+		expect(publishedSuccess(seam)).toBeUndefined();
+		// ...and the compaction was reported as skipped instead.
+		expect(
+			compactionNotices(seam).some((notice) =>
+				notice.message.endsWith("compaction-skipped"),
+			),
+		).toBe(true);
+	});
+
+	it("CMP05-CCA: a NORMALLY COMPLETED compaction still installs and still publishes its success", async () => {
+		// The CONSERVATION control. The repair must not have made every
+		// compaction un-installable: an uncancelled, normally completed
+		// compaction is still installed and still announces its success.
+		useProviderChunks(completedChunks(COMPLETE_LOOKING_SUMMARY));
+
+		const seam = await runProductionSeam();
+
+		expect(seam.saveCalls).toHaveLength(1);
+		expect(seam.installedState).toBeDefined();
+		expect(seam.providerVisibleText).toContain(COMPLETE_LOOKING_SUMMARY);
+		// The success publication still happens — and it still happens
+		// AFTER the installation, which is the point of the deferral.
+		expect(publishedSuccess(seam)).toBeDefined();
+		expect(rejectionDiagnostics(seam)).not.toContain("cancelled");
+	});
+
+	it("CMP05-CCA: a NORMALLY COMPLETED re-compaction still installs and still publishes its success", async () => {
+		// The CONSERVATION control on the re-compaction path.
+		const canonical = canonicalHistory();
+		const prior = priorCompactionState(canonical);
+		useProviderChunks(completedChunks(COMPLETE_LOOKING_SUMMARY));
+
+		const seam = await runProductionSeam({ existingState: prior, canonical });
+
+		expect(seam.saveCalls).toHaveLength(1);
+		expect(seam.installedState).not.toBe(prior);
+		expect(seam.providerVisibleText).toContain(COMPLETE_LOOKING_SUMMARY);
+		expect(publishedSuccess(seam)).toBeDefined();
+		expect(rejectionDiagnostics(seam)).not.toContain("cancelled");
 	});
 });
