@@ -56,6 +56,7 @@ import {
 } from "./compaction-shared";
 import {
 	applyVerifiedEvidenceToCompactedMessages,
+	EVIDENCE_REFERENCE_ALIAS_PREFIX,
 	extractVerifiedToolOutcomes,
 	MAX_CARRIED_OUTCOMES,
 } from "./evidence-continuity";
@@ -338,6 +339,31 @@ async function runStateAwareCompactionAndCapture(input: {
 
 const R1_CALL_ID = "call_r1_pipeline_mask_001";
 
+/**
+ * ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01
+ *
+ * The carried outcome LINES in a published section.
+ *
+ * ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01: the section publishes
+ * one line per carried outcome, and each line carries an OPAQUE,
+ * PUBLICATION-LOCAL alias rather than the canonical tool-call id.
+ *
+ * The controls below count these lines so that they stay NON-VACUOUS: an
+ * assertion of the form "the canonical id is absent" would now pass for
+ * the WRONG reason — the id is absent from every published section,
+ * carried or not — and it would no longer distinguish "the outcome was
+ * carried" from "the outcome was dropped".
+ */
+function carriedOutcomeLines(text: string): string[] {
+	return text
+		.split("\n")
+		.filter(
+			(line) =>
+				line.startsWith("- ") &&
+				line.includes(`(${EVIDENCE_REFERENCE_ALIAS_PREFIX}-`),
+		);
+}
+
 describe("ACT-CLINEMM-ROUNDC-COMPACTION-FIDELITY-RECON02 — R1 shell-status negative control", () => {
 	it("SCENARIO 5: a successful outer shell status masking a failed inner Helm verification must NOT certify a rendered image", async () => {
 		// The inner Helm process failed (rc=1, Go-template error). The
@@ -606,7 +632,11 @@ describe("ACT-CLINEMM-ROUNDC-COMPACTION-FIDELITY-RECON02 — R7 evidence-status 
 			],
 		});
 		const continuation = installedContinuationText(installedMessages);
-		expect(continuation).toContain("call_cd_chain_001");
+		// ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01: the carried
+		// outcome publishes an OPAQUE, PUBLICATION-LOCAL alias rather than
+		// the canonical tool-call id, so the control counts the carried
+		// LINES rather than looking for the raw id.
+		expect(carriedOutcomeLines(continuation)).toHaveLength(1);
 		expect(continuation).toContain("succeeded");
 		// The command identity IS carried now.
 		expect(continuation).toContain("helm template");
@@ -913,7 +943,11 @@ describe("ACT-CLINEMM-ROUNDC-COMPACTION-FIDELITY-RECON02 — folding and retenti
 		// ...but the deterministic canonical carry-forward contradicts it
 		// with the canonical tool-call id and the verified status.
 		expect(continuation).toContain("Verified tool outcomes (canonical record)");
-		expect(continuation).toContain("call_not_executed_001");
+		// ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01: the carried
+		// outcome publishes an OPAQUE, PUBLICATION-LOCAL alias rather than
+		// the canonical tool-call id, so the control counts the carried
+		// LINES rather than looking for the raw id.
+		expect(carriedOutcomeLines(continuation)).toHaveLength(1);
 		expect(continuation).toContain("succeeded");
 	});
 
@@ -956,8 +990,14 @@ describe("ACT-CLINEMM-ROUNDC-COMPACTION-FIDELITY-RECON02 — folding and retenti
 			canonicalMessages: messages,
 		});
 		const continuation = installedContinuationText(installedMessages);
-		expect(continuation).toContain("call_bounded_014");
-		expect(continuation).not.toContain("call_bounded_000");
+		// ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01: the carried
+		// outcome publishes an OPAQUE, PUBLICATION-LOCAL alias rather than
+		// the canonical tool-call id, so the control counts the carried
+		// LINES rather than looking for the raw id.
+		expect(carriedOutcomeLines(continuation)).toHaveLength(12);
+		// ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01: the evicted
+		// outcome contributes no carried line of its own.
+		expect(carriedOutcomeLines(continuation)).toHaveLength(12);
 	});
 });
 
@@ -1049,7 +1089,11 @@ describe("ACT-CLINEMM-ROUNDC-COMPACTION-FIDELITY-RECON02 — reconstruction prim
 		expect(
 			secondText.match(/Verified tool outcomes \(canonical record\)/g),
 		).toHaveLength(1);
-		expect(secondText).toContain("call_idem_001");
+		// ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01: the carried
+		// outcome publishes an OPAQUE, PUBLICATION-LOCAL alias rather than
+		// the canonical tool-call id, so the control counts the carried
+		// LINES rather than looking for the raw id.
+		expect(carriedOutcomeLines(secondText)).toHaveLength(1);
 	});
 });
 

@@ -58,6 +58,7 @@ import {
 	COMMAND_SUBCOMMAND_ALLOWLIST,
 	classifyCommand,
 	classifyToolResultStatus,
+	EVIDENCE_REFERENCE_ALIAS_PREFIX,
 	EVIDENCE_SECTION_HEADING,
 	extractVerifiedToolOutcomes,
 	MAX_CARRIED_OUTCOME_CHARS,
@@ -229,6 +230,32 @@ function countOccurrences(haystack: string, needle: string): number {
 	return count;
 }
 
+/**
+ * ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01
+ *
+ * The carried outcome LINES in a published section.
+ *
+ * The section publishes one line per carried outcome, and each line carries
+ * an OPAQUE, PUBLICATION-LOCAL alias rather than the canonical tool-call
+ * id.
+ *
+ * This helper exists so that the POSITIVE and NEGATIVE controls below stay
+ * NON-VACUOUS. A control that asserted only "the canonical id is absent"
+ * would pass for the WRONG reason after the repair — the id is now absent
+ * from every published section, carried or not — and it would no longer
+ * distinguish "the outcome was carried" from "the outcome was dropped".
+ * The LINE COUNT does distinguish them.
+ */
+function carriedOutcomeLines(text: string): string[] {
+	return text
+		.split("\n")
+		.filter(
+			(line) =>
+				line.startsWith("- ") &&
+				line.includes(`(${EVIDENCE_REFERENCE_ALIAS_PREFIX}-`),
+		);
+}
+
 type WrapperRun = {
 	prepared: Awaited<ReturnType<ContextPipelinePrepareTurn>>;
 	providerRequest: MessageWithMetadata[];
@@ -299,7 +326,15 @@ describe("verified tool outcome continuity — the reproduced defect", () => {
 		const providerText = providerVisibleText(providerRequest);
 		// The verified outcome MUST be present...
 		expect(providerText).toContain(EVIDENCE_SECTION_HEADING);
-		expect(providerText).toContain(HELM_CALL_ID);
+		// ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01: the carried
+		// outcome publishes an OPAQUE, PUBLICATION-LOCAL alias, not the
+		// canonical tool-call id. The id is an arbitrary byte string at
+		// the publication boundary, so it is not republished verbatim.
+		// The outcome itself is still carried — the LINE COUNT proves it.
+		const carriedLines = carriedOutcomeLines(providerText);
+		expect(carriedLines).toHaveLength(1);
+		expect(carriedLines[0]).toContain("(ev-0)");
+		expect(providerText).not.toContain(HELM_CALL_ID);
 		expect(providerText).toContain("succeeded");
 		// ...together with the command it executed, so the continuing model
 		// can tell WHAT was verified.
@@ -374,7 +409,12 @@ describe("verified tool outcome continuity — failed and not-run operations", (
 			compactResult: agenticCompactionResult("summary"),
 		});
 		const providerText = providerVisibleText(providerRequest);
-		expect(providerText).not.toContain("call_failed");
+		// ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01: the negative
+		// control must remain NON-VACUOUS. The canonical id is absent from
+		// every published section now, so its absence alone would prove
+		// nothing. The control counts the carried LINES instead: a failed
+		// outcome contributes NO carried line.
+		expect(carriedOutcomeLines(providerText)).toHaveLength(0);
 		expect(providerText).not.toContain("succeeded");
 	});
 
@@ -521,7 +561,10 @@ describe("verified tool outcome continuity — mismatched tool ids", () => {
 			compactResult: agenticCompactionResult("summary"),
 		});
 		const providerText = providerVisibleText(providerRequest);
-		expect(providerText).not.toContain("call_b");
+		// ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01: an unmatched
+		// result contributes NO carried line. The line count is what makes
+		// this control non-vacuous.
+		expect(carriedOutcomeLines(providerText)).toHaveLength(0);
 		expect(providerText).not.toContain("rc=0");
 	});
 
@@ -604,7 +647,10 @@ describe("verified tool outcome continuity — mismatched tool ids", () => {
 			compactResult: agenticCompactionResult("summary"),
 		});
 		const providerText = providerVisibleText(providerRequest);
-		expect(providerText).not.toContain("call_mixed");
+		// ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01: a MIXED batch
+		// contributes NO carried line. The line count is what makes this
+		// control non-vacuous.
+		expect(carriedOutcomeLines(providerText)).toHaveLength(0);
 		expect(providerText).not.toContain("rc=0");
 	});
 });
@@ -667,6 +713,10 @@ describe("verified tool outcome continuity — repeated compaction", () => {
 			compactResult: agenticCompactionResult(`summary body\n\n${staleSection}`),
 		});
 		const providerText = providerVisibleText(providerRequest);
+		// ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01: a STALE
+		// section is replaced, so the stale line is gone AND no new line
+		// takes its place (the canonical history establishes nothing).
+		expect(carriedOutcomeLines(providerText)).toHaveLength(0);
 		expect(providerText).not.toContain("call_stale");
 	});
 });
@@ -841,7 +891,12 @@ describe("verified tool outcome continuity — credential safety", () => {
 		const providerText = providerVisibleText(providerRequest);
 		// The VERIFIED FACT survives...
 		expect(providerText).toContain(EVIDENCE_SECTION_HEADING);
-		expect(providerText).toContain("call_cred");
+		// ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01: the outcome
+		// is carried under its OPAQUE alias, so the control counts the
+		// carried LINES rather than looking for the canonical id (which
+		// is absent from every published section now, so its absence
+		// alone would be vacuous).
+		expect(carriedOutcomeLines(providerText)).toHaveLength(1);
 		expect(providerText).toContain("succeeded");
 		// ...but NONE of the credential-bearing output does.
 		expect(providerText).not.toContain("hunter2");
@@ -898,7 +953,9 @@ describe("verified tool outcome continuity — credential safety", () => {
 			compactResult: agenticCompactionResult("summary"),
 		});
 		const providerText = providerVisibleText(providerRequest);
-		expect(providerText).toContain("call_kc");
+		// ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01: the outcome
+		// is carried under its OPAQUE alias.
+		expect(carriedOutcomeLines(providerText)).toHaveLength(1);
 		expect(providerText).not.toContain("admin123");
 	});
 });
@@ -949,7 +1006,9 @@ describe("verified tool outcome continuity — command classification confidenti
 			});
 			const providerText = providerVisibleText(providerRequest);
 			// The VERIFIED FACT survives...
-			expect(providerText).toContain("call_arg");
+			// ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01: the outcome
+			// is carried under its OPAQUE alias.
+			expect(carriedOutcomeLines(providerText)).toHaveLength(1);
 			expect(providerText).toContain("succeeded");
 			// ...but the command's ARGUMENT does not.
 			expect(providerText).not.toContain(secret);
@@ -1006,7 +1065,9 @@ describe("verified tool outcome continuity — command classification confidenti
 			compactResult: agenticCompactionResult("summary"),
 		});
 		const providerText = providerVisibleText(providerRequest);
-		expect(providerText).toContain("call_unknown");
+		// ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01: the outcome
+		// is carried under its OPAQUE alias.
+		expect(carriedOutcomeLines(providerText)).toHaveLength(1);
 		expect(providerText).toContain("succeeded");
 		expect(providerText).not.toContain("abc123");
 	});
@@ -1078,7 +1139,10 @@ describe("verified tool outcome continuity — result status contradictions", ()
 			compactResult: agenticCompactionResult("summary"),
 		});
 		const providerText = providerVisibleText(providerRequest);
-		expect(providerText).not.toContain("call_contradict");
+		// ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01: a
+		// contradicting batch contributes NO carried line. The line count is
+		// what makes this control non-vacuous.
+		expect(carriedOutcomeLines(providerText)).toHaveLength(0);
 		expect(providerText).not.toContain("rc=0");
 	});
 

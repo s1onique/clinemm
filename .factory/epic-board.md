@@ -1,3 +1,4 @@
+<<<<<<< RESOLVED: both workstreams preserved (destination first, then source) >>>>>>>
 
 # ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 (AMENDMENT-02) — GO_R2_ISOLATED_BEHAVIORAL_DOGFOOD — 2026-11-25
 
@@ -491,6 +492,429 @@ method with a wider host-supplied progress hook. R3 rides the existing
 `"allowance_exhausted"` branch with one more optional host-supplied
 callback. Neither needs a new lifecycle authority.
 # ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01-CORRECTION02 — PASS_SECURITY_BOUNDARY_STRUCTURAL — 2026-11-23
+
+<!-- ===== SOURCE-WORKSTREAM SIDE (preserved verbatim) ===== -->
+
+# ACT-CLINEMM-CMP05-TERMINAL-NEGATIVE-SIGNAL-PRECEDENCE-01 — GO_CMP05_TERMINAL_NEGATIVE_SIGNAL_PRECEDENCE — 2026-11-25
+
+```text
+ACT_ID:       ACT-CLINEMM-CMP05-TERMINAL-NEGATIVE-SIGNAL-PRECEDENCE-01
+TYPE:         bounded correction (terminal negative-signal precedence)
+VERDICT:      GO_CMP05_TERMINAL_NEGATIVE_SIGNAL_PRECEDENCE
+ENTRY_HEAD:   441b813f5
+SUBJECT_HEAD: 9408281c0
+BRANCH:       main
+EPIC:         CMP-04
+```
+
+**THE P1 IN `doneFinishReason()` AND THE SUMMARY TERMINAL ACCEPTANCE IS
+CLOSED.** The terminal fields of a done chunk can CONFLICT: the transport's
+success flag can disagree with the reported terminal reason, and the reported
+reason can disagree with an explicit incompleteness. Both places that read
+those fields consulted the **POSITIVE** signal first, so a negative signal
+could be normalized away.
+
+**THE RED REPRODUCED FOUR DEFECTS.**
+
+  1. `success=false` + `finishReason="stop"` -> the adapter reported the turn
+     as a NORMAL completion (`reason: "stop"`). A failed stream was
+     indistinguishable from a successful one.
+  2. `success=true` + `finishReason="unknown"` -> the summary was
+     **INSTALLED**. The provider never established a successful completion,
+     but the success flag alone authorized the installation -- exactly what
+     the acceptance contract exists to prevent.
+  3. `finishReason="stop"` + explicit `incompleteReason` -> the adapter
+     reported `stop` and lost the established max-token mapping.
+  4. The same for the content-filter mapping.
+
+**THE CORRECTION IS THE SMALLEST ONE THAT MAKES THE PRECEDENCE HOLD.**
+`doneFinishReason()` consults the signals in the order of authority: an
+explicit INCOMPLETENESS is authoritative; a REPORTED FAILURE is
+authoritative; only then is the reported reason consulted.
+`classifySummaryTerminalStatus()` treats a reported reason of `unknown` as a
+negative signal **in its own right**, not only when the stream also failed.
+
+**NO NEW TERMINAL-STATUS VOCABULARY.** `unestablished_completion` already
+existed; the correction only reorders which signal is consulted.
+
+**PRESERVED:** the unknown-versus-error distinction, the cancellation
+precedence, the valid max-token and content-filter mappings, a normal STOP
+completion, and a genuine legacy handler that reports no terminal reason
+(which is genuinely UNAVAILABLE status, not a reported unestablished
+completion).
+
+```text
+RED (before the correction):   4 defects FAILED (3 adapter + 1 acceptance)
+GREEN (after the correction):  87 passed (acceptance 31 | adapter 22 | transport 9
+                               | durable 2 | sibling summarizer 23)
+CORE CONTEXT+LLMS SUITE:     1 348 passed | 0 failed (95 files)
+LLMS PROVIDER SUITES:           190 passed
+TYPECHECK:                   73 errors -> 73 errors, ZERO DELTA; 0 ACT-owned
+BIOME:                       clean on all 4 changed files
+SDK BUILD:                   SUCCEEDED (bun --production -F './sdk/packages/*')
+GITLEAKS:                    no leaks found
+INFERENCE REQUESTS:           0
+```
+
+**A successor ACT is NOT started automatically.**
+
+```text
+ACT_ID:       ACT-CLINEMM-CMP04-TERMINAL-ACCEPTANCE-CONSERVATION-01
+TYPE:         bounded conservation witness + adapter contract repair
+VERDICT:      GO_CMP04_TERMINAL_ACCEPTANCE_CONSERVED
+ENTRY_HEAD:   4bca917fd58919bb13c5344998da9a53ce5afac7
+SUBJECT_HEAD: e14504e2e (the conservation witness and the bounded change)
+BRANCH:       main
+EPIC:         CMP-04
+```
+
+**THE PREDECESSOR'S TRANSPORT REPAIR WAS ACCEPTED. THIS ACT PROVES ITS
+CONSEQUENCE THROUGH THE PRODUCTION ACCEPTANCE PATH, AND CLOSES A SMALL
+ADAPTER CONTRACT DEFECT.**
+
+The predecessor (`4bca917fd`) established that a Gemini stream which ends
+WITHOUT the provider reporting a terminal reason produces gateway
+`finish.reason === "unknown"`, and that the compatibility adapter must not
+report such a stream as a SUCCESSFUL completion. That was proven **at the
+compatibility boundary**. What it did NOT establish is the consequence that
+matters for the compaction contract: a summary produced by such a stream must
+not be **INSTALLED** as the replacement for the compacted history.
+
+**THE WITNESS IS RED AGAINST THE DEFECTIVE PREDECESSOR.** With the
+predecessor's mapping (`success: event.reason !== "error"`), the
+unestablished Gemini summary **WAS INSTALLED**: it replaced the compacted
+history and reached the provider-visible output. Against the repaired source
+it is rejected. The RED was produced by restoring the predecessor's mapping
+in `compat.ts` and rebuilding — not by manufacturing a new production defect.
+
+**THE WITNESS SUBSTITUTES EXACTLY ONE THING: THE EXTERNAL PROVIDER
+BOUNDARY.** It drives the ACTUAL production composition — the state-aware
+wrapper, the compaction seam, the agentic compactor, the summarizer
+transport, the **REAL** handler factory, the **REAL** compatibility adapter
+and the **REAL** gateway — and substitutes only the HTTP `fetch`. The Gemini
+SSE fixtures are the ones the transport probe established. Every acceptance
+decision under test is taken by the REAL production code.
+
+**THE CONTROL MATRIX IS SATISFIED.** A Gemini text followed by an ABSENT
+finish reason is rejected; a Gemini text followed by a normal STOP is
+accepted and installed; the established MAX-TOKEN and CONTENT-FILTER
+rejections are conserved; and a previously installed valid state remains
+byte-identical after the rejection (no replacement persisted, the compacted
+source boundary does not advance).
+
+**THE BOUNDED CHANGE: THE REPORTED TERMINAL REASON NOW REACHES THE
+ACCEPTANCE DECISION.** The transport reports an unestablished completion and
+a known failure the same way — `success: false` — so `failed` alone cannot
+tell them apart. `generateSummary()` **discarded** the reported reason
+entirely, and the acceptance contract therefore classified an unestablished
+completion as a **known failure**. The reason is now carried through the
+transport, and the contract distinguishes the two: `unestablished_completion`
+is not a known failure, it is a completion the provider never ESTABLISHED.
+**The verdict is unchanged** — both are not installable — but the diagnosis
+is not, and the diagnosis is what an operator reads. `unknown` is preserved
+AS `unknown`: it is not converted into a normal completion, and it is not
+converted into an invented provider failure.
+
+**THE ADAPTER CONTRACT DEFECT IS CLOSED.** `ApiStreamDoneChunk.finishReason`
+was typed as an arbitrary `string`, and the consumer cast it back with an
+unchecked `as AgentModelFinishReason`. It is now typed as
+`AgentModelFinishReason` itself — the SAME vocabulary, not an arbitrary
+string — so no consumer has to cast and no consumer can silently receive a
+reason outside the union. The **negative-signal precedence is preserved**: a
+chunk that reports a FAILED stream with an error message is a FAILURE
+(`error`), and the reported reason does not launder it into an unestablished
+completion, which would lose the runtime's error recovery. A legacy handler
+that reports no reason at all keeps its previous mapping.
+
+**THE PERSISTENCE FRAMEWORK WAS NOT REDESIGNED.** No new persistence layer,
+no new provider registry, no documentation campaign, no full-suite rerun.
+
+```text
+RED (defective predecessor):  2 CMP04 rows FAILED | 22 pre-existing rows PASSED
+GREEN (repaired source):      24 passed (the whole acceptance regression)
+ADAPTER CONTRACT:             19 passed (apihandler-agent-model-adapter)
+TRANSPORT PROPAGATION:          9 passed (summary-generation.terminal-status)
+DURABLE PERSISTENCE:           2 passed
+LLMS PROVIDERS:              190 passed (compat / finish-reason / gateway)
+CORE CONTEXT+LLMS SUITE:    1 338 passed | 0 failed (95 files)
+TYPECHECK:                  73 errors -> 73 errors, ZERO DELTA; 0 ACT-owned
+BIOME:                      clean on all 8 changed files
+SDK BUILD:                  SUCCEEDED (bun --production -F './sdk/packages/*')
+GITLEAKS:                   no leaks found
+INFERENCE REQUESTS:          0
+```
+
+**A successor ACT is NOT started automatically.**
+
+```text
+ACT_ID:       ACT-CLINEMM-COMPACTION-ATOMIC-SUMMARY-INSTALLATION-REPAIR-01
+TYPE:         bounded repair (summary acceptance contract)
+VERDICT:      GO_COMPACTION_FIDELITY_REPAIR
+ENTRY_HEAD:   071305731a4a85acc71cea5bd77dbae49d959d51
+SUBJECT_HEAD: 7d57559acdfb4f030ab45e2ad8bc43febb01f234
+BRANCH:       main
+EPIC:         CMP-04
+EVIDENCE:     .factory/evidence/ACT-CLINEMM-COMPACTION-ATOMIC-SUMMARY-INSTALLATION-REPAIR-01/
+                 01-predecessor-evidence-corrections.md
+                 02-completion-status-ownership-recon.md
+                 03-repair-and-verification.md
+                 04-exit-contract.txt
+                 05-exit-report.md
+```
+
+**CMP-04 is CLOSED.** The ordinary (agentic) compactor asked only whether a
+summary EXISTS. `generateSummary()` already collected the provider-reported
+terminal signals (`incompleteReason`, `failed`), but **NO DECISION was made
+on them**: a summary the provider reported as INCOMPLETE — cut off
+mid-sentence by the output budget — or a generation it reported as FAILED
+passed straight through and REPLACED the compacted history exactly like a
+complete one, with no warning, no marker, and the previously usable working
+context gone. The EMPTY case was already handled correctly (skip + warn); the
+INCOMPLETE and FAILED cases were the dangerous ones.
+
+**The invariant is now `KNOWN_INCOMPLETE_SUMMARY_MUST_NOT_REPLACE_USABLE_CONTEXT`.**
+The decision is taken at the boundary that OWNS the summary installation —
+before the replacement compacted history is built, before the authoritative
+compaction state is updated, before a replacement summary is persisted, before
+a successful compaction result is published, and before the compacted source
+boundary advances. Rejecting there leaves the prior valid state and the
+canonical history untouched **by construction**.
+
+A provider-reported successful TRANSPORT is **not** sufficient when a
+separate completion signal reports truncation: a known negative terminal
+signal overrides the success flag and the non-empty text. The
+conflicting-signal rule and the order of authority live in one place, in the
+new `summary-acceptance.ts`.
+
+**This ACT does not claim that a normal model termination proves semantic
+completeness.** No textual heuristic, no keyword scoring, no additional
+inference, no new semantic validation framework, no new public enum, and
+**no automatic retry**: a rejected candidate returns "no compaction" and the
+summarizer is asked exactly once.
+
+**THE PRIMARY RED WAS REPRODUCED AND REPAIRED.** The predecessor's
+defect-positive witness passed 3/3 at ENTRY_HEAD asserting the defect was
+present. It is now a **permanent regression gate** asserting the repaired
+behaviour, driven with an **observable state-owning fixture** (`getState()`
+returns the installed state; `saveState()` records its actual invocation and
+installs what it was handed; the projection consumes the observed installed
+state). Durable persistence is qualified **separately**, over REAL files
+through the REAL store's own reader — the two claims are not conflated.
+
+**EVERY RED-MATRIX ROW REPRODUCED** — R1 (provider-reported incompleteness),
+R2 (the OpenAI-compatible `finish_reason: "length"` signal), R3
+(`success=false` with non-empty partial text), R4 (apparently complete prose
+with an authoritative incomplete signal), R5 (a failed generation with a valid
+prior compaction state), R6 (the positive control: a later valid attempt
+still installs). None is `NOT_REPRODUCED`. The A3 extended rows (content
+filtering, contradictory signals, tool-call termination, whitespace-only
+output, premature stream termination, legacy completion) and the A4
+accounting rows are covered too.
+
+**THE PROVIDER-SIGNAL PROPAGATION WAS ALREADY CORRECT** and was therefore NOT
+modified, per the A2 rule: `finish_reason "length"` -> `mapFinishReason()`
+(`ai-sdk.ts:1041`) -> `"max-tokens"` -> `toApiStreamChunk()` (`compat.ts:651`)
+-> `incompleteReason: "max_tokens"` -> `generateSummary()`. The one signal
+that WAS lost — whether the transport's completion event arrived at all — was
+added as `completed`, so a premature stream termination is distinguishable
+from the legacy shape that stays installable.
+
+**THE PREDECESSOR'S EVIDENCE CLASSIFICATIONS WERE CORRECTED OFFLINE**, from
+existing artifacts only, with **no campaign re-run and no inference request**.
+The material corrections: the **O4 adjudication** (the predecessor adjudicated
+O4 against the observed set {42,43,47,73}; the O4 oracle's own evidence set
+[7,65,67] establishes {47,73}, so 47 IS the smallest and the oracle is
+consistent — the oracle was NOT changed); the **O1 criteria**, now five
+separated criteria, with a stated requirement not treated as an observed
+successful operation; the **cache authority**
+(`PREFIX_COMPARISON_BASIS=HTTP_BODY_STRING_CODE_UNITS` — string comparison,
+NOT engine-token equality, NOT demonstrated KV-cache reuse; the native
+summarizer recorded ZERO cached tokens; LAST_WORKING produced no completion
+and no usage); the **production arm**
+(`PRODUCTION_ARM=RECONSTRUCTED_PRODUCTION_HELPER_COMPOSITION`, and
+`CANDIDATE_SUMMARY_FIDELITY=NOT_ESTABLISHED`); the **historical source
+binding** (`MEASURED_RUN_SOURCE_BINDING=UNESTABLISHED`); the **production-arm
+summary completeness** (`UNAVAILABLE_FROM_TRACE`); the **inference
+accounting** (one request per question does not establish equal total
+compaction cost across arms); the **experimental cache/latency authority**
+(`LATENCY_BASIS=INSTRUMENTED_REPLAY`, `RESUMED_CACHE_CONTROL=SYNTHETIC_CONTEXT_LIVE_PROVIDER`);
+and the **production integration gate summary** (G1, G4 and G6 are all NOT
+SATISFIED, agreeing with the detailed gate).
+`COMMAND_CLASSIFICATION_IS_NOT_CONFIDENTIALITY_AUTHORIZATION` is recorded and
+the classifier-only result-body publication was **NOT** implemented. The
+predecessor's research scripts were **NOT executed** during this ACT.
+
+**UPSTREAM:** #14732 is OPEN; #14741 is OPEN and UNMERGED at
+`34c104e6fc49781cda4adcd73ffdccd8f029fef9`. The upstream PR was **NOT merged
+wholesale**: its behaviour is retry-and-warn-and-**install** ("if the retry
+truncates too, the summary is still installed"), which is **not** equivalent
+to this ACT's invariant. Its retry authority was **not** taken either.
+
+**VERIFICATION:** the five new/converted suites **32 passed**; the context
+suite **1 216 passed / 2 skipped** (88 files) — was 1 187 / 2 skipped before
+this ACT — with **zero new regressions**; the `llms` package suite **1 176
+passed** with **17 pre-existing failures whose identities are IDENTICAL** to
+the baseline (verified by stash-and-rerun, not assumed); typecheck **45
+errors, unchanged from the baseline**, with **zero** in the ACT-owned files;
+**SDK build SUCCEEDED**; Biome clean; `git diff --check` clean; the
+repository's own gitleaks hook reported **no leaks found**.
+**ACT_OWNED_DIAGNOSTICS=0, NEW_REGRESSIONS=0.** No VSIX packaging and no
+installation.
+
+**SCOPE EXCLUSIONS RESPECTED:** no live inference request, no PCK revival or
+vocabulary expansion, no source-bound evidence activation, no raw
+command-result publication expansion, no new evidence-selection heuristics,
+no sanitizer or command-classification expansion, no native-message
+summarizer integration, no model comparison or configuration change, no
+Kurchatov or Strata modification, no LEAMAS repair, no B06 repair, no general
+retry-policy redesign.
+
+**CMP-02 and CMP-03 are preserved as independent work. No successor ACT is
+started automatically.** The recommended successor remains the
+`renderStructuredToolPayload()`-scoped fidelity repair, still subject to a
+formal confidentiality decision.
+
+
+# ACT-CLINEMM-ORDINARY-COMPACTION-UPSTREAM-AND-FIDELITY-REPAIR-01 — HALT_FACTUAL_PRESERVATION_NOT_ESTABLISHED — 2026-11-25
+
+```text
+ACT_ID:       ACT-CLINEMM-ORDINARY-COMPACTION-UPSTREAM-AND-FIDELITY-REPAIR-01
+TYPE:         bounded repair + upstream recon + behavioural qualification
+VERDICT:      HALT_FACTUAL_PRESERVATION_NOT_ESTABLISHED
+ENTRY_HEAD:   df99675ed40a899ceae2b22ffe5224537c88f2fd
+A10_COMMIT:   784f1e95b (the bounded A10 correction, committed separately)
+BRANCH:       main
+EPIC:         CMP-01 / CMP-02
+EVIDENCE:     .factory/evidence/ACT-CLINEMM-ORDINARY-COMPACTION-UPSTREAM-AND-FIDELITY-REPAIR-01/
+                00-entry-and-a10-correction.md
+                01-upstream-recon.md
+                02-production-input-loss.md
+                03-cache-discriminator.md
+                04-summary-completeness.md
+                05-behavioral-qualification.md
+                06-production-gate.md
+                07-exit-report.md
+                08-exit-contract.txt
+                verification/gates.md
+```
+
+**The A10 tool-name publication defect was REPRODUCED through both
+publication destinations and CORRECTED.** A fixed runtime-owned tool
+vocabulary now resolves published tool labels; unknown or untrusted tool
+names publish as the neutral `"tool"`. Internal canonical tool identity and
+admission semantics are unchanged. Committed SEPARATELY as `784f1e95b`, as
+the ACT required. Gates: reference-trust 17 passed, evidence-continuity 62
+passed, bounded-evidence-contract 40 passed, typecheck `45 → 45` (zero
+delta), Biome clean on the changed files.
+
+**The ordinary compaction's input loss is at the production serializer and
+is a COMPLETE-PROPOSITION-ABSENT failure.**
+`renderStructuredToolPayload()` (`sdk/packages/core/src/extensions/context/
+compaction-shared.ts`) renders **122 of 122** successful command result
+bodies as `[result omitted]`, and classifies only **5 of 123** structured
+payloads because the command classification fails closed on pipelines and
+redirections. The invocation survives; the result and the
+invocation/result correlation do not.
+
+**Upstream reconnaissance at `34c104e6fc49781cda4adcd73ffdccd8f029fef9`:**
+#15783, #14732 and #15005 remain OPEN; #15787 and #14741 remain
+OPEN/UNMERGED. #15787 is `REQUIRES_ADAPTATION` and is a transport/cache
+proposal, NOT a fidelity repair — adopting its serialization wholesale would
+WORSEN the structured-result loss, because upstream has no
+`renderStructuredToolPayload()` at all. #14732/#14741/#15005 are
+`APPLICABLE`; #14741's repair was excluded by the ACT's own §11 rule.
+
+**The model CAN recover the decisive propositions from the original
+evidence** — the ACT's §6 question, answered unambiguously. On the frozen
+W1 workload (session `1795491524406_mutdb`, 244 source messages) with the
+unchanged O1/O4/O7 probe wording and the oracle never in the prompt:
+
+| Proposition | PROD (current production) | TARGETED_SOURCE | FULL_SOURCE |
+| --- | --- | --- | --- |
+| O1 | **INCORRECT** — states a FAILED render SUCCEEDED | **CORRECT** | **CORRECT** |
+| O4 | **PARTIAL** — gives 43; the decisive value is 47, the smallest of {42,43,47,73} | **CORRECT** | **CORRECT** |
+| O7 | **INCORRECT** — misses the decisive 500/1000 ms notification-service constants | **CORRECT** | **CORRECT** |
+
+**None of the three propositions is a model-capability limitation.** The
+failure is entirely compaction-caused. The one material factual
+substitution observed (PROD's O1 "succeeded" claim) is a property of the
+EXISTING production path and is ELIMINATED by the faithful representation,
+not introduced by it.
+
+**The cache defect is real, large, and separable.** Measured on the actual
+HTTP request bodies (not on a JS object): the existing ordinary summarizer
+request shares **0.00019** of the working agent's serialized prefix — a
+complete cache break, as upstream #15783 describes. A native-message
+representation shares **0.886**. The summarizer → resumed-agent transition
+is a **one-time** change (`0.00038`) in both arms; the post-compaction
+prefix is **stable** — the next ordinary turn read **15 347 of 15 363**
+prompt tokens from cache and ran **3.5× faster**. **No repeated prefix
+churn.** The cache improvement is recorded SEPARATELY, as the ACT requires.
+
+**A concrete, separate RED was found for summary completeness.** A summary
+the provider reports as INCOMPLETE is installed exactly like a complete one,
+replacing the compacted history, with **no warning, no log and no marker**
+in the persisted metadata or the provider-visible continuation. An EMPTY
+summary IS handled correctly (the compaction is skipped with a warning); a
+TRUNCATED one is not. **CMP-04 is OPENED** with the exact owning boundary
+(`runAgenticCompaction()` in `agentic-compaction.ts` together with
+`generateSummary()` in `summary-generation.ts`). The witness suite is
+preserved at
+`sdk/packages/core/src/extensions/context/compaction.summary-completeness.red01.test.ts`
+(3 passed) and MUST FAIL once CMP-04 is repaired. It was NOT repaired here:
+the ACT forbids combining an unrelated summary-installation repair with the
+input-fidelity repair.
+
+**NO ordinary-compaction fidelity candidate was integrated.** The §12 gate
+requires EVERY condition to hold; two did not:
+
+- **G4 CONFIDENTIALITY — NOT ESTABLISHED.** The faithful representation
+  publishes the result body, which is the thing the ClineMM-only
+  `[result omitted]` control exists to withhold. The arm is bounded and
+  sanitized, so it is not *unrestricted* publication, but whether publishing
+  the body at all is *authorized* is a confidentiality-policy decision this
+  ACT did not receive authority to make, and the ACT forbids unrestricted
+  publication without a formal confidentiality review. **That review has
+  not happened.**
+- **G6 BUDGET — NOT CONSERVED.** The native summarizer request prefills
+  **123 327** tokens against the production path's **12 962** (9.5×) and
+  takes **333 740 ms** against **45 507 ms** (7.3×) on a cold cache. The
+  ACT's primary objective is SPEED × CORRECTNESS; a 7.3× summarizer latency
+  increase bought with a warm-cache win that was NOT measured does not
+  establish a speed improvement.
+
+**The negative result is preserved**, and the smallest existing
+canonical-history recovery seam is identified:
+**`renderStructuredToolPayload()`** — the single function that owns the
+canonical invocation/result correlation, the `[result omitted]` policy and
+the fail-closed command classification, called from exactly one place
+(`serializeConversation()` → `buildSummaryRequest()`). The recommended
+successor targets THAT function, publishing only the bodies of commands
+whose classification ALREADY SUCCEEDED, leaving the fail-closed path
+untouched, and it must demonstrate budget conservation against the
+12 962-token production baseline.
+
+**VERIFICATION:** context suite **1 187 passed / 2 skipped** (85 files; was
+1 184 before this ACT's 3 new witnesses) — zero new regressions; typecheck
+**45 errors, unchanged from baseline**, zero ACT-owned diagnostics; Biome
+clean on the changed files; `git diff --check` clean. No new
+full-repository baseline campaign was run (no relevant production dependency
+changed). No VSIX packaging and no installation.
+
+**SCOPE EXCLUSIONS RESPECTED:** no PCK revival, no new semantic-memory
+architecture, no new persistent evidence store, no value-qualification
+pairing, no further deterministic ranking heuristics, no model comparison,
+no model configuration changes, no Kurchatov/Strata engine changes, no
+LEAMAS repair, no B06 repair.
+
+**SUCCESSOR (not started automatically):** the
+`renderStructuredToolPayload()`-scoped fidelity repair, subject to a formal
+confidentiality decision, measured with the SAME W1 workload, the SAME
+O1/O4/O7 questions and the SAME cache discriminator; and, separately,
+**CMP-04**, the summary-completeness repair.
+
+
+<<<<<<< END RESOLVED >>>>>>>
 
 ```text
 ACT_ID: ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01-CORRECTION02
@@ -40594,12 +41018,12 @@ VERDICT=GO_PACKAGING
 ### A10 — the evidence-continuity reference confidentiality (SEPARATE)
 
 ```text
-ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01
-
-PRIORITY:         SECURITY
-EVIDENCE:         SYNTHETIC_REAL
-STATUS:           RED_REPRODUCED
-PRODUCTION_CHANGE: NONE
+ACT:                ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01
+PRIORITY:           SECURITY
+EVIDENCE:           SYNTHETIC_REAL_PRODUCTION_SEAM
+STATUS:             GREEN
+PRODUCTION_CHANGE:  APPLIED
+ENTRY_HEAD:         c92a45deb702eab5a3a84dee6e13f5b8f107b543
 ```
 
 A confidentiality defect is NOT documentary residue merely because it
@@ -40608,6 +41032,40 @@ existing verified-outcome section still publishes the synthetic
 canonical identifier. It does not block an otherwise qualified
 PCK-specific repair, but it prevents claiming confidentiality of the
 ENTIRE compacted summary.
+
+This ACT repaired that boundary. The recovered predecessor RED was
+reproduced against the REAL production seam (`renderEvidenceSection` ->
+`createSessionCompactionState()` persistence and `MessageBuilder.buildForApi()`
+provider projection), and the repair publishes a runtime-controlled,
+publication-local alias (`ev-0`, `ev-1`, ...) in place of the canonical
+tool-call id, and reduces the transcript-supplied tool name to a single
+escaped line so it can neither close the section nor forge an extra
+carried outcome.
+
+The INTERNAL canonical identity is unchanged: the call/result join, the
+outcome record and the rejection ledger still use the canonical id. Only
+the PUBLISHED representation changed.
+
+```text
+A10_PREDECESSOR_RED_RECOVERED   YES
+A10_CURRENT_RED                 YES  (11 failed | 6 passed)
+A10_GREEN                       YES  (17 passed)
+NECESSITY_ABLATION              YES  (3 specific ablations, all revert to RED)
+PERSISTED_SUMMARY_REFERENCE_CONFIDENTIALITY   CONFIRMED
+PROVIDER_CONTINUATION_REFERENCE_CONFIDENTIALITY CONFIRMED
+INTERNAL_REFERENCE_IDENTITY_CONSERVATION      CONFIRMED
+REFERENCE_CORRELATION_CONSERVATION            CONFIRMED
+REFERENCE_CARDINALITY_CONSERVATION            CONFIRMED
+ASSURANCE_CONSERVATION                        CONFIRMED
+LEGITIMATE_EVIDENCE_CONSERVATION              CONFIRMED
+ADVERSARIAL_CONTROLS                          12 families, 5 controls
+ACT_OWNED_DIAGNOSTICS                         0
+NEW_REGRESSIONS                               0
+VERDICT=GO_MODEL_COMPARISON
+```
+
+Evidence package:
+`.factory/evidence/ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01/`.
 
 ### B06 — the completion-continuation quiescence (SEPARATE)
 
@@ -42054,6 +42512,7 @@ VSIX packaging NOT EXECUTED | installed-live NOT EXECUTED | the whole SDK
 regression suite NOT RUN (no production dependency changed, as the ACT
 requires) | git diff --check CLEAN
 
+<<<<<<< RESOLVED: both workstreams preserved (destination first, then source) >>>>>>>
 # ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION02-AMENDMENT02 — GO_PROVIDER_REASONING_REPAIR_INTEGRATION — 2026-11-25
 
 ```text
@@ -42420,3 +42879,126 @@ detector WOULD intervene.
 FINAL_HEAD: (this commit)
 TRACKED_DIRT: (none beyond this ACT's own files)
 ```
+
+<!-- ===== SOURCE-WORKSTREAM SIDE (preserved verbatim) ===== -->
+
+---
+
+## ACT-CLINEMM-EVIDENCE-SANITIZER-BOUNDED-COMPLEXITY-REPAIR-01 — closure
+
+**ENTRY_HEAD = 1d45a8d845eca27bce311949a08fca7868f211cd** (the expected
+predecessor, verified; the tree was clean and there were no stashes).
+**SUBJECT_HEAD = 7a88dd10aafc20d5957d77b8616e752342cf6a42** (the source HEAD carrying the bounded implementation
+tree; this closure commit changes NO production code, so the implementation
+commit stays `7a88dd10aafc20d5957d77b8616e752342cf6a42`).
+
+**VERDICT = GO_EVIDENCE_REFERENCE_TRUST_REPAIR.**
+
+The production `sanitizeOutcomeText()` had TWO pathological operations. Both
+are reproduced against the REAL production sanitizer in an independently
+terminable child process, both are causally isolated by ablation, and both
+are removed by a bounded repair whose output is **byte-identical** to the
+predecessor's on every input tested.
+
+**THE RED IS REPRODUCED, NOT INFERRED.** The predecessor's own witness —
+which imports and executes the ACTUAL production sanitizer, not a copied
+regular expression — hit its 5 s watchdog on BOTH the 50 KiB non-matching
+and the 50 KiB credential-bearing inputs. On the full ladder the predecessor
+produced **12 watchdog terminations**. Its growth is **quadratic**: 2× the
+input costs 4× the time (8 KiB → 102 ms, 32 KiB → 1 936 ms, 1 MiB → does
+not terminate).
+
+**THE TWO CULPRITS ARE ISOLATED, AND THE ABLATION IS NECESSARY.**
+
+```text
+1 credential-assignment key run   QUADRATIC — THE PRIMARY CULPRIT (50 000 chars → 3 674 ms)
+2 bearer header                   linear — unchanged
+3 PEM lazy span                   QUADRATIC — THE SECOND CULPRIT
+4 provider-shaped key             linear — unchanged
+
+REPAIRED (bounded key + linear PEM)      :    0.82 ms  [nonmatching 50 KiB]
+ABLATED  (predecessor key regex restored) : 3673.65 ms  [nonmatching 50 KiB]
+REPAIRED (bounded key + linear PEM)      :    2.19 ms  [PEM flood]
+ABLATED  (predecessor PEM regex restored) :   17.75 ms  [PEM flood]
+```
+
+The key pattern had NO anchor on the start of the key run, so the engine
+retried the whole run at EVERY offset inside it and backtracked through the
+run each time. The PEM pattern's LAZY `[\s\S]*?` span made the engine, for
+EACH `BEGIN` marker, rescan forward to the end of the input. **Exponential
+complexity is NOT claimed** — both are superlinear (quadratic), which is
+sufficient to justify the repair.
+
+**THE REPAIR IS THE SMALLEST ONE THAT WORKS.** The key pattern gained a
+run-boundary guard `(?<![A-Za-z0-9_.-])` and a secret-name lookahead; the
+PEM pattern became a deterministic linear scan. The bearer and provider
+patterns were left UNCHANGED — they were measured linear, and changing them
+would have been an unrequested change. No dependency, worker pool, service
+or runtime configuration was introduced. No input was truncated. Nothing was
+returned unsanitized on failure. The redaction policy was NOT weakened.
+
+**THE BOUNDED COMPLEXITY IS A STRUCTURAL ARGUMENT, NOT A TIMING ARGUMENT.**
+No offset inside a key run is attemptable, so the quadratic "retry at every
+offset" behaviour is impossible. The `END` markers are located in ONE pass
+and each pairing is a binary search, so "markers × body length" is
+impossible.
+
+```text
+TIMING_50KIB_MS=0.626 (Node/V8) / 5.876 (bun)   [limit 100]
+TIMING_1MIB_MS=10.850 (Node/V8) / 116.509 (bun)  [limit 1000]
+WATCHDOG_TERMINATIONS_AFTER_REPAIR=0
+GROWTH=LINEAR (20× input → ~20× time; the predecessor's was quadratic)
+```
+
+**THE CONFIDENTIALITY GATE IS DIFFERENTIAL, AGAINST THE PREDECESSOR'S OWN
+OUTPUT.** 300 000 random + 118 structured + 200 000 PEM-shape differential
+cases, plus the committed suite's 2 000 random + 47 structured: **ZERO
+mismatches**. Every supported category is asserted, plus the adversarial
+shapes: long non-matching prefixes, repeated separators and whitespace,
+near matches, multiple credentials, mixed line endings, Unicode and
+malformed text, long credential values, and credentials crossing a chunk
+boundary.
+
+**THE ACT CORRECTED ITSELF TWICE, AND BOTH CORRECTIONS ARE RECORDED.**
+(1) It first asserted the sanitizer was IDEMPOTENT. It is not, and it was
+not idempotent in the predecessor either — `[REDACTED]` is itself a
+value-position assignment. The assertion was corrected to require the
+repair to REPRODUCE the predecessor's exact behaviour, because "improving"
+it would be an unrequested change to the emitted text. (2) Its FIRST PEM
+rewrite diverged from the predecessor on 9 138 of 200 000 adversarial PEM
+inputs, because the predecessor's greedy marker extent can OVERLAP the `END`
+literal. It was replaced with a faithful algorithm. The divergence was
+caught by the differential fuzz, not by inspection.
+
+**NO NEWLY-CLAIMED COVERAGE.** The `.pgpass`-style credential, the legacy
+`_auth=` token and the `scheme://user:password@host` URL still survive the
+sanitizer, exactly as before. The repair does not change that.
+
+**THE PRODUCTION SEAM IS VERIFIED.** The ACT's own suite drives the REAL
+`buildSourceFileFact()` — the caller that sanitizes the WHOLE source body
+BEFORE truncating it, which is the seam the defect actually reached — with
+a 100 000-char body: it completes, `hunter2` is not published, `[REDACTED]`
+is, ordinary evidence is carried verbatim, and the automatic carry-forward
+is still DEFAULT OFF.
+
+```text
+ACT-OWNED WITNESSES:   20 (all PASSED)
+EXISTING CONTEXT SUITE: 81 files passed | 1 skipped; 1 152 tests passed
+EXISTING SUITES:       evidence-continuity 62 | evidence-fidelity 39 | source-bound 22
+TYPECHECK:              45 -> 45, ZERO DELTA; 0 ACT-OWNED diagnostics
+BIOME:                  clean
+PRODUCTION DELTA:       the sanitizer's complexity only; PCK and source-bound evidence
+                         remain DEFAULT OFF; A10 untouched
+VSIX PACKAGING:         NOT EXECUTED
+INSTALLED-LIVE:         NOT EXECUTED
+INFERENCE REQUESTS:     0
+```
+
+```text
+A02b-R14 Value-qualification pairing          CLOSE_COMPACTION_SELECTION_NOT_QUALIFIED — CLOSED
+A12    Sanitizer bounded complexity            CLOSED — GO_EVIDENCE_REFERENCE_TRUST_REPAIR
+A10    Evidence-continuity confidentiality     UNCHANGED
+```
+
+**A successor ACT is NOT started automatically.**
+<<<<<<< END RESOLVED >>>>>>>

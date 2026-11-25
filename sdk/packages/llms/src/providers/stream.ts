@@ -4,7 +4,7 @@
  * Unified streaming response types that all providers yield.
  * This provides a consistent interface regardless of the underlying provider.
  */
-import type { GeneratedMedia } from "@cline/shared";
+import type { AgentModelFinishReason, GeneratedMedia } from "@cline/shared";
 
 /**
  * The main stream type - an async generator that yields chunks
@@ -124,6 +124,29 @@ export interface ApiStreamDoneChunk {
 	error?: string;
 	/** Reason for incomplete response (e.g., "max_output_tokens") */
 	incompleteReason?: string;
+	/**
+	 * ACT-CLINEMM-COMPACTION-ATOMIC-SUMMARY-INSTALLATION-REPAIR-01
+	 * (AMENDMENT-02 C1) — THE TERMINAL REASON.
+	 *
+	 * The gateway's terminal reason, preserved so a consumer can tell an
+	 * ESTABLISHED completion from an UNEStablished one.
+	 *
+	 * It is the distinction `success` alone cannot carry: `success: false`
+	 * covers BOTH a failed stream and a stream that ended without the
+	 * provider reporting a terminal reason, and those two need different
+	 * handling (a failure is an error; an unestablished completion is an
+	 * incomplete turn).
+	 *
+	 * The values are the gateway's `AgentModelFinishReason` vocabulary — the
+	 * SAME vocabulary, not an arbitrary string. The type is therefore the
+	 * shared union itself, so a consumer does not have to cast an unchecked
+	 * `string` back into it and cannot silently receive a reason outside it.
+	 *
+	 * ABSENT when the producing handler did not report one — a legacy
+	 * handler that finishes without a terminal reason is NOT the same claim
+	 * as a handler that reported an unestablished one.
+	 */
+	finishReason?: AgentModelFinishReason;
 	/** Response ID */
 	id: string;
 }

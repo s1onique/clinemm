@@ -1,0 +1,17 @@
+ACT-CLINEMM-EVIDENCE-SANITIZER-BOUNDED-COMPLEXITY-REPAIR-01 — PRODUCTION SEAM VERIFICATION
+===========================================================================================
+THE ACTUAL EXISTING EVIDENCE-CONTINUITY CALLER: buildSourceFileFact()
+  A synthetic representative tool result is passed through the REAL production
+  function, with the automatic carry-forward enabled for the duration of the case
+  and restored afterwards.
+
+ASSERTED
+  the production path REACHES the repaired sanitizer   PASS (the carried fact is observed)
+  the pathological input COMPLETES                     PASS (100 000-char body, under the limit)
+  credential-bearing values are NOT published          PASS (hunter2 absent, [REDACTED] present)
+  ordinary evidence remains unchanged                  PASS (source carried verbatim, gutter stripped)
+  existing carry-forward behaviour remains intact       PASS (DEFAULT OFF control holds)
+
+  Note: the excerpt is bounded to SOURCE_FILE_FACT_CHAR_LIMIT (2 000 chars) AFTER
+  redaction, so a credential beyond that bound is not carried at all. Both the
+  inside-the-window and the beyond-the-window cases are asserted separately.

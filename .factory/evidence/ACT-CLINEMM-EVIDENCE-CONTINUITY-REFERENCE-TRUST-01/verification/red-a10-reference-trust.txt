@@ -1,0 +1,31 @@
+ ✓ src/extensions/context/evidence-continuity.reference-trust01.test.ts > ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 — the publication boundary > P1: the credential-shaped canonical id is a REAL canonical reference of the session 2ms
+ × src/extensions/context/evidence-continuity.reference-trust01.test.ts > ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 — the publication boundary > P2: the sentinel reaches NEITHER the persisted summary NOR the provider-visible continuation 12ms
+   → expected '## Verified tool outcomes (canonical …' not to contain 'FAKE-CREDENTIAL-DO-NOT-USE-7P4xQz'
+ × src/extensions/context/evidence-continuity.reference-trust01.test.ts > ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 — the publication boundary > P3: the legitimate observation REMAINS present and attributable 2ms
+   → expected '## Verified tool outcomes (canonical …' not to contain 'call_ordinary_001'
+ × src/extensions/context/evidence-continuity.reference-trust01.test.ts > ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 — the publication boundary > P4: the published reference is a runtime-controlled alias, not a derivative of the canonical id 1ms
+   → expected '## Verified tool outcomes (canonical …' to contain '(ev-0)'
+ ✓ src/extensions/context/evidence-continuity.reference-trust01.test.ts > ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 — conservation > C1: the INTERNAL canonical identity is unchanged 0ms
+ × src/extensions/context/evidence-continuity.reference-trust01.test.ts > ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 — conservation > C2: distinct canonical identities remain DISTINGUISHABLE, and the cardinality is preserved 1ms
+   → expected [] to have a length of 3 but got +0
+ × src/extensions/context/evidence-continuity.reference-trust01.test.ts > ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 — conservation > C3: the SAME identity keeps the SAME alias across BOTH destinations and across re-derivation 1ms
+   → expected undefined to be defined
+ × src/extensions/context/evidence-continuity.reference-trust01.test.ts > ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 — conservation > C4: references with SIMILAR PREFIXES remain distinguishable 0ms
+   → expected [] to have a length of 2 but got +0
+ ✓ src/extensions/context/evidence-continuity.reference-trust01.test.ts > ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 — conservation > C5: the ASSURANCE is neither promoted nor weakened 0ms
+ × src/extensions/context/evidence-continuity.reference-trust01.test.ts > ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 — conservation > C6: publication cannot MANUFACTURE a reference to an unobserved event 0ms
+   → expected [] to have a length of 1 but got +0
+ ✓ src/extensions/context/evidence-continuity.reference-trust01.test.ts > ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 — conservation > C7: the section is byte-STABLE across re-derivation (the prompt-cache invariant) 0ms
+ ✓ src/extensions/context/evidence-continuity.reference-trust01.test.ts > ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 — conservation > C8: the summary is byte-stable across a re-compaction 1ms
+ × src/extensions/context/evidence-continuity.reference-trust01.test.ts > ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 — adversarial controls > A1: no adversarial identifier reaches EITHER destination 1ms
+   → expected '{"version":1,"updated_at":"2026-11-25…' not to contain 'call_ordinary'
+ × src/extensions/context/evidence-continuity.reference-trust01.test.ts > ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 — adversarial controls > A2: an adversarial identifier's SENTINEL never reaches either destination 1ms
+   → expected '{"version":1,"updated_at":"2026-11-25…' not to contain 'FAKE-CREDENTIAL-DO-NOT-USE-7P4xQz'
+ × src/extensions/context/evidence-continuity.reference-trust01.test.ts > ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 — adversarial controls > A3: an adversarial TOOL NAME cannot forge a section boundary 1ms
+   → expected 2 to be 1 // Object.is equality
+ × src/extensions/context/evidence-continuity.reference-trust01.test.ts > ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 — adversarial controls > A4: MIXED legitimate and malicious identifiers are handled independently 3ms
+   → expected '{"version":1,"updated_at":"2026-11-25…' not to contain 'FAKE-CREDENTIAL-DO-NOT-USE-7P4xQz'
+ ✓ src/extensions/context/evidence-continuity.reference-trust01.test.ts > ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 — adversarial controls > A5: an UNRESOLVED reference is not carried at all 0ms
+⎯⎯⎯⎯⎯⎯ Failed Tests 11 ⎯⎯⎯⎯⎯⎯⎯
+ Test Files  1 failed (1)
+      Tests  11 failed | 6 passed (17)

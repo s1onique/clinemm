@@ -68,6 +68,7 @@ import {
 } from "./compaction";
 import {
 	applyVerifiedEvidenceToCompactedMessages,
+	EVIDENCE_REFERENCE_ALIAS_PREFIX,
 	EVIDENCE_SECTION_HEADING,
 	inferCompactionSourceBoundary,
 } from "./evidence-continuity";
@@ -223,6 +224,31 @@ function providerVisibleSuccessSignals(
 		}
 	}
 	return signals;
+}
+
+/**
+ * ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01
+ *
+ * The carried outcome LINES in a published section.
+ *
+ * ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01: the section publishes
+ * one line per carried outcome, and each line carries an OPAQUE,
+ * PUBLICATION-LOCAL alias rather than the canonical tool-call id.
+ *
+ * The controls below count these lines so that they stay NON-VACUOUS: an
+ * assertion of the form "the canonical id is absent" would now pass for
+ * the WRONG reason — the id is absent from every published section,
+ * carried or not — and it would no longer distinguish "the outcome was
+ * carried" from "the outcome was dropped".
+ */
+function carriedOutcomeLines(text: string): string[] {
+	return text
+		.split("\n")
+		.filter(
+			(line) =>
+				line.startsWith("- ") &&
+				line.includes(`(${EVIDENCE_REFERENCE_ALIAS_PREFIX}-`),
+		);
 }
 
 /**
@@ -423,7 +449,13 @@ describe("ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01 — the evidence surviv
 		// The boundary-verified outcome is model-visible too — through the
 		// SUMMARY's carried section, because the compacted prefix that held
 		// its raw result is replaced by the summary.
-		expect(providerVisibleText(run.providerRequest)).toContain("call_ev_a");
+		// ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01: the carried
+		// outcome publishes an OPAQUE, PUBLICATION-LOCAL alias rather than
+		// the canonical tool-call id, so the control counts the carried
+		// LINES rather than looking for the raw id.
+		expect(
+			carriedOutcomeLines(providerVisibleText(run.providerRequest)),
+		).toHaveLength(1);
 	});
 
 	it("keeps the boundary-verified outcome carried in the summary section", async () => {
@@ -435,7 +467,11 @@ describe("ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01 — the evidence surviv
 		const run = await runWrapper({ canonical: h1, existingState: state });
 		const text = projectedSummaryText(run.prepared?.messages ?? []);
 		expect(text).toContain(EVIDENCE_SECTION_HEADING);
-		expect(text).toContain("call_ev_a");
+		// ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01: the carried
+		// outcome publishes an OPAQUE, PUBLICATION-LOCAL alias rather than
+		// the canonical tool-call id, so the control counts the carried
+		// LINES rather than looking for the raw id.
+		expect(carriedOutcomeLines(text)).toHaveLength(1);
 	});
 
 	it("keeps the task contract visible", async () => {
@@ -518,7 +554,9 @@ describe("ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01 — conservation", () =
 		const signals = providerVisibleSuccessSignals(run.providerRequest);
 		expect(signals.get("call_cf")).toBe(false);
 		const text = projectedSummaryText(run.prepared?.messages ?? []);
-		expect(text).not.toContain("call_cf");
+		// ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01: the outcome is
+		// NOT carried, so there is no carried line for it.
+		expect(carriedOutcomeLines(text)).toHaveLength(0);
 	});
 
 	it("does not promote an UNPAIRED post-boundary call", async () => {
@@ -533,7 +571,9 @@ describe("ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01 — conservation", () =
 		];
 		const run = await runWrapper({ canonical: h1, existingState: state });
 		const text = projectedSummaryText(run.prepared?.messages ?? []);
-		expect(text).not.toContain("call_cu");
+		// ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01: the outcome is
+		// NOT carried, so there is no carried line for it.
+		expect(carriedOutcomeLines(text)).toHaveLength(0);
 	});
 
 	it("conserves the multi-command outcome's success signal", async () => {
@@ -655,7 +695,11 @@ describe("ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01 — conservation", () =
 		expect(saved.source_message_count).toBe(canonical.length);
 		// The NEW summary carries the evidence for the NEW boundary.
 		const text = projectedSummaryText(saved.messages);
-		expect(text).toContain("call_rc");
+		// ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01: the carried
+		// outcome publishes an OPAQUE, PUBLICATION-LOCAL alias rather than
+		// the canonical tool-call id, so the control counts the carried
+		// LINES rather than looking for the raw id.
+		expect(carriedOutcomeLines(text)).toHaveLength(1);
 	});
 });
 
@@ -728,7 +772,11 @@ describe("ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01-CORRECTION01 — the bo
 		// The boundary-verified outcome IS carried, because the production
 		// path passed the persisted `source_message_count` — not the
 		// under-estimated inference.
-		expect(text).toContain("call_rt_a");
+		// ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01: the carried
+		// outcome publishes an OPAQUE, PUBLICATION-LOCAL alias rather than
+		// the canonical tool-call id, so the control counts the carried
+		// LINES rather than looking for the raw id.
+		expect(carriedOutcomeLines(text)).toHaveLength(1);
 	});
 
 	it("the Phase-A boundary equals the PERSISTED source_message_count even with a display-only message", async () => {
@@ -759,7 +807,11 @@ describe("ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01-CORRECTION01 — the bo
 		// persisted sidecar is self-consistent: the outcome that lived in the
 		// canonical prefix is carried.
 		const text = projectedSummaryText(saved.messages);
-		expect(text).toContain("call_do");
+		// ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01: the carried
+		// outcome publishes an OPAQUE, PUBLICATION-LOCAL alias rather than
+		// the canonical tool-call id, so the control counts the carried
+		// LINES rather than looking for the raw id.
+		expect(carriedOutcomeLines(text)).toHaveLength(1);
 	});
 });
 
@@ -823,7 +875,11 @@ describe("ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01-CORRECTION02 — the ca
 
 		// The carried section must contain the verified outcome...
 		const summaryText = projectedSummaryText(saved.messages);
-		expect(summaryText).toContain("call_idx_b");
+		// ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01: the carried
+		// outcome publishes an OPAQUE, PUBLICATION-LOCAL alias rather than
+		// the canonical tool-call id, so the control counts the carried
+		// LINES rather than looking for the raw id.
+		expect(carriedOutcomeLines(summaryText)).toHaveLength(1);
 		// ...and the model-visible request must carry the ASSERTED SUCCESS
 		// for that call id, not merely the call id.
 		//
@@ -833,7 +889,11 @@ describe("ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01-CORRECTION02 — the ca
 		// correctness failure.
 		expect(canonicalTailToolResultCount(run.providerRequest)).toBe(0);
 		const visible = providerVisibleText(run.providerRequest);
-		expect(visible).toContain("call_idx_b");
+		// ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01: the carried
+		// outcome publishes an OPAQUE, PUBLICATION-LOCAL alias rather than
+		// the canonical tool-call id, so the control counts the carried
+		// LINES rather than looking for the raw id.
+		expect(carriedOutcomeLines(visible)).toHaveLength(1);
 		// The section states the outcome in its own vocabulary: the call id
 		// AND the ASSERTED status. A bare call id would not distinguish a
 		// success from a merely submitted command.
@@ -847,13 +907,21 @@ describe("ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01-CORRECTION02 — the ca
 
 		const run = await runWrapper({ canonical: history, existingState: state });
 		const summaryText = projectedSummaryText(run.prepared?.messages ?? []);
-		expect(summaryText).toContain("call_idx_c");
+		// ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01: the carried
+		// outcome publishes an OPAQUE, PUBLICATION-LOCAL alias rather than
+		// the canonical tool-call id, so the control counts the carried
+		// LINES rather than looking for the raw id.
+		expect(carriedOutcomeLines(summaryText)).toHaveLength(1);
 
 		// The canonical boundary consumes the whole canonical history, so the
 		// tail is empty and the section is the ONLY carrier.
 		expect(canonicalTailToolResultCount(run.providerRequest)).toBe(0);
 		const visible = providerVisibleText(run.providerRequest);
-		expect(visible).toContain("call_idx_c");
+		// ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01: the carried
+		// outcome publishes an OPAQUE, PUBLICATION-LOCAL alias rather than
+		// the canonical tool-call id, so the control counts the carried
+		// LINES rather than looking for the raw id.
+		expect(carriedOutcomeLines(visible)).toHaveLength(1);
 		expect(visible).toContain("succeeded");
 	});
 
@@ -864,7 +932,11 @@ describe("ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01-CORRECTION02 — the ca
 		const messages = run.prepared?.messages ?? [];
 
 		// The outcome is carried in the SUMMARY...
-		expect(projectedSummaryText(messages)).toContain("call_idx_d");
+		// ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01: the carried
+		// outcome publishes an OPAQUE, PUBLICATION-LOCAL alias rather than
+		// the canonical tool-call id, so the control counts the carried
+		// LINES rather than looking for the raw id.
+		expect(carriedOutcomeLines(projectedSummaryText(messages))).toHaveLength(1);
 		// ...and the canonical tail must NOT also present it as a second
 		// independent verified outcome.
 		const tailOccurrences = messages.filter(
@@ -938,7 +1010,9 @@ describe("ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01-CORRECTION02 — the fa
 		const sectionText =
 			(applied.messages[0].metadata as { summary?: string } | undefined)
 				?.summary ?? "";
-		expect(sectionText).not.toContain("call_fb");
+		// ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01: the outcome is
+		// NOT carried, so there is no carried line for it.
+		expect(carriedOutcomeLines(sectionText)).toHaveLength(0);
 	});
 
 	it("the AUTHORITATIVE boundary does not omit that outcome", () => {
@@ -968,6 +1042,10 @@ describe("ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01-CORRECTION02 — the fa
 		const sectionText =
 			(applied.messages[0].metadata as { summary?: string } | undefined)
 				?.summary ?? "";
-		expect(sectionText).toContain("call_fb2");
+		// ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01: the carried
+		// outcome publishes an OPAQUE, PUBLICATION-LOCAL alias rather than
+		// the canonical tool-call id, so the control counts the carried
+		// LINES rather than looking for the raw id.
+		expect(carriedOutcomeLines(sectionText)).toHaveLength(1);
 	});
 });

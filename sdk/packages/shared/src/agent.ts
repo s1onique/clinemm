@@ -762,6 +762,27 @@ export interface AgentRuntimePrepareTurnContext {
 	 * filters it again before anything is written.
 	 */
 	requestOptions?: Readonly<Record<string, unknown>>;
+	/**
+	 * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01.
+	 *
+	 * The channel through which the host reports the PROVIDER-REPORTED USAGE
+	 * of an auxiliary inference it performed OUTSIDE the main model request —
+	 * today, the summarization request the compaction seam dispatches.
+	 *
+	 * The runtime ACCOUNTS for the reported usage through the SAME mechanism
+	 * it uses for the main model's usage: the reported delta is added to the
+	 * runtime's usage state and the resulting `usage-updated` event flows
+	 * through the ordinary production consumer. There is no second ledger.
+	 *
+	 * The usage is reported WHATEVER became of the inference's result. A
+	 * rejected, cancelled or refused summarization request was still paid
+	 * for, and its usage is not free.
+	 *
+	 * The reported usage is a DELTA for the inference it describes. An
+	 * absent report means the provider reported no usage, and it is never
+	 * turned into a zero-cost inference.
+	 */
+	reportAuxiliaryUsage?: (usage: AuxiliaryInferenceUsage) => void;
 	emitStatusNotice?: (
 		message: string,
 		metadata?: Record<string, unknown>,
@@ -815,6 +836,46 @@ export interface AgentRuntimePrepareTurnResult {
 	 * disabled, which is the pre-repair behavior.
 	 */
 	maxRequestTokens?: number;
+}
+
+/**
+ * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01.
+ *
+ * The provider-reported usage of ONE auxiliary inference (a provider request
+ * the host dispatched outside the main model request).
+ *
+ * The counters are the provider's own numbers for that request. They are
+ * never estimated and never derived from a character count.
+ *
+ * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 (AMENDMENT-02 §4):
+ * the `inferenceId` is the PHYSICAL provider request identity, as reported
+ * by the transport itself. It distinguishes two summarization requests
+ * within the same logical turn, so the second one is independently
+ * attributed instead of being merged into the first.
+ */
+export interface AuxiliaryInferenceUsage {
+	/**
+	 * The PHYSICAL provider request this usage belongs to.
+	 *
+	 * It is the transport's own per-request identity, so two
+	 * summarization requests that share one logical iteration are
+	 * distinguishable.
+	 */
+	inferenceId: string;
+	/** What the inference was for. */
+	kind: "summarization";
+	/** The provider's reported input tokens for this request. */
+	inputTokens: number;
+	/** The provider's reported output tokens for this request. */
+	outputTokens: number;
+	/** The provider's reported cache-read tokens for this request. */
+	cacheReadTokens?: number;
+	/** The provider's reported cache-write tokens for this request. */
+	cacheWriteTokens?: number;
+	/** The provider's reported cost for this request. */
+	totalCost?: number;
+	/** The provider's reported reasoning tokens for this request. */
+	reasoningTokenCount?: number;
 }
 
 /**

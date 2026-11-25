@@ -32,6 +32,7 @@ import type {
 	CoreCompactionMode,
 	CoreCompactionResult,
 	CoreCompactionStrategy,
+	CoreCompactionSummarizationUsage,
 	CoreSessionConfig,
 } from "../../types/config";
 import type { ProviderConfig } from "../../types/provider-settings";
@@ -50,6 +51,7 @@ import {
 	DEFAULT_PRESERVE_RECENT_TOKENS,
 	DEFAULT_TARGET_RATIO,
 	findLatestSummaryIndex,
+	isCompactionCancellation,
 	MAX_INPUT_UNDERESTIMATE_FACTOR,
 	normalizeUserContextCeiling,
 	resolveEffectiveMaxInputTokens,
@@ -149,6 +151,23 @@ export interface ContextPipelinePrepareTurnInput {
 		decisionId: () => string;
 		deadlineMs?: () => number;
 	};
+	/**
+	 * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01.
+	 *
+	 * The channel through which the compaction reports the
+	 * PROVIDER-REPORTED USAGE of the auxiliary inferences it performed.
+	 *
+	 * It is OUT OF BAND on purpose: a compaction that rejected its
+	 * candidate, was cancelled, or was refused at the persistence boundary
+	 * produced no transcript, so a usage field on the compaction's RESULT
+	 * would be lost exactly in the cases where the inference was still paid
+	 * for.
+	 *
+	 * It is forwarded into the compaction invocation VERBATIM, so the
+	 * summarizer's usage reaches the accounting owner whatever the
+	 * compaction's outcome.
+	 */
+	reportAuxiliaryUsage?: (usage: CoreCompactionSummarizationUsage) => void;
 }
 
 export interface ContextPipelinePrepareTurnResult {
@@ -281,17 +300,369 @@ export interface ContextCompactionPrepareTurnOptions {
 
 const LONG_CONVERSATION_TARGET_RATIO = 0.5;
 
-function isCompactionCancellation(
-	error: unknown,
-	abortSignal: AbortSignal,
+// ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01: the cancellation
+// classifier now lives in `compaction-shared.ts`, because the agentic
+// compactor needs the SAME rule and `compaction.ts` already imports that
+// module — a local copy here would let the two boundaries drift.
+
+/**
+ * ACT-CLINEMM-CMP05-CANCELLATION-COMMIT-AUTHORITY-01.
+ *
+ * The INSTALLATION AUTHORITY CHECK, at the boundary that OWNS the
+ * installation.
+ *
+ * THE COMMIT POINT
+ * ----------------
+ *
+ * The compaction's installation is committed by the `saveState()` call in
+ * `createCompactionStateAwarePrepareTurn()`. That call is NOT the durable
+ * linearization point on its own: the host's `saveState` implementation
+ * validates the state, enqueues the write behind the session's write queue,
+ * and only then performs the atomic file write that actually replaces the
+ * persisted sidecar. Several ASYNCHRONOUS boundaries sit between the
+ * acceptance decision and that durable write.
+ *
+ * The check therefore belongs IMMEDIATELY BEFORE `saveState` is invoked:
+ * that is the last point at which this seam still has authority to refuse
+ * the installation. After `saveState` is invoked the write is in flight
+ * and cancelling would be a rollback of an already committed compaction,
+ * which this contract does NOT do.
+ *
+ * THE AUTHORITY
+ * -------------
+ *
+ * The SAME abort signal that the acceptance decision consults
+ * (`runAgenticCompaction()`) is consulted here. It is the single
+ * cancellation authority; this is not a second one, and it does not
+ * introduce a new state.
+ *
+ * WHY IT IS NEEDED
+ * ----------------
+ *
+ * The acceptance decision runs BEFORE the enrichment pipeline — the task
+ * contract, the verified-outcome carry-forward, the source-bound evidence
+ * carry-forward and the adjudication carry-forward — and every one of those
+ * is `await`ed. A cancellation signalled during that window arrives AFTER
+ * the summary was accepted and BEFORE the state is written, and without this
+ * check it was simply ignored: the state was written and a successful
+ * compaction was published for work the user had already cancelled.
+ */
+function isInstallationCancelled(
+	abortSignal: AbortSignal | undefined,
 ): boolean {
-	if (abortSignal.aborted) {
-		return true;
+	return abortSignal?.aborted === true;
+}
+
+/**
+ * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 (AMENDMENT-01 A1) —
+ * THE INSTALLATION OUTCOME.
+ *
+ * What the host reports about a compaction installation.
+ *
+ * The outcome is a DISCRIMINATED UNION: a successful installation and an
+ * unsuccessful one are DISTINCT typed variants, and an unsuccessful one
+ * ALWAYS carries an ESTABLISHED refusal reason.
+ *
+ * - `{ installed: true }` — the state was durably installed.
+ * - `{ installed: false, reason: "cancelled" }` — the durable commit
+ *   boundary refused the replacement because the turn was cancelled.
+ * - `{ installed: false, reason: "persistence_failed" }` — the durable
+ *   replacement FAILED, or the state was refused before the commit
+ *   boundary because it does not project onto the session's messages.
+ * - `{ installed: false, reason: "stale_state" }` — the incoming state is
+ *   OLDER than the state already installed, so it was skipped.
+ *
+ * WHY THE REASONS ARE DISTINCT
+ * -----------------------------
+ *
+ * The three refusals are THREE DIFFERENT FACTS with three different
+ * remedies:
+ *
+ *   - a CANCELLATION is the user's intent and is not retried;
+ *   - a PERSISTENCE FAILURE is a fault and may be retried or surfaced;
+ *   - a STALE STATE is a benign skip: the newer state already won, and
+ *     nothing is wrong at all.
+ *
+ * Reporting a stale-state skip as a cancellation is a MISDIAGNOSIS: it
+ * tells an operator the user stopped the turn when the user did nothing
+ * wrong. Reporting it as a persistence failure is equally wrong: it
+ * invents a fault that did not occur.
+ *
+ * A cancellation is therefore NEVER reported without cancellation
+ * authority, and a filesystem failure is NEVER reported for a
+ * non-filesystem refusal.
+ */
+export type CompactionInstallationOutcome =
+	| { readonly installed: true }
+	| {
+			readonly installed: false;
+			readonly reason: CompactionInstallationRefusalReason;
+	  };
+
+/**
+ * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 (AMENDMENT-01 A1) —
+ * THE ESTABLISHED REFUSAL REASONS.
+ *
+ * Every unsuccessful installation names one of these. There is no
+ * "unspecified" refusal: an outcome without an established reason is not a
+ * well-formed report.
+ */
+export type CompactionInstallationRefusalReason =
+	| "cancelled"
+	| "persistence_failed"
+	| "stale_state";
+
+/**
+ * ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01 — THE HOST'S
+ * INSTALLATION REPORT.
+ *
+ * Everything a host may return from `saveState`.
+ *
+ * `void` is part of it because a host that installs the state and reports
+ * NOTHING is the historical contract, and such a function must stay
+ * assignable to the `saveState` signature.
+ */
+export type CompactionInstallationReport =
+	| void
+	| boolean
+	| CompactionInstallationOutcome;
+
+/**
+ * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 (AMENDMENT-01 A1) —
+ * THE OUTCOME NORMALIZER.
+ *
+ * It maps the host's return value onto ONE shape, and it is deliberately
+ * CONSERVATIVE about the HISTORICAL contract:
+ *
+ * - `undefined` / `void` — the host reports no outcome, which is the
+ *   HISTORICAL contract: the installation is treated as committed;
+ * - `true` — installed;
+ * - `false` — refused, with the reason UNKNOWN. The refusal is reported as
+ *   a cancellation, which is the PRE-EXISTING behaviour, so no existing
+ *   host's diagnosis changes;
+ * - the object form — installed or refused, with the host's OWN reason.
+ *
+ * THE LEGACY SHAPES ARE PRESERVED EXACTLY
+ * ----------------------------------------
+ *
+ * The bare `false` and the reason-less object are the LEGACY contracts and
+ * they keep their historical meaning. A reason-less object is a host that
+ * has not opted into the structured form; it is reported as a cancellation
+ * because that is what it meant before.
+ *
+ * The defect this repair closes is DIFFERENT and narrower: the STRUCTURED
+ * form must not be able to express an unsuccessful installation WITHOUT an
+ * established reason. A host that opts into the structured form names the
+ * refusal it actually observed.
+ */
+function normalizeInstallationOutcome(
+	outcome: CompactionInstallationReport | undefined,
+): {
+	installed: boolean;
+	reason?: CompactionInstallationRefusalReason;
+} {
+	if (outcome === undefined || outcome === null) {
+		return { installed: true };
 	}
-	return (
-		error instanceof Error &&
-		(error.name === "AbortError" || error.name === "AgentRuntimeAbortError")
-	);
+	if (typeof outcome === "boolean") {
+		return outcome
+			? { installed: true }
+			: { installed: false, reason: "cancelled" };
+	}
+	if (outcome.installed) {
+		return { installed: true };
+	}
+	// The STRUCTURED form always names its refusal. A host that reports an
+	// unsuccessful installation without an established reason is reporting
+	// an ill-formed outcome; the conservative reading of an UNNAMED refusal
+	// is the historical one (a cancellation), and it is NOT an invented
+	// filesystem failure.
+	const reason: CompactionInstallationRefusalReason =
+		outcome.reason ?? "cancelled";
+	return { installed: false, reason };
+}
+
+/**
+ * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 (AMENDMENT-01 A1) —
+ * THE REFUSAL DIAGNOSIS.
+ *
+ * The three refusals are three DIFFERENT facts, and each one is named by
+ * the fact it actually is:
+ *
+ *   - a CANCELLATION names the user's intent;
+ *   - a PERSISTENCE FAILURE names the fault;
+ *   - a STALE STATE names the benign skip: the newer state already won.
+ *
+ * A stale-state skip is never reported as a cancellation, and it is never
+ * reported as a filesystem failure.
+ */
+function describeInstallationRefusal(
+	reason: CompactionInstallationRefusalReason,
+): string {
+	switch (reason) {
+		case "cancelled":
+			return "Skipped agentic compaction: the turn was cancelled before the compaction was durably installed";
+		case "stale_state":
+			return "Skipped agentic compaction: a newer compaction state is already installed";
+		case "persistence_failed":
+			return "Skipped agentic compaction: the compaction could not be durably installed";
+	}
+}
+
+/**
+ * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 (AMENDMENT-01 A1) —
+ * THE REFUSAL KIND.
+ *
+ * The published kind names the refusal boundary and the refusal reason, so
+ * a consumer can tell the three refusals apart without parsing prose.
+ */
+function describeInstallationRefusalKind(
+	reason: CompactionInstallationRefusalReason,
+):
+	| "cancelled_before_durable_commit"
+	| "persistence_failed_at_durable_commit"
+	| "stale_state_at_durable_commit" {
+	switch (reason) {
+		case "cancelled":
+			return "cancelled_before_durable_commit";
+		case "stale_state":
+			return "stale_state_at_durable_commit";
+		case "persistence_failed":
+			return "persistence_failed_at_durable_commit";
+	}
+}
+
+/**
+ * ACT-CLINEMM-CMP05-CANCELLATION-COMMIT-AUTHORITY-01.
+ *
+ * THE SUCCESS PUBLICATION GATE.
+ *
+ * THE ORDERING PROBLEM
+ * --------------------
+ *
+ * The compaction's SUCCESS PUBLICATION ("compacted") is emitted by the
+ * inner seam, which runs the compaction strategy and returns the compacted
+ * transcript. The INSTALLATION is performed by the OUTER seam — this one —
+ * which writes the replacement state.
+ *
+ * So the publication naturally PRECEDES the installation. That ordering is
+ * only safe while nothing can refuse the installation between the two.
+ * With the installation authority check in place, something CAN: a
+ * cancellation signalled in the window between the publication and the
+ * installation refuses the write, and a publication that already claimed a
+ * successful compaction would then be a lie — the operator would be told a
+ * compaction happened when nothing was installed.
+ *
+ * THE FIX
+ * -------
+ *
+ * The publication is DEFERRED past the installation and RELEASED only when
+ * the installation actually committed. The interception reuses the seam's
+ * EXISTING `emitStatusNotice` channel — the same channel the imported-
+ * history seam already intercepts — so no new channel and no new contract
+ * are introduced.
+ *
+ * Every OTHER notice is passed through immediately and in order, so the
+ * observable notice sequence is unchanged apart from the success notice
+ * moving after the installation it describes. That is the point: the
+ * success notice now describes an installation that actually happened.
+ *
+ * The buffered notice is RELEASED when the installation committed, and
+ * SUPPRESSED when the installation was refused by the cancellation
+ * authority. In the refused case the outer seam reports the compaction as
+ * SKIPPED, which is the truthful outcome.
+ */
+interface DeferredCompactionSuccessPublication {
+	/** The buffered success notice, when one was published. */
+	readonly pending: {
+		readonly message: string;
+		readonly metadata: unknown;
+	} | null;
+	/** The interception installed on the inner seam's context. */
+	readonly intercept: (
+		message: string,
+		metadata?: Record<string, unknown>,
+	) => void;
+	/**
+	 * Release the buffered success notice, if any.
+	 *
+	 * Called ONLY after the installation committed.
+	 */
+	readonly release: () => void;
+	/**
+	 * Drop the buffered success notice, if any.
+	 *
+	 * Called when the installation was refused, so no successful
+	 * compaction is published for work that was not installed.
+	 */
+	readonly discard: () => void;
+	/**
+	 * Publish the TRUTHFUL outcome of a refused installation.
+	 *
+	 * The buffered success notice is dropped and the compaction is
+	 * reported as SKIPPED with the cancellation reason, so an operator
+	 * sees WHY nothing was installed instead of seeing a compaction that
+	 * appears to have started and then stopped for no reason.
+	 */
+	readonly publishRefused: (metadata: Record<string, unknown>) => void;
+}
+
+function createDeferredCompactionSuccessPublication(input: {
+	emitStatusNotice:
+		| ((message: string, metadata?: Record<string, unknown>) => void)
+		| undefined;
+	/**
+	 * Whether the notice is the compaction SUCCESS publication.
+	 *
+	 * The success notice is the one whose suffix is exactly `compacted`;
+	 * the sibling notices are `compacting`, `compaction-skipped` and
+	 * `compaction-budget-adjusted`.
+	 */
+	isSuccessNotice: (message: string) => boolean;
+}): DeferredCompactionSuccessPublication {
+	let pending: {
+		readonly message: string;
+		readonly metadata: unknown;
+	} | null = null;
+	return {
+		get pending() {
+			return pending;
+		},
+		intercept: (message, metadata) => {
+			if (input.isSuccessNotice(message)) {
+				pending = { message, metadata };
+				return;
+			}
+			input.emitStatusNotice?.(message, metadata);
+		},
+		release: () => {
+			const notice = pending;
+			pending = null;
+			if (notice) {
+				input.emitStatusNotice?.(
+					notice.message,
+					notice.metadata as Record<string, unknown> | undefined,
+				);
+			}
+		},
+		discard: () => {
+			pending = null;
+		},
+		publishRefused: (metadata) => {
+			pending = null;
+			// ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01: the
+			// refusal REASON is reported truthfully. The `reason` the caller
+			// supplies is the authority; a persistence failure is not
+			// reported as a cancellation.
+			const reason =
+				typeof metadata.reason === "string" ? metadata.reason : "cancelled";
+			input.emitStatusNotice?.("compaction-skipped", {
+				phase: "skipped",
+				rejectionReason: reason,
+				...metadata,
+			});
+		},
+	};
 }
 
 function describeCompactionError(error: unknown): Record<string, unknown> {
@@ -1074,6 +1445,13 @@ export function createContextCompactionPrepareTurn(
 			model: context.model,
 			mode: effectiveMode,
 			abortSignal: context.abortSignal,
+			// ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01: the
+			// usage channel is forwarded into the compaction context, so the
+			// summarizer's provider-reported usage leaves the compaction
+			// whatever the compaction's outcome.
+			...(context.reportAuxiliaryUsage
+				? { reportAuxiliaryUsage: context.reportAuxiliaryUsage }
+				: {}),
 			budget: {
 				request: {
 					inputTokens: requestInputTokens,
@@ -1818,11 +2196,56 @@ export function createCompactionStateAwarePrepareTurn(input: {
 	 * over; hosts must validate projection against these rather than a
 	 * separately derived transcript, which can legally differ mid-turn and
 	 * spuriously reject the write.
+	 *
+	 * ACT-CLINEMM-CMP06-DURABLE-COMMIT-AUTHORITY-01.
+	 *
+	 * The host's persistence path is ASYNCHRONOUS: it serializes the
+	 * session's compaction-state writes behind a queue and performs the
+	 * durable replacement only when the write reaches the front of that
+	 * queue. The seam's own cancellation check (immediately before this
+	 * call) therefore governs only the ACCEPTANCE of the candidate, not
+	 * its INSTALLATION: the write may still be QUEUED when the turn is
+	 * cancelled.
+	 *
+	 * So the SEAM'S OWN abort signal is handed to the host here, and the
+	 * host consults it at the DURABLE COMMIT BOUNDARY — the last point at
+	 * which the replacement can still be refused. It is the SAME signal,
+	 * not a second authority.
+	 *
+	 * The RETURN VALUE reports whether the state was actually INSTALLED:
+	 *
+	 *   - `undefined` / `void` — the host does not report an outcome; the
+	 *     installation is treated as committed (the historical contract,
+	 *     preserved for every existing host and test double);
+	 *   - `true` — the state was durably installed;
+	 *   - `false` — the installation was REFUSED at the durable commit
+	 *     boundary, so nothing was written and the success notice must
+	 *     NOT be published.
+	 *
+	 * ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01 — THE
+	 * REFUSAL REASON.
+	 *
+	 * A bare `false` says only THAT the installation was refused, not WHY.
+	 * The seam cannot tell a CANCELLATION from a PERSISTENCE FAILURE, and
+	 * it used to report both as `cancelled` — a misclassification, because
+	 * a persistence failure is a DIFFERENT fact with a DIFFERENT remedy.
+	 *
+	 * The host may therefore return an OBJECT carrying the reason:
+	 *
+	 *   - `{ installed: false, reason: "cancelled" }` — the durable commit
+	 *     boundary refused the replacement because the turn was cancelled;
+	 *   - `{ installed: false, reason: "persistence_failed" }` — the
+	 *     durable replacement FAILED.
+	 *
+	 * The object form is ADDITIVE: a host that returns `undefined`,
+	 * `true` or `false` behaves EXACTLY as before. Only a host that opts in
+	 * to the object form gets the truthful diagnosis.
 	 */
 	saveState?: (
 		state: SessionCompactionState,
 		sourceMessages: CoreCompactionContext["messages"],
-	) => void | Promise<void>;
+		abortSignal?: AbortSignal,
+	) => CompactionInstallationReport | Promise<CompactionInstallationReport>;
 	/**
 	 * ACT-CLINEMM-COMPACTION-TASK-CONTRACT-CONSERVATION-REPAIR01: an
 	 * additional ceiling on the effective request input limit, applied on top
@@ -1995,11 +2418,28 @@ export function createCompactionStateAwarePrepareTurn(input: {
 			// canonical tail. This keeps automatic turns bounded without rebuilding a
 			// full-transcript summary every turn; manual `/compact` is the path for a
 			// fresh summary from canonical history.
+			//
+			// ACT-CLINEMM-CMP05-CANCELLATION-COMMIT-AUTHORITY-01: the inner
+			// seam's SUCCESS PUBLICATION is deferred until this seam has
+			// actually installed the state, so a successful compaction is
+			// never announced for work that was refused or never written.
+			const successPublication = createDeferredCompactionSuccessPublication({
+				emitStatusNotice: context.emitStatusNotice,
+				isSuccessNotice: (message) => message.endsWith("compacted"),
+			});
 			const result = input.compact
 				? await input.compact({
 						...context,
 						messages: projectedMessages,
 						apiMessages: await input.prepareApiMessages(projectedMessages),
+						emitStatusNotice: successPublication.intercept,
+						// ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01:
+						// the usage channel is forwarded into the compaction
+						// invocation, so the summarizer's provider-reported usage
+						// leaves the compaction whatever its outcome.
+						...(context.reportAuxiliaryUsage
+							? { reportAuxiliaryUsage: context.reportAuxiliaryUsage }
+							: {}),
 					})
 				: undefined;
 			if (result?.messages) {
@@ -2105,19 +2545,117 @@ export function createCompactionStateAwarePrepareTurn(input: {
 					countCanonicalSourceMessages(context.messages),
 				);
 				const contractedMessages = adjudicated.messages;
-				const nextState = createSessionCompactionState({
-					sourceMessages: context.messages,
-					compactedMessages: contractedMessages,
-					conversationId: context.conversationId,
-					systemPrompt,
-				});
-				await input.saveState?.(nextState, context.messages);
-				return publishWorkingContextEstimate(
-					contractedMessages,
-					systemPrompt ?? context.systemPrompt,
-					context.tools,
-					contractMaxRequestTokens,
+				// ACT-CLINEMM-CMP05-CANCELLATION-COMMIT-AUTHORITY-01: the
+				// INSTALLATION AUTHORITY CHECK.
+				//
+				// The summary was ACCEPTED above, but the enrichment
+				// pipeline that follows it is `await`ed, so a cancellation
+				// signalled in that window arrives after the acceptance and
+				// before the state is written. This is the last point at
+				// which this seam can refuse the installation.
+				//
+				// A cancelled installation writes NOTHING: the previously
+				// installed valid state is left exactly as it was, the
+				// compacted source boundary does not advance, and no
+				// successful compaction is published.
+				//
+				// The refusal FALLS THROUGH to the restoration path below,
+				// which is exactly what this seam does when the compaction
+				// produced no result: the previously installed sidecar is
+				// projected for the provider. The rejected candidate is
+				// never projected and never persisted.
+				if (!isInstallationCancelled(context.abortSignal)) {
+					const nextState = createSessionCompactionState({
+						sourceMessages: context.messages,
+						compactedMessages: contractedMessages,
+						conversationId: context.conversationId,
+						systemPrompt,
+					});
+					// ACT-CLINEMM-CMP06-DURABLE-COMMIT-AUTHORITY-01: the seam's
+					// OWN abort signal travels with the installation, and the
+					// host reports whether the state was actually INSTALLED.
+					//
+					// The host's persistence path is a QUEUE: the write can
+					// still be pending when the turn is cancelled after this
+					// seam's own check. The host therefore consults the SAME
+					// signal at the DURABLE COMMIT BOUNDARY and refuses the
+					// replacement there.
+					const installed = normalizeInstallationOutcome(
+						await input.saveState?.(
+							nextState,
+							context.messages,
+							context.abortSignal,
+						),
+					);
+					if (!installed.installed) {
+						// The installation was REFUSED at the durable commit
+						// boundary: nothing was written, so no successful
+						// compaction may be published and the previously
+						// installed state remains in force.
+						//
+						// ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01:
+						// the refusal REASON is reported truthfully. A
+						// PERSISTENCE FAILURE is not a cancellation and is
+						// not reported as one.
+						const refusalReason: CompactionInstallationRefusalReason =
+							installed.reason ?? "cancelled";
+						input.logger?.log?.(describeInstallationRefusal(refusalReason), {
+							severity: "warn",
+							rejectionReason: refusalReason,
+							phase: "durable_commit",
+						});
+						successPublication.publishRefused({
+							kind: describeInstallationRefusalKind(refusalReason),
+							reason: refusalReason,
+							iteration: context.iteration,
+						});
+						// ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01
+						// — THE REFUSED CANDIDATE IS NOT RETURNED.
+						//
+						// The candidate was NOT installed: nothing was written
+						// and the previously installed state remains in force.
+						// Returning `contractedMessages` would nevertheless
+						// hand the REJECTED candidate to the provider as this
+						// turn's working transcript, so the refusal would
+						// hold in the persisted sidecar but NOT in the
+						// request the model actually sees.
+						//
+						// The refusal therefore returns the ORIGINAL messages,
+						// exactly as the installation-refusal path below
+						// does. The rejected candidate is absent from the
+						// provider-visible projection.
+						return publishWorkingContextEstimateMetadataOnly(
+							context.messages,
+							context.systemPrompt,
+							context.tools,
+						);
+					}
+					// The installation committed, so the success notice may
+					// now be published.
+					successPublication.release();
+					return publishWorkingContextEstimate(
+						contractedMessages,
+						systemPrompt ?? context.systemPrompt,
+						context.tools,
+						contractMaxRequestTokens,
+					);
+				}
+				input.logger?.log?.(
+					"Skipped agentic compaction: the turn was cancelled before the compaction was installed",
+					{
+						severity: "warn",
+						rejectionReason: "cancelled",
+						phase: "installation",
+					},
 				);
+				// No successful compaction is published for a compaction that
+				// was not installed. The truthful outcome is reported
+				// instead, naming the cancellation.
+				successPublication.publishRefused({
+					kind: "cancelled_before_installation",
+					reason: "cancelled",
+					iteration: context.iteration,
+				});
 			}
 			const projectedSystemPrompt =
 				result?.systemPrompt ?? existingState.system_prompt;
@@ -2228,11 +2766,27 @@ export function createCompactionStateAwarePrepareTurn(input: {
 		// The seam itself is FORWARDED INTO the compaction invocation, so
 		// the seam that OWNS the eligibility decision is the one that
 		// decides whether to pay for the checkpoint.
+		// ACT-CLINEMM-CMP05-CANCELLATION-COMMIT-AUTHORITY-01: the inner
+		// seam's SUCCESS PUBLICATION is deferred until this seam has
+		// actually installed the state, so a successful compaction is never
+		// announced for work that was refused or never written.
+		const successPublication = createDeferredCompactionSuccessPublication({
+			emitStatusNotice: context.emitStatusNotice,
+			isSuccessNotice: (message) => message.endsWith("compacted"),
+		});
 		const result = input.compact
 			? await input.compact({
 					...context,
 					...(input.knowledgeCheckpoint
 						? { knowledgeCheckpoint: input.knowledgeCheckpoint }
+						: {}),
+					emitStatusNotice: successPublication.intercept,
+					// ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01:
+					// the usage channel is forwarded into the compaction
+					// invocation, so the summarizer's provider-reported usage
+					// leaves the compaction whatever its outcome.
+					...(context.reportAuxiliaryUsage
+						? { reportAuxiliaryUsage: context.reportAuxiliaryUsage }
 						: {}),
 				})
 			: undefined;
@@ -2308,13 +2862,91 @@ export function createCompactionStateAwarePrepareTurn(input: {
 				checkpointRecords,
 			);
 			const contractedMessages = checkpointed;
+			// ACT-CLINEMM-CMP05-CANCELLATION-COMMIT-AUTHORITY-01: the
+			// INSTALLATION AUTHORITY CHECK.
+			//
+			// The same authority, at the same kind of boundary, on the FIRST
+			// compaction path. The enrichment pipeline between the
+			// acceptance and this point is `await`ed, so a cancellation
+			// signalled in that window arrives after the acceptance and
+			// before the state is written.
+			//
+			// A cancelled installation writes NOTHING and publishes NO
+			// successful compaction.
+			if (isInstallationCancelled(context.abortSignal)) {
+				input.logger?.log?.(
+					"Skipped agentic compaction: the turn was cancelled before the compaction was installed",
+					{
+						severity: "warn",
+						rejectionReason: "cancelled",
+						phase: "installation",
+					},
+				);
+				// No successful compaction is published for a compaction
+				// that was not installed. The truthful outcome is reported
+				// instead, naming the cancellation.
+				successPublication.publishRefused({
+					kind: "cancelled_before_installation",
+					reason: "cancelled",
+					iteration: context.iteration,
+				});
+				return publishWorkingContextEstimateMetadataOnly(
+					context.messages,
+					context.systemPrompt,
+					context.tools,
+				);
+			}
 			const nextState = createSessionCompactionState({
 				sourceMessages: context.messages,
 				compactedMessages: contractedMessages,
 				conversationId: context.conversationId,
 				systemPrompt: result.systemPrompt,
 			});
-			await input.saveState?.(nextState, context.messages);
+			// ACT-CLINEMM-CMP06-DURABLE-COMMIT-AUTHORITY-01: the seam's OWN
+			// abort signal travels with the installation, and the host
+			// reports whether the state was actually INSTALLED. The host's
+			// persistence path is a QUEUE, so the write can still be pending
+			// when the turn is cancelled after this seam's own check; the
+			// host consults the SAME signal at the DURABLE COMMIT BOUNDARY
+			// and refuses the replacement there.
+			const installed = normalizeInstallationOutcome(
+				await input.saveState?.(
+					nextState,
+					context.messages,
+					context.abortSignal,
+				),
+			);
+			if (!installed.installed) {
+				// The installation was REFUSED at the durable commit
+				// boundary: nothing was written, so no successful
+				// compaction may be published and the previously installed
+				// state remains in force.
+				//
+				// ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01:
+				// the refusal REASON is reported truthfully. A PERSISTENCE
+				// FAILURE is not a cancellation and is not reported as one.
+				const refusalReason: CompactionInstallationRefusalReason =
+					installed.reason ?? "cancelled";
+				input.logger?.log?.(describeInstallationRefusal(refusalReason), {
+					severity: "warn",
+					rejectionReason: refusalReason,
+					phase: "durable_commit",
+				});
+				successPublication.publishRefused({
+					kind: describeInstallationRefusalKind(refusalReason),
+					reason: refusalReason,
+					iteration: context.iteration,
+				});
+				return publishWorkingContextEstimateMetadataOnly(
+					context.messages,
+					context.systemPrompt,
+					context.tools,
+					contractMaxRequestTokens,
+				);
+			}
+			// The installation committed, so the success notice may now be
+			// published.
+			successPublication.release();
 			return publishWorkingContextEstimate(
 				contractedMessages,
 				result.systemPrompt ?? context.systemPrompt,

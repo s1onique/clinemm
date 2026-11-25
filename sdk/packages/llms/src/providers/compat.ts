@@ -1,5 +1,6 @@
 import type {
 	AgentModelEvent,
+	AgentModelFinishReason,
 	GatewayModelDefinition,
 	GatewayProviderFactory,
 	GatewayProviderRegistration,
@@ -579,6 +580,45 @@ function buildGatewayConfig(config: ProviderConfig) {
 	};
 }
 
+/**
+ * ACT-CLINEMM-COMPACTION-ATOMIC-SUMMARY-INSTALLATION-REPAIR-01
+ * (AMENDMENT-02 C1) — THE TERMINAL REASONS THAT ESTABLISH A SUCCESSFUL
+ * COMPLETION.
+ *
+ * A gateway `finish` event carries an `AgentModelFinishReason`. Only the
+ * reasons in this set establish that the provider completed the response
+ * successfully.
+ *
+ *   - `stop`         — the provider completed the response normally.
+ *   - `tool-calls`   — the provider completed the response by asking for tool
+ *                      calls; the response itself was complete.
+ *   - `max-tokens`   — the provider completed the response but truncated it
+ *                      against the output budget. The completion IS
+ *                      established; the TRUNCATION is reported separately
+ *                      through `incompleteReason`.
+ *   - `content-filter` — the provider completed the response and filtered it.
+ *                      The completion IS established; the FILTERING is
+ *                      reported separately through `incompleteReason`.
+ *
+ * The reasons NOT in this set do NOT establish a successful completion:
+ *
+ *   - `unknown`      — the provider reported no terminal reason, or one this
+ *                      codebase does not model. The response may be cut off;
+ *                      authoritative successful completion has NOT been
+ *                      established. (The shared contract says exactly this.)
+ *   - `error`        — the stream failed.
+ *   - `aborted`      — the stream was aborted.
+ *
+ * The set is module-level so the mapping does not allocate per chunk.
+ */
+const SUCCESSFUL_COMPLETION_REASONS: ReadonlySet<AgentModelFinishReason> =
+	new Set<AgentModelFinishReason>([
+		"stop",
+		"tool-calls",
+		"max-tokens",
+		"content-filter",
+	]);
+
 function toApiStreamChunk(
 	id: string,
 	event: AgentModelEvent,
@@ -643,11 +683,51 @@ function toApiStreamChunk(
 				totalCost: event.usage.totalCost,
 			};
 		case "finish":
+			// ACT-CLINEMM-COMPACTION-ATOMIC-SUMMARY-INSTALLATION-REPAIR-01
+			// (AMENDMENT-02 C1) — THE TERMINAL-AUTHORITY MAPPING.
+			//
+			// `success` used to be `event.reason !== "error"`, which answered
+			// "did the stream complete successfully?" with "was the reason
+			// literally the string 'error'?". The gateway's finish-reason
+			// vocabulary is wider than that, and the shared contract states
+			// the intended semantics explicitly:
+			//
+			//   "Missing or unrecognized provider finish reasons normalize to
+			//    `unknown`: the response may be cut off and must not be treated
+			//    as successful completion."
+			//
+			// The adapter therefore DISCARDED a distinction the transport had
+			// already made: an `unknown` reason (a stream that ended without
+			// the provider reporting a terminal reason) was reported as
+			// `success: true`, byte-identical to a normal `stop` completion.
+			// A consumer could not tell an ESTABLISHED completion from an
+			// UNEStablished one.
+			//
+			// `success` is now derived from the reasons that ESTABLISH a
+			// successful completion. An `unknown` reason is not a successful
+			// completion: it means authoritative successful completion has
+			// NOT been established. That is a weaker and different claim than
+			// "the response was truncated" — a provider may legitimately
+			// report a reason this codebase does not model — so NO
+			// `incompleteReason` is manufactured for it, and no error
+			// message is invented either. The consumer sees a non-successful
+			// terminal completion and nothing more.
+			//
+			// The established mappings are preserved exactly: `max-tokens`
+			// still reports `incompleteReason: "max_tokens"`, `content-filter`
+			// still reports `incompleteReason: "content_filter"`, and a
+			// `stop` / `tool-calls` completion is still successful.
 			return {
 				type: "done",
 				id,
-				success: event.reason !== "error",
+				success: SUCCESSFUL_COMPLETION_REASONS.has(event.reason),
 				error: event.error,
+				// The terminal reason is preserved so a consumer can tell an
+				// ESTABLISHED completion from an UNEStablished one. `success`
+				// alone cannot carry that distinction: it is false both for a
+				// failed stream and for a stream that ended without the
+				// provider reporting a terminal reason.
+				finishReason: event.reason,
 				incompleteReason:
 					event.reason === "max-tokens"
 						? "max_tokens"

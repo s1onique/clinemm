@@ -192,6 +192,164 @@ describe("createAgentModelFromApiHandler", () => {
 		});
 	});
 
+	// ACT-CLINEMM-COMPACTION-ATOMIC-SUMMARY-INSTALLATION-REPAIR-01
+	// (AMENDMENT-02 C1) — THE PRESERVED TERMINAL REASON.
+	it("preserves a reported terminal reason instead of collapsing it into stop", async () => {
+		// The compatibility adapter reports `success: false` for a stream that
+		// ended without the provider ESTABLISHING a successful completion.
+		// That covers both a FAILED stream and an UNEStablished one, and the
+		// runtime handles them differently — so the distinction must survive
+		// the adapter instead of collapsing into "error".
+		const handler = fakeHandler([
+			{
+				type: "done",
+				success: false,
+				finishReason: "unknown",
+				id: "x",
+			},
+		]);
+		const model = createAgentModelFromApiHandler(handler);
+		const events = await collect(model.stream(baseRequest));
+
+		// An unestablished completion is NOT an error: the runtime has
+		// dedicated handling for it ("Model ended without a recognized finish
+		// reason"), and that handling must not be bypassed.
+		expect(events.at(-1)).toMatchObject({
+			type: "finish",
+			reason: "unknown",
+		});
+	});
+
+	it("keeps a LEGACY done chunk without a terminal reason unchanged", async () => {
+		// A legacy registered handler (e.g. the VS Code LM handler) reports no
+		// terminal reason at all. That is NOT the same claim as a handler that
+		// REPORTED an unestablished one, so it keeps its previous mapping.
+		const handler = fakeHandler([{ type: "done", success: true, id: "x" }]);
+		const model = createAgentModelFromApiHandler(handler);
+		const events = await collect(model.stream(baseRequest));
+
+		expect(events.at(-1)).toMatchObject({ type: "finish", reason: "stop" });
+	});
+
+	// ACT-CLINEMM-CMP04-TERMINAL-ACCEPTANCE-CONSERVATION-01 — THE ADAPTER
+	// CONTRACT.
+	//
+	// The terminal reason is now a TYPED value (`AgentModelFinishReason`),
+	// not an arbitrary string, and the mapping has a defined precedence.
+	it("does not let a reported terminal reason override a REPORTED FAILURE", async () => {
+		// The negative signal wins: a chunk that reports a failed stream
+		// WITH an error message is a failure. The reported reason must not
+		// launder it into an "unestablished completion", which would lose
+		// the runtime's error recovery.
+		const handler = fakeHandler([
+			{
+				type: "done",
+				success: false,
+				error: "Provider transport failed",
+				finishReason: "unknown",
+				id: "x",
+			},
+		]);
+		const model = createAgentModelFromApiHandler(handler);
+		const events = await collect(model.stream(baseRequest));
+
+		expect(events.at(-1)).toMatchObject({
+			type: "finish",
+			reason: "error",
+			error: "Provider transport failed",
+		});
+	});
+
+	it("preserves an UNKNOWN terminal reason as unknown, not as a failure", async () => {
+		// `unknown` means the provider never ESTABLISHED a successful
+		// completion. It is NOT an invented provider failure and NOT a
+		// normal completion: the runtime has dedicated handling for it
+		// ("Model ended without a recognized finish reason"), and that
+		// handling must not be bypassed.
+		const handler = fakeHandler([
+			{ type: "done", success: false, finishReason: "unknown", id: "x" },
+		]);
+		const model = createAgentModelFromApiHandler(handler);
+		const events = await collect(model.stream(baseRequest));
+
+		expect(events.at(-1)).toMatchObject({ type: "finish", reason: "unknown" });
+		// No error message is invented for it.
+		expect((events.at(-1) as { error?: string }).error).toBeUndefined();
+	});
+
+	it("does not turn an UNKNOWN terminal reason into a normal completion", async () => {
+		// The counterpart control: `unknown` must not become `stop`.
+		const handler = fakeHandler([
+			{ type: "done", success: true, finishReason: "unknown", id: "x" },
+		]);
+		const model = createAgentModelFromApiHandler(handler);
+		const events = await collect(model.stream(baseRequest));
+
+		expect(events.at(-1)).toMatchObject({ type: "finish", reason: "unknown" });
+	});
+
+	// ACT-CLINEMM-CMP05-TERMINAL-NEGATIVE-SIGNAL-PRECEDENCE-01 — THE
+	// CONFLICTING TERMINAL SIGNALS.
+	//
+	// The terminal fields of a done chunk can CONFLICT. A negative signal
+	// must win over a positive one, or a failed/unestablished turn is
+	// normalized into a successful completion and the consumer cannot tell
+	// the difference.
+	it("does not normalize a FAILED stream with a stop reason into a successful completion", async () => {
+		// `success: false` says the stream did NOT complete successfully.
+		// `finishReason: "stop"` says the provider reported a normal
+		// completion. The NEGATIVE signal wins: the stream failed.
+		const handler = fakeHandler([
+			{ type: "done", success: false, finishReason: "stop", id: "x" },
+		]);
+		const model = createAgentModelFromApiHandler(handler);
+		const events = await collect(model.stream(baseRequest));
+
+		expect(events.at(-1)).toMatchObject({ type: "finish", reason: "error" });
+		expect((events.at(-1) as { reason?: string }).reason).not.toBe("stop");
+	});
+
+	it("does not let a stop reason override an explicit INCOMPLETENESS", async () => {
+		// The provider reported the response was cut short. That
+		// incompleteness is authoritative: the reason must not collapse it
+		// into a normal completion.
+		const handler = fakeHandler([
+			{
+				type: "done",
+				success: true,
+				finishReason: "stop",
+				incompleteReason: "max_output_tokens",
+				id: "x",
+			},
+		]);
+		const model = createAgentModelFromApiHandler(handler);
+		const events = await collect(model.stream(baseRequest));
+
+		expect(events.at(-1)).toMatchObject({
+			type: "finish",
+			reason: "max-tokens",
+		});
+	});
+
+	it("keeps the CONTENT-FILTER incompleteness authoritative over a stop reason", async () => {
+		const handler = fakeHandler([
+			{
+				type: "done",
+				success: true,
+				finishReason: "stop",
+				incompleteReason: "content_filter",
+				id: "x",
+			},
+		]);
+		const model = createAgentModelFromApiHandler(handler);
+		const events = await collect(model.stream(baseRequest));
+
+		expect(events.at(-1)).toMatchObject({
+			type: "finish",
+			reason: "content-filter",
+		});
+	});
+
 	it("forwards the abort signal to the handler", async () => {
 		const handler = fakeHandler([{ type: "text", text: "x", id: "x" }]);
 		const controller = new AbortController();

@@ -1852,6 +1852,18 @@ export class SessionRuntime {
 				...(buildModelOptions(this.config) !== undefined
 					? { requestOptions: buildModelOptions(this.config) }
 					: {}),
+				// ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01: the
+				// runtime's usage channel is forwarded into the compaction
+				// seam, so the summarizer's provider-reported usage reaches
+				// the ordinary production accounting consumer.
+				//
+				// It is forwarded VERBATIM and unconditionally: a compaction
+				// that rejected, cancelled or refused its candidate still
+				// performed a PAID inference, and its usage must not be
+				// lost with the rejected candidate.
+				...(context.reportAuxiliaryUsage
+					? { reportAuxiliaryUsage: context.reportAuxiliaryUsage }
+					: {}),
 				emitStatusNotice: context.emitStatusNotice,
 			});
 			if (!result) {

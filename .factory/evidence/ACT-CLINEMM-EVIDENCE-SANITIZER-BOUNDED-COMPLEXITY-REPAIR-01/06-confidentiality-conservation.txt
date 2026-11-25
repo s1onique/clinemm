@@ -1,0 +1,65 @@
+ACT-CLINEMM-EVIDENCE-SANITIZER-BOUNDED-COMPLEXITY-REPAIR-01 — CONFIDENTIALITY CONSERVATION
+============================================================================================
+THE GATE
+  A DIFFERENTIAL comparison against the predecessor's own output, over every input
+  for which the predecessor terminates. The predecessor implementation is frozen
+  VERBATIM in the committed test file as the reference oracle; the function under
+  test is always the PRODUCTION sanitizeOutcomeText.
+
+RESULTS
+  random fuzz:    300 000 inputs   0 mismatches
+  structured:         118 inputs   0 mismatches
+  pem fuzz:        200 000 inputs   0 mismatches
+  committed suite:   2 000 random + 47 structured   0 mismatches
+  CONFIDENTIALITY_REGRESSIONS = 0
+  ORDINARY_CONTENT_CONSERVATION = CONSERVED (byte-identical)
+
+THE CATEGORIES ASSERTED (each PASSes)
+  key=value credential assignment           value does not survive
+  key: value credential assignment          value does not survive
+  quoted value with spaces                  whole value does not survive
+  JSON-shaped "password":"..."              value does not survive
+  Bearer / Basic / Token header             [REDACTED] emitted
+  PEM private-key block                     [REDACTED PRIVATE KEY] emitted
+  provider-shaped key (sk-, ghp_, xox)      [REDACTED] emitted
+  ordinary content                          unchanged, byte for byte
+  redaction marker and contextual label     DB_PASSWORD=[REDACTED] — label conserved
+  repeated application                      the predecessor's exact behaviour reproduced
+  credential at the START of a long input   redacted
+  credential at the END of a long input     redacted
+  credential crossing a chunk boundary      redacted
+  long credential value (50 000 chars)      redacted
+  multiple credentials in one input         all redacted
+  long non-matching prefix                  terminates, unchanged
+  repeated separators and whitespace        terminates, identical to the predecessor
+  near matches                              identical to the predecessor
+  mixed line endings                         identical to the predecessor
+  unicode and malformed text                 identical to the predecessor
+  PEM markers with no closing marker        identical to the predecessor
+  nested PEM blocks                         identical to the predecessor
+
+TWO CORRECTIONS THE ACT MADE TO ITSELF
+  (1) IDEMPOTENCY. The ACT's first draft asserted the sanitizer was idempotent.
+      It is not, and it was NOT idempotent in the predecessor either: the redaction
+      marker [REDACTED] is itself a value-position assignment whose value runs up
+      to the first ]. The existing contract does NOT require idempotency. The
+      assertion was corrected to assert that the repair REPRODUCES the
+      predecessor's exact repeated-application behaviour ([REDACTED] ->
+      [REDACTED]]), because "improving" it would be an unrequested change to the
+      emitted text.
+  (2) THE PEM REWRITE. The FIRST PEM rewrite — locating both marker kinds with a
+      global regex and pairing them by offset — diverged from the predecessor on
+      9 138 of 200 000 adversarial PEM inputs. The divergence was in the pairing
+      semantics: the predecessor's greedy [A-Z ]* marker extent can OVERLAP the
+      END literal, and the predecessor's lazy span consumes a BEGIN marker that
+      lies inside an already-consumed span. The rewrite was replaced with the
+      faithful algorithm (sticky marker extents; the BEGIN run walked from its
+      LONGEST form down to its shortest; binary-searched pairing), which
+      reproduces the predecessor exactly. Caught by the differential fuzz, not by
+      inspection.
+
+NO NEWLY-CLAIMED COVERAGE
+  No previously-unsupported credential category is claimed to be covered now. The
+  .pgpass-style credential, the legacy _auth= token and the
+  scheme://user:password@host URL still survive the sanitizer — exactly as before.
+  The repair does not change that, and the ACT does not claim it.

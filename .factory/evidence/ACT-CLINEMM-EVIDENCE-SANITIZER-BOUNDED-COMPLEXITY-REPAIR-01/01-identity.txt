@@ -1,0 +1,14 @@
+ACT-CLINEMM-EVIDENCE-SANITIZER-BOUNDED-COMPLEXITY-REPAIR-01 — IDENTITY
+=========================================================================
+ENTRY_HEAD            = 1d45a8d845eca27bce311949a08fca7868f211cd
+SUBJECT_HEAD          = 7a88dd10aafc20d5957d77b8616e752342cf6a42
+EXPECTED_PREDECESSOR  = 1d45a8d845eca27bce311949a08fca7868f211cd  (MATCH)
+BRANCH                = main
+TRACKED_TREE_AT_ENTRY = clean
+STASHES_AT_ENTRY      = none
+PREDECESSOR_ACT       = ACT-CLINEMM-COMPACTION-TASK-CONDITIONED-EVIDENCE-SELECTION-01
+PRODUCTION_FILE       = sdk/packages/core/src/extensions/context/evidence-continuity.ts
+PRODUCTION_SYMBOL     = sanitizeOutcomeText(text: string): string
+BARREL_EXPORT         = sdk/packages/core/src/index.ts (unchanged)
+RUNTIMES_EXERCISED    = Node 26.0.0 (V8, the production extension-host runtime)
+                        bun 1.3.14 (the SDK runtime)

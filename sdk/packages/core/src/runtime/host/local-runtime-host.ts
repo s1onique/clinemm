@@ -42,7 +42,6 @@ import {
 	resolvePckDeadlineMs,
 } from "../../extensions/context/precompaction-knowledge-checkpoint/runtime";
 import { generateSummary } from "../../extensions/context/summary-generation";
-import { resolveConnectionProviderConfig } from "../../services/llms/handler-factory";
 import type {
 	McpAppResourceReadRequest,
 	McpAppsRuntime,
@@ -66,6 +65,7 @@ import type { TeamEvent } from "../../extensions/tools/team";
 import type { HookEventPayload } from "../../hooks";
 import { buildTelemetryAgentIdentity } from "../../services/agent-events";
 import { resolveWorkspacePath } from "../../services/config";
+import { resolveConnectionProviderConfig } from "../../services/llms/handler-factory";
 import { prepareLocalRuntimeBootstrap } from "../../services/local-runtime-bootstrap";
 import {
 	executePluginCommand,
@@ -152,6 +152,7 @@ import {
 } from "../orchestration/runtime-oauth-token-manager";
 import type { RuntimeBuilder } from "../orchestration/session-runtime";
 import { SessionRuntime } from "../orchestration/session-runtime-orchestrator";
+import { markHostRuntimeControl } from "../turn-queue/host-runtime-control-brand";
 import { PendingPromptsController } from "../turn-queue/pending-prompt-service";
 import { manifestToSessionRecord } from "./history";
 import { AgentEventBridge } from "./local/agent-event-bridge";
@@ -170,16 +171,13 @@ import {
 	type SubAgentStartTracker,
 } from "./local/spawn-tool";
 import { loadUserFileContent } from "./local/user-files";
-import {
-	markHostRuntimeControl,
-} from "../turn-queue/host-runtime-control-brand";
 import type {
+	HostOwnershipFactsSnapshotInternal,
 	ListSessionsOptions,
 	PendingPromptsServiceApi,
 	ResolvedStartSessionInput,
 	RestoreSessionInput,
 	RestoreSessionResult,
-	HostOwnershipFactsSnapshotInternal,
 	RuntimeHost,
 	RuntimeHostSubscribeOptions,
 	SendSessionInput,
@@ -629,10 +627,10 @@ export class LocalRuntimeHost implements RuntimeHost {
 			// to prevent a stale read at Q5 from being read as
 			// "queue is empty" (fail-closed on unknown sessionId).
 			count: (sessionId) => {
-				if (!sessionId) return { available: false }
-				const active = this.sessions.get(sessionId)
-				if (!active) return { available: false }
-				return { available: true, count: active.pendingPrompts.length }
+				if (!sessionId) return { available: false };
+				const active = this.sessions.get(sessionId);
+				if (!active) return { available: false };
+				return { available: true, count: active.pendingPrompts.length };
 			},
 		};
 		this.eventBridge = new AgentEventBridge({
@@ -1172,8 +1170,9 @@ export class LocalRuntimeHost implements RuntimeHost {
 					// shared summarizer/agent configuration is never mutated
 					// and the ordinary summarizer's and the working agent's
 					// retries are preserved exactly.
-					const pckCheckpointProviderConfig =
-						applyPckPhysicalRequestPolicy(effectiveCheckpointProviderConfig);
+					const pckCheckpointProviderConfig = applyPckPhysicalRequestPolicy(
+						effectiveCheckpointProviderConfig,
+					);
 					return await generateSummary({
 						providerConfig: pckCheckpointProviderConfig,
 						systemPrompt,
@@ -1206,35 +1205,34 @@ export class LocalRuntimeHost implements RuntimeHost {
 			// byte-identical to the pre-ACT behaviour.
 			...(adjudicationRegistry
 				? {
-					adjudication: {
-						registry: adjudicationRegistry,
-						...(configWithProvider.adjudication?.vocabulary
-							? { vocabulary: configWithProvider.adjudication.vocabulary }
-							: {}),
-						...(configWithProvider.adjudication?.revisionResolver
-							? {
-								revisionResolver:
-									configWithProvider.adjudication.revisionResolver,
-							}
-							: {}),
-						// ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01:
-						// the acquisition-time records.
-						//
-						// They are derived from the CANONICAL HISTORY, which is
-						// the DURABLE authority: the records ride on the
-						// persisted tool-result blocks, so a session recreated
-						// from the persisted transcript restores them with no
-						// in-memory handover and no workspace re-read.
-						...(configWithProvider.adjudication?.revisionResolver
-							? {
-									getAcquisitions: (
-										canonicalMessages: readonly LlmsProviders.MessageWithMetadata[],
-									) =>
-										buildAcquisitionEvidenceLedger(canonicalMessages),
-								}
-							: {}),
-					},
-				}
+						adjudication: {
+							registry: adjudicationRegistry,
+							...(configWithProvider.adjudication?.vocabulary
+								? { vocabulary: configWithProvider.adjudication.vocabulary }
+								: {}),
+							...(configWithProvider.adjudication?.revisionResolver
+								? {
+										revisionResolver:
+											configWithProvider.adjudication.revisionResolver,
+									}
+								: {}),
+							// ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01:
+							// the acquisition-time records.
+							//
+							// They are derived from the CANONICAL HISTORY, which is
+							// the DURABLE authority: the records ride on the
+							// persisted tool-result blocks, so a session recreated
+							// from the persisted transcript restores them with no
+							// in-memory handover and no workspace re-read.
+							...(configWithProvider.adjudication?.revisionResolver
+								? {
+										getAcquisitions: (
+											canonicalMessages: readonly LlmsProviders.MessageWithMetadata[],
+										) => buildAcquisitionEvidenceLedger(canonicalMessages),
+									}
+								: {}),
+						},
+					}
 				: {}),
 			// ACT-CLINEMM-COMPACTION-TASK-CONTRACT-CONSERVATION-REPAIR01:
 			// use the SAME configured operating ceiling as the compaction
@@ -1269,7 +1267,9 @@ export class LocalRuntimeHost implements RuntimeHost {
 						"Compaction prepareTurn ran before the session runtime was created",
 					);
 				}
-				if (typeof agent.prepareProviderMessagesForBudgetAccounting === "function") {
+				if (
+					typeof agent.prepareProviderMessagesForBudgetAccounting === "function"
+				) {
 					return await agent.prepareProviderMessagesForBudgetAccounting(
 						messages,
 					);
@@ -1279,9 +1279,13 @@ export class LocalRuntimeHost implements RuntimeHost {
 				}
 				return messages;
 			},
-			saveState: async (state, sourceMessages) => {
+			// ACT-CLINEMM-CMP06-DURABLE-COMMIT-AUTHORITY-01: the seam's OWN
+			// abort signal travels with the installation, and the outcome is
+			// reported back so the seam can withhold its success notice when
+			// the durable commit boundary refused the replacement.
+			saveState: async (state, sourceMessages, abortSignal) => {
 				const activeSession = activeSessionRef;
-				if (!activeSession) return;
+				if (!activeSession) return true;
 				const stateForSession = {
 					...state,
 					conversation_id: activeSession.sessionId,
@@ -1296,6 +1300,7 @@ export class LocalRuntimeHost implements RuntimeHost {
 						activeSession,
 						stateForSession,
 						sourceMessages,
+						abortSignal,
 					);
 					if (!result.updated) {
 						configWithProvider.logger?.debug?.(
@@ -1306,6 +1311,38 @@ export class LocalRuntimeHost implements RuntimeHost {
 							},
 						);
 					}
+					// ACT-CLINEMM-CMP06-DURABLE-COMMIT-AUTHORITY-01: report the
+					// INSTALLATION OUTCOME. `false` means the durable commit
+					// boundary refused the replacement (nothing was written), so
+					// the seam must not publish a successful compaction.
+					//
+					// ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01:
+					// the outcome carries the REFUSAL REASON, so the seam can
+					// tell a cancellation from a persistence failure and
+					// report the truthful diagnosis.
+					//
+					// ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01
+					// (AMENDMENT-02 §5) — THE OUTCOME IS A DISCRIMINATED
+					// UNION, NOT A CAST.
+					//
+					// The previous form built an optional-reason object and
+					// CAST it into the union, so the type system never checked
+					// that an unsuccessful installation actually carried a
+					// reason. The producer now CONSTRUCTS the union: an
+					// unsuccessful outcome is impossible to express without an
+					// established refusal reason.
+					//
+					// The LEGACY shapes are untouched: the boolean `false` and
+					// the reason-less object keep their historical meaning
+					// elsewhere; only this producer opts into the structured
+					// form.
+					if (result.updated) {
+						return { installed: true };
+					}
+					return {
+						installed: false,
+						reason: result.reason ?? "persistence_failed",
+					};
 				} catch (error) {
 					configWithProvider.logger?.error?.(
 						"Failed to persist session compaction state",
@@ -1324,6 +1361,14 @@ export class LocalRuntimeHost implements RuntimeHost {
 						},
 					});
 				}
+				// The durable replacement FAILED, so nothing was installed.
+				// The seam must not publish a successful compaction for it.
+				//
+				// ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01:
+				// the failure is reported as a PERSISTENCE FAILURE, not as a
+				// cancellation. The turn was not cancelled — the write
+				// failed — and the two facts have different remedies.
+				return { installed: false, reason: "persistence_failed" };
 			},
 		});
 
@@ -1465,21 +1510,21 @@ export class LocalRuntimeHost implements RuntimeHost {
 			// messages still wins.
 			hooks: adjudicationRegistry
 				? {
-					...bootstrap.hooks,
-					beforeModel: async (ctx) => {
-						const withHandles = attachEvidenceHandlesToAgentMessages(
-							ctx.request.messages,
-							adjudicationRegistry,
-						);
-						const control = await bootstrap.hooks?.beforeModel?.({
-							...ctx,
-							request: { ...ctx.request, messages: withHandles },
-						});
-						return control
-							? { ...control, messages: control.messages ?? withHandles }
-							: { messages: withHandles };
-					},
-				}
+						...bootstrap.hooks,
+						beforeModel: async (ctx) => {
+							const withHandles = attachEvidenceHandlesToAgentMessages(
+								ctx.request.messages,
+								adjudicationRegistry,
+							);
+							const control = await bootstrap.hooks?.beforeModel?.({
+								...ctx,
+								request: { ...ctx.request, messages: withHandles },
+							});
+							return control
+								? { ...control, messages: control.messages ?? withHandles }
+								: { messages: withHandles };
+						},
+					}
 				: bootstrap.hooks,
 			extensions,
 			hookErrorMode: configWithProvider.hookErrorMode,
@@ -2172,11 +2217,13 @@ export class LocalRuntimeHost implements RuntimeHost {
 	 * `undefined` returned here and the absent-method case in
 	 * `SdkSessionHost` / `ClineCore`.
 	 */
-	getActiveRuntimeSnapshot(sessionId: string | undefined): LiveAgentRuntimeStateSnapshot | undefined {
-		if (!sessionId) return undefined
-		const active = this.sessions.get(sessionId)
-		if (!active) return undefined
-		return active.agent.snapshot?.()
+	getActiveRuntimeSnapshot(
+		sessionId: string | undefined,
+	): LiveAgentRuntimeStateSnapshot | undefined {
+		if (!sessionId) return undefined;
+		const active = this.sessions.get(sessionId);
+		if (!active) return undefined;
+		return active.agent.snapshot?.();
 	}
 
 	/**
@@ -2218,11 +2265,15 @@ export class LocalRuntimeHost implements RuntimeHost {
 	 * method-absent and returns-undefined cases collapse to a
 	 * single fallback at the C3 capability projection.
 	 */
-	getActiveRuntimeToolNames(sessionId: string | undefined): readonly string[] | undefined {
-		if (!sessionId) return undefined
-		const active = this.sessions.get(sessionId)
-		if (!active) return undefined
-		return [...active.runtime.tools, ...(active.config.extraTools ?? [])].map((t) => t.name)
+	getActiveRuntimeToolNames(
+		sessionId: string | undefined,
+	): readonly string[] | undefined {
+		if (!sessionId) return undefined;
+		const active = this.sessions.get(sessionId);
+		if (!active) return undefined;
+		return [...active.runtime.tools, ...(active.config.extraTools ?? [])].map(
+			(t) => t.name,
+		);
 	}
 
 	/**
@@ -2275,17 +2326,19 @@ export class LocalRuntimeHost implements RuntimeHost {
 	 * Read-only: never mutates runtime/session state, never inserts
 	 * state-post events, never schedules timers.
 	 */
-	captureHostOwnershipFacts(sessionId: string | undefined): HostOwnershipFactsSnapshotInternal | undefined {
-		if (!sessionId) return undefined
-		const active = this.sessions.get(sessionId)
-		if (!active) return undefined
+	captureHostOwnershipFacts(
+		sessionId: string | undefined,
+	): HostOwnershipFactsSnapshotInternal | undefined {
+		if (!sessionId) return undefined;
+		const active = this.sessions.get(sessionId);
+		if (!active) return undefined;
 		return {
 			lastInteractiveTurnFinishReason: active.lastInteractiveTurnFinishReason,
 			sessionStatus: active.status,
 			pendingPromptCount: active.pendingPrompts.length,
 			drainingPendingPrompts: active.drainingPendingPrompts,
 			agentCanStartRun: active.agent.canStartRun?.() ?? false,
-		}
+		};
 	}
 
 	async listSessions(
@@ -2484,7 +2537,25 @@ export class LocalRuntimeHost implements RuntimeHost {
 		session: ActiveSession,
 		state: SessionCompactionState,
 		sourceMessages?: readonly LlmsProviders.Message[],
-	): Promise<{ updated: boolean }> {
+		/**
+		 * ACT-CLINEMM-CMP06-DURABLE-COMMIT-AUTHORITY-01.
+		 *
+		 * The compaction seam's OWN abort signal. It is consulted at the
+		 * DURABLE COMMIT BOUNDARY — the last point at which the durable
+		 * replacement can still be refused — because the write may be
+		 * QUEUED behind an earlier write when the turn is cancelled.
+		 *
+		 * It is the SAME signal the seam already consults at its own
+		 * installation check, not a second cancellation authority.
+		 */
+		abortSignal?: AbortSignal,
+	): Promise<
+		| { updated: true }
+		| {
+				updated: false;
+				reason: "cancelled" | "persistence_failed" | "stale_state";
+		  }
+	> {
 		if (
 			!(await this.canPersistCompactionState(
 				session.sessionId,
@@ -2494,9 +2565,50 @@ export class LocalRuntimeHost implements RuntimeHost {
 				sourceMessages,
 			))
 		) {
-			return { updated: false };
+			// The state was refused BEFORE the durable commit boundary: it
+			// does not project onto the session's messages.
+			//
+			// ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01: this
+			// is NOT a cancellation. The turn was not cancelled — the
+			// candidate was rejected as unprojectable — and the two facts
+			// have different remedies. Reporting it as a cancellation
+			// misleads an operator into thinking the user stopped the turn.
+			//
+			// ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01
+			// (AMENDMENT-01 A1): the refusal is named `persistence_failed`
+			// because the durable replacement did not happen. The state was
+			// refused before the commit boundary, so nothing was written.
+			//
+			// It is deliberately NOT reported as a FILESYSTEM failure here:
+			// no filesystem operation was attempted. The reason names the
+			// outcome that actually occurred — the replacement was not
+			// durably installed — and it does not claim a cause the host did
+			// not observe.
+			return { updated: false, reason: "persistence_failed" };
 		}
 		return await this.enqueueCompactionStateWrite(session, async () => {
+			// ACT-CLINEMM-CMP06-DURABLE-COMMIT-AUTHORITY-01: THE DURABLE
+			// COMMIT BOUNDARY.
+			//
+			// This action runs when the write reaches the FRONT of the
+			// session's compaction-state write queue. That is the last
+			// point at which the durable replacement can still be refused:
+			// once `persistSessionCompactionState` is entered the atomic
+			// file replacement begins, and cancelling after that would be a
+			// ROLLBACK of an already committed compaction, which this
+			// contract does not do.
+			//
+			// A write that was QUEUED when the turn was cancelled is
+			// therefore refused here: nothing is written, the previously
+			// installed state remains in force, and the in-memory state is
+			// NOT advanced.
+			//
+			// ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01: the
+			// refusal REASON is reported, so a cancellation is not confused
+			// with a stale-state skip or with a persistence failure.
+			if (abortSignal?.aborted === true) {
+				return { updated: false, reason: "cancelled" as const };
+			}
 			const currentState = session.compactionState;
 			const currentStateStillProjects =
 				currentState !== undefined &&
@@ -2516,7 +2628,17 @@ export class LocalRuntimeHost implements RuntimeHost {
 					? isIncomingCompactionStateStale(state, currentState)
 					: Date.parse(state.updated_at) < Date.parse(currentState.updated_at))
 			) {
-				return { updated: false };
+				// ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01
+				// (AMENDMENT-01 A1): the STALE-STATE refusal is named.
+				//
+				// The incoming state is OLDER than the state already installed,
+				// so the newer state won and this write was SKIPPED. That is
+				// neither a cancellation nor a fault: nothing went wrong, and
+				// the newer state remains in force.
+				//
+				// Reporting it as a cancellation would tell an operator the
+				// user stopped the turn when the user did nothing wrong.
+				return { updated: false, reason: "stale_state" as const };
 			}
 			await this.invoke<void>(
 				"persistSessionCompactionState",
@@ -2617,21 +2739,24 @@ export class LocalRuntimeHost implements RuntimeHost {
 	 * a permanent listener registry here.
 	 */
 	subscribeRecoveryStateChange(
-		listener: (sessionId: string, recovery: AgentRuntimeRecoverySnapshot) => void,
+		listener: (
+			sessionId: string,
+			recovery: AgentRuntimeRecoverySnapshot,
+		) => void,
 	): () => void {
-		const unsubscribers: Array<() => void> = []
+		const unsubscribers: Array<() => void> = [];
 		for (const active of this.sessions.values()) {
-			unsubscribers.push(active.agent.subscribeRecoveryStateChange(listener))
+			unsubscribers.push(active.agent.subscribeRecoveryStateChange(listener));
 		}
 		return () => {
 			for (const unsub of unsubscribers) {
 				try {
-					unsub()
+					unsub();
 				} catch {
 					// defensive: subscriber already detached
 				}
 			}
-		}
+		};
 	}
 
 	/**
@@ -2647,24 +2772,24 @@ export class LocalRuntimeHost implements RuntimeHost {
 	subscribeRuntimeEvents(
 		listener: (sessionId: string, event: AgentRuntimeEvent) => void,
 	): () => void {
-		const unsubscribers: Array<() => void> = []
+		const unsubscribers: Array<() => void> = [];
 		for (const active of this.sessions.values()) {
-			const sessionId = active.sessionId
+			const sessionId = active.sessionId;
 			unsubscribers.push(
 				active.agent.subscribeRuntimeEvents((event) => {
-					listener(sessionId, event)
+					listener(sessionId, event);
 				}),
-			)
+			);
 		}
 		return () => {
 			for (const unsub of unsubscribers) {
 				try {
-					unsub()
+					unsub();
 				} catch {
 					// defensive: subscriber already detached
 				}
 			}
-		}
+		};
 	}
 
 	async updateSessionModel(sessionId: string, modelId: string): Promise<void> {
@@ -3121,13 +3246,13 @@ export class LocalRuntimeHost implements RuntimeHost {
 			// WeakSet membership check — CORRECTION03's
 			// `Symbol.for`/`Object.defineProperty` mechanism has been
 			// removed entirely.
-			let runInput: AgentMessage | string | undefined
+			let runInput: AgentMessage | string | undefined;
 			if (runtimeControlKind !== undefined) {
 				const messageMetadata: Record<string, unknown> = {
 					runtimeAuthority: "host_runtime_control",
 					kind: runtimeControlKind,
 					userRunSpan: 0,
-				}
+				};
 				const envelope: AgentMessage = {
 					id: `runtime-control-${Date.now()}`,
 					// role:"user" is load-bearing — see (a)-(d) above.
@@ -3135,13 +3260,13 @@ export class LocalRuntimeHost implements RuntimeHost {
 					content: [{ type: "text", text: prompt }],
 					createdAt: Date.now(),
 					metadata: messageMetadata,
-				}
+				};
 				// Register the envelope into the module-private WeakSet.
 				// This is the entire attack surface for marking; there
 				// is no Symbol property, no metadata discriminator, and
 				// no other credential to forge.
-				markHostRuntimeControl(envelope)
-				runInput = envelope
+				markHostRuntimeControl(envelope);
+				runInput = envelope;
 			}
 			// R3: upstream threads the (possibly brand-gated) run input into the
 			// agent call. The fork keeps its own abort re-issue authority below

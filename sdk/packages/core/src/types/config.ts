@@ -107,6 +107,28 @@ export interface CoreCompactionContext {
 	 * or recovering turn is not blocked on a stalled compaction.
 	 */
 	abortSignal?: AbortSignal;
+	/**
+	 * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01.
+	 *
+	 * The channel through which a compaction reports the PROVIDER-REPORTED
+	 * USAGE of the auxiliary inferences it performed — today, the
+	 * summarization request.
+	 *
+	 * WHY IT IS A CHANNEL AND NOT A RETURN VALUE
+	 * -------------------------------------------
+	 *
+	 * The compaction's RESULT describes the transcript it produced. A
+	 * compaction that REJECTED its candidate, was CANCELLED, or was refused
+	 * at the persistence boundary produces NO transcript — so a usage field
+	 * on the result would be lost exactly in the cases where the inference
+	 * was still paid for.
+	 *
+	 * A rejected summary is not free inference. The channel is therefore
+	 * OUT OF BAND: it carries the usage out of the compaction whatever the
+	 * compaction's outcome, and it carries nothing when no usage was
+	 * reported.
+	 */
+	reportAuxiliaryUsage?: (usage: CoreCompactionSummarizationUsage) => void;
 }
 
 // Mirrors BudgetPolicyIntent in extensions/context/budget-projection/types.ts.
@@ -135,6 +157,34 @@ export interface CoreCompactionBudgetMetadata {
 export interface CoreCompactionResult {
 	messages: MessageWithMetadata[];
 	budget?: CoreCompactionBudgetMetadata;
+}
+
+/**
+ * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01.
+ *
+ * The provider-reported usage of ONE summarization inference.
+ *
+ * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 (AMENDMENT-02 §4):
+ * the `inferenceId` is the PHYSICAL provider request identity, as
+ * reported by the transport itself.
+ */
+export interface CoreCompactionSummarizationUsage {
+	/**
+	 * The PHYSICAL provider request this usage belongs to.
+	 *
+	 * It is the transport's own per-request identity, so two
+	 * summarization invocations that share one logical iteration are
+	 * distinguishable.
+	 */
+	inferenceId: string;
+	/** What the inference was for. */
+	kind: "summarization";
+	inputTokens: number;
+	outputTokens: number;
+	cacheReadTokens?: number;
+	cacheWriteTokens?: number;
+	totalCost?: number;
+	reasoningTokenCount?: number;
 }
 
 export interface CoreCompactionSummarizerConfig {

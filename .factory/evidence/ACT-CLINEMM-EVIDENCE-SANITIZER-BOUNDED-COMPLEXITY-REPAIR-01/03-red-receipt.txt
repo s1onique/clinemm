@@ -1,0 +1,56 @@
+ACT-CLINEMM-EVIDENCE-SANITIZER-BOUNDED-COMPLEXITY-REPAIR-01 — RED RECEIPT
+=========================================================================
+WITNESS: sdk/packages/core/scripts/sanitizer-bounded-complexity-witness.ts
+  It imports and executes the ACTUAL production sanitizer
+  (../src/extensions/context/evidence-continuity), NOT a copied regular expression.
+  The parent enforces an INDEPENDENT hard timeout and SIGKILLs the child on breach.
+  A Promise.race() is NOT used as a synchronous execution timeout.
+  Execution time is measured INSIDE the child; process startup is excluded.
+
+--- (a) the PREDECESSOR's ORIGINAL witness, verbatim, AT THE ENTRY HEAD ---
+{ "mode": "nonmatching", "length": 50000, "elapsedMs": 5001, "terminated": true },
+{ "mode": "matching",    "length": 50000, "elapsedMs": 5001, "terminated": true },
+{ "mode": "adversarial", "length": 50000, "elapsedMs": 4,    "terminated": false },
+{ "mode": "nonmatching", "length": 2000,  "elapsedMs": 15,   "terminated": false },
+{ "mode": "matching",    "length": 2000,  "elapsedMs": 15,   "terminated": false },
+{ "mode": "adversarial", "length": 2000,  "elapsedMs": 1,    "terminated": false }
+unboundedCasesTerminated: 2  ["nonmatching","matching"]
+
+--- (b) the LADDER against the PREDECESSOR (12 watchdog terminations) ---
+PREDECESSOR RED: watchdogTerminations: 12
+  terminationModes: ['nonmatching@32768', 'nonmatching@51200',
+                     'nonmatching@131072', 'nonmatching@524288',
+                     'nonmatching@1048576',
+                     'matching@32768', 'matching@51200',
+                     'matching@131072', 'matching@524288',
+                     'matching@1048576',
+                     'pem-flood@524288', 'pem-flood@1048576']
+  legacy unboundedCasesTerminated: 2 ['nonmatching', 'matching']
+
+--- (c) the predecessor's GROWTH, measured directly (Node 26 / V8) ---
+KEY-nonmatch len  10000   539.46 ms
+KEY-nonmatch len  20000  1792.87 ms
+KEY-nonmatch len  40000  4731.85 ms
+   -> 2x input => 4x time. QUADRATIC.
+
+PEM begin-no-end len  12400    1.45 ms
+PEM begin-no-end len  24800    5.54 ms
+PEM begin-no-end len  49600   22.19 ms
+PEM begin-no-end len  99200   87.79 ms
+PEM begin-no-end len 198400  352.96 ms
+   -> 2x input => 4x time. QUADRATIC.
+
+--- (d) the predecessor's ladder, direct (Node 26 / V8) ---
+  chars      2048      8192     32768
+  ms      6.196   101.73   1935.622
+
+INPUT LADDER (as named by the ACT)
+  2048, 8192, 32768, 51200, 131072, 524288, 1048576
+MODES EXERCISED
+  ordinary non-matching command output (nonmatching)
+  the previously identified pathological input (nonmatching / matching)
+  near-matching input (near-match)
+  matching credential-bearing input (matching)
+  the PEM-flood shape (pem-flood)
+
+SYNTHETIC CONTENT ONLY.
