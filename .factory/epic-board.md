@@ -1,4 +1,142 @@
-# ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01-CORRECTION02 — PASS_SECURITY_BOUNDARY_STRUCTURAL — 2026-11-23
+# ACT-CLINEMM-ORDINARY-COMPACTION-UPSTREAM-AND-FIDELITY-REPAIR-01 — HALT_FACTUAL_PRESERVATION_NOT_ESTABLISHED — 2026-11-25
+
+```text
+ACT_ID:       ACT-CLINEMM-ORDINARY-COMPACTION-UPSTREAM-AND-FIDELITY-REPAIR-01
+TYPE:         bounded repair + upstream recon + behavioural qualification
+VERDICT:      HALT_FACTUAL_PRESERVATION_NOT_ESTABLISHED
+ENTRY_HEAD:   df99675ed40a899ceae2b22ffe5224537c88f2fd
+A10_COMMIT:   784f1e95b (the bounded A10 correction, committed separately)
+BRANCH:       main
+EPIC:         CMP-01 / CMP-02
+EVIDENCE:     .factory/evidence/ACT-CLINEMM-ORDINARY-COMPACTION-UPSTREAM-AND-FIDELITY-REPAIR-01/
+                00-entry-and-a10-correction.md
+                01-upstream-recon.md
+                02-production-input-loss.md
+                03-cache-discriminator.md
+                04-summary-completeness.md
+                05-behavioral-qualification.md
+                06-production-gate.md
+                07-exit-report.md
+                08-exit-contract.txt
+                verification/gates.md
+```
+
+**The A10 tool-name publication defect was REPRODUCED through both
+publication destinations and CORRECTED.** A fixed runtime-owned tool
+vocabulary now resolves published tool labels; unknown or untrusted tool
+names publish as the neutral `"tool"`. Internal canonical tool identity and
+admission semantics are unchanged. Committed SEPARATELY as `784f1e95b`, as
+the ACT required. Gates: reference-trust 17 passed, evidence-continuity 62
+passed, bounded-evidence-contract 40 passed, typecheck `45 → 45` (zero
+delta), Biome clean on the changed files.
+
+**The ordinary compaction's input loss is at the production serializer and
+is a COMPLETE-PROPOSITION-ABSENT failure.**
+`renderStructuredToolPayload()` (`sdk/packages/core/src/extensions/context/
+compaction-shared.ts`) renders **122 of 122** successful command result
+bodies as `[result omitted]`, and classifies only **5 of 123** structured
+payloads because the command classification fails closed on pipelines and
+redirections. The invocation survives; the result and the
+invocation/result correlation do not.
+
+**Upstream reconnaissance at `34c104e6fc49781cda4adcd73ffdccd8f029fef9`:**
+#15783, #14732 and #15005 remain OPEN; #15787 and #14741 remain
+OPEN/UNMERGED. #15787 is `REQUIRES_ADAPTATION` and is a transport/cache
+proposal, NOT a fidelity repair — adopting its serialization wholesale would
+WORSEN the structured-result loss, because upstream has no
+`renderStructuredToolPayload()` at all. #14732/#14741/#15005 are
+`APPLICABLE`; #14741's repair was excluded by the ACT's own §11 rule.
+
+**The model CAN recover the decisive propositions from the original
+evidence** — the ACT's §6 question, answered unambiguously. On the frozen
+W1 workload (session `1795491524406_mutdb`, 244 source messages) with the
+unchanged O1/O4/O7 probe wording and the oracle never in the prompt:
+
+| Proposition | PROD (current production) | TARGETED_SOURCE | FULL_SOURCE |
+| --- | --- | --- | --- |
+| O1 | **INCORRECT** — states a FAILED render SUCCEEDED | **CORRECT** | **CORRECT** |
+| O4 | **PARTIAL** — gives 43; the decisive value is 47, the smallest of {42,43,47,73} | **CORRECT** | **CORRECT** |
+| O7 | **INCORRECT** — misses the decisive 500/1000 ms notification-service constants | **CORRECT** | **CORRECT** |
+
+**None of the three propositions is a model-capability limitation.** The
+failure is entirely compaction-caused. The one material factual
+substitution observed (PROD's O1 "succeeded" claim) is a property of the
+EXISTING production path and is ELIMINATED by the faithful representation,
+not introduced by it.
+
+**The cache defect is real, large, and separable.** Measured on the actual
+HTTP request bodies (not on a JS object): the existing ordinary summarizer
+request shares **0.00019** of the working agent's serialized prefix — a
+complete cache break, as upstream #15783 describes. A native-message
+representation shares **0.886**. The summarizer → resumed-agent transition
+is a **one-time** change (`0.00038`) in both arms; the post-compaction
+prefix is **stable** — the next ordinary turn read **15 347 of 15 363**
+prompt tokens from cache and ran **3.5× faster**. **No repeated prefix
+churn.** The cache improvement is recorded SEPARATELY, as the ACT requires.
+
+**A concrete, separate RED was found for summary completeness.** A summary
+the provider reports as INCOMPLETE is installed exactly like a complete one,
+replacing the compacted history, with **no warning, no log and no marker**
+in the persisted metadata or the provider-visible continuation. An EMPTY
+summary IS handled correctly (the compaction is skipped with a warning); a
+TRUNCATED one is not. **CMP-04 is OPENED** with the exact owning boundary
+(`runAgenticCompaction()` in `agentic-compaction.ts` together with
+`generateSummary()` in `summary-generation.ts`). The witness suite is
+preserved at
+`sdk/packages/core/src/extensions/context/compaction.summary-completeness.red01.test.ts`
+(3 passed) and MUST FAIL once CMP-04 is repaired. It was NOT repaired here:
+the ACT forbids combining an unrelated summary-installation repair with the
+input-fidelity repair.
+
+**NO ordinary-compaction fidelity candidate was integrated.** The §12 gate
+requires EVERY condition to hold; two did not:
+
+- **G4 CONFIDENTIALITY — NOT ESTABLISHED.** The faithful representation
+  publishes the result body, which is the thing the ClineMM-only
+  `[result omitted]` control exists to withhold. The arm is bounded and
+  sanitized, so it is not *unrestricted* publication, but whether publishing
+  the body at all is *authorized* is a confidentiality-policy decision this
+  ACT did not receive authority to make, and the ACT forbids unrestricted
+  publication without a formal confidentiality review. **That review has
+  not happened.**
+- **G6 BUDGET — NOT CONSERVED.** The native summarizer request prefills
+  **123 327** tokens against the production path's **12 962** (9.5×) and
+  takes **333 740 ms** against **45 507 ms** (7.3×) on a cold cache. The
+  ACT's primary objective is SPEED × CORRECTNESS; a 7.3× summarizer latency
+  increase bought with a warm-cache win that was NOT measured does not
+  establish a speed improvement.
+
+**The negative result is preserved**, and the smallest existing
+canonical-history recovery seam is identified:
+**`renderStructuredToolPayload()`** — the single function that owns the
+canonical invocation/result correlation, the `[result omitted]` policy and
+the fail-closed command classification, called from exactly one place
+(`serializeConversation()` → `buildSummaryRequest()`). The recommended
+successor targets THAT function, publishing only the bodies of commands
+whose classification ALREADY SUCCEEDED, leaving the fail-closed path
+untouched, and it must demonstrate budget conservation against the
+12 962-token production baseline.
+
+**VERIFICATION:** context suite **1 187 passed / 2 skipped** (85 files; was
+1 184 before this ACT's 3 new witnesses) — zero new regressions; typecheck
+**45 errors, unchanged from baseline**, zero ACT-owned diagnostics; Biome
+clean on the changed files; `git diff --check` clean. No new
+full-repository baseline campaign was run (no relevant production dependency
+changed). No VSIX packaging and no installation.
+
+**SCOPE EXCLUSIONS RESPECTED:** no PCK revival, no new semantic-memory
+architecture, no new persistent evidence store, no value-qualification
+pairing, no further deterministic ranking heuristics, no model comparison,
+no model configuration changes, no Kurchatov/Strata engine changes, no
+LEAMAS repair, no B06 repair.
+
+**SUCCESSOR (not started automatically):** the
+`renderStructuredToolPayload()`-scoped fidelity repair, subject to a formal
+confidentiality decision, measured with the SAME W1 workload, the SAME
+O1/O4/O7 questions and the SAME cache discriminator; and, separately,
+**CMP-04**, the summary-completeness repair.
+
+
 
 ```text
 ACT_ID: ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01-CORRECTION02

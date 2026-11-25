@@ -1088,4 +1088,87 @@ HEADER                     = consumes transported W
 The producer half is closed at `96336dc77`. The next causal
 question is mechanical: whether the authoritative W
 published in `fc906dfc6` reaches the `TaskHeader` context
+
+## Current frontier update — 2026-11-25 (ACT-CLINEMM-ORDINARY-COMPACTION-UPSTREAM-AND-FIDELITY-REPAIR-01 — HALT_FACTUAL_PRESERVATION_NOT_ESTABLISHED)
+
+```text
+ACT:              ACT-CLINEMM-ORDINARY-COMPACTION-UPSTREAM-AND-FIDELITY-REPAIR-01
+ENTRY_HEAD:       df99675ed40a899ceae2b22ffe5224537c88f2fd
+A10_COMMIT:       784f1e95b (bounded A10 correction, committed separately)
+VERDICT:          HALT_FACTUAL_PRESERVATION_NOT_ESTABLISHED
+EVIDENCE:         .factory/evidence/ACT-CLINEMM-ORDINARY-COMPACTION-UPSTREAM-AND-FIDELITY-REPAIR-01/
+```
+
+**CMP-01 / CMP-02 state.** The ordinary agentic compaction's input loss
+is now located at its **production boundary**, measured, and its cause
+separated from the model's capability.
+
+```text
+LOSS_BOUNDARY:            renderStructuredToolPayload() in
+                           sdk/packages/core/src/extensions/context/compaction-shared.ts
+RESULT_BODIES_OMITTED:    122 of 122 successful command results -> "[result omitted]"
+PAYLOADS_CLASSIFIED:      5 of 123 (the command classification fails closed on
+                           pipelines and redirections)
+INVOCATION:                PRESERVED
+RESULT:                    LOST
+INVOCATION/RESULT_CORRELATION: LOST
+FAILURE_CLASS:             COMPLETE_PROPOSITION_ABSENT (not a misinterpretation,
+                           not a model-capability failure)
+```
+
+**The decisive qualification of the preceding campaign's conclusion.** The
+model CAN recover O1/O4/O7 from the original evidence: the TARGETED SOURCE
+arm and the FULL SOURCE arm both answered all three propositions
+**CORRECTLY**, while the current production arm answered them
+INCORRECT / PARTIAL / INCORRECT. **No decisive proposition is a
+model-capability limitation.** The failure is entirely compaction-caused.
+The one material factual substitution observed — the production arm
+stating a FAILED Helm render SUCCEEDED — is a property of the EXISTING
+production path, and the faithful representation ELIMINATES it.
+
+**The cache discriminator, measured on the actual HTTP request bodies.**
+
+```text
+working-agent -> summarizer prefix equality:
+  production (serialized) : 0.00019   (a complete cache break)
+  native      (messages)  : 0.886
+summarizer -> resumed-agent prefix equality: 0.00038 (one-time; unavoidable)
+post-compaction stable recovery: 15347 of 15363 prompt tokens cached;
+  14781 ms against 51655 ms (3.5x); NO repeated prefix churn
+```
+
+**NO fidelity candidate was integrated.** Two §12 gate conditions failed:
+**G4 confidentiality** (the faithful representation publishes the result
+body, which the ClineMM-only `[result omitted]` control exists to withhold;
+the broader disclosure has NOT had the formal confidentiality review the
+ACT requires) and **G6 budget** (123 327 prompt tokens against 12 962 —
+9.5x — and 333 740 ms against 45 507 ms — 7.3x — on a cold cache). The
+negative result is preserved.
+
+**Smallest existing canonical-history recovery seam:**
+`renderStructuredToolPayload()` — it already owns the canonical
+invocation/result correlation, the `[result omitted]` policy and the
+fail-closed command classification, and it is called from exactly one place.
+The successor should publish only the bodies of commands whose
+classification ALREADY SUCCEEDED, leaving the fail-closed path untouched,
+and must demonstrate budget conservation against the 12 962-token
+production baseline.
+
+**CMP-04 OPENED.** A summary the provider reports as INCOMPLETE is
+installed exactly like a complete one, replacing the compacted history,
+with no warning, no log and no marker. An EMPTY summary is handled
+correctly; a TRUNCATED one is not. Owning boundary:
+`runAgenticCompaction()` in `agentic-compaction.ts` together with
+`generateSummary()` in `summary-generation.ts`. The witness
+(`compaction.summary-completeness.red01.test.ts`, 3 passed) MUST FAIL once
+the repair lands. Not repaired here — the ACT forbids combining it.
+
+**Verification:** context suite 1 187 passed / 2 skipped (zero new
+regressions); typecheck 45 = baseline with zero ACT-owned diagnostics;
+Biome clean; `git diff --check` clean. No VSIX packaging, no installation.
+
+**Successor (not started automatically):** the
+`renderStructuredToolPayload()`-scoped fidelity repair, subject to a formal
+confidentiality decision; and, separately, CMP-04.
+
 gauge. C1: GO_HEADER_TRANSPORT.
