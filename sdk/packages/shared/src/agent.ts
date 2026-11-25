@@ -5,6 +5,7 @@
  *
  */
 
+import type { ExecutionStagnationPolicy } from "./agents/execution-stagnation";
 import type {
 	AgentRuntimeRecoverySnapshot,
 	ToolRuntimeOutcome,
@@ -1200,6 +1201,26 @@ export interface AgentRuntimeConfig {
 		requireCompletionTool?: boolean;
 		completionGuard?: () => string | undefined;
 	};
+	/**
+	 * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (R1).
+	 *
+	 * The runtime-owned execution-stagnation recovery policy.
+	 *
+	 * When enabled, the agent runtime observes each execution round and, if
+	 * a configurable streak of consecutive rounds produced no productive
+	 * step, injects ONE runtime-owned corrective instruction before the next
+	 * model request. The instruction describes observable execution facts and
+	 * asks for the next smallest useful experiment or edit; execution then
+	 * continues AUTOMATICALLY without user confirmation.
+	 *
+	 * The policy is OPT-IN: when it is absent the runtime behaves exactly as
+	 * before (no observation cost, no injected message, no accounting).
+	 *
+	 * The accounting is RUN-SCOPED and lives on the runtime instance, so it
+	 * survives compaction (compaction replaces the PROVIDER REQUEST messages,
+	 * never the runtime's canonical transcript or its counters).
+	 */
+	executionStagnationPolicy?: ExecutionStagnationPolicy;
 	toolExecution?: "sequential" | "parallel";
 	toolPolicies?: Record<string, ToolPolicy>;
 	toolContextMetadata?: Record<string, unknown>;

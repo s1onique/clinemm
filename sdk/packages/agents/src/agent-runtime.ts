@@ -32,6 +32,9 @@ import type {
 	CaptureTaskLifecycleEventInput,
 	CommandExecutionPlan,
 	ControlPlaneOutcome,
+	ExecutionRoundObservation,
+	ExecutionRoundProductivity,
+	ExecutionStagnationAccounting,
 	LiveAgentRuntimeEvent,
 	LiveAgentRuntimeStateSnapshot,
 	ModelBehaviorTraceEditApprovalOutcome,
@@ -43,18 +46,22 @@ import type {
 	ToolRuntimeOutcome,
 } from "@cline/shared";
 import {
+	applyExecutionStagnationDecision,
 	assertProviderRequestWithinBudget,
 	buildCompletionToolReminderMessage,
 	captureAgentUnexpectedReasoningTokens,
 	captureSdkError,
 	captureTaskLifecycleEvent,
 	computeFinalProjectionFingerprint,
+	createExecutionStagnationAccounting,
+	decideExecutionStagnation,
 	describeEditRequest,
 	EDIT_OBSERVATION_APPROVAL_METADATA_KEY,
 	EDIT_OBSERVATION_IDENTITY_METADATA_KEY,
 	EDIT_OBSERVATION_SINK_METADATA_KEY,
 	estimateRequestInputTokens,
 	estimateTokens,
+	foldExecutionRound,
 	isProviderDispatchRecordRequired,
 	MODEL_BEHAVIOR_TRACE_UNAVAILABLE,
 	MODEL_BEHAVIOR_WIRE_REASONING_REQUEST_ID_METADATA_KEY,
@@ -966,6 +973,38 @@ export class AgentRuntime {
 	private activeDispatchRecord: Record<string, unknown> | undefined;
 	/** One automatic overflow-recovery attempt per run. */
 	private overflowRecoveryAttempted = false;
+	/**
+	 * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (R1).
+	 *
+	 * RUN-SCOPED execution-stagnation accounting. It lives on the runtime
+	 * instance (never module-global, never UI-owned), so it is reset only by
+	 * a NEW RUN and is unaffected by compaction — compaction replaces the
+	 * PROVIDER REQUEST messages, never the runtime's counters.
+	 *
+	 * The pure decision function lives in `@cline/shared`
+	 * (`agents/execution-stagnation`); this field only holds its state.
+	 */
+	private executionStagnation: ExecutionStagnationAccounting =
+		createExecutionStagnationAccounting();
+	/**
+	 * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (R1).
+	 *
+	 * The facts observed for the CURRENT execution round (one model request
+	 * plus the tool calls it produced). Reset at the start of every round.
+	 */
+	private executionRoundFacts: {
+		toolNames: string[];
+		editAttempts: number;
+		successfulEdits: number;
+		executedCommands: number;
+		awaitingBackgroundWork: boolean;
+	} = {
+		toolNames: [],
+		editAttempts: 0,
+		successfulEdits: 0,
+		executedCommands: 0,
+		awaitingBackgroundWork: false,
+	};
 	/** Consecutive output-limit cut-offs recovered this run; see MAX_TOKENS_RECOVERY_LIMIT. */
 	private maxTokensRecoveryCount = 0;
 	/** One automatic recovery attempt per run for max-tokens-truncated turns. */
@@ -1819,6 +1858,222 @@ export class AgentRuntime {
 		].filter((message): message is string => Boolean(message));
 	}
 
+	/**
+	 * Record the observable facts of ONE tool call into the current
+	 * execution round.
+	 *
+	 * This is a pure OBSERVATION: it never influences the tool call, never
+	 * changes a result, and never throws.
+	 */
+	private observeExecutionRoundToolCall(
+		toolName: string,
+		input: unknown,
+		result: { output: unknown; isError?: boolean } | undefined,
+	): void {
+		try {
+			this.executionRoundFacts.toolNames.push(toolName);
+			// The HOST may classify its own tools more precisely than the
+			// runtime can (for example: was this shell command a read-only
+			// inspection or a real test run?). The runtime NEVER guesses
+			// from command text — that would be provider-specific string
+			// matching. A host callback that throws is treated as "no
+			// opinion" and the runtime's own structural classification is
+			// used instead.
+			const hostVerdict = this.askHostForToolCallProductivity(
+				toolName,
+				input,
+				result,
+			);
+			if (hostVerdict !== undefined) {
+				this.applyHostProductivityVerdict(hostVerdict, result);
+				return;
+			}
+			const classified = this.classifyToolCallProductivity(
+				toolName,
+				input,
+				result,
+			);
+			if (classified.kind === "edit") {
+				this.executionRoundFacts.editAttempts += 1;
+				if (result?.isError !== true) {
+					this.executionRoundFacts.successfulEdits += 1;
+				}
+				return;
+			}
+			if (classified.kind === "command") {
+				if (classified.awaiting) {
+					this.executionRoundFacts.awaitingBackgroundWork = true;
+				} else if (result?.isError !== true) {
+					this.executionRoundFacts.executedCommands += 1;
+				}
+			}
+		} catch {
+			// Observation isolation: instrumentation NEVER affects a tool call.
+		}
+	}
+
+	/**
+	 * Ask the host to classify ONE tool call.
+	 *
+	 * Returns `undefined` when there is no host classifier, when the
+	 * classifier throws, or when it declines to classify the call.
+	 */
+	private askHostForToolCallProductivity(
+		toolName: string,
+		input: unknown,
+		result: { output: unknown; isError?: boolean } | undefined,
+	): ExecutionRoundProductivity | undefined {
+		const classifier = this.config.executionStagnationPolicy?.classifyToolCall;
+		if (!classifier) {
+			return undefined;
+		}
+		try {
+			return classifier(toolName, input, result);
+		} catch {
+			return undefined;
+		}
+	}
+
+	/**
+	 * Fold a host verdict into the current round's facts.
+	 */
+	private applyHostProductivityVerdict(
+		verdict: ExecutionRoundProductivity,
+		result: { output: unknown; isError?: boolean } | undefined,
+	): void {
+		switch (verdict) {
+			case "edited":
+				this.executionRoundFacts.editAttempts += 1;
+				if (result?.isError !== true) {
+					this.executionRoundFacts.successfulEdits += 1;
+				}
+				return;
+			case "executed":
+				if (result?.isError !== true) {
+					this.executionRoundFacts.executedCommands += 1;
+				}
+				return;
+			case "awaiting":
+				this.executionRoundFacts.awaitingBackgroundWork = true;
+				return;
+			case "inspected":
+			case "idle":
+				return;
+			default:
+				return;
+		}
+	}
+
+	/**
+	 * Classify the CURRENT execution round into a productivity signal.
+	 *
+	 * The classification is structural:
+	 *
+	 *   - `edited`   — the round contains a SUCCESSFUL native edit.
+	 *   - `executed` — the round executed at least one command successfully
+	 *                  (a test, a build, a probe). Executing is progress
+	 *                  even when the command's output is a failure report,
+	 *                  because the agent OBTAINED executable evidence.
+	 *   - `awaiting` — the round started work that is STILL RUNNING. A
+	 *                  legitimate wait is not a stall.
+	 *   - `inspected`— the round only inspected (read/search/list).
+	 *   - `idle`     — the round made no tool call at all.
+	 */
+	private classifyExecutionRound(): ExecutionRoundProductivity {
+		const facts = this.executionRoundFacts;
+		if (facts.successfulEdits > 0) {
+			return "edited";
+		}
+		if (facts.awaitingBackgroundWork) {
+			return "awaiting";
+		}
+		if (facts.executedCommands > 0) {
+			return "executed";
+		}
+		if (facts.toolNames.length === 0) {
+			return "idle";
+		}
+		return "inspected";
+	}
+
+	/**
+	 * The observation handed to the pure decision function.
+	 */
+	private buildExecutionRoundObservation(): ExecutionRoundObservation {
+		return {
+			productivity: this.classifyExecutionRound(),
+			toolNames: [...this.executionRoundFacts.toolNames],
+			editAttempts: this.executionRoundFacts.editAttempts,
+			successfulEdits: this.executionRoundFacts.successfulEdits,
+		};
+	}
+
+	/**
+	 * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (R1).
+	 *
+	 * The RUNTIME INTERVENTION BOUNDARY.
+	 *
+	 * Called at the iteration boundary — after the round's tool calls have
+	 * been executed and their results delivered, and BEFORE the next model
+	 * request is issued. It:
+	 *
+	 *   1. folds the just-completed round into the run-scoped accounting,
+	 *   2. asks the pure decision function whether a corrective instruction
+	 *      is due,
+	 *   3. when it is, injects EXACTLY ONE runtime-owned corrective message
+	 *      through the existing `addUserReminderMessage` seam,
+	 *   4. returns WITHOUT interrupting the run — execution continues
+	 *      automatically; no user confirmation is required.
+	 *
+	 * The decision uses ONLY facts observed so far. It never consults a
+	 * future observation and never classifies an earlier round using later
+	 * information.
+	 */
+	private async evaluateExecutionStagnation(): Promise<void> {
+		const policy = this.config.executionStagnationPolicy;
+		if (!policy || policy.enabled === false) {
+			return;
+		}
+		const observation = this.buildExecutionRoundObservation();
+		this.executionStagnation = foldExecutionRound(
+			this.executionStagnation,
+			observation,
+		);
+		const decision = decideExecutionStagnation(
+			this.executionStagnation,
+			policy,
+		);
+		if (decision.kind !== "inject") {
+			return;
+		}
+		this.executionStagnation = applyExecutionStagnationDecision(
+			this.executionStagnation,
+			decision,
+		);
+		await this.emit({
+			type: "status-notice",
+			snapshot: this.snapshot(),
+			message: `execution stagnation detected after ${decision.unproductiveRounds} unproductive round(s) — injecting a recovery instruction (attempt ${this.executionStagnation.instructionsInjected}/${policy.maxRecoveryInstructions})`,
+			metadata: {
+				kind: "execution_stagnation_recovery",
+				reason: "execution_stagnation_recovery",
+				phase: "started",
+				iteration: this.state.iteration,
+				unproductiveRounds: decision.unproductiveRounds,
+				attempt: this.executionStagnation.instructionsInjected,
+				maxRecoveryInstructions: policy.maxRecoveryInstructions,
+			},
+		});
+		// The corrective instruction is a RUNTIME-OWNED message. It is
+		// appended to the canonical transcript exactly like the runtime's
+		// existing completion reminder, so the next model request carries
+		// it and the run continues automatically.
+		await this.addUserReminderMessage(decision.message, {
+			displayRole: "system",
+			runtimeAuthority: "execution_stagnation_recovery",
+		});
+	}
+
 	private async addUserReminderMessage(
 		text: string,
 		metadata: AgentMessage["metadata"] = {},
@@ -1834,6 +2089,122 @@ export class AgentRuntime {
 			message: reminderMessage,
 		});
 		return reminderMessage;
+	}
+
+	// -------------------------------------------------------------------------
+	// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (R1)
+	//
+	// Runtime-owned execution-stagnation recovery.
+	//
+	// The runtime is the ONLY lifecycle authority here: it observes its own
+	// execution rounds, owns the accounting, and injects its own corrective
+	// message through the EXISTING `addUserReminderMessage` seam. No parallel
+	// supervisor, no provider switching, no workflow engine.
+	//
+	// The pure decision function lives in `@cline/shared`
+	// (`agents/execution-stagnation`) so the compaction contract-conservation
+	// path can recognise the injected message by template equality.
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Clear the facts observed for the current execution round.
+	 */
+	private resetExecutionRoundFacts(): void {
+		this.executionRoundFacts = {
+			toolNames: [],
+			editAttempts: 0,
+			successfulEdits: 0,
+			executedCommands: 0,
+			awaitingBackgroundWork: false,
+		};
+	}
+
+	/**
+	 * Classify ONE tool call's observable shape into a productivity signal.
+	 *
+	 * The classification is driven by the tool INPUT SHAPE and the tool
+	 * RESULT OUTCOME, never by a host/provider-specific tool-name string
+	 * comparison:
+	 *
+	 *   - an input carrying an edit operation (`path` + `old_text` /
+	 *     `new_text` / `insert_line`, or an `apply_patch` body) is an EDIT
+	 *     attempt;
+	 *   - an input carrying a command list is a COMMAND EXECUTION;
+	 *   - everything else is INSPECTION.
+	 *
+	 * A command whose result reports that it is STILL RUNNING is
+	 * "awaiting background work" — the round must NOT count toward the
+	 * stagnation streak, because a legitimate wait is not a stall.
+	 */
+	private classifyToolCallProductivity(
+		toolName: string,
+		input: unknown,
+		result: { output: unknown; isError?: boolean } | undefined,
+	): {
+		kind: "edit" | "command" | "inspection";
+		awaiting: boolean;
+	} {
+		const record = (input ?? {}) as Record<string, unknown>;
+		const hasEditShape =
+			typeof record.path === "string" &&
+			(typeof record.old_text === "string" ||
+				typeof record.new_text === "string" ||
+				typeof record.insert_line === "string" ||
+				typeof record.content === "string" ||
+				typeof record.diff === "string" ||
+				typeof record.patch === "string");
+		const hasPatchBody =
+			typeof input === "string" && input.includes("*** Begin Patch");
+		if (hasEditShape || hasPatchBody) {
+			return { kind: "edit", awaiting: false };
+		}
+		const commands = record.commands;
+		if (Array.isArray(commands)) {
+			return {
+				kind: "command",
+				awaiting: this.resultReportsStillRunning(result?.output),
+			};
+		}
+		// `toolName` participates only as a LAST-RESORT disambiguator for
+		// hosts that express a patch body as a dedicated tool input.
+		void toolName;
+		return { kind: "inspection", awaiting: false };
+	}
+
+	/**
+	 * Whether a command result reports that the command is STILL RUNNING.
+	 *
+	 * The check is DATA-SHAPE driven: it looks for an explicit
+	 * "still running" marker in the structured result, never for prose.
+	 * A host that reports background work through a different channel simply
+	 * does not set the marker, and the round is then classified by the same
+	 * rules as any other command round.
+	 */
+	private resultReportsStillRunning(output: unknown): boolean {
+		if (typeof output === "string") {
+			return /\b(still running|running in the background|backgrounded)\b/i.test(
+				output,
+			);
+		}
+		if (!output || typeof output !== "object") {
+			return false;
+		}
+		const record = output as Record<string, unknown>;
+		for (const key of ["status", "state", "commandExecutionDisposition"]) {
+			const value = record[key];
+			if (typeof value === "string") {
+				const normalized = value.toLowerCase();
+				if (
+					normalized === "running" ||
+					normalized === "backgrounded" ||
+					normalized === "still_running" ||
+					normalized === "in_progress"
+				) {
+					return true;
+				}
+			}
+		}
+		return record.isRunning === true || record.stillRunning === true;
 	}
 
 	private async execute(input?: AgentRunInput): Promise<AgentRunResult> {
@@ -1872,6 +2243,12 @@ export class AgentRuntime {
 		this.pendingHookContexts = [];
 		this.maxTokensRecoveryCount = 0;
 		this.maxTokensRecoveryAttempted = false;
+		// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (R1): the
+		// execution-stagnation accounting is RUN-SCOPED. A fresh run starts
+		// from a clean streak AND a clean instruction allowance, so a prior
+		// run's stall cannot consume the next run's recovery budget.
+		this.executionStagnation = createExecutionStagnationAccounting();
+		this.resetExecutionRoundFacts();
 
 		// C1.4: reset recovery bookkeeping that is scoped to a
 		// single run. The same logic applies here as in
@@ -1922,6 +2299,10 @@ export class AgentRuntime {
 				this.throwIfAborted();
 
 				this.state.iteration += 1;
+				// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (R1): the
+				// execution round's observable facts are reset at the START of
+				// the round, so they describe exactly the work this round does.
+				this.resetExecutionRoundFacts();
 				await this.emit({
 					type: "turn-started",
 					snapshot: this.snapshot(),
@@ -2090,6 +2471,14 @@ export class AgentRuntime {
 				}
 
 				await this.flushPendingHookContexts();
+				// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (R1): the
+				// RUNTIME INTERVENTION BOUNDARY. This runs AFTER the round's
+				// tool calls have been executed and their results delivered,
+				// and BEFORE the next model request. When it injects a
+				// corrective instruction, execution continues AUTOMATICALLY —
+				// the loop proceeds to the next iteration without any user
+				// confirmation and without terminating the run.
+				await this.evaluateExecutionStagnation();
 				await this.emit({
 					type: "turn-finished",
 					snapshot: this.snapshot(),
@@ -5881,6 +6270,17 @@ export class AgentRuntime {
 				),
 			);
 		}
+
+		// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (R1): record the
+		// OBSERVABLE facts of this tool call for the current execution
+		// round. The observation is read-only and NEVER influences the tool
+		// call itself: it is taken AFTER the result is produced, and a
+		// classification failure cannot affect the outcome.
+		this.observeExecutionRoundToolCall(
+			prepared.toolCall.toolName,
+			prepared.input,
+			result,
+		);
 
 		const message = createMessage("tool", [
 			{

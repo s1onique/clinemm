@@ -322,6 +322,23 @@ export interface CoreSessionConfig
 	 * never promoted above its canonical evidence.
 	 */
 	adjudication?: CoreAdjudicationConfig;
+	/**
+	 * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (R1).
+	 *
+	 * The OPT-IN, HOST-SUPPLIED execution-stagnation recovery policy.
+	 *
+	 * When absent (the default), the runtime behaves EXACTLY as before: no
+	 * execution round is classified, no corrective instruction is injected,
+	 * and no recovery accounting exists.
+	 *
+	 * When present AND enabled, the agent runtime observes each execution
+	 * round and, after a configurable streak of consecutive rounds that
+	 * produced no productive step, injects ONE runtime-owned corrective
+	 * instruction before the next model request. Execution continues
+	 * AUTOMATICALLY — no user confirmation is required and no additional
+	 * authority is granted.
+	 */
+	executionStagnationPolicy?: AgentConfig["executionStagnationPolicy"];
 	checkpoint?: CoreCheckpointConfig;
 	onTeamEvent?: (event: TeamEvent) => void;
 	onConsecutiveMistakeLimitReached?: (

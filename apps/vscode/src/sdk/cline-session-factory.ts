@@ -13,6 +13,7 @@ import {
 	buildWorkspaceMetadata,
 	type ClineCoreStartInput,
 	type CoreSessionConfig,
+	createHostExecutionProgressClassifier,
 	getProviderAuthHandler,
 	getSandboxBackend,
 	normalizeUserContextCeiling,
@@ -1543,6 +1544,34 @@ export async function buildSessionConfig(input: SessionConfigInput): Promise<Cor
 			: {}),
 		disableMcpSettingsTools: true,
 		mode: mode === "plan" ? "plan" : "act",
+		// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (R1): the
+		// runtime-owned execution-stagnation recovery policy.
+		//
+		// The runtime observes its own execution rounds and, after a
+		// configurable streak of consecutive rounds that produced no
+		// productive step, injects ONE runtime-owned corrective instruction
+		// before the next model request. Execution then continues
+		// AUTOMATICALLY — no user confirmation, no new authority, no
+		// completion.
+		//
+		// The policy is scoped to ACT mode: in PLAN mode the agent is
+		// explicitly forbidden to edit, so an "unproductive" round is the
+		// requested behaviour, not a stall.
+		//
+		// The `classifyToolCall` hook is the HOST's contribution: the
+		// runtime cannot tell a read-only shell inspection from a real
+		// execution without reading command text, so the host — which owns
+		// the command-policy layer — supplies that judgement.
+		...(mode === "plan"
+			? {}
+			: {
+					executionStagnationPolicy: {
+						unproductiveRoundThreshold: 5,
+						maxRecoveryInstructions: 2,
+						enabled: true,
+						classifyToolCall: createHostExecutionProgressClassifier(),
+					},
+				}),
 		...reasoningConfig,
 		...(maxTokensPerTurn !== undefined ? { maxTokensPerTurn } : {}),
 		...(temperature !== undefined ? { temperature } : {}),

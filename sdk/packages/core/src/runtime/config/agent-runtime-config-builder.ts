@@ -138,6 +138,10 @@ export function createAgentRuntimeConfig(
 			input.completionPolicy === null
 				? undefined
 				: (input.completionPolicy ?? agentConfig.completionPolicy),
+		// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (R1): forward the
+		// runtime-owned execution-stagnation recovery policy. It is OPT-IN:
+		// absent means the runtime behaves exactly as before.
+		executionStagnationPolicy: agentConfig.executionStagnationPolicy,
 		maxIterations: agentConfig.maxIterations,
 		toolExecution,
 		toolPolicies: agentConfig.toolPolicies,

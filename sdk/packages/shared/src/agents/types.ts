@@ -16,6 +16,7 @@ import type {
 	AgentTool,
 	ProviderErrorClass,
 } from "../agent";
+import type { ExecutionStagnationPolicy } from "./execution-stagnation";
 import type { ExtensionContext } from "../extensions/context";
 import type {
 	AgentExtensionApi,
@@ -999,6 +1000,23 @@ export interface AgentConfig {
 		requireCompletionTool?: boolean;
 		completionGuard?: () => string | undefined;
 	};
+	/**
+	 * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (R1).
+	 *
+	 * The runtime-owned execution-stagnation recovery policy. When enabled,
+	 * the agent runtime observes each execution round and, after a
+	 * configurable streak of consecutive rounds that produced no productive
+	 * step, injects ONE runtime-owned corrective instruction before the next
+	 * model request. Execution continues AUTOMATICALLY — no user
+	 * confirmation, no new authority, no completion.
+	 *
+	 * The accounting is RUN-SCOPED and lives on the runtime instance, so it
+	 * survives compaction (compaction replaces the PROVIDER REQUEST messages,
+	 * never the runtime's canonical transcript or its counters).
+	 *
+	 * Opt-in: absent means the runtime behaves exactly as before.
+	 */
+	executionStagnationPolicy?: ExecutionStagnationPolicy;
 
 	// -------------------------------------------------------------------------
 	// Pending User Messages

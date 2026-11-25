@@ -1,3 +1,81 @@
+
+# ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 — GO_AUTONOMOUS_RECOVERY_R1_DOGFOOD — 2026-11-25
+
+```text
+ACT_ID: ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01
+TYPE: bounded runtime-seam prototype (R1 autonomous execution recovery)
+VERDICT: GO_AUTONOMOUS_RECOVERY_R1_DOGFOOD
+SCOPE: R1 only. R2 and R3 identified as extension points, NOT implemented.
+ENTRY_HEAD: 5c0ffe2ef3d5ea72bff8bce6cbd9747b65e1c614
+BRANCH: main
+EVIDENCE: docs/acts/ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01.md
+```
+
+**The production intervention boundary is the `AgentRuntime` iteration
+boundary** (`sdk/packages/agents/src/agent-runtime.ts`). It is the only
+place that owns the iteration boundary, the tool results, the runtime-owned
+corrective messages, the completion obligation, and the run-scoped
+accounting simultaneously, so the runtime remains the SINGLE lifecycle
+authority. No parallel supervisor, no provider switching, no generic
+workflow engine.
+
+**The frozen failure witness — session `1795606095016_glc2s`, processed
+programmatically.** The stall phase contains 34 model responses and 36 tool
+calls with ZERO native editor calls. The decisive Gemini terminal-status
+probe ran at round 26; the trajectory then returned to reconnaissance.
+
+**The earliest defensible recovery trigger is round 5** — the first round at
+which five consecutive unproductive rounds have been observed. The decision
+uses only information available at that point; a future observation can
+never reclassify an earlier round. The trigger fires 21 rounds BEFORE the
+decisive probe, so it does not depend on the probe having happened.
+
+**The mechanism.** A configurable streak of unproductive execution rounds
+triggers ONE runtime-owned corrective instruction, injected through the
+EXISTING `addUserReminderMessage()` seam before the next model request.
+The instruction states observable execution facts only (round count, tool
+names, edit attempts) and ASKS for the next smallest useful experiment or
+edit. It fabricates no tool result, impersonates no user, and touches no
+provider-owned reasoning block. Execution continues AUTOMATICALLY — no user
+confirmation.
+
+**The host supplies the tool classification.** The runtime cannot tell a
+read-only shell inspection from a real execution without reading command
+text, and command-text string matching is what this repository forbids, so
+the host (which owns the command-policy layer) supplies that judgement
+through `ExecutionStagnationPolicy.classifyToolCall`. The runtime never
+guesses.
+
+**Conservation.** The parent task and completion obligations, the canonical
+history, signed reasoning continuity, the sandbox and tool authority, the
+provider and model configuration, and the consumed run-scoped accounting are
+all conserved. Recovery never manufactures task completion and never grants
+additional permissions. Compaction does not reset the recovery accounting:
+the accounting lives on the runtime instance and compaction replaces the
+PROVIDER REQUEST messages, never the runtime's canonical transcript or its
+counters.
+
+**Qualification.** Nine required controls, witnessed through the REAL
+`AgentRuntime` with a synthetic deterministic model — no wall-clock time, no
+sleep, no network, no paid inference. A surgical RED (disabling the single
+runtime intervention call) fails exactly the 5 recovery-specific witnesses
+while the 6 conservation witnesses still pass, so the tests genuinely detect
+the mechanism. The OFFLINE REPLAY of the frozen session reports that the
+detector WOULD have intervened at round 5; an offline replay does NOT prove
+behavioral recovery, and the ACT does not claim it does.
+
+**Suite results.** `@cline/shared` 649 passed / 6 skipped / 0 failed
+(+15 new). `@cline/agents` 43 failed / 597 passed versus a 48 failed / 592
+passed baseline — the pre-existing failure population SHRANK by 5 and no
+suite gained a failure. `@cline/core` 113 failed / 6241 passed versus a
+113 failed / 6230 passed baseline — +11 new passed, 0 new failures.
+`apps/vscode` typecheck clean. Biome clean on every changed file (the two
+remaining `types.ts` findings are the pre-existing baseline findings).
+
+**R2 / R3 extension points, NOT implemented.** R2 rides the same runtime
+method with a wider host-supplied progress hook. R3 rides the existing
+`"allowance_exhausted"` branch with one more optional host-supplied
+callback. Neither needs a new lifecycle authority.
 # ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01-CORRECTION02 — PASS_SECURITY_BOUNDARY_STRUCTURAL — 2026-11-23
 
 ```text
