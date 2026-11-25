@@ -1,4 +1,8 @@
 /**
+ * ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01
+ *
+ * C2.1 — THE CORRECTED SANITIZER BOUNDED-COMPLEXITY WITNESS.
+ *
  * ACT-CLINEMM-COMPACTION-FACTUAL-PRESERVATION-REPAIR-01
  *
  * C8 — THE SANITIZER BOUNDED-COMPLEXITY WITNESS.
@@ -54,6 +58,14 @@ import { join } from "node:path";
  * The ladder is the one the ACT names. Each rung is measured in the SAME
  * runtime, in the SAME child process, with the execution time measured
  * INSIDE the child so that process startup is excluded.
+ *
+ * ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 (C2.1): the ladder is
+ * the REQUESTED ladder. It is recorded SEPARATELY from the length of the
+ * input the child actually generated, because the generated length is not
+ * necessarily the requested one (the PEM family generates a whole number of
+ * markers, so its byte length differs from the requested length). A timing
+ * claim must be attributable to a REQUESTED rung, not to an accident of the
+ * generator.
  */
 const INPUT_LADDER = [
 	2_048, 8_192, 32_768, 51_200, 131_072, 524_288, 1_048_576,
@@ -89,11 +101,30 @@ const CHILD_TIMEOUT_MS = 10_000;
 const REPETITIONS = 5;
 
 if (process.argv[2] === "--child") {
+	// ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 (C2.1): the child
+	// loads the PRODUCTION sanitizer from the real TypeScript module.
+	//
+	// It is loaded through `jiti`, which is a PRODUCTION dependency of this
+	// package (see `package.json`), because the sanitizer's module graph
+	// reaches a TypeScript source file through an extensionless specifier
+	// (`../../session/models/session-compaction`) that Node's own ESM
+	// resolver cannot follow. The module under measurement is therefore the
+	// SAME source file the extension host bundles — not a copy and not a
+	// re-implementation.
+	//
+	// The measurement is taken INSIDE the child, so the child's startup cost
+	// is excluded from the measurement of the sanitizer.
+	const { createJiti } = await import("jiti");
+	const jiti = createJiti(import.meta.url, { interopDefault: true });
+	const modulePath = join(
+		import.meta.dirname ?? ".",
+		"../src/extensions/context/evidence-continuity.ts",
+	);
+	const { sanitizeOutcomeText } = (await jiti.import(modulePath)) as {
+		sanitizeOutcomeText: (text: string) => string;
+	};
 	const mode = process.argv[3] ?? "nonmatching";
 	const length = Number(process.argv[4] ?? "50000");
-	const { sanitizeOutcomeText } = await import(
-		"../src/extensions/context/evidence-continuity"
-	);
 	let body: string;
 	switch (mode) {
 		case "nonmatching":
@@ -130,7 +161,7 @@ if (process.argv[2] === "--child") {
 	// startup cost is excluded from the measurement of the sanitizer.
 	const samples: number[] = [];
 	let result = "";
-	for (let repetition = 0; repetition < REPETITIONS; repetition++) {
+	for (let repetition = 0; repetition < REPETITIONS; repetition += 1) {
 		const startedAt = process.hrtime.bigint();
 		result = sanitizeOutcomeText(body);
 		samples.push(Number(process.hrtime.bigint() - startedAt) / 1e6);
@@ -140,6 +171,10 @@ if (process.argv[2] === "--child") {
 		JSON.stringify({
 			mode,
 			runtime: process.versions.node ?? process.versions.bun,
+			// ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 (C2.1): the
+			// REQUESTED length is recorded SEPARATELY from the GENERATED
+			// length, so a timing claim is attributable to a requested rung.
+			requestedLength: length,
 			inputBytes: Buffer.byteLength(body, "utf8"),
 			inputLength: body.length,
 			medianMs: sorted[sorted.length >> 1],
@@ -179,14 +214,43 @@ interface CaseResult {
  */
 interface LadderRung {
 	readonly mode: string;
+	/**
+	 * ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 (C2.1): the
+	 * REQUESTED rung of the ladder. This is the identity the timing claim
+	 * is made against.
+	 */
+	readonly requestedLength: number;
 	readonly inputBytes: number;
 	readonly inputLength: number;
 	readonly medianMs: number;
 	readonly maxMs: number;
 	readonly runtime: string;
-	readonly terminated: boolean;
+	/**
+	 * ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 (C2.1): the
+	 * OUTCOME of the rung, so that a WATCHDOG TERMINATION, a CHILD-PROCESS
+	 * FAILURE and a MALFORMED MEASUREMENT are distinguishable from one
+	 * another. The predecessor's cut collapsed all three into a single
+	 * `terminated: true` boolean, so a child that crashed for an unrelated
+	 * reason was indistinguishable from a watchdog termination.
+	 */
+	readonly outcome: LadderRungOutcome;
 	readonly secretSurvived?: boolean;
 }
+
+/**
+ * ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 (C2.1)
+ *
+ * The distinguishable outcomes of a ladder rung.
+ */
+type LadderRungOutcome =
+	/** The child completed and reported a well-formed measurement. */
+	| "measured"
+	/** The parent's watchdog fired: the child had to be SIGKILLed. */
+	| "watchdog_terminated"
+	/** The child exited without reporting a measurement (a crash). */
+	| "child_failed"
+	/** The child reported something that is not a valid measurement. */
+	| "malformed_measurement";
 
 function runCase(caseToRun: {
 	mode: string;
@@ -267,6 +331,12 @@ function runCase(caseToRun: {
  * when it is exceeded. This is the only way to bound a SYNCHRONOUS
  * operation: a `Promise.race` against a timer cannot interrupt a blocked
  * event loop.
+ *
+ * ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 (C2.1): the outcome of
+ * the rung is DISTINGUISHED. A watchdog termination, a child that exited
+ * without a measurement, and a child that reported a malformed measurement
+ * are three DIFFERENT facts, and the predecessor's cut reported all three
+ * as the same `terminated: true`.
  */
 function runLadderRung(mode: string, length: number): Promise<LadderRung> {
 	return new Promise((resolve) => {
@@ -293,12 +363,13 @@ function runLadderRung(mode: string, length: number): Promise<LadderRung> {
 			child.kill("SIGKILL");
 			resolve({
 				mode,
+				requestedLength: length,
 				inputBytes: length,
 				inputLength: length,
 				medianMs: Number.POSITIVE_INFINITY,
 				maxMs: Number.POSITIVE_INFINITY,
 				runtime: "unknown",
-				terminated: true,
+				outcome: "watchdog_terminated",
 			});
 		}, CHILD_TIMEOUT_MS);
 		child.stdout?.on("data", (chunk: Buffer) => {
@@ -310,37 +381,69 @@ function runLadderRung(mode: string, length: number): Promise<LadderRung> {
 			}
 			settled = true;
 			clearTimeout(timer);
+			let parsed: {
+				mode: string;
+				runtime: string;
+				requestedLength: number;
+				inputBytes: number;
+				inputLength: number;
+				medianMs: number;
+				maxMs: number;
+				secretSurvived: boolean;
+			};
 			try {
-				const parsed = JSON.parse(stdout) as {
-					mode: string;
-					runtime: string;
-					inputBytes: number;
-					inputLength: number;
-					medianMs: number;
-					maxMs: number;
-					secretSurvived: boolean;
-				};
-				resolve({
-					mode: parsed.mode,
-					inputBytes: parsed.inputBytes,
-					inputLength: parsed.inputLength,
-					medianMs: parsed.medianMs,
-					maxMs: parsed.maxMs,
-					runtime: parsed.runtime,
-					terminated: false,
-					secretSurvived: parsed.secretSurvived,
-				});
+				parsed = JSON.parse(stdout) as typeof parsed;
 			} catch {
+				// ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 (C2.1):
+				// the child produced NO parsable measurement. This is a
+				// CHILD-PROCESS FAILURE, which is DISTINCT from a watchdog
+				// termination: the watchdog did not fire, so the child
+				// terminated on its own.
 				resolve({
 					mode,
+					requestedLength: length,
 					inputBytes: length,
 					inputLength: length,
 					medianMs: Number.POSITIVE_INFINITY,
 					maxMs: Number.POSITIVE_INFINITY,
 					runtime: "unknown",
-					terminated: true,
+					outcome: "child_failed",
 				});
+				return;
 			}
+			// ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 (C2.1): a
+			// measurement is only a measurement when it is COMPLETE. A
+			// missing or non-numeric timing field is a MALFORMED
+			// MEASUREMENT, not a fast run.
+			const isWellFormed =
+				typeof parsed.medianMs === "number" &&
+				Number.isFinite(parsed.medianMs) &&
+				typeof parsed.maxMs === "number" &&
+				Number.isFinite(parsed.maxMs);
+			if (!isWellFormed) {
+				resolve({
+					mode,
+					requestedLength: length,
+					inputBytes: length,
+					inputLength: length,
+					medianMs: Number.POSITIVE_INFINITY,
+					maxMs: Number.POSITIVE_INFINITY,
+					runtime: "unknown",
+					outcome: "malformed_measurement",
+				});
+				return;
+			}
+			resolve({
+				mode: parsed.mode,
+				requestedLength: parsed.requestedLength ?? length,
+				inputBytes: parsed.inputBytes,
+				inputLength: parsed.inputLength,
+				medianMs: parsed.medianMs,
+				maxMs: parsed.maxMs,
+				runtime: parsed.runtime,
+				outcome: "measured",
+				secretSurvived: parsed.secretSurvived,
+			});
 		});
 	});
 }
@@ -389,20 +492,92 @@ for (const mode of LADDER_MODES) {
 	}
 }
 
-const ladderTerminations = ladder.filter((rung) => rung.terminated);
-const secretSurvivals = ladder.filter((rung) => rung.secretSurvived === true);
-const rung50Kib = ladder.filter(
-	(rung) => rung.inputLength === 51_200 || rung.inputLength === 50_000,
+/**
+ * ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 (C2.1)
+ *
+ * The MEASURED rungs, i.e. the rungs whose measurement COMPLETED.
+ *
+ * A watchdog termination, a child failure and a malformed measurement are
+ * EXCLUDED from the timing statistics, because none of them produced a
+ * timing. They are counted separately, so their absence cannot be mistaken
+ * for a fast run.
+ */
+const measuredRungs = ladder.filter((rung) => rung.outcome === "measured");
+const watchdogTerminations = ladder.filter(
+	(rung) => rung.outcome === "watchdog_terminated",
 );
-const rung1Mib = ladder.filter((rung) => rung.inputLength === 1_048_576);
-const worst50KibMs = rung50Kib.reduce(
-	(worst, rung) => Math.max(worst, rung.maxMs),
-	0,
+const childFailures = ladder.filter((rung) => rung.outcome === "child_failed");
+const malformedMeasurements = ladder.filter(
+	(rung) => rung.outcome === "malformed_measurement",
 );
-const worst1MibMs = rung1Mib.reduce(
-	(worst, rung) => Math.max(worst, rung.maxMs),
-	0,
+const secretSurvivals = measuredRungs.filter(
+	(rung) => rung.secretSurvived === true,
 );
+
+/**
+ * ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 (C2.1)
+ *
+ * THE REQUIRED MEASUREMENTS.
+ *
+ * Every family must have been measured at EVERY requested rung. A missing
+ * measurement is a GAP, and a gap must never be reported as a satisfied
+ * limit.
+ */
+const requiredMeasurements = LADDER_MODES.flatMap((mode) =>
+	INPUT_LADDER.map((requestedLength) => ({ mode, requestedLength })),
+);
+const missingMeasurements = requiredMeasurements.filter(
+	({ mode, requestedLength }) =>
+		!measuredRungs.some(
+			(rung) => rung.mode === mode && rung.requestedLength === requestedLength,
+		),
+);
+
+/**
+ * ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 (C2.1)
+ *
+ * THE WORST-CASE TIMING, across ALL FOUR FAMILIES, at each required rung.
+ *
+ * The predecessor's cut selected the 50 KiB rung by matching the GENERATED
+ * length against a hard-coded list (`51200 || 50000 || 48979 || 52886`),
+ * which is neither the requested rung nor stable across the families. Here
+ * the rung is the REQUESTED one, and the worst case is taken over EVERY
+ * family, so no family can hide behind another's faster measurement.
+ */
+const worstCaseByRung = INPUT_LADDER.map((requestedLength) => {
+	const atRung = measuredRungs.filter(
+		(rung) => rung.requestedLength === requestedLength,
+	);
+	return {
+		requestedLength,
+		familiesMeasured: atRung.length,
+		worstMaxMs: atRung.reduce((worst, rung) => Math.max(worst, rung.maxMs), 0),
+	};
+});
+const worst50KibMs =
+	(
+		worstCaseByRung.find((rung) => rung.requestedLength === 51_200) ??
+		worstCaseByRung[0]
+	)?.worstMaxMs ?? Number.POSITIVE_INFINITY;
+const worst1MibMs =
+	(
+		worstCaseByRung.find((rung) => rung.requestedLength === 1_048_576) ??
+		worstCaseByRung[worstCaseByRung.length - 1]
+	)?.worstMaxMs ?? Number.POSITIVE_INFINITY;
+
+/**
+ * ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 (C2.1)
+ *
+ * EVERY required measurement must EXIST, EVERY rung must have terminated
+ * SUCCESSFULLY, and EVERY limit must be satisfied.
+ */
+const allLimitsSatisfied =
+	missingMeasurements.length === 0 &&
+	watchdogTerminations.length === 0 &&
+	childFailures.length === 0 &&
+	malformedMeasurements.length === 0 &&
+	worst50KibMs <= LIMIT_50_KIB_MS &&
+	worst1MibMs <= LIMIT_1_MIB_MS;
 
 console.log(
 	JSON.stringify(
@@ -419,15 +594,31 @@ console.log(
 				childTimeoutMs: CHILD_TIMEOUT_MS,
 				limit50KibMs: LIMIT_50_KIB_MS,
 				limit1MibMs: LIMIT_1_MIB_MS,
-				watchdogTerminations: ladderTerminations.length,
-				watchdogTerminationModes: ladderTerminations.map(
-					(rung) => `${rung.mode}@${rung.inputLength}`,
+				// ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 (C2.1):
+				// the three failure modes are DISTINGUISHED, and the required
+				// measurements are asserted to EXIST.
+				requiredMeasurementCount: requiredMeasurements.length,
+				measuredCount: measuredRungs.length,
+				missingMeasurements,
+				watchdogTerminations: watchdogTerminations.length,
+				watchdogTerminationRungs: watchdogTerminations.map(
+					(rung) => `${rung.mode}@${rung.requestedLength}`,
+				),
+				childFailures: childFailures.length,
+				childFailureRungs: childFailures.map(
+					(rung) => `${rung.mode}@${rung.requestedLength}`,
+				),
+				malformedMeasurements: malformedMeasurements.length,
+				malformedMeasurementRungs: malformedMeasurements.map(
+					(rung) => `${rung.mode}@${rung.requestedLength}`,
 				),
 				secretSurvivals: secretSurvivals.length,
 				worst50KibMaxMs: worst50KibMs,
 				worst1MibMaxMs: worst1MibMs,
 				within50KibLimit: worst50KibMs <= LIMIT_50_KIB_MS,
 				within1MibLimit: worst1MibMs <= LIMIT_1_MIB_MS,
+				worstCaseByRequestedRung: worstCaseByRung,
+				allLimitsSatisfied,
 				rungs: ladder,
 			},
 		},
@@ -435,3 +626,13 @@ console.log(
 		2,
 	),
 );
+
+// ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 (C2.1): the witness
+// FAILS when a required measurement is missing, when any rung terminated
+// abnormally, or when a limit is exceeded. The predecessor's cut always
+// exited 0, so it could not fail the gate that ran it.
+if (!allLimitsSatisfied) {
+	console.error("SANITIZER_LADDER_LIMITS_NOT_SATISFIED");
+	process.exit(1);
+}
+console.log("SANITIZER_LADDER_LIMITS_SATISFIED");

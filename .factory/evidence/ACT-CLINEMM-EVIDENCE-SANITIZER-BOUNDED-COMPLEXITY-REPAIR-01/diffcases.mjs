@@ -35,20 +35,25 @@ const credCases = [
  '{\"password\": \"v\"}', "{'password': 'v'}", '{"apiKey":"v"}',
  'Authorization: Bearer abcdefghijklmnop', 'Basic abcdefghijklmnop', SYN_TOKEN,
  SYN_SK, 'ghp_abcdefghijklmnopqrstuvwxyz012345', 'xoxb-abcdefghijklmnop',
- '${PEM_BEGIN_RSA}\nAAAA\n${PEM_END_RSA}',
- '${PEM_BEGIN_PLAIN}\nA\n${PEM_END_PLAIN}',
- '${PEM_BEGIN_RSA}', '${PEM_END_RSA}',
- '${PEM_BEGIN_A}\nX\n${PEM_END_A}',
- '${PEM_BEGIN_RSA}\nX\n${PEM_END_RSA}\nY\n${PEM_BEGIN_RSA}\nZ\n${PEM_END_RSA}',
- 'pre ${PEM_BEGIN_RSA}\nX\n${PEM_END_RSA} post',
- '${PEM_BEGIN_RSA}\n${PEM_END_RSA}',
- '${PEM_BEGIN_RSA}\nA\n${PEM_END_RSA}\n${PEM_BEGIN_RSA}\nB\n${PEM_END_RSA}',
- '${PEM_BEGIN_RSA}\n${PEM_END_EC}',
- '${PEM_END_RSA}\n${PEM_BEGIN_RSA}',
+ // ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 (C2.2): the PEM
+ // fixtures below are TEMPLATE LITERALS, so the marker is ASSEMBLED at run
+ // time. The predecessor's cut used single-quoted strings, so the literal
+ // text `${PEM_BEGIN_RSA}` was passed to the sanitizer instead of the
+ // marker: those fixtures never exercised the PEM path at all.
+ `${PEM_BEGIN_RSA}\nAAAA\n${PEM_END_RSA}`,
+ `${PEM_BEGIN_PLAIN}\nA\n${PEM_END_PLAIN}`,
+ `${PEM_BEGIN_RSA}`, `${PEM_END_RSA}`,
+ `${PEM_BEGIN_A}\nX\n${PEM_END_A}`,
+ `${PEM_BEGIN_RSA}\nX\n${PEM_END_RSA}\nY\n${PEM_BEGIN_RSA}\nZ\n${PEM_END_RSA}`,
+ `pre ${PEM_BEGIN_RSA}\nX\n${PEM_END_RSA} post`,
+ `${PEM_BEGIN_RSA}\n${PEM_END_RSA}`,
+ `${PEM_BEGIN_RSA}\nA\n${PEM_END_RSA}\n${PEM_BEGIN_RSA}\nB\n${PEM_END_RSA}`,
+ `${PEM_BEGIN_RSA}\n${PEM_END_EC}`,
+ `${PEM_END_RSA}\n${PEM_BEGIN_RSA}`,
  'password=' + SYN_SK,
  'sk-abcdefghijklmnop1234 password=v',
  'password=v sk-abcdefghijklmnop1234',
- '${PEM_BEGIN_RSA}\npassword=v\n${PEM_END_RSA}',
+ `${PEM_BEGIN_RSA}\npassword=v\n${PEM_END_RSA}`,
  '', ' ', '\n', 'a', '=', ':',
 ];
 for (const c of credCases) check("cred", c);
@@ -88,3 +93,11 @@ check("cred-end", "a".repeat(50000) + "\npassword=secret");
 check("cred-both", "password=s1\n" + "a".repeat(50000) + "\npassword=s2");
 check("cred-crossing", "x".repeat(49990) + "password=secret\n" + "y".repeat(10));
 console.log("structured:", total, "mismatches", mism);
+// ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 (C2.2): a mismatch is
+// a FAILURE. The predecessor's cut always exited 0, so a differential
+// regression could not fail the gate that ran it.
+if (mism > 0) {
+  console.error(`DIFFERENTIAL_MISMATCHES=${mism}`);
+  process.exit(1);
+}
+console.log("DIFFERENTIAL_MISMATCHES=0");

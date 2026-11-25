@@ -29,7 +29,13 @@ import { sanitizeOutcomeText as N } from "./new.ts";
 const ALPH = ["a","b","Z","_","-",".",'"',"'","=",":"," ","\n","\t","1","/","\\","{","}",",",";",")","]","(","|","&","%","#","*","+","\u00e9","\u4e2d","\u0000","@","~","`","<",">","\r","\f","\v","0","9"];
 const WORDS = ["password","passwd","secret","token","api_key","apikey","api-key","credential","private_key","privatekey","access_key","accesskey","auth_key","authkey","passphrase","PASSWORD","Token","apiKey","xxpasswordxx","p","key","SECRET","PassWord"];
 let rnd = 987654321;
-function r(){ rnd = (rnd*1103515245+12345)&0x7fffffff; return rnd/0x7fffffff; }
+// ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 (C2.2): the PRNG
+// multiplication used a FLOAT multiply. `rnd * 1103515245` exceeds 2^53 for
+// the seeded range, so the product loses its low bits and the generator
+// DEGENERATES: the sequence repeats and the corpus is not the 300 000
+// distinct inputs the gate claims. `Math.imul()` performs the multiplication
+// in 32-bit space, which is what the LCG requires.
+function r(){ rnd = (Math.imul(rnd, 1103515245) + 12345) & 0x7fffffff; return rnd/0x7fffffff; }
 function pick(a){ return a[(r()*a.length)|0]; }
 function randStr(n){ let s=""; for(let i=0;i<n;i++) s+=pick(ALPH); return s; }
 const PEMB = `${PEM_BEGIN}`;
@@ -54,3 +60,11 @@ for(let i=0;i<300000;i++){
   check(s);
 }
 console.log("random fuzz:", total, "mismatches", mism);
+// ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 (C2.2): a mismatch is
+// a FAILURE. The predecessor's cut always exited 0, so a differential
+// regression could not fail the gate that ran it.
+if (mism > 0) {
+  console.error(`DIFFERENTIAL_MISMATCHES=${mism}`);
+  process.exit(1);
+}
+console.log("DIFFERENTIAL_MISMATCHES=0");

@@ -6,7 +6,13 @@ const M = (a, b) => a + b;
 import { sanitizeOutcomeText as P } from "./pred.mjs";
 import { sanitizeOutcomeText as N } from "./new.ts";
 let rnd = 424242;
-function r(){ rnd=(rnd*1103515245+12345)&0x7fffffff; return rnd/0x7fffffff; }
+// ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 (C2.2): the PRNG
+// multiplication used a FLOAT multiply. `rnd * 1103515245` exceeds 2^53 for
+// the seeded range, so the product loses its low bits and the generator
+// DEGENERATES: the sequence repeats and the corpus is not the 200 000
+// distinct inputs the gate claims. `Math.imul()` performs the multiplication
+// in 32-bit space, which is what the LCG requires.
+function r(){ rnd = (Math.imul(rnd, 1103515245) + 12345) & 0x7fffffff; return rnd/0x7fffffff; }
 function pick(a){ return a[(r()*a.length)|0]; }
 const MARKS = [M("-----BEGIN RSA"," PRIVATE KEY-----"),M("-----END RSA"," PRIVATE KEY-----"),M("-----BEGIN PRI","VATE KEY-----"),
  M("-----END PRI","VATE KEY-----"),M("-----BEGIN EC ","PRIVATE KEY-----"),M("-----END EC ","PRIVATE KEY-----"),
@@ -23,3 +29,11 @@ for(let i=0;i<200000;i++){
   if(a!==b){ mism++; if(shown++<10) console.log("MISMATCH", JSON.stringify(s), "\n  PRED:", JSON.stringify(a), "\n  NEW :", JSON.stringify(b)); }
 }
 console.log("pem fuzz:", total, "mismatches", mism);
+// ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 (C2.2): a mismatch is
+// a FAILURE. The predecessor's cut always exited 0, so a differential
+// regression could not fail the gate that ran it.
+if (mism > 0) {
+  console.error(`DIFFERENTIAL_MISMATCHES=${mism}`);
+  process.exit(1);
+}
+console.log("DIFFERENTIAL_MISMATCHES=0");

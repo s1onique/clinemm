@@ -37,8 +37,34 @@
  * SCREENING limit, not a proof. The proof that the pathological behaviour
  * cannot recur is the STRUCTURAL one: the guarded pattern attempts the
  * match once per key run, and the PEM scan has no nested rescan.
+ *
+ * ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 (C2.3)
+ * ----------------------------------------------------------
+ *
+ * THE PATHOLOGICAL TIMING ASSERTIONS RUN IN A CHILD PROCESS.
+ *
+ * The sanitizer is SYNCHRONOUS, so a pathological input blocks the event
+ * loop for its whole duration. A `Promise.race` against a timeout CANNOT
+ * interrupt it, and Vitest's own test timeout CANNOT interrupt it either:
+ * a return to quadratic behaviour would HANG THE WORKER rather than fail
+ * it. That is the worst possible failure mode for a regression suite — the
+ * gate does not report a failure, it stops reporting at all.
+ *
+ * So the pathological measurements run in an INDEPENDENTLY TERMINABLE
+ * CHILD PROCESS. The parent enforces a hard timeout and SIGKILLs the child,
+ * so a return to quadratic behaviour produces a DETERMINISTIC, REPORTED
+ * failure instead of a hang.
+ *
+ * The small FUNCTIONAL and DIFFERENTIAL assertions stay in-process: they
+ * are fast, they cannot hang, and they are the ones that pin the redaction
+ * POLICY. No new testing framework is introduced: the child is a plain
+ * `node:child_process` spawn of a committed `.mjs` helper, and the suite
+ * is still a `vitest` suite.
  */
 
+import { spawn } from "node:child_process";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
 	buildSourceFileFact,
@@ -85,56 +111,236 @@ const PEM_BEGIN_MARKER = `-----BEGIN ${PEM_MARKER_LABEL}`;
 const PEM_END_MARKER = `-----END ${PEM_MARKER_LABEL}`;
 
 /**
- * Measure the median of `repetitions` executions of the PRODUCTION
- * sanitizer, in milliseconds.
+ * ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 (C2.3)
+ *
+ * The hard timeout the PARENT enforces on the measurement child.
+ *
+ * It is generous — it is an UPPER bound on a measurement that takes
+ * single-digit milliseconds — because its purpose is not to measure
+ * latency but to BOUND a synchronous operation. A quadratic return would
+ * blow past it by orders of magnitude, and the child would be SIGKILLed.
  */
-function medianMs(body: string, repetitions = 5): number {
-	const samples: number[] = [];
-	for (let repetition = 0; repetition < repetitions; repetition++) {
-		const startedAt = process.hrtime.bigint();
-		sanitizeOutcomeText(body);
-		samples.push(Number(process.hrtime.bigint() - startedAt) / 1e6);
+const CHILD_TIMEOUT_MS = 30_000;
+
+/**
+ * ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 (C2.3)
+ *
+ * The committed child-process helper.
+ *
+ * It is a plain `.mjs` file, so it runs under BOTH `node` and `bun` without
+ * a build step, and it is NOT a test file (the suite's `include` pattern
+ * only collects `*.test.ts`).
+ */
+const CHILD_HELPER_PATH = join(
+	dirname(fileURLToPath(import.meta.url)),
+	"sanitizer-bounded-complexity.child.mjs",
+);
+
+/**
+ * ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 (C2.3)
+ *
+ * ONE measurement, as reported by the child.
+ */
+interface ChildMeasurement {
+	/** The family the child generated the input for. */
+	readonly family: string;
+	/** The REQUESTED input length. */
+	readonly requestedLength: number;
+	/** The GENERATED input length, which need not equal the requested one. */
+	readonly inputLength: number;
+	/** The median of the child's repetitions, in milliseconds. */
+	readonly medianMs: number;
+	/** The maximum of the child's repetitions, in milliseconds. */
+	readonly maxMs: number;
+	/** Whether the synthetic credential survived. */
+	readonly secretSurvived: boolean;
+}
+
+/**
+ * ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 (C2.3)
+ *
+ * The outcome of a child measurement.
+ *
+ * The three failure modes are DISTINGUISHED, because they are three
+ * different facts: a WATCHDOG TERMINATION (the child hung and had to be
+ * SIGKILLed — the pathological behaviour returned), a CHILD FAILURE (the
+ * child died on its own, e.g. it could not load the module), and a
+ * MALFORMED MEASUREMENT (the child reported something that is not a
+ * measurement).
+ */
+type ChildOutcome =
+	| { readonly kind: "measured"; readonly measurements: ChildMeasurement[] }
+	| { readonly kind: "watchdog_terminated" }
+	| { readonly kind: "child_failed"; readonly detail: string }
+	| { readonly kind: "malformed_measurement"; readonly detail: string };
+
+/**
+ * ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 (C2.3)
+ *
+ * Run the measurement child and collect its report.
+ *
+ * The child is INDEPENDENTLY TERMINABLE: the parent SIGKILLs it when the
+ * timeout expires. A return to quadratic behaviour therefore produces a
+ * reported failure rather than a hung worker.
+ */
+function runMeasurementChild(input: {
+	family: string;
+	lengths: readonly number[];
+}): Promise<ChildOutcome> {
+	return new Promise((resolve) => {
+		const child = spawn(
+			process.execPath,
+			[
+				CHILD_HELPER_PATH,
+				"--family",
+				input.family,
+				"--lengths",
+				input.lengths.join(","),
+			],
+			{ stdio: ["ignore", "pipe", "pipe"] },
+		);
+		let stdout = "";
+		let stderr = "";
+		let settled = false;
+		const timer = setTimeout(() => {
+			if (settled) {
+				return;
+			}
+			settled = true;
+			child.kill("SIGKILL");
+			resolve({ kind: "watchdog_terminated" });
+		}, CHILD_TIMEOUT_MS);
+		child.stdout?.on("data", (chunk: Buffer) => {
+			stdout += chunk.toString();
+		});
+		child.stderr?.on("data", (chunk: Buffer) => {
+			stderr += chunk.toString();
+		});
+		child.on("close", (code) => {
+			if (settled) {
+				return;
+			}
+			settled = true;
+			clearTimeout(timer);
+			let parsed: { measurements?: ChildMeasurement[] };
+			try {
+				parsed = JSON.parse(stdout) as { measurements?: ChildMeasurement[] };
+			} catch {
+				resolve({
+					kind: "child_failed",
+					detail: `exit ${code}: ${stderr.slice(0, 400)}`,
+				});
+				return;
+			}
+			const measurements = parsed.measurements;
+			if (!Array.isArray(measurements) || measurements.length === 0) {
+				resolve({
+					kind: "malformed_measurement",
+					detail: stdout.slice(0, 400),
+				});
+				return;
+			}
+			for (const measurement of measurements) {
+				if (
+					typeof measurement.medianMs !== "number" ||
+					!Number.isFinite(measurement.medianMs) ||
+					typeof measurement.maxMs !== "number" ||
+					!Number.isFinite(measurement.maxMs)
+				) {
+					resolve({
+						kind: "malformed_measurement",
+						detail: stdout.slice(0, 400),
+					});
+					return;
+				}
+			}
+			resolve({ kind: "measured", measurements });
+		});
+	});
+}
+
+/**
+ * ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 (C2.3)
+ *
+ * Assert that the child produced a usable measurement.
+ *
+ * A failure here is deliberately LOUD and specific: the three abnormal
+ * outcomes are different facts and must not be collapsed.
+ */
+function assertMeasured(outcome: ChildOutcome): ChildMeasurement[] {
+	if (outcome.kind === "watchdog_terminated") {
+		throw new Error(
+			`the sanitizer measurement child did not terminate within ${CHILD_TIMEOUT_MS} ms: the pathological behaviour returned`,
+		);
 	}
-	samples.sort((left, right) => left - right);
-	return samples[samples.length >> 1];
+	if (outcome.kind === "child_failed") {
+		throw new Error(
+			`the sanitizer measurement child failed: ${outcome.detail}`,
+		);
+	}
+	if (outcome.kind === "malformed_measurement") {
+		throw new Error(
+			`the sanitizer measurement child reported a malformed measurement: ${outcome.detail}`,
+		);
+	}
+	return outcome.measurements;
 }
 
 describe("sanitizeOutcomeText bounded complexity", () => {
-	it("terminates on a 50 KiB body with no match", () => {
-		const body = "a".repeat(50 * 1024);
-		const elapsed = medianMs(body);
-		expect(elapsed).toBeLessThanOrEqual(LIMIT_50_KIB_MS);
+	it("terminates on a 50 KiB body with no match", async () => {
+		const outcome = await runMeasurementChild({
+			family: "nonmatching",
+			lengths: [50 * 1024],
+		});
+		const [measurement] = assertMeasured(outcome);
+		expect(measurement.maxMs).toBeLessThanOrEqual(LIMIT_50_KIB_MS);
 	});
 
-	it("terminates on a 50 KiB body that carries a credential", () => {
-		const body = `${"x".repeat(50 * 1024)}\nDB_PASSWORD=hunter2\n`;
-		const elapsed = medianMs(body);
-		expect(elapsed).toBeLessThanOrEqual(LIMIT_50_KIB_MS);
-		expect(sanitizeOutcomeText(body)).not.toContain("hunter2");
+	it("terminates on a 50 KiB body that carries a credential", async () => {
+		const outcome = await runMeasurementChild({
+			family: "matching",
+			lengths: [50 * 1024],
+		});
+		const [measurement] = assertMeasured(outcome);
+		expect(measurement.maxMs).toBeLessThanOrEqual(LIMIT_50_KIB_MS);
+		expect(measurement.secretSurvived).toBe(false);
 	});
 
-	it("terminates on a 1 MiB body with no match", () => {
-		const body = "a".repeat(1024 * 1024);
-		const elapsed = medianMs(body);
-		expect(elapsed).toBeLessThanOrEqual(LIMIT_1_MIB_MS);
+	it("terminates on a 1 MiB body with no match", async () => {
+		const outcome = await runMeasurementChild({
+			family: "nonmatching",
+			lengths: [1024 * 1024],
+		});
+		const [measurement] = assertMeasured(outcome);
+		expect(measurement.maxMs).toBeLessThanOrEqual(LIMIT_1_MIB_MS);
 	});
 
-	it("terminates on a body flooded with PEM BEGIN markers", () => {
+	it("terminates on a body flooded with PEM BEGIN markers", async () => {
 		// The predecessor's lazy span rescanned to the end of the input for
 		// EACH BEGIN marker: quadratic in the number of markers.
-		const body = `${PEM_BEGIN_MARKER}-----`.repeat((1024 * 1024) / 30);
-		const elapsed = medianMs(body, 3);
-		expect(elapsed).toBeLessThanOrEqual(LIMIT_1_MIB_MS);
+		const outcome = await runMeasurementChild({
+			family: "pemflood",
+			lengths: [1024 * 1024],
+		});
+		const [measurement] = assertMeasured(outcome);
+		expect(measurement.maxMs).toBeLessThanOrEqual(LIMIT_1_MIB_MS);
 	});
 
-	it("grows sub-quadratically across the input ladder", () => {
+	it("grows sub-quadratically across the input ladder", async () => {
 		// The predecessor's cost quadrupled when the input doubled. The
 		// repaired cost is LINEAR, so a doubling must not more than
 		// TRIPLE the time (a generous bound that a return to quadratic
 		// behaviour cannot satisfy).
-		const small = medianMs("a".repeat(64 * 1024));
-		const large = medianMs("a".repeat(128 * 1024));
-		expect(large).toBeLessThan(Math.max(small * 3, 5));
+		//
+		// Both sizes are measured in the SAME child process, so the
+		// comparison is not contaminated by a difference between the two
+		// processes' start-up state.
+		const outcome = await runMeasurementChild({
+			family: "nonmatching",
+			lengths: [64 * 1024, 128 * 1024],
+		});
+		const [small, large] = assertMeasured(outcome);
+		expect(large.maxMs).toBeLessThan(Math.max(small.maxMs * 3, 5));
 	});
 });
 
