@@ -41561,3 +41561,123 @@ histories or model responses (everything under the gitignored `tmp/` tree) |
 VSIX packaging NOT EXECUTED | installed-live NOT EXECUTED | the whole SDK
 regression suite NOT RUN (no production dependency changed, as the ACT
 requires) | git diff --check CLEAN
+
+---
+
+## ACT-CLINEMM-EVIDENCE-SANITIZER-BOUNDED-COMPLEXITY-REPAIR-01 — closure
+
+**ENTRY_HEAD = 1d45a8d845eca27bce311949a08fca7868f211cd** (the expected
+predecessor, verified; the tree was clean and there were no stashes).
+**SUBJECT_HEAD:** the source HEAD carrying the bounded implementation tree
+(recorded in the closure commit, because a commit cannot contain its own
+hash).
+
+**VERDICT = GO_EVIDENCE_REFERENCE_TRUST_REPAIR.**
+
+The production `sanitizeOutcomeText()` had TWO pathological operations. Both
+are reproduced against the REAL production sanitizer in an independently
+terminable child process, both are causally isolated by ablation, and both
+are removed by a bounded repair whose output is **byte-identical** to the
+predecessor's on every input tested.
+
+**THE RED IS REPRODUCED, NOT INFERRED.** The predecessor's own witness —
+which imports and executes the ACTUAL production sanitizer, not a copied
+regular expression — hit its 5 s watchdog on BOTH the 50 KiB non-matching
+and the 50 KiB credential-bearing inputs. On the full ladder the predecessor
+produced **12 watchdog terminations**. Its growth is **quadratic**: 2× the
+input costs 4× the time (8 KiB → 102 ms, 32 KiB → 1 936 ms, 1 MiB → does
+not terminate).
+
+**THE TWO CULPRITS ARE ISOLATED, AND THE ABLATION IS NECESSARY.**
+
+```text
+1 credential-assignment key run   QUADRATIC — THE PRIMARY CULPRIT (50 000 chars → 3 674 ms)
+2 bearer header                   linear — unchanged
+3 PEM lazy span                   QUADRATIC — THE SECOND CULPRIT
+4 provider-shaped key             linear — unchanged
+
+REPAIRED (bounded key + linear PEM)      :    0.82 ms  [nonmatching 50 KiB]
+ABLATED  (predecessor key regex restored) : 3673.65 ms  [nonmatching 50 KiB]
+REPAIRED (bounded key + linear PEM)      :    2.19 ms  [PEM flood]
+ABLATED  (predecessor PEM regex restored) :   17.75 ms  [PEM flood]
+```
+
+The key pattern had NO anchor on the start of the key run, so the engine
+retried the whole run at EVERY offset inside it and backtracked through the
+run each time. The PEM pattern's LAZY `[\s\S]*?` span made the engine, for
+EACH `BEGIN` marker, rescan forward to the end of the input. **Exponential
+complexity is NOT claimed** — both are superlinear (quadratic), which is
+sufficient to justify the repair.
+
+**THE REPAIR IS THE SMALLEST ONE THAT WORKS.** The key pattern gained a
+run-boundary guard `(?<![A-Za-z0-9_.-])` and a secret-name lookahead; the
+PEM pattern became a deterministic linear scan. The bearer and provider
+patterns were left UNCHANGED — they were measured linear, and changing them
+would have been an unrequested change. No dependency, worker pool, service
+or runtime configuration was introduced. No input was truncated. Nothing was
+returned unsanitized on failure. The redaction policy was NOT weakened.
+
+**THE BOUNDED COMPLEXITY IS A STRUCTURAL ARGUMENT, NOT A TIMING ARGUMENT.**
+No offset inside a key run is attemptable, so the quadratic "retry at every
+offset" behaviour is impossible. The `END` markers are located in ONE pass
+and each pairing is a binary search, so "markers × body length" is
+impossible.
+
+```text
+TIMING_50KIB_MS=0.626 (Node/V8) / 5.876 (bun)   [limit 100]
+TIMING_1MIB_MS=10.850 (Node/V8) / 116.509 (bun)  [limit 1000]
+WATCHDOG_TERMINATIONS_AFTER_REPAIR=0
+GROWTH=LINEAR (20× input → ~20× time; the predecessor's was quadratic)
+```
+
+**THE CONFIDENTIALITY GATE IS DIFFERENTIAL, AGAINST THE PREDECESSOR'S OWN
+OUTPUT.** 300 000 random + 118 structured + 200 000 PEM-shape differential
+cases, plus the committed suite's 2 000 random + 47 structured: **ZERO
+mismatches**. Every supported category is asserted, plus the adversarial
+shapes: long non-matching prefixes, repeated separators and whitespace,
+near matches, multiple credentials, mixed line endings, Unicode and
+malformed text, long credential values, and credentials crossing a chunk
+boundary.
+
+**THE ACT CORRECTED ITSELF TWICE, AND BOTH CORRECTIONS ARE RECORDED.**
+(1) It first asserted the sanitizer was IDEMPOTENT. It is not, and it was
+not idempotent in the predecessor either — `[REDACTED]` is itself a
+value-position assignment. The assertion was corrected to require the
+repair to REPRODUCE the predecessor's exact behaviour, because "improving"
+it would be an unrequested change to the emitted text. (2) Its FIRST PEM
+rewrite diverged from the predecessor on 9 138 of 200 000 adversarial PEM
+inputs, because the predecessor's greedy marker extent can OVERLAP the `END`
+literal. It was replaced with a faithful algorithm. The divergence was
+caught by the differential fuzz, not by inspection.
+
+**NO NEWLY-CLAIMED COVERAGE.** The `.pgpass`-style credential, the legacy
+`_auth=` token and the `scheme://user:password@host` URL still survive the
+sanitizer, exactly as before. The repair does not change that.
+
+**THE PRODUCTION SEAM IS VERIFIED.** The ACT's own suite drives the REAL
+`buildSourceFileFact()` — the caller that sanitizes the WHOLE source body
+BEFORE truncating it, which is the seam the defect actually reached — with
+a 100 000-char body: it completes, `hunter2` is not published, `[REDACTED]`
+is, ordinary evidence is carried verbatim, and the automatic carry-forward
+is still DEFAULT OFF.
+
+```text
+ACT-OWNED WITNESSES:   20 (all PASSED)
+EXISTING CONTEXT SUITE: 81 files passed | 1 skipped; 1 152 tests passed
+EXISTING SUITES:       evidence-continuity 62 | evidence-fidelity 39 | source-bound 22
+TYPECHECK:              45 -> 45, ZERO DELTA; 0 ACT-OWNED diagnostics
+BIOME:                  clean
+PRODUCTION DELTA:       the sanitizer's complexity only; PCK and source-bound evidence
+                         remain DEFAULT OFF; A10 untouched
+VSIX PACKAGING:         NOT EXECUTED
+INSTALLED-LIVE:         NOT EXECUTED
+INFERENCE REQUESTS:     0
+```
+
+```text
+A02b-R14 Value-qualification pairing          CLOSE_COMPACTION_SELECTION_NOT_QUALIFIED — CLOSED
+A12    Sanitizer bounded complexity            CLOSED — GO_EVIDENCE_REFERENCE_TRUST_REPAIR
+A10    Evidence-continuity confidentiality     UNCHANGED
+```
+
+**A successor ACT is NOT started automatically.**

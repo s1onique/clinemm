@@ -1,0 +1,43 @@
+ACT-CLINEMM-EVIDENCE-SANITIZER-BOUNDED-COMPLEXITY-REPAIR-01 — CAUSAL DISCRIMINATOR
+===============================================================================
+EACH OPERATION MEASURED IN ISOLATION (the other three removed), Node 26 / V8
+  1 credential-assignment key run   QUADRATIC. THE PRIMARY CULPRIT.
+                                     50 000 chars -> 3 816 ms
+  2 bearer header                   linear. Not pathological.
+  3 PEM lazy span                   QUADRATIC. THE SECOND CULPRIT.
+                                     50 000 markers -> 22 ms, 4x per doubling
+  4 provider-shaped key             linear. Not pathological.
+
+NECESSITY ABLATION (restoring each operation in isolation, into the repair)
+  REPAIRED (bounded key + linear PEM)      :    0.76 ms  [nonmatching 50 KiB]
+  ABLATED  (predecessor key regex restored) : 3816.93 ms  [nonmatching 50 KiB]
+  REPAIRED (bounded key + linear PEM)      :    2.30 ms  [PEM flood]
+  ABLATED  (predecessor PEM regex restored) :   17.54 ms  [PEM flood]
+
+  -> Removing the suspected operation removes the pathological behaviour.
+  -> Restoring it restores the failure.  BOTH OPERATIONS ARE NECESSARY.
+
+MECHANISM — operation 1
+  predecessor pattern:
+    ("?)((?:[A-Za-z0-9_.-]*(?:password|...)[A-Za-z0-9_.-]*)\1\s*[:=]\s*)(VALUE)
+  The leading [A-Za-z0-9_.-]* is greedy and NOTHING anchors the START of the key
+  run. The engine attempts the match at EVERY offset inside the run; at each one it
+  consumes the run and backtracks through the run's characters looking for the
+  secret name, the closing quote, the :/= and a value. On a body with no match,
+  every attempt fails after a full traversal of the run.
+  cost = O(run length) per offset x O(run length) offsets = O(n^2)
+
+MECHANISM — operation 3
+  predecessor pattern:
+    -----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----
+  The LAZY [\s\S]*? span means: for EACH BEGIN marker, rescan forward to the end of
+  the input looking for an END marker.
+  cost = O(markers x body length)
+
+A CLAIM NOT MADE
+  EXPONENTIAL COMPLEXITY IS NOT CLAIMED. Both behaviours are SUPERLINEAR
+  (quadratic), established by the 2x/4x growth measurements. Superlinear
+  pathological behaviour is sufficient to justify the repair.
+
+THE TEMPORARY INSTRUMENTATION LIVED IN THE ISOLATED WITNESS, NOT IN THE
+PRODUCTION SANITIZER.

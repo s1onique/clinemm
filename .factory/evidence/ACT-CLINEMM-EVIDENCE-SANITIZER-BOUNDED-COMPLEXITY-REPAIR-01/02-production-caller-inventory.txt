@@ -1,0 +1,32 @@
+ACT-CLINEMM-EVIDENCE-SANITIZER-BOUNDED-COMPLEXITY-REPAIR-01 — PRODUCTION CALLER INVENTORY
+===========================================================================================
+CALLER                        LOCATION                                        INPUT BOUND AT THE SANITIZER
+buildSourceFileFact()         evidence-continuity.ts:653                       UNBOUNDED — the WHOLE source body is
+                                                                               sanitized; the excerpt is truncated
+                                                                               only AFTER redaction.
+                                                                               Reachable from compaction-shared.ts:269.
+admitEvidenceFragment()       bounded-evidence-contract/contract.ts:480       BOUNDED — boundExcerpt() runs BEFORE
+                                                                               sanitizeOutcomeText().
+
+CONFIDENTIALITY vs PRESENTATION TRUNCATION (kept distinct)
+  confidentiality   = sanitizeOutcomeText()      <- THE ONLY THING THIS ACT CHANGED
+  presentation      = truncateText() / boundExcerpt()  <- UNTOUCHED
+
+THE FOUR OPERATIONS OF THE PREDECESSOR'S SANITIZER
+  1 credential-assignment value redaction   QUADRATIC  <- PRIMARY CULPRIT
+  2 Bearer/Basic/Token header redaction     linear    <- unchanged
+  3 PEM private-key block redaction         QUADRATIC  <- SECOND CULPRIT
+  4 provider-shaped key redaction           linear    <- unchanged
+
+SUPPORTED REDACTION CATEGORIES (from the production source)
+  1 value-position credential assignment whose KEY names a secret:
+      password passwd secret token api_key apikey credential private_key
+      access_key auth_key passphrase
+    in key=value and key: value form, quoted or bare value
+  2 Bearer / Basic / Token headers, 8+ character token
+  3 PEM private-key blocks
+  4 provider-shaped keys: sk-..., gh[pousr]_..., xox[baprs]-...
+
+PUBLICATION DESTINATIONS AFFECTED
+  the summarizer input, the carried evidence section, thence the provider request.
+  A non-terminating sanitizer blocks the compaction path entirely.

@@ -1,0 +1,68 @@
+ACT-CLINEMM-EVIDENCE-SANITIZER-BOUNDED-COMPLEXITY-REPAIR-01 — GREEN TIMING LADDER
+===============================================================================
+THE EXACT RED WITNESS, RE-RUN AGAINST THE REPAIR
+  watchdogTerminations: 0 []
+  secretSurvivals:      0
+  worst50KibMaxMs: 5.876  (limit 100)   ok=True
+  worst1MibMaxMs:  116.509 (limit 1000) ok=True
+  legacy unboundedCasesTerminated: 0 []
+
+NODE 26.0.0 (V8) — THE PRODUCTION EXTENSION-HOST RUNTIME
+5 repetitions per rung, median and maximum, execution measured inside the child.
+  mode         input      median_ms    max_ms
+  nonmatching      2048       0.014      0.509
+  nonmatching      8192       0.046      0.052
+  nonmatching     32768       0.176      0.188
+  nonmatching     51200       0.274      0.287
+  nonmatching    131072       0.739      0.753
+  nonmatching    524288       2.845      3.549
+  nonmatching   1048576       5.609      6.393
+  matching        2048       0.010      0.019
+  matching        8192       0.036      0.049
+  matching       32768       0.139      0.144
+  matching       51200       0.216      0.626
+  matching      131072       0.564      0.573
+  matching      524288       2.190      2.432
+  matching     1048576       4.387      4.611
+  nearmatch       2048       0.010      0.012
+  nearmatch       8192       0.042      0.048
+  nearmatch      32768       0.164      0.166
+  nearmatch      51200       0.276      0.279
+  nearmatch     131072       0.750      0.820
+  nearmatch     524288       2.941      3.474
+  nearmatch    1048576       5.685      6.444
+  pemflood        2048       0.089      0.206
+  pemflood        8192       0.100      0.151
+  pemflood       32768       0.382      0.407
+  pemflood       51200       0.580      0.608
+  pemflood      131072       1.350      1.387
+  pemflood      524288       5.449      5.475
+  pemflood     1048576      10.775     10.850
+
+  WORST_50KIB_MAX_MS=0.626   (limit 100)
+  WORST_1MIB_MAX_MS=10.850   (limit 1000)
+
+BUN 1.3.14 — THE SDK RUNTIME
+  worst50KibMaxMs: 5.876  (limit 100)   ok=True
+  worst1MibMaxMs:  116.509 (limit 1000) ok=True
+  (full per-rung table produced by the witness; see the script)
+
+THE GROWTH IS LINEAR, NOT MERELY "UNDER THE LIMIT"
+  input        predecessor      repaired (Node)
+     8192         101.73 ms          0.046 ms
+    32768        1935.62 ms          0.176 ms
+  1048576   (did not terminate)      5.609 ms
+  A 4x input increase took the predecessor from 102 ms to 1 936 ms (19x) and the
+  repaired implementation from 0.046 ms to 0.176 ms (3.8x — linear).
+
+BOUNDED COMPLEXITY ARGUMENT (STRUCTURAL, not a timing argument)
+  operation 1: the guard (?<![A-Za-z0-9_.-]) makes a match ATTEMPTABLE only at the
+    start of a key run. The number of attemptable positions is O(number of key
+    runs), NOT O(body length). No offset inside a run is attemptable, so the
+    quadratic "retry at every offset" behaviour is structurally impossible.
+  operation 3: the END markers are located in ONE left-to-right pass; the BEGIN
+    scan advances a monotone cursor and each pairing is a BINARY SEARCH over the
+    already-located END markers. There is no forward rescan of the body from any
+    BEGIN marker, so "markers x body length" is structurally impossible.
+
+NO INDEPENDENT WATCHDOG TERMINATION OCCURRED AT ANY RUNG, IN EITHER RUNTIME.

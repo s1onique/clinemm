@@ -1,0 +1,38 @@
+ACT-CLINEMM-EVIDENCE-SANITIZER-BOUNDED-COMPLEXITY-REPAIR-01 — EXECUTABLE GATES
+===============================================================================
+ACT-OWNED SUITE  src/extensions/context/sanitizer-bounded-complexity.repair01.test.ts
+                  20 tests PASSED
+EXISTING         evidence-continuity.test.ts                 62 tests PASSED
+EXISTING         compaction.evidence-fidelity01.test.ts      39 tests PASSED
+EXISTING         source-bound-evidence.test.ts                22 tests PASSED
+WHOLE CONTEXT    src/extensions/context/  81 files passed | 1 skipped; 1152 tests passed
+TYPECHECK        bun run typecheck (@cline/core)   45 -> 45, ZERO DELTA
+                 (baseline and after are byte-identical; see 09-typecheck-*.txt)
+                 0 ACT-OWNED diagnostics
+LINT             biome check --diagnostic-level=error on the three touched files: CLEAN
+RED WITNESS      against the predecessor: 12 watchdog terminations
+RED WITNESS      against the repair:     0 watchdog terminations
+
+ACT_OWNED_DIAGNOSTICS = 0
+NEW_REGRESSIONS       = 0
+
+No unrelated full-repository gate was executed: the change touches one production
+module in one package, and that package's context suite, its typecheck and its
+lint cover it.
+
+SCOPE EXCLUSIONS — HONOURED
+  PCK generation or inference policies      UNTOUCHED
+  experimental source-bound evidence select  UNTOUCHED
+  carried-unit shape                        UNTOUCHED
+  command-result pairing                    UNTOUCHED
+  A10 reference trust                       UNTOUCHED
+  model settings / provider request policie UNTOUCHED
+  compaction eligibility / context budgets  UNTOUCHED
+  oracle or scoring machinery               UNTOUCHED
+
+  PCK_DEFAULT_OFF                   = UNCHANGED
+  SOURCE_BOUND_EVIDENCE_DEFAULT_OFF = UNCHANGED
+  A10_UNCHANGED                    = YES
+  VSIX_PACKAGING                   = NOT_EXECUTED
+  INSTALLED_LIVE                   = NOT_EXECUTED
+  INFERENCE_REQUESTS               = 0
