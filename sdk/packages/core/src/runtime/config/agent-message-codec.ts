@@ -249,10 +249,19 @@ function contentBlockToAgentPart(block: ContentBlock): AgentMessagePart {
 			return {
 				type: "reasoning",
 				text: block.thinking,
-				metadata: block.signature
-					? { signature: block.signature, details: block.details }
-					: block.details
-						? { details: block.details }
+				metadata:
+					block.signature || block.originAuthority || block.details
+						? {
+								...(block.signature ? { signature: block.signature } : {}),
+								// ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION02
+								// (A4): the origin authority is restored WITH the
+								// payload, so the outbound projection can still enforce
+								// the route boundary after a session restore.
+								...(block.originAuthority
+									? { originAuthority: block.originAuthority }
+									: {}),
+								...(block.details ? { details: block.details } : {}),
+							}
 						: undefined,
 			};
 		case "redacted_thinking":
@@ -322,12 +331,31 @@ function agentPartToContentBlock(
 				} satisfies RedactedThinkingContent;
 			}
 			const metadata = part.metadata as
-				| { signature?: string; details?: unknown[] }
+				| {
+						signature?: string;
+						details?: unknown[];
+						/**
+						 * ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION02.
+						 *
+						 * The ORIGIN AUTHORITY of the route that issued the opaque
+						 * signature. It is preserved through persistence and
+						 * restoration so the outbound projection can enforce the
+						 * route boundary.
+						 */
+						originAuthority?: string;
+				  }
 				| undefined;
 			return {
 				type: "thinking",
 				thinking: part.text,
 				signature: metadata?.signature,
+				// ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION02 (A4):
+				// the origin authority travels WITH the payload. It is
+				// backward-compatible: a record written before this field
+				// existed simply has none.
+				...(typeof metadata?.originAuthority === "string"
+					? { originAuthority: metadata.originAuthority }
+					: {}),
 				details: metadata?.details,
 			} satisfies ThinkingContent;
 		}

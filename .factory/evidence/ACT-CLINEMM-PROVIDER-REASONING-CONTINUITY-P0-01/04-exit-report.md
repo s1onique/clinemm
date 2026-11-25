@@ -71,6 +71,35 @@ MINIMAX_LOW_EFFORT_PRODUCTION_DELTA NONE
 MINIMAX_LOW_RUNTIME_WIRE_CONSERVATION PASS
 HISTORICAL_INSTALLED_UI_TO_WIRE_CORRELATION UNKNOWN
 
+--- CORRECTION02 (ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION02) ---
+
+UNKNOWN_ORIGIN_REPLAY_AUTHORITY    NONE (fail closed; O1 is GREEN)
+MALFORMED_ORIGIN_REPLAY_AUTHORITY  NONE (fail closed)
+UNKNOWN_DESTINATION_REPLAY_AUTHORITY NONE (the destination authority is REQUIRED)
+MALFORMED_DESTINATION_REPLAY_AUTHORITY NONE (fail closed)
+OUTBOUND_CALLER_AUTHORITY_COVERAGE COMPLETE (toAiSdkMessages has exactly ONE
+                                     production caller, and it supplies the
+                                     required destination authority)
+EFFECTIVE_ENDPOINT_BINDING         VERIFIED (the RESOLVED base URL, including
+                                     its path and the API-line variant)
+SAME_PROVIDER_DIFFERENT_ENDPOINT   CLOSED (O2 is GREEN)
+REVERSE_PROVIDER_TRANSITION        CLOSED (O3 is GREEN)
+ORIGIN_CODEC_ROUNDTRIP             PASS (the origin survives the production
+                                     persistence codec, the production
+                                     restoration codec and restore())
+RESTORED_ORIGIN_ENFORCEMENT        PASS (O4: the restored payload cannot cross
+                                     the route boundary)
+SAME_ORIGIN_REPLAY_CONSERVATION    PASS (O5: byte-for-byte unchanged; switching
+                                     back to the compatible route replays it)
+ORIGIN_BOOKKEEPING_WIRE_EXCLUSION  PASS (the origin authority is consumed by the
+                                     outbound projection and is never sent)
+LEGACY_ORIGINLESS_POLICY           CONSERVED (no fixture deleted, no global
+                                     exemption; the policy was not weakened)
+ORIGIN_CORRECTION_NECESSITY        PROVEN (ablation F)
+
+The CORRECTION02 evidence is in
+`06-correction02-origin-authority.md`.
+
 FOCUSED_REGRESSION_GATE              PASS (238/238)
 TYPECHECK_GATE                      PASS (exit 0)
 ORDINARY_GATE                       PASS_WITH_PRE_EXISTING_FAILURES (1189 passed, 17 pre-existing failures in 3 unrelated suites)

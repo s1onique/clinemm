@@ -414,10 +414,14 @@ function buildAiSdkRequestMessages(
 ) {
 	const aiMessages = toAiSdkMessages(request.messages, systemPrompt, {
 		includeReasoning: shouldIncludeReasoningHistory(request, context),
-		// ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION01:
-		// the ORIGIN provider of this request. It bounds the replay of
-		// opaque provider-owned reasoning metadata.
-		requestProviderId: request.providerId,
+		// ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION02 (A1):
+		// the destination authority is REQUIRED and is established here, at
+		// the single request-construction boundary. A caller that cannot
+		// establish it gets no opaque replay authority.
+		destinationAuthority: buildReasoningOriginAuthority({
+			providerId: request.providerId,
+			baseUrl: context.config.baseUrl,
+		}),
 		supportedInputModalities:
 			context.model.modalities?.input ??
 			(context.model.capabilities
@@ -761,17 +765,22 @@ function buildAiSdkRuntimeContext(
 
 function toAiSdkMessages(
 	messages: readonly AgentMessage[],
-	systemPrompt?: string,
-	options?: {
+	systemPrompt: string | undefined,
+	options: {
 		includeReasoning?: boolean;
 		supportedInputModalities?: readonly string[];
 		/**
-		 * ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION01.
+		 * ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION02 (A1).
 		 *
-		 * The ORIGIN provider of the request the messages are replayed
-		 * into.
+		 * The ORIGIN AUTHORITY of the request the messages are replayed
+		 * into (the provider id plus the effective endpoint).
+		 *
+		 * It is REQUIRED: an opaque reasoning payload may only be replayed
+		 * when the destination's authority is positively established. There
+		 * is deliberately no permissive fallback — a caller that cannot
+		 * establish the destination identity gets NO opaque replay authority.
 		 */
-		requestProviderId?: string;
+		destinationAuthority: string;
 	},
 ) {
 	const includeReasoning = options?.includeReasoning ?? true;
@@ -813,10 +822,10 @@ function toAiSdkMessages(
 				// of a cross-origin replay, and dropping it would silently lose
 				// a provider-required signature.
 				const origin = metadata?.[REASONING_METADATA_ORIGIN_KEY];
-				const sameOrigin =
-					typeof origin !== "string" ||
-					options?.requestProviderId === undefined ||
-					origin === options.requestProviderId;
+				const sameOrigin = mayReplayOpaqueReasoning({
+					origin,
+					destinationAuthority: options.destinationAuthority,
+				});
 				const signature = sameOrigin ? metadata?.signature : undefined;
 				const redactedData = sameOrigin ? metadata?.redactedData : undefined;
 				content.push({
@@ -1515,17 +1524,124 @@ function extractGoogleThoughtMetadata(
 }
 
 /**
- * ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION01.
+ * ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION02.
  *
- * The ClineMM-owned metadata key that records the ORIGIN provider of an
- * opaque provider-owned reasoning payload.
+ * The metadata key that records the ORIGIN AUTHORITY of an opaque
+ * provider-owned reasoning payload.
  *
- * It lives inside the reasoning part's metadata bag so it travels with the
- * payload through accumulation and persistence, and it is READ ONLY by the
- * outbound conversion. It is never sent to a provider: the outbound
- * conversion consumes it and does not forward it.
+ * It is the SAME key the production persistence codec preserves
+ * (`agent-message-codec.ts`, `ThinkingContent.originAuthority`), so the
+ * authority travels with the payload through accumulation, persistence and
+ * restoration without a second representation.
+ *
+ * It is READ ONLY by the outbound conversion. It is never sent to a
+ * provider: the outbound conversion consumes it and does not forward it.
  */
-const REASONING_METADATA_ORIGIN_KEY = "__clineReasoningOrigin";
+const REASONING_METADATA_ORIGIN_KEY = "originAuthority";
+
+/**
+ * ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION02.
+ *
+ * The ORIGIN AUTHORITY of a provider endpoint.
+ *
+ * The opaque reasoning payloads (the Anthropic thinking signature and the
+ * redacted-thinking payload) authenticate a block to the ENDPOINT that
+ * issued them. A provider id alone does NOT establish a trust domain: two
+ * endpoints can share one provider id (a regional or self-hosted endpoint,
+ * a gateway, a proxy) while being entirely distinct trust domains.
+ *
+ * The authority therefore identifies BOTH:
+ *
+ *   - the provider id, and
+ *   - the EFFECTIVE endpoint (the resolved base URL), when one is known.
+ *
+ * The endpoint is CREDENTIAL-FREE by construction: the API key is a
+ * separate configuration field, never part of the base URL. The value is
+ * therefore safe to persist alongside the payload.
+ *
+ * The two parts are joined with a separator that cannot occur in either,
+ * so the composite cannot be forged by moving characters between them.
+ */
+function buildReasoningOriginAuthority(input: {
+	providerId: string;
+	baseUrl: string | undefined;
+}): string {
+	// ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION02 (A2).
+	//
+	// The EFFECTIVE ROUTE, not merely the logical provider id and not the
+	// unresolved configuration value:
+	//
+	//   - `context.config.baseUrl` is the RESOLVED endpoint. The registry
+	//     resolves it as `config.baseUrl ?? apiLineBaseUrl ??
+	//     registration.defaults.baseUrl`, so the API-line variant (for
+	//     example MiniMax's China vs international endpoint) is already
+	//     applied.
+	//   - The full base URL is used, INCLUDING its PATH, because two
+	//     endpoints can share a hostname and differ only by path, and a
+	//     different path can be a different trust domain. The Anthropic
+	//     adapter builds its effective request URL as
+	//     `${baseURL}/messages`, so the base URL's path IS part of the
+	//     route.
+	//   - Only trailing slashes are normalized, so `/v1` and `/v1/` are the
+	//     same route while `/v1` and `/v2` are not.
+	//
+	// CREDENTIAL FREEDOM: the API key is a separate configuration field
+	// and is never part of the base URL, so this value carries no
+	// credential, no authorization header and no credential-bearing URL.
+	//
+	// LIMITATION (stated explicitly): endpoint identity establishes the
+	// ROUTE that issued a payload. It does NOT by itself prove every
+	// account-, model- or conversation-level compatibility condition that
+	// a provider may require; it is the strongest cheap, existing,
+	// credential-free route identity the repository has.
+	const endpoint = input.baseUrl?.trim().replace(/\/+$/, "");
+	return endpoint
+		? `${input.providerId}\u0000${endpoint}`
+		: `${input.providerId}\u0000`;
+}
+
+/**
+ * ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION02.
+ *
+ * Whether an opaque reasoning payload may be replayed to a destination.
+ *
+ * The policy is FAIL-CLOSED:
+ *
+ *   - the recorded origin must be PRESENT and well formed, and
+ *   - it must EXACTLY equal the destination's origin authority.
+ *
+ * A missing or malformed origin does NOT grant replay authority: absence of
+ * provenance is not evidence of compatibility, and granting it would
+ * disclose one endpoint's opaque metadata to another.
+ *
+ * The reasoning TEXT is never gated by this — only the opaque payload is.
+ */
+function mayReplayOpaqueReasoning(input: {
+	origin: unknown;
+	destinationAuthority: string;
+}): boolean {
+	// ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION02 (A1).
+	//
+	// FAIL CLOSED on every branch:
+	//
+	//   - a MISSING or MALFORMED issuing origin grants no authority,
+	//   - a MISSING or MALFORMED destination identity grants no authority,
+	//   - KNOWN INCOMPATIBLE origins grant no authority,
+	//   - only POSITIVELY ESTABLISHED COMPATIBLE origins grant authority.
+	//
+	// The destination authority is REQUIRED by the caller, so a missing
+	// destination can never be reached through the ordinary request path.
+	if (typeof input.origin !== "string" || input.origin.length === 0) {
+		return false;
+	}
+	if (
+		typeof input.destinationAuthority !== "string" ||
+		input.destinationAuthority.length === 0
+	) {
+		return false;
+	}
+	return input.origin === input.destinationAuthority;
+}
 
 /**
  * ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01.
@@ -1557,7 +1673,7 @@ const REASONING_METADATA_ORIGIN_KEY = "__clineReasoningOrigin";
  */
 function extractReasoningMetadata(
 	part: AiSdkStreamPart,
-	issuingProviderId?: string,
+	issuingAuthority?: string,
 ): Record<string, unknown> | undefined {
 	const metadata: Record<string, unknown> = {};
 
@@ -1612,11 +1728,11 @@ function extractReasoningMetadata(
 	// Anthropic opaque payload, and it is recorded under a ClineMM-owned
 	// key, so it never alters the provider's own metadata shape.
 	if (
-		issuingProviderId !== undefined &&
+		issuingAuthority !== undefined &&
 		(typeof metadata.signature === "string" ||
 			typeof metadata.redactedData === "string")
 	) {
-		metadata[REASONING_METADATA_ORIGIN_KEY] = issuingProviderId;
+		metadata[REASONING_METADATA_ORIGIN_KEY] = issuingAuthority;
 	}
 
 	return Object.keys(metadata).length > 0 ? metadata : undefined;
@@ -1763,7 +1879,13 @@ async function* emitAiSdkEvents(
 					// even when its text is empty, so the provider-owned metadata
 					// survives to the accumulated reasoning part. An event with
 					// neither text nor metadata remains a no-op.
-					const metadata = extractReasoningMetadata(part, request.providerId);
+					const metadata = extractReasoningMetadata(
+						part,
+						buildReasoningOriginAuthority({
+							providerId: request.providerId,
+							baseUrl: context.config.baseUrl,
+						}),
+					);
 					if (text || metadata) {
 						if (text) {
 							sawVisibleContent = true;

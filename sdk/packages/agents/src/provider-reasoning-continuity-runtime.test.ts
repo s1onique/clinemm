@@ -98,21 +98,51 @@ function textBlock(index: number, text: string): string[] {
 
 type CapturedBody = Record<string, unknown>;
 
+/**
+ * ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION02 (A3).
+ *
+ * ONE captured HTTP attempt: the EFFECTIVE URL the transport actually
+ * requested, together with the serialized body.
+ *
+ * The URL is the proof that a specific ROUTE was exercised. A differently
+ * labelled fixture is not.
+ */
+type CapturedCall = {
+	url: string;
+	body: CapturedBody;
+};
+
 function makeFetch(responses: (() => Response)[]) {
-	const calls: CapturedBody[] = [];
+	const calls: CapturedCall[] = [];
 	let index = 0;
-	const fetchImpl = (async (_input: unknown, init?: RequestInit) => {
+	const fetchImpl = (async (input: unknown, init?: RequestInit) => {
 		const raw = init?.body;
-		calls.push(
+		const body =
 			typeof raw === "string"
 				? (JSON.parse(raw) as CapturedBody)
-				: ({} as CapturedBody),
-		);
+				: ({} as CapturedBody);
+		// The EFFECTIVE URL the transport actually reached. This is the
+		// proof that a specific route was exercised, not merely a
+		// differently-labelled fixture.
+		const url =
+			typeof input === "string"
+				? input
+				: input instanceof URL
+					? input.toString()
+					: String(input);
+		calls.push({ url, body });
 		const factory = responses[Math.min(index, responses.length - 1)];
 		index += 1;
 		return factory();
 	}) as unknown as typeof fetch;
-	return { fetchImpl, calls };
+	return {
+		fetchImpl,
+		calls,
+		/** The bodies, in request order. */
+		bodies: calls.map((call) => call.body),
+		/** The EFFECTIVE URLs, in request order. */
+		urls: calls.map((call) => call.url),
+	};
 }
 
 function telemetryMock(): ITelemetryService {
@@ -229,7 +259,7 @@ describe("provider reasoning continuity through the REAL AgentRuntime", () => {
 		expect(calls).toHaveLength(2);
 
 		// ---- THE FOLLOW-UP REQUEST (the acceptance authority) ----
-		const followUp = calls[1];
+		const followUp = calls[1].body;
 		const assistant = assistantBlocks(followUp);
 
 		// The provider-required reasoning, WITH its signature, is replayed.
@@ -308,7 +338,7 @@ describe("provider reasoning continuity through the REAL AgentRuntime", () => {
 		expect(executions).toEqual([TOOL_NAME]);
 		expect(calls).toHaveLength(2);
 
-		const assistant = assistantBlocks(calls[1]);
+		const assistant = assistantBlocks(calls[1].body);
 		const thinking = assistant.filter((block) => block.type === "thinking");
 
 		// EXACT ordered equality: each block keeps its own text AND its own
@@ -341,7 +371,9 @@ describe("provider reasoning continuity through the REAL AgentRuntime", () => {
 		});
 
 		// The ClineMM-owned origin bookkeeping NEVER reaches the provider.
-		expect(JSON.stringify(calls[1])).not.toContain("__clineReasoningOrigin");
+		expect(JSON.stringify(calls[1].body)).not.toContain(
+			"__clineReasoningOrigin",
+		);
 	});
 
 	it("RT3: conserves an EMPTY signed thinking block", async () => {
@@ -396,7 +428,7 @@ describe("provider reasoning continuity through the REAL AgentRuntime", () => {
 		expect(executions).toEqual([TOOL_NAME]);
 		expect(calls).toHaveLength(2);
 
-		const assistant = assistantBlocks(calls[1]);
+		const assistant = assistantBlocks(calls[1].body);
 		const thinking = assistant.filter((block) => block.type === "thinking");
 
 		// The provider-owned signature survives DESPITE the empty text, and
@@ -461,7 +493,7 @@ describe("provider reasoning continuity through the REAL AgentRuntime", () => {
 
 		// The Anthropic reasoning signature appears ONLY on the reasoning
 		// block. The tool_use block carries NO reasoning metadata.
-		const assistant = assistantBlocks(calls[1]);
+		const assistant = assistantBlocks(calls[1].body);
 		const toolUse = assistant.find((block) => block.type === "tool_use");
 		expect(toolUse).toEqual({
 			type: "tool_use",
@@ -533,12 +565,12 @@ describe("MiniMax real-runtime reasoning continuity", () => {
 		expect(calls).toHaveLength(2);
 
 		// A4 CONSERVATION: Low stays Low on EVERY captured MiniMax request.
-		for (const body of calls) {
+		for (const body of calls.map((call) => call.body)) {
 			expect(body.output_config).toMatchObject({ effort: "low" });
 		}
 
 		// The provider-required signed reasoning reaches the wire.
-		const assistant = assistantBlocks(calls[1]);
+		const assistant = assistantBlocks(calls[1].body);
 		expect(assistant.filter((block) => block.type === "thinking")).toEqual([
 			{
 				type: "thinking",
@@ -600,7 +632,7 @@ describe("MiniMax real-runtime reasoning continuity", () => {
 		expect(executions).toEqual([TOOL_NAME]);
 		expect(calls).toHaveLength(2);
 
-		const assistant = assistantBlocks(calls[1]);
+		const assistant = assistantBlocks(calls[1].body);
 		// EXACT ordered equality: two DISTINCT blocks, each with its own text
 		// and its own signature.
 		expect(assistant.filter((block) => block.type === "thinking")).toEqual([
@@ -709,7 +741,7 @@ describe("same-adapter provider-origin conservation", () => {
 		await destinationRuntime.run("SYNTHETIC-PROMPT");
 
 		// The destination request is the LAST captured one.
-		const destinationBody = calls[calls.length - 1];
+		const destinationBody = calls[calls.length - 1].body;
 		const destinationThinking = assistantBlocks(destinationBody).filter(
 			(block) => block.type === "thinking",
 		);
@@ -721,6 +753,252 @@ describe("same-adapter provider-origin conservation", () => {
 		expect(JSON.stringify(destinationBody)).not.toContain(SIGNATURE_A);
 		for (const block of destinationThinking) {
 			expect(block.signature).toBeUndefined();
+		}
+	});
+});
+
+describe("origin authority discriminators (CORRECTION02)", () => {
+	const MINIMAX_BASE_URL = "https://api.minimax.io/anthropic/v1";
+	const ANTHROPIC_OFFICIAL_BASE_URL = "https://api.anthropic.com/v1";
+	/** A DISTINCT endpoint under the SAME provider id. */
+	const ANTHROPIC_OTHER_BASE_URL = "https://eu.api.anthropic.com/v1";
+	const M31_MODEL_ID = "MiniMax-M3.1-Flash";
+
+	function anthropicTurn(): Response {
+		return new Response(
+			[
+				MESSAGE_START,
+				...thinkingBlock(0, REASONING_A, SIGNATURE_A),
+				...toolUseBlock(1, TOOL_CALL_ID),
+				'event: message_delta\ndata: {"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"output_tokens":10}}\n\n',
+				MESSAGE_STOP,
+			].join(""),
+			{ headers: { "content-type": "text/event-stream" } },
+		);
+	}
+
+	function plainTurn(): Response {
+		return new Response(
+			[
+				MESSAGE_START,
+				...textBlock(0, "DONE"),
+				'event: message_delta\ndata: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":5}}\n\n',
+				MESSAGE_STOP,
+			].join(""),
+			{ headers: { "content-type": "text/event-stream" } },
+		);
+	}
+
+	function makeRuntime(input: {
+		providerId: string;
+		modelId: string;
+		baseUrl: string;
+		fetchImpl: typeof fetch;
+		executions: string[];
+	}) {
+		const gateway = createGateway({
+			providerConfigs: [
+				{
+					providerId: input.providerId,
+					apiKey: "test-key",
+					baseUrl: input.baseUrl,
+					fetch: input.fetchImpl,
+				},
+			],
+		});
+		return createAgentRuntime({
+			model: gateway.createAgentModel({
+				providerId: input.providerId,
+				modelId: input.modelId,
+			}),
+			tools: [makeTool(input.executions)],
+			requestToolApproval: () => ({ approved: true }),
+			telemetry: telemetryMock(),
+		});
+	}
+
+	/**
+	 * ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION02 (A3).
+	 *
+	 * The host of every EFFECTIVE URL the transport reached.
+	 */
+	function hostsOf(calls: CapturedCall[]): string[] {
+		return calls.map((call) => new URL(call.url).host);
+	}
+
+	it("O1: an originless opaque reasoning payload is NOT replayed", async () => {
+		// The opaque payload arrives with NO origin provenance at all, as it
+		// would from a history written before the origin was recorded, or by a
+		// producer that never established one.
+		//
+		// Missing provenance must NOT itself grant replay authority.
+		const executions: string[] = [];
+		const { fetchImpl, calls } = makeFetch([plainTurn]);
+		const runtime = makeRuntime({
+			providerId: "anthropic",
+			modelId: MODEL_ID,
+			baseUrl: ANTHROPIC_OFFICIAL_BASE_URL,
+			fetchImpl,
+			executions,
+		});
+
+		await runtime.run([
+			{
+				id: "m_user",
+				role: "user",
+				content: [{ type: "text", text: "SYNTHETIC-PROMPT" }],
+				createdAt: 1,
+			},
+			{
+				id: "m_assistant",
+				role: "assistant",
+				content: [
+					{
+						type: "reasoning",
+						text: REASONING_A,
+						// NO origin recorded.
+						metadata: { signature: SIGNATURE_A },
+					},
+				],
+				createdAt: 2,
+			},
+		]);
+
+		// (3) At least one destination request occurred.
+		expect(calls.length).toBeGreaterThanOrEqual(1);
+		// (1) The intended destination endpoint was exercised.
+		expect(hostsOf(calls)).toEqual(calls.map(() => "api.anthropic.com"));
+		// (4) EVERY destination request excludes the opaque payload.
+		for (const call of calls) {
+			expect(JSON.stringify(call.body)).not.toContain(SIGNATURE_A);
+		}
+	});
+
+	it("O2: the SAME provider id on a DIFFERENT endpoint does not replay the opaque payload", async () => {
+		const sourceExecutions: string[] = [];
+		const { fetchImpl: sourceFetch, calls: sourceCalls } = makeFetch([
+			anthropicTurn,
+			plainTurn,
+		]);
+		const source = makeRuntime({
+			providerId: "anthropic",
+			modelId: MODEL_ID,
+			baseUrl: ANTHROPIC_OFFICIAL_BASE_URL,
+			fetchImpl: sourceFetch,
+			executions: sourceExecutions,
+		});
+		const first = await source.run("SYNTHETIC-PROMPT");
+		expect(sourceExecutions).toEqual([TOOL_NAME]);
+
+		// (1) The intended SOURCE endpoint was exercised.
+		expect(hostsOf(sourceCalls)).toEqual(
+			sourceCalls.map(() => "api.anthropic.com"),
+		);
+		// The source produced the opaque payload.
+		expect(JSON.stringify(sourceCalls[1].body)).toContain(SIGNATURE_A);
+
+		// The DESTINATION uses the SAME provider id but a DIFFERENT endpoint.
+		const destExecutions: string[] = [];
+		const { fetchImpl: destFetch, calls: destCalls } = makeFetch([plainTurn]);
+		const destination = makeRuntime({
+			providerId: "anthropic",
+			modelId: MODEL_ID,
+			baseUrl: ANTHROPIC_OTHER_BASE_URL,
+			fetchImpl: destFetch,
+			executions: destExecutions,
+		});
+		destination.restore(first.messages);
+		await destination.run("SYNTHETIC-PROMPT");
+
+		// (3) At least one destination request occurred.
+		expect(destCalls.length).toBeGreaterThanOrEqual(1);
+		// (2) The intended DESTINATION endpoint was exercised — a genuinely
+		// different host, not a relabelled fixture.
+		expect(hostsOf(destCalls)).toEqual(
+			destCalls.map(() => "eu.api.anthropic.com"),
+		);
+		expect(hostsOf(destCalls)).not.toEqual(hostsOf(sourceCalls));
+
+		// (4) EVERY destination request excludes the foreign opaque payload.
+		for (const call of destCalls) {
+			expect(JSON.stringify(call.body)).not.toContain(SIGNATURE_A);
+		}
+	});
+
+	it("O3: the REVERSE direction (MiniMax -> native Anthropic) does not replay", async () => {
+		const sourceExecutions: string[] = [];
+		const { fetchImpl: sourceFetch, calls: sourceCalls } = makeFetch([
+			anthropicTurn,
+			plainTurn,
+		]);
+		const source = makeRuntime({
+			providerId: "minimax",
+			modelId: M31_MODEL_ID,
+			baseUrl: MINIMAX_BASE_URL,
+			fetchImpl: sourceFetch,
+			executions: sourceExecutions,
+		});
+		const first = await source.run("SYNTHETIC-PROMPT");
+		expect(sourceExecutions).toEqual([TOOL_NAME]);
+		// (1) The intended SOURCE endpoint was exercised.
+		expect(hostsOf(sourceCalls)).toEqual(
+			sourceCalls.map(() => "api.minimax.io"),
+		);
+		expect(JSON.stringify(sourceCalls[1].body)).toContain(SIGNATURE_A);
+
+		const destExecutions: string[] = [];
+		const { fetchImpl: destFetch, calls: destCalls } = makeFetch([plainTurn]);
+		const destination = makeRuntime({
+			providerId: "anthropic",
+			modelId: MODEL_ID,
+			baseUrl: ANTHROPIC_OFFICIAL_BASE_URL,
+			fetchImpl: destFetch,
+			executions: destExecutions,
+		});
+		destination.restore(first.messages);
+		await destination.run("SYNTHETIC-PROMPT");
+
+		// (2)+(3) The destination endpoint was exercised.
+		expect(destCalls.length).toBeGreaterThanOrEqual(1);
+		expect(hostsOf(destCalls)).toEqual(
+			destCalls.map(() => "api.anthropic.com"),
+		);
+		// (4) EVERY destination request excludes the opaque payload.
+		for (const call of destCalls) {
+			expect(JSON.stringify(call.body)).not.toContain(SIGNATURE_A);
+		}
+	});
+
+	it("O5: same-origin compatible signed reasoning still reaches the wire byte-for-byte", async () => {
+		const executions: string[] = [];
+		const { fetchImpl, calls } = makeFetch([anthropicTurn, plainTurn]);
+		const runtime = makeRuntime({
+			providerId: "anthropic",
+			modelId: MODEL_ID,
+			baseUrl: ANTHROPIC_OFFICIAL_BASE_URL,
+			fetchImpl,
+			executions,
+		});
+		await runtime.run("SYNTHETIC-PROMPT");
+
+		expect(executions).toEqual([TOOL_NAME]);
+		expect(calls).toHaveLength(2);
+		// (1) The intended endpoint was exercised.
+		expect(hostsOf(calls)).toEqual(calls.map(() => "api.anthropic.com"));
+
+		// (5) EVERY required compatible continuation preserves the expected
+		// signed blocks, byte-for-byte.
+		for (const call of calls.slice(1)) {
+			const thinking = assistantBlocks(call.body).filter(
+				(block) => block.type === "thinking",
+			);
+			expect(thinking).toEqual([
+				{
+					type: "thinking",
+					thinking: REASONING_A,
+					signature: SIGNATURE_A,
+				},
+			]);
 		}
 	});
 });

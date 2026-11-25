@@ -23,6 +23,7 @@ import type {
 	AgentModelRequest,
 	AgentTool,
 	AgentToolContext,
+	ContentBlock,
 	ITelemetryService,
 } from "@cline/shared";
 import { describe, expect, it } from "vitest";
@@ -81,14 +82,17 @@ function textBlock(index: number, text: string): string[] {
  * (the resolved `@ai-sdk/anthropic` adapter, the ClineMM translator and the
  * Anthropic serializer) is the production one.
  */
-async function makeRealModel(fetchImpl: typeof fetch): Promise<AgentModel> {
+async function makeRealModel(
+	fetchImpl: typeof fetch,
+	baseUrl: string = ANTHROPIC_BASE_URL,
+): Promise<AgentModel> {
 	const { createGateway } = await import("@cline/llms");
 	const gateway = createGateway({
 		providerConfigs: [
 			{
 				providerId: "anthropic",
 				apiKey: "test-key",
-				baseUrl: ANTHROPIC_BASE_URL,
+				baseUrl,
 				fetch: fetchImpl,
 			},
 		],
@@ -99,16 +103,28 @@ async function makeRealModel(fetchImpl: typeof fetch): Promise<AgentModel> {
 	});
 }
 
+type CapturedCall = {
+	/** The EFFECTIVE URL the transport actually requested. */
+	url: string;
+	body: Record<string, unknown>;
+};
+
 function makeFetch(responses: (() => Response)[]) {
-	const calls: Record<string, unknown>[] = [];
+	const calls: CapturedCall[] = [];
 	let index = 0;
-	const fetchImpl = (async (_input: unknown, init?: RequestInit) => {
+	const fetchImpl = (async (input: unknown, init?: RequestInit) => {
 		const raw = init?.body;
-		calls.push(
+		const body =
 			typeof raw === "string"
 				? (JSON.parse(raw) as Record<string, unknown>)
-				: ({} as Record<string, unknown>),
-		);
+				: ({} as Record<string, unknown>);
+		const url =
+			typeof input === "string"
+				? input
+				: input instanceof URL
+					? input.toString()
+					: String(input);
+		calls.push({ url, body });
 		const factory = responses[Math.min(index, responses.length - 1)];
 		index += 1;
 		return factory();
@@ -151,6 +167,30 @@ function makeTool(
 	};
 }
 
+function anthropicTurn(): Response {
+	return new Response(
+		[
+			MESSAGE_START,
+			...thinkingBlock(0, REASONING_A, SIGNATURE_A),
+			...toolUseBlock(1, TOOL_CALL_ID),
+			'event: message_delta\ndata: {"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"output_tokens":10}}\n\n',
+			MESSAGE_STOP,
+		].join(""),
+		{ headers: { "content-type": "text/event-stream" } },
+	);
+}
+
+function plainTurn(): Response {
+	return new Response(
+		[
+			MESSAGE_START,
+			...textBlock(0, "DONE"),
+			'event: message_delta\ndata: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":5}}\n\n',
+			MESSAGE_STOP,
+		].join(""),
+		{ headers: { "content-type": "text/event-stream" } },
+	);
+}
 function assistantBlocks(
 	body: Record<string, unknown>,
 ): Array<Record<string, unknown>> {
@@ -212,12 +252,31 @@ describe("production session restoration of provider reasoning", () => {
 				?.signature,
 		).toBe(SIGNATURE_A);
 
+		// O4 (ORIGIN_CODEC_ROUNDTRIP): the ORIGIN AUTHORITY survives the
+		// production persistence codec AND the production restoration codec.
+		const restoredOrigin = (
+			restoredReasoning?.metadata as Record<string, unknown> | undefined
+		)?.originAuthority;
+		expect(typeof restoredOrigin).toBe("string");
+		expect(restoredOrigin as string).toContain("anthropic");
+		expect(restoredOrigin as string).toContain("api.anthropic.com");
+		// The persisted form carries it too.
+		const persistedThinking = persisted
+			.flatMap((message) =>
+				Array.isArray(message.content) ? message.content : [],
+			)
+			.find(
+				(block): block is Extract<ContentBlock, { type: "thinking" }> =>
+					block.type === "thinking",
+			);
+		expect(persistedThinking?.originAuthority).toBe(restoredOrigin);
+
 		// ---- THE PRODUCTION restore() SEAM, then a real continuation ----
 		runtime.restore(restored);
 		await runtime.run("SYNTHETIC-SECOND-PROMPT");
 
 		expect(calls.length).toBeGreaterThanOrEqual(3);
-		const assistant = assistantBlocks(calls[calls.length - 1]);
+		const assistant = assistantBlocks(calls[calls.length - 1].body);
 		expect(assistant.filter((block) => block.type === "thinking")).toEqual([
 			{
 				type: "thinking",
@@ -225,5 +284,100 @@ describe("production session restoration of provider reasoning", () => {
 				signature: SIGNATURE_A,
 			},
 		]);
+	});
+});
+
+describe("restored origin enforcement (CORRECTION02 O4/O5)", () => {
+	const ANTHROPIC_OFFICIAL_BASE_URL = "https://api.anthropic.com/v1";
+	const ANTHROPIC_OTHER_BASE_URL = "https://eu.api.anthropic.com/v1";
+
+	it("O4/O5: a restored payload is enforced against the destination route, and switching back replays it", async () => {
+		const executions: string[] = [];
+		const { fetchImpl, calls } = makeFetch([
+			anthropicTurn,
+			plainTurn,
+			plainTurn,
+			plainTurn,
+		]);
+		const runtime = createAgentRuntime({
+			model: await makeRealModel(fetchImpl, ANTHROPIC_OFFICIAL_BASE_URL),
+			tools: [makeTool(executions)],
+			requestToolApproval: () => ({ approved: true }),
+			telemetry: telemetryMock(),
+		});
+
+		const first = await runtime.run("SYNTHETIC-PROMPT");
+		expect(executions).toEqual([TOOL_NAME]);
+
+		// ---- PRODUCTION persistence + restoration ----
+		const persisted = first.messages.map(agentMessageToMessageWithMetadata);
+		const restored = messagesToAgentMessages(persisted);
+		expect(
+			(
+				restored
+					.flatMap((message) => message.content)
+					.find((part) => part.type === "reasoning")?.metadata as
+					| Record<string, unknown>
+					| undefined
+			)?.originAuthority,
+		).toBeTruthy();
+
+		// ---- The INCOMPATIBLE destination route ----
+		const destExecutions: string[] = [];
+		const { fetchImpl: destFetch, calls: destCalls } = makeFetch([
+			plainTurn,
+			plainTurn,
+		]);
+		const destination = createAgentRuntime({
+			model: await makeRealModel(destFetch, ANTHROPIC_OTHER_BASE_URL),
+			tools: [makeTool(destExecutions)],
+			requestToolApproval: () => ({ approved: true }),
+			telemetry: telemetryMock(),
+		});
+		destination.restore(restored);
+		await destination.run("SYNTHETIC-SECOND-PROMPT");
+
+		// The incompatible route was really exercised, and EVERY request on
+		// it excludes the restored opaque payload.
+		expect(destCalls.length).toBeGreaterThanOrEqual(1);
+		expect(destCalls.map((call) => new URL(call.url).host)).toEqual(
+			destCalls.map(() => "eu.api.anthropic.com"),
+		);
+		for (const call of destCalls) {
+			expect(JSON.stringify(call.body)).not.toContain(SIGNATURE_A);
+		}
+
+		// ---- Switching BACK to the compatible route ----
+		// The stored history was NOT mutated by the enforcement: the very
+		// same restored transcript still replays correctly on its own route.
+		const backExecutions: string[] = [];
+		const { fetchImpl: backFetch, calls: backCalls } = makeFetch([
+			plainTurn,
+			plainTurn,
+		]);
+		const back = createAgentRuntime({
+			model: await makeRealModel(backFetch, ANTHROPIC_OFFICIAL_BASE_URL),
+			tools: [makeTool(backExecutions)],
+			requestToolApproval: () => ({ approved: true }),
+			telemetry: telemetryMock(),
+		});
+		back.restore(restored);
+		await back.run("SYNTHETIC-THIRD-PROMPT");
+
+		expect(backCalls.map((call) => new URL(call.url).host)).toEqual(
+			backCalls.map(() => "api.anthropic.com"),
+		);
+		for (const call of backCalls) {
+			const thinking = assistantBlocks(call.body).filter(
+				(block) => block.type === "thinking",
+			);
+			expect(thinking).toEqual([
+				{
+					type: "thinking",
+					thinking: REASONING_A,
+					signature: SIGNATURE_A,
+				},
+			]);
+		}
 	});
 });
