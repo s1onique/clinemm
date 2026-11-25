@@ -24,6 +24,7 @@ import {
 	resolveSummarizerConfig,
 	serializeConversation,
 } from "./compaction-shared";
+import { classifySummaryTerminalStatus } from "./summary-acceptance";
 import { generateSummary } from "./summary-generation";
 
 const MIN_AGENTIC_SUMMARY_INPUT_TOKENS = 1_024;
@@ -200,6 +201,42 @@ export async function runAgenticCompaction(options: {
 		providerId: summarizerProviderConfig.providerId,
 	});
 	const rawSummary = summaryResult.text.trim();
+
+	// ACT-CLINEMM-COMPACTION-ATOMIC-SUMMARY-INSTALLATION-REPAIR-01: the
+	// SUMMARY ACCEPTANCE CONTRACT.
+	//
+	// The EMPTY case was already handled, but a NON-EMPTY candidate whose
+	// completion status is KNOWN to be bad was installed exactly like a
+	// complete one: it replaced the compacted history, the previously usable
+	// working context was gone, and nothing recorded why.
+	//
+	// The decision is taken HERE, at the boundary that OWNS the summary
+	// installation, BEFORE the replacement compacted history is built, BEFORE
+	// the authoritative compaction state is updated, BEFORE a replacement
+	// summary is persisted, BEFORE a successful compaction result is published
+	// and BEFORE the compacted source boundary advances. Rejecting here
+	// therefore leaves the prior valid state and the canonical history
+	// untouched by construction.
+	//
+	// A provider-reported successful TRANSPORT is NOT sufficient when a
+	// separate completion signal reports truncation: a known negative
+	// terminal signal overrides the success flag and the non-empty text.
+	const acceptance = classifySummaryTerminalStatus({
+		incompleteReason: summaryResult.incompleteReason,
+		failed: summaryResult.failed,
+		completed: summaryResult.completed,
+	});
+	// ACT-CLINEMM-COMPACTION-ATOMIC-SUMMARY-INSTALLATION-REPAIR-01: an
+	// unexpected TOOL CALL is not a summary. The summarizer is a text-only
+	// request, so a tool-call termination means the model did not produce the
+	// requested note; the same rule the sibling `summarizeConversation()`
+	// path already applies.
+	//
+	// The tool-call fact is reported alongside the EMPTY diagnostic when the
+	// output is also empty, because a tool-call termination usually carries
+	// NO text at all and the distinct reason is more useful to an operator
+	// than the generic empty-output diagnostic alone.
+	const unexpectedToolCall = summaryResult.usedTools;
 	if (!rawSummary) {
 		options.logger?.log(
 			"Skipped agentic compaction: summarizer returned no summary text",
@@ -214,6 +251,45 @@ export async function runAgenticCompaction(options: {
 					summaryResult.reasoningChars > 0
 						? "output_budget_consumed_by_reasoning"
 						: "empty_response",
+				// ACT-CLINEMM-COMPACTION-ATOMIC-SUMMARY-INSTALLATION-REPAIR-01:
+				// the terminal classification and the tool-call fact are
+				// reported ADDITIVELY, so the long-standing empty-summary
+				// diagnostic is preserved unchanged.
+				summaryTerminalStatus: acceptance.status,
+				...(unexpectedToolCall
+					? { rejectionReason: "unexpected_tool_call" }
+					: {}),
+			},
+		);
+		return undefined;
+	}
+	if (!acceptance.installable) {
+		options.logger?.log(
+			"Skipped agentic compaction: summarizer returned an unusable summary",
+			{
+				severity: "warn",
+				summarizerProviderId: summarizerProviderConfig.providerId,
+				summarizerModelId: summarizerProviderConfig.modelId,
+				summarizerMaxOutputTokens: summarizerProviderConfig.maxOutputTokens,
+				reasoningChars: summaryResult.reasoningChars,
+				incompleteReason: summaryResult.incompleteReason,
+				summaryTerminalStatus: acceptance.status,
+				rejectionReason: acceptance.reason,
+				summaryChars: rawSummary.length,
+			},
+		);
+		return undefined;
+	}
+	if (unexpectedToolCall) {
+		options.logger?.log(
+			"Skipped agentic compaction: summarizer issued a tool call instead of a summary",
+			{
+				severity: "warn",
+				summarizerProviderId: summarizerProviderConfig.providerId,
+				summarizerModelId: summarizerProviderConfig.modelId,
+				summaryTerminalStatus: acceptance.status,
+				rejectionReason: "unexpected_tool_call",
+				summaryChars: rawSummary.length,
 			},
 		);
 		return undefined;

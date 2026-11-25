@@ -20,6 +20,20 @@ export async function generateSummary(options: {
 	let failed = false;
 	let usedTools = false;
 	let incompleteReason: string | undefined;
+	// ACT-CLINEMM-COMPACTION-ATOMIC-SUMMARY-INSTALLATION-REPAIR-01: whether
+	// the transport reported its completion event at all.
+	//
+	// The transport contract says a handler MAY finish without emitting an
+	// optional done chunk, so the ABSENCE of the chunk is not by itself a
+	// failure. But a stream that ENDED — with text and without a completion
+	// event — is distinguishable from one that ended normally, and the
+	// acceptance contract needs that distinction: an unexpected stream
+	// termination must not be read as a successful completion.
+	//
+	// `undefined` means "the transport never reported a completion event",
+	// which the acceptance contract classifies as the LEGACY shape when the
+	// stream ended normally.
+	let completed: boolean | undefined;
 	for await (const chunk of handler.createMessage(options.systemPrompt, [
 		{ role: "user", content: options.request },
 	])) {
@@ -35,11 +49,19 @@ export async function generateSummary(options: {
 			if (!chunk.success && chunk.error) throw new Error(chunk.error);
 			incompleteReason = chunk.incompleteReason ?? incompleteReason;
 			failed ||= !chunk.success;
+			completed = true;
 		} else if (chunk.type === "tool_calls") {
 			usedTools = true;
 		}
 	}
 	options.signal?.throwIfAborted();
 	// Handlers may finish normally without emitting an optional done chunk.
-	return { text, reasoningChars, failed, usedTools, incompleteReason };
+	return {
+		text,
+		reasoningChars,
+		failed,
+		usedTools,
+		incompleteReason,
+		completed,
+	};
 }
