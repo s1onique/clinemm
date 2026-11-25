@@ -682,6 +682,23 @@ export interface BoundedObjectiveSelectionObservation {
 	 */
 	readonly selectionOrdinal: number;
 	/**
+	 * ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01 (AMENDMENT-01):
+	 * the EXACT identity of the SELECTOR REQUEST, as the EXISTING
+	 * provider-request capture names it.
+	 *
+	 * The runtime mints this id and puts it in the selection request's
+	 * transport metadata under the EXISTING `captureId` key. The existing
+	 * provider-request capture (`sdk/packages/llms/src/providers/
+	 * provider-request-capture.ts`) already honours an explicit
+	 * `correlation.captureId`, so the CAPTURED REQUEST FILE is named
+	 * `<selectorRequestId>.ai_sdk_prompt.<n>.provider-request.json`.
+	 *
+	 * The captured RESPONSE artifact carries the SAME id, so the response
+	 * joins to its request by EXACT IDENTITY — not by timestamp proximity
+	 * and not merely by a non-empty parent-task identifier.
+	 */
+	readonly selectorRequestId?: string;
+	/**
 	 * The GENERATED objective text — the model's raw reply to the selector
 	 * request.
 	 *
@@ -751,10 +768,21 @@ export interface BoundedObjectiveSelectionTraceSink {
  * or reference that failed, so the next live discriminator does not have to
  * re-derive it from the proposal.
  *
+ * ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01 (AMENDMENT-01):
+ * `failingField` is present ONLY when the VALIDATOR ESTABLISHES that
+ * particular field. Where the validator does NOT establish a single field,
+ * `failingField` is OMITTED. An omitted field is an HONEST "the validator
+ * did not establish which field failed"; it is not a claim that some other
+ * field failed.
+ *
  * It is a PURE function and never throws.
  */
 export interface BoundedObjectiveRejectionDiagnosis {
-	/** The candidate field that failed, when one can be named. */
+	/**
+	 * The candidate field that failed, WHEN THE VALIDATOR ESTABLISHED IT.
+	 *
+	 * It is ABSENT when the rejection reason does not identify one field.
+	 */
 	readonly failingField?: string;
 	/** The candidate reference that failed, when one can be named. */
 	readonly failingReference?: string;
@@ -762,6 +790,41 @@ export interface BoundedObjectiveRejectionDiagnosis {
 
 /**
  * Diagnose WHICH field or reference of a rejected candidate failed.
+ *
+ * ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01 (AMENDMENT-01).
+ *
+ * TRUTHFUL ATTRIBUTION.
+ *
+ * The rejection REASON is preserved EXACTLY and the RAW proposal is never
+ * rewritten. The `failingField` is reported ONLY for the reasons whose
+ * check provably runs against ONE named field:
+ *
+ *   - `unknown_obligation_reference` -> `obligationReferences`
+ *     (the reference check reads that list, and the offending reference
+ *     can be named),
+ *   - `fabricated_evidence` -> `evidenceReferences`
+ *     (the evidence check reads that list).
+ *
+ * The OTHER reasons are raised against a JOINED haystack or against a
+ * MULTI-FIELD condition, so the validator does NOT establish one field:
+ *
+ *   - `constraint_conflict` is raised by the authority-escalation scan over
+ *     ALL required fields, by the per-constraint scan over the same joined
+ *     haystack, and by the read-only-scope/first-step PAIR. It is not
+ *     established to be `firstStep`.
+ *   - `scope_expansion` is raised by the candidate's OWN `mutationScope`
+ *     AND by a path that appears in ANY of the required fields. It is not
+ *     established to be `mutationScope`.
+ *   - `unsupported_completion_claim` is raised over the joined
+ *     `objective + successCondition + verificationCondition` haystack. It is
+ *     not established to be `successCondition`.
+ *   - `malformed` is raised against ANY of the six required fields OR
+ *     against either reference list. It is not established to be one field,
+ *     and it is not established to be the candidate as a whole.
+ *
+ * For those reasons the diagnosis reports NO field. The raw proposal and
+ * the exact reason remain available to the caller, so nothing is lost: the
+ * next discriminator can decide the field itself.
  *
  * The diagnosis is STRUCTURAL: it re-runs the reference checks the
  * validator performs and reports the first offending entry. It performs no
@@ -775,8 +838,11 @@ export function describeBoundedObjectiveRejection(
 		readonly outstandingObligations: readonly string[];
 	},
 ): BoundedObjectiveRejectionDiagnosis {
+	// ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01 (AMENDMENT-01): a
+	// non-object candidate has NO field to attribute, so NO field is
+	// reported. The reason itself is preserved by the caller.
 	if (typeof candidate !== "object" || candidate === null) {
-		return { failingField: "candidate" };
+		return {};
 	}
 	const raw = candidate as Record<string, unknown>;
 	if (reason === "unknown_obligation_reference") {
@@ -812,16 +878,10 @@ export function describeBoundedObjectiveRejection(
 	if (reason === "fabricated_evidence") {
 		return { failingField: "evidenceReferences" };
 	}
-	if (reason === "scope_expansion") {
-		return { failingField: "mutationScope" };
-	}
-	if (reason === "constraint_conflict") {
-		return { failingField: "firstStep" };
-	}
-	if (reason === "unsupported_completion_claim") {
-		return { failingField: "successCondition" };
-	}
-	return { failingField: "candidate" };
+	// ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01 (AMENDMENT-01): the
+	// remaining reasons do NOT establish one field, so NO field is
+	// reported. Naming one would be a claim the validator never made.
+	return {};
 }
 
 /**
@@ -1432,8 +1492,16 @@ const COMPLETION_PHRASE_PATTERN = new RegExp(
 
 /**
  * The PREFIX that marks an obligation as no longer outstanding.
+ *
+ * ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01 (AMENDMENT-01): the
+ * PREDECESSOR recognized the SPACED form
+ * `no longer outstanding: ${normalizedObligation}` — the separator space is
+ * part of the recognized form. The prefix below therefore RETAINS the
+ * separator so the predecessor's recognition semantics are conserved
+ * EXACTLY. The prefix is a COMPLETION ASSERTION in its own right and
+ * carries no negation/future marker of its own.
  */
-const NO_LONGER_OUTSTANDING_PREFIX = "no longer outstanding:";
+const NO_LONGER_OUTSTANDING_PREFIX = "no longer outstanding: ";
 
 /**
  * Whether a candidate's text ASSERTS that an obligation is already
@@ -1461,10 +1529,10 @@ const NO_LONGER_OUTSTANDING_PREFIX = "no longer outstanding:";
  *      by accident.
  *
  * The check is deliberately LEXICAL and bounded: it recognises the
- * EXISTING phrase list, plus the EXISTING "no longer outstanding:" prefix,
- * and it classifies the clause in which the phrase occurs. It does not
- * attempt to understand the sentence, and it does not add new English
- * phrases.
+ * EXISTING phrase list, plus the EXISTING "no longer outstanding: " prefix
+ * (with its separator space), and it classifies the clause in which the
+ * phrase occurs. It does not attempt to understand the sentence, and it
+ * does not add new English phrases.
  *
  * The function is PURE and never throws.
  */
@@ -1472,8 +1540,9 @@ function assertsObligationCompletion(
 	haystack: string,
 	normalizedObligation: string,
 ): boolean {
-	// The "no longer outstanding:" form is a COMPLETION ASSERTION in its own
-	// right and carries no negation/future marker of its own.
+	// The "no longer outstanding: " form (WITH the separator space the
+	// predecessor recognized) is a COMPLETION ASSERTION in its own right
+	// and carries no negation/future marker of its own.
 	if (
 		haystack.includes(`${NO_LONGER_OUTSTANDING_PREFIX}${normalizedObligation}`)
 	) {

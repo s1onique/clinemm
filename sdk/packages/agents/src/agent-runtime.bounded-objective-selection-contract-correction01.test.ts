@@ -494,12 +494,26 @@ describe("ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01 / selection acceptance
 			notices.filter((n) => n.includes("bounded objective recovery outcome"))
 				.length,
 		).toBeGreaterThan(0);
-		// The run continued past the objective: later requests carry NO
-		// bounded objective, which is the automatic return to the parent.
-		const afterObjective = model.requests.filter(
-			(request) => boundedObjectiveIn(request) === undefined,
-		);
-		expect(afterObjective.length).toBeGreaterThan(0);
+		// ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01 (AMENDMENT-01):
+		// the objective-free request must occur AFTER an ACTUAL
+		// objective-bearing request. Counting every objective-free request
+		// would also count the requests that PRECEDED the objective, so the
+		// assertion is order-sensitive: there must be an objective-free
+		// request whose index is GREATER than the index of the LAST
+		// objective-bearing request.
+		const objectiveIndexes = model.requests
+			.map((request, index) =>
+				boundedObjectiveIn(request) === undefined ? -1 : index,
+			)
+			.filter((index) => index !== -1);
+		// The objective WAS dispatched...
+		expect(objectiveIndexes.length).toBeGreaterThan(0);
+		const lastObjectiveIndex = Math.max(...objectiveIndexes);
+		// ...and a request WITHOUT the objective came AFTER it.
+		const objectiveFreeAfter = model.requests
+			.slice(lastObjectiveIndex + 1)
+			.filter((request) => boundedObjectiveIn(request) === undefined);
+		expect(objectiveFreeAfter.length).toBeGreaterThan(0);
 	});
 
 	it("W7: the objective NEVER authorizes the parent's completion", async () => {

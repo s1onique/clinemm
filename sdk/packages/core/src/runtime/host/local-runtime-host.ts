@@ -1406,6 +1406,22 @@ export class LocalRuntimeHost implements RuntimeHost {
 			// whether an objective's verification condition was met -- and the
 			// runtime never resolves, relaxes or invents a policy of its own.
 			boundedObjectivePolicy: configWithProvider.boundedObjectivePolicy,
+			// ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01 (AMENDMENT-01):
+			// forward the OPT-IN, host-supplied R2 selection OBSERVATION sink
+			// into the `AgentConfig` the runtime actually receives.
+			//
+			// Without this forwarding the sink stopped at the session config
+			// and the runtime never observed it: the selector's RESPONSE was
+			// never captured, so the historical rejection cause could not be
+			// recovered from a live run.
+			//
+			// It is forwarded VERBATIM and it is READ-ONLY: the runtime
+			// REPORTS facts through it and never reads a decision back, so
+			// it cannot influence the selection, the validation, or the
+			// completion authority. When absent (the default) the runtime
+			// pays a single null check and behaves exactly as before.
+			boundedObjectiveSelectionTraceSink:
+				configWithProvider.boundedObjectiveSelectionTraceSink,
 			prepareTurn,
 			tools,
 			modelTools: runtime.modelTools,

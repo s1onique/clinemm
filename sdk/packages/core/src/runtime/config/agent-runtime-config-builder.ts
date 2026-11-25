@@ -147,6 +147,18 @@ export function createAgentRuntimeConfig(
 		// absent means the runtime behaves exactly as before — no selection
 		// inference, no dispatch, no accounting.
 		boundedObjectivePolicy: agentConfig.boundedObjectivePolicy,
+		// ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01 (AMENDMENT-01):
+		// forward the OPT-IN, host-supplied R2 selection observation sink so
+		// the agent runtime can report the selector's actual RESPONSE and the
+		// exact validation disposition.
+		//
+		// It is READ-ONLY: the runtime REPORTS facts through it and never
+		// reads a decision back, so it cannot influence the selection, the
+		// validation, or the completion authority. When absent (the default)
+		// the runtime pays a single null check and behaves exactly as
+		// before.
+		boundedObjectiveSelectionTraceSink:
+			agentConfig.boundedObjectiveSelectionTraceSink,
 		maxIterations: agentConfig.maxIterations,
 		toolExecution,
 		toolPolicies: agentConfig.toolPolicies,

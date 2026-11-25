@@ -733,3 +733,106 @@ describe("ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01 / selection contract",
 		});
 	});
 });
+
+// ---------------------------------------------------------------------------
+// ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01 (AMENDMENT-01)
+// ---------------------------------------------------------------------------
+
+describe("ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01 (AMENDMENT-01) / completion-prefix conservation", () => {
+	it("S14: the PREDECESSOR's SPACED `no longer outstanding: <obligation>` form is STILL recognised", () => {
+		// The PREDECESSOR recognised the SPACED form
+		// `no longer outstanding: ${normalizedObligation}`. The separator
+		// space is part of the recognized form and must be conserved.
+		const obligation = "Complete the parent task as authorized by the user";
+		const result = validateBoundedObjective(
+			{
+				objective: "Repair the disposable target so its VALUE constant is 2",
+				firstStep: "Edit the disposable target module to set VALUE = 2",
+				mutationScope: "the disposable workspace directory",
+				verificationCondition: "the regression check for VALUE reports PASS",
+				obligationReferences: [obligation],
+				evidenceReferences: [
+					"The last 3 consecutive execution round(s) produced no productive step",
+				],
+				// The SPACED predecessor form.
+				successCondition: `no longer outstanding: ${obligation}`,
+				failureCondition: "the editable file cannot be changed",
+			},
+			{
+				parentTaskId: "run_abc",
+				parentMutationScope: "the disposable target module",
+				parentMutationScopePaths: [],
+				parentConstraints: [],
+				outstandingObligations: [obligation],
+				establishedObservations: [
+					"The last 3 consecutive execution round(s) produced no productive step",
+				],
+			},
+		);
+		expect(result).toEqual({
+			valid: false,
+			reason: "unsupported_completion_claim",
+		});
+	});
+});
+
+describe("ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01 (AMENDMENT-01) / truthful rejection attribution", () => {
+	it("S15: a reason the validator does NOT tie to ONE field reports NO failing field", () => {
+		// `constraint_conflict` is raised by the authority-escalation scan
+		// over ALL required fields and by the per-constraint scan over the
+		// joined haystack. The validator does NOT establish one field, so
+		// the diagnosis must NOT name one.
+		const diagnosis = describeBoundedObjectiveRejection(
+			{ objective: "x", firstStep: "y" },
+			"constraint_conflict",
+			{ outstandingObligations: [] },
+		);
+		expect(diagnosis.failingField).toBeUndefined();
+		expect(diagnosis.failingReference).toBeUndefined();
+	});
+
+	it("S16: `unsupported_completion_claim` reports NO failing field", () => {
+		// The completion-claim check runs over the joined
+		// `objective + successCondition + verificationCondition` haystack.
+		const diagnosis = describeBoundedObjectiveRejection(
+			{ objective: "x", successCondition: "y", verificationCondition: "z" },
+			"unsupported_completion_claim",
+			{ outstandingObligations: [] },
+		);
+		expect(diagnosis.failingField).toBeUndefined();
+	});
+
+	it("S17: `scope_expansion` reports NO failing field", () => {
+		// The scope check reads the candidate's OWN `mutationScope` AND
+		// every path named in ANY required field.
+		const diagnosis = describeBoundedObjectiveRejection(
+			{
+				mutationScope: "/workspace/project",
+				objective: "/workspace/other/a.ts",
+			},
+			"scope_expansion",
+			{ outstandingObligations: [] },
+		);
+		expect(diagnosis.failingField).toBeUndefined();
+	});
+
+	it("S18: `malformed` reports NO failing field", () => {
+		// The malformed check runs against ANY of the six required fields
+		// OR either reference list.
+		const diagnosis = describeBoundedObjectiveRejection(
+			{ objective: "" },
+			"malformed",
+			{ outstandingObligations: [] },
+		);
+		expect(diagnosis.failingField).toBeUndefined();
+	});
+
+	it("S19: `fabricated_evidence` STILL names the field the validator established", () => {
+		const diagnosis = describeBoundedObjectiveRejection(
+			{ evidenceReferences: ["not an established observation"] },
+			"fabricated_evidence",
+			{ outstandingObligations: [] },
+		);
+		expect(diagnosis.failingField).toBe("evidenceReferences");
+	});
+});

@@ -2770,6 +2770,7 @@ export class AgentRuntime {
 				...(this.state.agentId ? { agentId: this.state.agentId } : {}),
 				parentTaskId: selectionContext.parentTaskId,
 				selectionOrdinal: this.boundedObjectiveSelectionInferences,
+				selectorRequestId: selection.selectorRequestId,
 				generatedText: selection.generatedText,
 				disposition: "unparsable",
 			});
@@ -2807,6 +2808,9 @@ export class AgentRuntime {
 				...(this.state.agentId ? { agentId: this.state.agentId } : {}),
 				parentTaskId: selectionContext.parentTaskId,
 				selectionOrdinal: this.boundedObjectiveSelectionInferences,
+				// The EXACT selector-request identity the captured REQUEST
+				// file is named after.
+				selectorRequestId: selection.selectorRequestId,
 				generatedText: selection.generatedText,
 				parsedProposal: candidate,
 				disposition: validation.reason,
@@ -2823,6 +2827,7 @@ export class AgentRuntime {
 				...(this.state.agentId ? { agentId: this.state.agentId } : {}),
 				parentTaskId: selectionContext.parentTaskId,
 				selectionOrdinal: this.boundedObjectiveSelectionInferences,
+				selectorRequestId: selection.selectorRequestId,
 				generatedText: selection.generatedText,
 				parsedProposal: candidate,
 				disposition: "valid",
@@ -3252,10 +3257,31 @@ export class AgentRuntime {
 			objectiveRounds: number;
 		};
 	}): Promise<
-		{ readonly generatedText: string; readonly candidate: unknown } | undefined
+		| {
+				readonly generatedText: string;
+				readonly candidate: unknown;
+				readonly selectorRequestId: string;
+		  }
+		| undefined
 	> {
 		this.throwIfAborted();
 		const prompt = buildBoundedObjectiveSelectionPrompt(context);
+		// ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01 (AMENDMENT-01):
+		// the EXACT identity of the SELECTOR REQUEST.
+		//
+		// The id is minted ONCE per selection inference and is put into the
+		// selection request's transport metadata under the EXISTING
+		// `captureId` key. The EXISTING provider-request capture already
+		// honours an explicit `correlation.captureId`, so the CAPTURED
+		// REQUEST FILE is named `<selectorRequestId>...`, and the captured
+		// RESPONSE carries the SAME id. The response therefore joins to its
+		// request by EXACT IDENTITY.
+		//
+		// It is minted for EVERY selection inference — including the ones
+		// whose response is never observed — because the captured REQUEST
+		// must always be nameable. The id is inert: it is transport
+		// correlation metadata, never a prompt field.
+		const selectorRequestId = createUID("sel");
 		let stream: AsyncIterable<AgentModelEvent>;
 		try {
 			stream = await this.config.model.stream({
@@ -3275,6 +3301,8 @@ export class AgentRuntime {
 						kind: "bounded_objective_selection",
 						runId: this.state.runId,
 						agentId: this.state.agentId,
+						// The EXISTING capture-id correlation key.
+						captureId: selectorRequestId,
 					},
 				}),
 			});
@@ -3300,9 +3328,13 @@ export class AgentRuntime {
 		// text is returned alongside the parsed candidate so the
 		// observation sink can record what the model actually said. It is
 		// the model's own reply — never provider-owned reasoning.
+		//
+		// (AMENDMENT-01): the SELECTOR REQUEST IDENTITY is returned too, so
+		// the captured RESPONSE joins to the captured REQUEST by exact id.
 		return {
 			generatedText: text,
 			candidate: parseBoundedObjectiveCandidate(text),
+			selectorRequestId,
 		};
 	}
 
@@ -3316,19 +3348,56 @@ export class AgentRuntime {
 	 * method pays a single null check.
 	 *
 	 * The report is READ-ONLY and MUST NOT affect the selection, the
-	 * validation, the dispatch, or the completion authority. A throwing
-	 * sink is swallowed.
+	 * validation, the dispatch, or the completion authority.
+	 *
+	 * ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01 (AMENDMENT-01):
+	 * FAILURE ISOLATION covers BOTH a synchronous throw AND an
+	 * ASYNCHRONOUS rejection.
+	 *
+	 * The sink's contract is `void | Promise<void>`. `try { void
+	 * sink.onSelectionObservation(...) } catch {}` only isolates the
+	 * SYNCHRONOUS throw: a returned Promise that rejects LATER escapes
+	 * the try block entirely and becomes an UNHANDLED REJECTION, which
+	 * terminates the process under `--unhandled-rejections=strict` (and
+	 * is an unhandled rejection in every other profile too).
+	 *
+	 * The returned thenable is therefore ATTACHED: a rejection is
+	 * swallowed by the runtime's OWN rejection handler, so the observer
+	 * can never take the process down. The observation itself is
+	 * fire-and-forget — the runtime NEVER awaits the sink, so a slow or
+	 * hanging sink cannot delay the selection, the validation or the
+	 * parent continuation.
+	 *
+	 * DEFAULT OFF additionally performs NO capture-specific diagnosis or
+	 * serialization: the absent-sink path is a single null check and
+	 * returns before any observation is built.
 	 */
 	private observeBoundedObjectiveSelection(
 		observation: BoundedObjectiveSelectionObservation,
 	): void {
 		const sink = this.config.boundedObjectiveSelectionTraceSink;
-		if (!sink?.onSelectionObservation) {
+		const report = sink?.onSelectionObservation;
+		if (!report) {
 			return;
 		}
 		try {
-			void sink.onSelectionObservation(observation);
+			const result = report.call(sink, observation);
+			// The sink MAY return a Promise. A rejection must never escape
+			// as an unhandled rejection, so the runtime attaches its own
+			// rejection handler. The runtime does NOT await it: the
+			// observation is fire-and-forget by contract.
+			if (
+				result !== null &&
+				typeof result === "object" &&
+				typeof (result as Promise<void>).then === "function"
+			) {
+				(result as Promise<void>).then(undefined, () => {
+					// The observation sink must never affect model
+					// execution. A rejected observation is swallowed.
+				});
+			}
 		} catch {
+			// A SYNCHRONOUS throw is swallowed too.
 			// The observation sink must never affect model execution.
 		}
 	}

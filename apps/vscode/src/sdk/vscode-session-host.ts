@@ -55,6 +55,9 @@ import {
 	getDiagnosticHostId,
 	getDiagnosticManagerId,
 } from "./background-job-liveness-authority"
+// ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01 (AMENDMENT-01): the
+// OPT-IN, operator-local R2 selection-RESPONSE capture sink.
+import { installSelectionResponseCaptureSink } from "./bounded-objective-selection-capture"
 import { type CommandJobLifecycleEvent, CommandJobManager, type CommandJobState } from "./command-job-manager"
 import { createProductionPendingPromptCapture } from "./continuation-cardinality-authority.session-host-capture"
 import { type VscodeGitTelemetry, VscodeGitTelemetryManager } from "./git-telemetry"
@@ -475,6 +478,15 @@ export class VscodeSessionHost implements SdkSessionHost {
 			// as before, and the Round C latency sink observes the same
 			// production boundaries in parallel.
 			const roundcLatencyTraceSink = installRoundcLatencyTraceSink(inputWithRemoteConfig.config.sessionId)
+			// ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01 (AMENDMENT-01):
+			// install the OPT-IN, operator-local R2 selection-RESPONSE
+			// capture sink for THIS session.
+			//
+			// It returns `undefined` when the operator did not opt in (the
+			// DEFAULT) or when there is no operator-local capture root. In
+			// BOTH cases NOTHING is installed and the config carries exactly
+			// the pre-ACT shape.
+			const selectionResponseCaptureSink = installSelectionResponseCaptureSink()
 			const config: ClineCoreStartInput["config"] = {
 				...inputWithRemoteConfig.config,
 				telemetry: inputWithRemoteConfig.config.telemetry ?? options.telemetry,
@@ -494,6 +506,24 @@ export class VscodeSessionHost implements SdkSessionHost {
 				modelBehaviorTraceSink: roundcLatencyTraceSink
 					? observeRoundcCaptureIdentity(composeModelBehaviorTraceSinks(modelBehaviorTraceSink, roundcLatencyTraceSink))
 					: modelBehaviorTraceSink,
+				// ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01 (AMENDMENT-01):
+				// attach the OPT-IN, operator-local R2 selection-RESPONSE
+				// capture sink.
+				//
+				// This is the SAME seam that installs the extension's existing
+				// `modelBehaviorTraceSink` — the REAL SDK runtime construction
+				// path (`ClineCore.create` -> the session runtime -> the
+				// `AgentRuntime`). It is NOT a separate diagnostic runtime.
+				//
+				// The sink is installed ONLY when the operator opted in
+				// (`CLINE_CAPTURE_SELECTION_RESPONSE=1`) AND an operator-local
+				// capture root exists. When it is absent (the DEFAULT), this
+				// expression is EXACTLY the pre-ACT value and the runtime pays
+				// a single null check at the selection boundary.
+				//
+				// The sink is READ-ONLY: the runtime REPORTS the selector's
+				// response through it and never reads a decision back.
+				...(selectionResponseCaptureSink ? { boundedObjectiveSelectionTraceSink: selectionResponseCaptureSink } : {}),
 			}
 			return {
 				...inputWithRemoteConfig,

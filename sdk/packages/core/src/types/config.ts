@@ -364,6 +364,21 @@ export interface CoreSessionConfig
 	 * implementation, not permanent production defaults.
 	 */
 	boundedObjectivePolicy?: AgentConfig["boundedObjectivePolicy"];
+	/**
+	 * ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01 (AMENDMENT-01):
+	 * optional read-only observation sink for the R2 bounded-objective
+	 * SELECTION boundary.
+	 *
+	 * The runtime REPORTS the generated objective text, the parsed
+	 * proposal, the exact validation disposition and the failing field or
+	 * reference. The runtime never reads a decision back, so the sink can
+	 * never influence the selection, the validation, or the completion
+	 * authority.
+	 *
+	 * DEFAULT OFF: when absent (the default), the runtime pays a single
+	 * null check at the boundary and behaves exactly as before.
+	 */
+	boundedObjectiveSelectionTraceSink?: AgentConfig["boundedObjectiveSelectionTraceSink"];
 	checkpoint?: CoreCheckpointConfig;
 	onTeamEvent?: (event: TeamEvent) => void;
 	onConsecutiveMistakeLimitReached?: (

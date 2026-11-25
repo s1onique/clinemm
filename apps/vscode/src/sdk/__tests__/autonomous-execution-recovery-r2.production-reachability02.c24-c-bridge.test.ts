@@ -82,7 +82,7 @@
  * SYNTHETIC_REAL_PRODUCTION_SEAM.
  */
 
-import { mkdtempSync, rmSync } from "node:fs"
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import type { AgentConfig, AgentModel, AgentModelEvent, AgentModelRequest, AgentRuntimeEvent } from "@cline/shared"
@@ -248,6 +248,11 @@ const envSnapshot = {
 	HOME: process.env.HOME,
 	CLINE_DIR: process.env.CLINE_DIR,
 	CLINE_BOUNDED_OBJECTIVE_DOGFOOD: process.env.CLINE_BOUNDED_OBJECTIVE_DOGFOOD,
+	// ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01 (AMENDMENT-01): the
+	// operator opt-in and the operator-local capture root.
+	CLINE_CAPTURE_SELECTION_RESPONSE: process.env.CLINE_CAPTURE_SELECTION_RESPONSE,
+	CLINE_DATA_DIR: process.env.CLINE_DATA_DIR,
+	CLINE_CAPTURE_DIR: process.env.CLINE_CAPTURE_DIR,
 }
 let isolatedHomeDir = ""
 
@@ -255,6 +260,13 @@ beforeEach(() => {
 	isolatedHomeDir = mkdtempSync(join(tmpdir(), "autonomous-recovery-reachability-"))
 	process.env.HOME = isolatedHomeDir
 	process.env.CLINE_DIR = join(isolatedHomeDir, ".cline")
+	// The operator-local capture root is ISOLATED per case, so a capture
+	// written by one case can never be observed by another.
+	process.env.CLINE_DATA_DIR = join(isolatedHomeDir, "capture-root")
+	// DEFAULT OFF: the selection-RESPONSE capture is disabled unless a
+	// case explicitly opts in.
+	delete process.env.CLINE_CAPTURE_SELECTION_RESPONSE
+	delete process.env.CLINE_CAPTURE_DIR
 	vi.clearAllMocks()
 	mocks.stateManager.getApiConfiguration.mockReturnValue({
 		actModeApiProvider: "anthropic",
@@ -271,10 +283,18 @@ beforeEach(() => {
 afterEach(() => {
 	process.env.HOME = envSnapshot.HOME
 	process.env.CLINE_DIR = envSnapshot.CLINE_DIR
-	if (envSnapshot.CLINE_BOUNDED_OBJECTIVE_DOGFOOD === undefined) {
-		delete process.env.CLINE_BOUNDED_OBJECTIVE_DOGFOOD
-	} else {
-		process.env.CLINE_BOUNDED_OBJECTIVE_DOGFOOD = envSnapshot.CLINE_BOUNDED_OBJECTIVE_DOGFOOD
+	for (const key of [
+		"CLINE_BOUNDED_OBJECTIVE_DOGFOOD",
+		"CLINE_CAPTURE_SELECTION_RESPONSE",
+		"CLINE_DATA_DIR",
+		"CLINE_CAPTURE_DIR",
+	] as const) {
+		const value = envSnapshot[key]
+		if (value === undefined) {
+			delete process.env[key]
+		} else {
+			process.env[key] = value
+		}
 	}
 	rmSync(isolatedHomeDir, { recursive: true, force: true })
 })
@@ -491,5 +511,288 @@ describe("ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 / Q4", () => {
 		)
 		expect(objectiveRequests.length).toBeGreaterThan(0)
 		expect(objectiveRequests[0]?.systemPrompt).toContain("Observable verification condition:")
+	})
+})
+
+// ---------------------------------------------------------------------------
+// Q5 - Q8 — ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01 (AMENDMENT-01)
+//
+// PRODUCTION REACHABILITY of the R2 selection-RESPONSE capture.
+//
+// The changeset that introduced `boundedObjectiveSelectionTraceSink` tested
+// it by DIRECT INJECTION into `AgentRuntime`. These controls establish that
+// the INSTALLED extension can actually SUPPLY and FORWARD the sink, that
+// the ACTUAL selection RESPONSE is written to an OPERATOR-LOCAL capture,
+// that it is CORRELATED to the existing selector REQUEST identity, and
+// that the capture is ABSENT when the operator did not opt in.
+//
+// The chain under test is the REAL one:
+//
+//   apps/vscode/src/sdk/cline-session-factory.ts
+//     buildSessionConfig({ mode })            <-- THE PRODUCER
+//        -> CoreSessionConfig.boundedObjectivePolicy
+//           -> LocalRuntimeHost.startSession()   (REAL host)
+//              -> the AgentConfig literal    <-- THE FORWARDING SEAM
+//                 -> createAgentRuntimeConfig()
+//                    -> AgentRuntime         <-- THE ACTUAL RUNTIME
+//
+// and, for the capture itself:
+//
+//   apps/vscode/src/sdk/bounded-objective-selection-capture.ts
+//     installSelectionResponseCaptureSink()   <-- THE OPT-IN SEAM
+//        -> the operator-local capture file
+//
+// NO paid inference. The model is a deterministic scripted double; the only
+// replaced boundary is the model transport.
+//
+// EVIDENCE CLASS
+// --------------
+//
+// SYNTHETIC_REAL_PRODUCTION_SEAM.
+// ---------------------------------------------------------------------------
+
+describe("ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01 (AMENDMENT-01) / Q5-Q8", () => {
+	/**
+	 * Drive the REAL host construction + forwarding seam and return the
+	 * `AgentConfig` the runtime actually receives.
+	 */
+	async function captureHostAgentConfig(config: Record<string, unknown>): Promise<AgentConfig> {
+		const captured: AgentConfig[] = []
+		const host = new LocalRuntimeHost({
+			distinctId: "autonomous-recovery-r2-selection-capture",
+			sessionService: new FileSessionService(join(isolatedHomeDir, "sessions-capture")),
+			createAgent: (agentConfig) => {
+				captured.push(agentConfig)
+				return {
+					getAgentId: () => "agent-1",
+					getConversationId: () => "conv-1",
+					subscribeEvents: () => undefined,
+					canStartRun: () => true,
+					run: async () => ({ status: "completed" }),
+					resume: async () => ({ status: "completed" }),
+					abort: () => undefined,
+					dispose: async () => undefined,
+					sendMessage: async () => undefined,
+				} as never
+			},
+		})
+		await host.startSession({
+			interactive: true,
+			config: {
+				sessionId: "session-r2-selection-capture",
+				providerId: "anthropic",
+				modelId: "claude-sonnet-4-6",
+				systemPrompt: "test",
+				enableTools: false,
+				enableSpawnAgent: false,
+				enableAgentTeams: false,
+				...(config as unknown as Record<string, unknown>),
+			} as never,
+		})
+		expect(captured.length).toBe(1)
+		return captured[0] as AgentConfig
+	}
+
+	it("Q5: the DEFAULT (no operator opt-in) installs NO sink — the capture is ABSENT", async () => {
+		// The operator did not opt in.
+		delete process.env.CLINE_CAPTURE_SELECTION_RESPONSE
+		const { installSelectionResponseCaptureSink } = await import("../bounded-objective-selection-capture")
+		expect(installSelectionResponseCaptureSink()).toBeUndefined()
+		// And the REAL host's config carries NO sink key at all.
+		process.env.CLINE_BOUNDED_OBJECTIVE_DOGFOOD = "1"
+		const config = await buildProductionConfig("act")
+		const agentConfig = await captureHostAgentConfig(config as unknown as Record<string, unknown>)
+		expect(agentConfig.boundedObjectiveSelectionTraceSink).toBeUndefined()
+		// And NO capture file was written anywhere under the capture root.
+		const captureRoot = join(isolatedHomeDir, "capture-root")
+		expect(existsSync(captureRoot)).toBe(false)
+	})
+
+	it("Q6: WITH the operator opt-in, the REAL host FORWARDS the sink to the AgentConfig", async () => {
+		process.env.CLINE_CAPTURE_SELECTION_RESPONSE = "1"
+		const { installSelectionResponseCaptureSink } = await import("../bounded-objective-selection-capture")
+		const sink = installSelectionResponseCaptureSink()
+		expect(sink).toBeDefined()
+		expect(typeof sink?.onSelectionObservation).toBe("function")
+
+		process.env.CLINE_BOUNDED_OBJECTIVE_DOGFOOD = "1"
+		const config = await buildProductionConfig("act")
+		const agentConfig = await captureHostAgentConfig({
+			...(config as unknown as Record<string, unknown>),
+			boundedObjectiveSelectionTraceSink: sink,
+		})
+		// The sink SURVIVED the host's AgentConfig forwarding seam.
+		expect(agentConfig.boundedObjectiveSelectionTraceSink).toBeDefined()
+		expect(typeof agentConfig.boundedObjectiveSelectionTraceSink?.onSelectionObservation).toBe("function")
+	})
+
+	/**
+	 * The selection reply the R2 selector answers with.
+	 */
+	const SELECTION_REPLY = {
+		objective: "Repair the disposable target so its VALUE constant is 2",
+		firstStep: "Edit the disposable target module to set VALUE = 2",
+		mutationScope: "the disposable workspace directory",
+		verificationCondition: "the run_commands regression check for VALUE reports PASS",
+		obligationReferences: ["parent-task:original"],
+		evidenceReferences: ["The last 2 consecutive execution round(s) produced no productive step"],
+		successCondition: "the executable check for VALUE reports PASS",
+		failureCondition: "the editable file cannot be changed",
+	}
+
+	/**
+	 * The scripted model for the selection-capture controls: FOUR stalled
+	 * inspection rounds (enough to exhaust R1's allowance and trip R2),
+	 * then a finish.
+	 */
+	function captureScriptedModel(): ScriptedModel {
+		return new ScriptedModel(
+			[
+				toolCallStep("t1", "read_files", { files: [{ path: "/tmp/a" }] }),
+				toolCallStep("t2", "read_files", { files: [{ path: "/tmp/a" }] }),
+				toolCallStep("t3", "read_files", { files: [{ path: "/tmp/a" }] }),
+				toolCallStep("t4", "read_files", { files: [{ path: "/tmp/a" }] }),
+				() => [
+					{ type: "text-delta", text: "done" },
+					{ type: "finish", reason: "stop" },
+				],
+			],
+			SELECTION_REPLY,
+		)
+	}
+
+	it("Q7: the ACTUAL selection RESPONSE is written to an OPERATOR-LOCAL capture, CORRELATED to the selector REQUEST identity", async () => {
+		process.env.CLINE_CAPTURE_SELECTION_RESPONSE = "1"
+		const { installSelectionResponseCaptureSink } = await import("../bounded-objective-selection-capture")
+		const sink = installSelectionResponseCaptureSink()
+		expect(sink).toBeDefined()
+
+		// The REAL runtime, driven through the REAL R2 activation, with the
+		// REAL production forwarding seam's sink.
+		const { AgentRuntime } = await import("@cline/agents")
+		process.env.CLINE_BOUNDED_OBJECTIVE_DOGFOOD = "1"
+		const config = await buildProductionConfig("act")
+		const policy = config.boundedObjectivePolicy
+		expect(policy).toBeDefined()
+
+		const model = captureScriptedModel()
+		const runtime = new AgentRuntime({
+			model,
+			tools: [
+				{
+					name: "read_files",
+					description: "Reads files (inspection only)",
+					inputSchema: { type: "object" } as never,
+					async execute() {
+						return "file contents"
+					},
+				},
+			],
+			executionStagnationPolicy: {
+				unproductiveRoundThreshold: 2,
+				maxRecoveryInstructions: 1,
+				enabled: true,
+			},
+			boundedObjectivePolicy: policy,
+			boundedObjectiveSelectionTraceSink: sink,
+		})
+		await runtime.run("Fix the disposable target module")
+
+		// The captured RESPONSE exists, in the OPERATOR-LOCAL capture
+		// directory that SITS BESIDE the existing provider-request capture.
+		const captureDir = join(isolatedHomeDir, "capture-root", "selection-response-captures")
+		expect(existsSync(captureDir)).toBe(true)
+		const files = readdirSync(captureDir).filter((name) => name.endsWith(".selection-response.json"))
+		expect(files).toHaveLength(1)
+
+		const artifact = JSON.parse(readFileSync(join(captureDir, files[0] as string), "utf8")) as {
+			kind: string
+			selectorRequestId?: string
+			generatedText: string
+			disposition: string
+			parentTaskId: string
+			selectionOrdinal: number
+		}
+		expect(artifact.kind).toBe("bounded_objective_selection_response")
+		// The ACTUAL selection RESPONSE (the model's own reply) is present.
+		expect(artifact.generatedText).toContain("VALUE constant is 2")
+		// The EXACT validation disposition is present.
+		expect(artifact.disposition).toBe("valid")
+		expect(artifact.selectionOrdinal).toBeGreaterThan(0)
+
+		// The CORRELATION to the EXISTING selector request identity: the
+		// observation carries the SAME id the runtime put into the selection
+		// request's transport metadata under the EXISTING `captureId` key.
+		expect(artifact.selectorRequestId).toBeTruthy()
+		const selectionMetadata = (model.selectionRequests[0]?.options as { metadata?: Record<string, unknown> } | undefined)
+			?.metadata
+		expect(selectionMetadata?.captureId).toBe(artifact.selectorRequestId)
+		expect(selectionMetadata?.kind).toBe("bounded_objective_selection")
+
+		// The capture file is named after the SAME id, so the captured
+		// REQUEST and the captured RESPONSE join by EXACT identity.
+		expect(files[0]).toBe(`${artifact.selectorRequestId}.selection-response.json`)
+
+		// RESTRICTIVE local file permissions.
+		const mode = statSync(join(captureDir, files[0] as string)).mode & 0o777
+		expect(mode).toBe(0o600)
+		const dirMode = statSync(captureDir).mode & 0o777
+		expect(dirMode).toBe(0o700)
+	})
+
+	it("Q8: a CAPTURE FAILURE cannot change the selection, the validation or the parent continuation", async () => {
+		// The capture root points at a path that CANNOT be created (a FILE
+		// stands where the capture directory would be).
+		const blocker = join(isolatedHomeDir, "capture-blocked")
+		writeFileSync(blocker, "not a directory")
+		process.env.CLINE_DATA_DIR = blocker
+		process.env.CLINE_CAPTURE_SELECTION_RESPONSE = "1"
+
+		const { installSelectionResponseCaptureSink } = await import("../bounded-objective-selection-capture")
+		const sink = installSelectionResponseCaptureSink()
+		expect(sink).toBeDefined()
+
+		const { AgentRuntime } = await import("@cline/agents")
+		process.env.CLINE_BOUNDED_OBJECTIVE_DOGFOOD = "1"
+		const config = await buildProductionConfig("act")
+		const policy = config.boundedObjectivePolicy
+		expect(policy).toBeDefined()
+
+		const model = captureScriptedModel()
+		const runtime = new AgentRuntime({
+			model,
+			tools: [
+				{
+					name: "read_files",
+					description: "Reads files (inspection only)",
+					inputSchema: { type: "object" } as never,
+					async execute() {
+						return "file contents"
+					},
+				},
+			],
+			executionStagnationPolicy: {
+				unproductiveRoundThreshold: 2,
+				maxRecoveryInstructions: 1,
+				enabled: true,
+			},
+			boundedObjectivePolicy: policy,
+			boundedObjectiveSelectionTraceSink: sink,
+		})
+		const notices: string[] = []
+		runtime.subscribe((event: AgentRuntimeEvent) => {
+			if (event.type === "status-notice") {
+				notices.push(event.message)
+			}
+		})
+		await runtime.run("Fix the disposable target module")
+
+		// The selection still activated and the objective was still
+		// dispatched: the capture failure changed NOTHING.
+		expect(notices.filter((n) => n.includes("bounded objective activated"))).toHaveLength(1)
+		const objectiveRequests = model.requests.filter((request) =>
+			(request.systemPrompt ?? "").includes("[SYSTEM] Active bounded objective (runtime authority):"),
+		)
+		expect(objectiveRequests.length).toBeGreaterThan(0)
 	})
 })

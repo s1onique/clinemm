@@ -642,9 +642,7 @@ export interface AgentTool<TInput = unknown, TOutput = unknown>
 	 * auto-generates this from the Zod schema; tools that supply a raw
 	 * JSON schema may set it explicitly.
 	 */
-	validateInput?: (
-		input: unknown,
-	) => undefined | string | Promise<undefined | string>;
+	validateInput?: (input: unknown) => void | string | Promise<void | string>;
 	/**
 	 * Optional tool-scoped input canonicalizer. Invoked by AgentRuntime
 	 * BEFORE `validateInput`, `beforeTool` hooks, approval, execution-plan
