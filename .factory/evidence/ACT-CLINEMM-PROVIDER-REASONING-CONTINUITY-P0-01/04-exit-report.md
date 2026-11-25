@@ -105,7 +105,7 @@ TYPECHECK_GATE                      PASS (exit 0)
 ORDINARY_GATE                       PASS_WITH_PRE_EXISTING_FAILURES (1189 passed, 17 pre-existing failures in 3 unrelated suites)
 ACT_OWNED_DIAGNOSTICS               NONE
 
-FINAL_HEAD                          9079c4cd238b1b61533fe8873ed444ecb979bf40
+FINAL_HEAD                          251da905c608ac483f6488bd14f6fabbc0b1ac6d
 ACT_BRANCH                          act/provider-reasoning-continuity-p0-01
 WORKTREE_PATH                       /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm-second/.worktrees/act-pr-p0-01
 TRACKED_DIRT                        none
@@ -124,7 +124,7 @@ The CORRECTION01 evidence is in
 |---|---|
 | `ENTRY_HEAD` | `1d45a8d845eca27bce311949a08fca7868f211cd` |
 | `RED_SUBJECT_HEAD` | `1d45a8d845eca27bce311949a08fca7868f211cd` |
-| `FINAL_HEAD` | `9079c4cd238b1b61533fe8873ed444ecb979bf40` |
+| `FINAL_HEAD` | `251da905c608ac483f6488bd14f6fabbc0b1ac6d` |
 | `ACT_BRANCH` | `act/provider-reasoning-continuity-p0-01` |
 | `WORKTREE_PATH` | `/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm-second/.worktrees/act-pr-p0-01` |
 | `TRACKED_DIRT` | none (clean at exit) |
@@ -250,6 +250,11 @@ dependency tree are untouched; no permanent diagnostic field was added.
 
 ```
 branch: act/provider-reasoning-continuity-p0-01
+
+  (CORRECTION02 — the origin AUTHORITY correction:)
+commit: 251da905c608ac483f6488bd14f6fabbc0b1ac6d
+message: fix(llms): require a positively established reasoning origin authority
+parent:  0524b32afca587e9750a0dcc2b891ccc62cbc0a0
 
   (CORRECTION01 — the block-identity and origin correction:)
 commit: 9079c4cd238b1b61533fe8873ed444ecb979bf40
