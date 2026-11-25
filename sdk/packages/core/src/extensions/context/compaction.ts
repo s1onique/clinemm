@@ -1993,11 +1993,37 @@ export function createCompactionStateAwarePrepareTurn(input: {
 	 * over; hosts must validate projection against these rather than a
 	 * separately derived transcript, which can legally differ mid-turn and
 	 * spuriously reject the write.
+	 *
+	 * ACT-CLINEMM-CMP06-DURABLE-COMMIT-AUTHORITY-01.
+	 *
+	 * The host's persistence path is ASYNCHRONOUS: it serializes the
+	 * session's compaction-state writes behind a queue and performs the
+	 * durable replacement only when the write reaches the front of that
+	 * queue. The seam's own cancellation check (immediately before this
+	 * call) therefore governs only the ACCEPTANCE of the candidate, not
+	 * its INSTALLATION: the write may still be QUEUED when the turn is
+	 * cancelled.
+	 *
+	 * So the SEAM'S OWN abort signal is handed to the host here, and the
+	 * host consults it at the DURABLE COMMIT BOUNDARY — the last point at
+	 * which the replacement can still be refused. It is the SAME signal,
+	 * not a second authority.
+	 *
+	 * The RETURN VALUE reports whether the state was actually INSTALLED:
+	 *
+	 *   - `undefined` / `void` — the host does not report an outcome; the
+	 *     installation is treated as committed (the historical contract,
+	 *     preserved for every existing host and test double);
+	 *   - `true` — the state was durably installed;
+	 *   - `false` — the installation was REFUSED at the durable commit
+	 *     boundary, so nothing was written and the success notice must
+	 *     NOT be published.
 	 */
 	saveState?: (
 		state: SessionCompactionState,
 		sourceMessages: CoreCompactionContext["messages"],
-	) => void | Promise<void>;
+		abortSignal?: AbortSignal,
+	) => void | boolean | Promise<void | boolean>;
 	/**
 	 * ACT-CLINEMM-COMPACTION-TASK-CONTRACT-CONSERVATION-REPAIR01: an
 	 * additional ceiling on the effective request input limit, applied on top
@@ -2316,7 +2342,45 @@ export function createCompactionStateAwarePrepareTurn(input: {
 						conversationId: context.conversationId,
 						systemPrompt,
 					});
-					await input.saveState?.(nextState, context.messages);
+					// ACT-CLINEMM-CMP06-DURABLE-COMMIT-AUTHORITY-01: the seam's
+					// OWN abort signal travels with the installation, and the
+					// host reports whether the state was actually INSTALLED.
+					//
+					// The host's persistence path is a QUEUE: the write can
+					// still be pending when the turn is cancelled after this
+					// seam's own check. The host therefore consults the SAME
+					// signal at the DURABLE COMMIT BOUNDARY and refuses the
+					// replacement there.
+					const installed = await input.saveState?.(
+						nextState,
+						context.messages,
+						context.abortSignal,
+					);
+					if (installed === false) {
+						// The installation was REFUSED at the durable commit
+						// boundary: nothing was written, so no successful
+						// compaction may be published and the previously
+						// installed state remains in force.
+						input.logger?.log?.(
+							"Skipped agentic compaction: the turn was cancelled before the compaction was durably installed",
+							{
+								severity: "warn",
+								rejectionReason: "cancelled",
+								phase: "durable_commit",
+							},
+						);
+						successPublication.publishRefused({
+							kind: "cancelled_before_durable_commit",
+							reason: "cancelled",
+							iteration: context.iteration,
+						});
+						return publishWorkingContextEstimate(
+							contractedMessages,
+							systemPrompt ?? context.systemPrompt,
+							context.tools,
+							contractMaxRequestTokens,
+						);
+					}
 					// The installation committed, so the success notice may
 					// now be published.
 					successPublication.release();
@@ -2582,7 +2646,43 @@ export function createCompactionStateAwarePrepareTurn(input: {
 				conversationId: context.conversationId,
 				systemPrompt: result.systemPrompt,
 			});
-			await input.saveState?.(nextState, context.messages);
+			// ACT-CLINEMM-CMP06-DURABLE-COMMIT-AUTHORITY-01: the seam's OWN
+			// abort signal travels with the installation, and the host
+			// reports whether the state was actually INSTALLED. The host's
+			// persistence path is a QUEUE, so the write can still be pending
+			// when the turn is cancelled after this seam's own check; the
+			// host consults the SAME signal at the DURABLE COMMIT BOUNDARY
+			// and refuses the replacement there.
+			const installed = await input.saveState?.(
+				nextState,
+				context.messages,
+				context.abortSignal,
+			);
+			if (installed === false) {
+				// The installation was REFUSED at the durable commit
+				// boundary: nothing was written, so no successful
+				// compaction may be published and the previously installed
+				// state remains in force.
+				input.logger?.log?.(
+					"Skipped agentic compaction: the turn was cancelled before the compaction was durably installed",
+					{
+						severity: "warn",
+						rejectionReason: "cancelled",
+						phase: "durable_commit",
+					},
+				);
+				successPublication.publishRefused({
+					kind: "cancelled_before_durable_commit",
+					reason: "cancelled",
+					iteration: context.iteration,
+				});
+				return publishWorkingContextEstimateMetadataOnly(
+					context.messages,
+					context.systemPrompt,
+					context.tools,
+					contractMaxRequestTokens,
+				);
+			}
 			// The installation committed, so the success notice may now be
 			// published.
 			successPublication.release();

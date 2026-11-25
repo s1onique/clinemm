@@ -1279,9 +1279,13 @@ export class LocalRuntimeHost implements RuntimeHost {
 				}
 				return messages;
 			},
-			saveState: async (state, sourceMessages) => {
+			// ACT-CLINEMM-CMP06-DURABLE-COMMIT-AUTHORITY-01: the seam's OWN
+			// abort signal travels with the installation, and the outcome is
+			// reported back so the seam can withhold its success notice when
+			// the durable commit boundary refused the replacement.
+			saveState: async (state, sourceMessages, abortSignal) => {
 				const activeSession = activeSessionRef;
-				if (!activeSession) return;
+				if (!activeSession) return true;
 				const stateForSession = {
 					...state,
 					conversation_id: activeSession.sessionId,
@@ -1296,6 +1300,7 @@ export class LocalRuntimeHost implements RuntimeHost {
 						activeSession,
 						stateForSession,
 						sourceMessages,
+						abortSignal,
 					);
 					if (!result.updated) {
 						configWithProvider.logger?.debug?.(
@@ -1306,6 +1311,11 @@ export class LocalRuntimeHost implements RuntimeHost {
 							},
 						);
 					}
+					// ACT-CLINEMM-CMP06-DURABLE-COMMIT-AUTHORITY-01: report the
+					// INSTALLATION OUTCOME. `false` means the durable commit
+					// boundary refused the replacement (nothing was written), so
+					// the seam must not publish a successful compaction.
+					return result.updated;
 				} catch (error) {
 					configWithProvider.logger?.error?.(
 						"Failed to persist session compaction state",
@@ -1324,6 +1334,9 @@ export class LocalRuntimeHost implements RuntimeHost {
 						},
 					});
 				}
+				// The durable replacement FAILED, so nothing was installed.
+				// The seam must not publish a successful compaction for it.
+				return false;
 			},
 		});
 
@@ -2440,6 +2453,18 @@ export class LocalRuntimeHost implements RuntimeHost {
 		session: ActiveSession,
 		state: SessionCompactionState,
 		sourceMessages?: readonly LlmsProviders.Message[],
+		/**
+		 * ACT-CLINEMM-CMP06-DURABLE-COMMIT-AUTHORITY-01.
+		 *
+		 * The compaction seam's OWN abort signal. It is consulted at the
+		 * DURABLE COMMIT BOUNDARY — the last point at which the durable
+		 * replacement can still be refused — because the write may be
+		 * QUEUED behind an earlier write when the turn is cancelled.
+		 *
+		 * It is the SAME signal the seam already consults at its own
+		 * installation check, not a second cancellation authority.
+		 */
+		abortSignal?: AbortSignal,
 	): Promise<{ updated: boolean }> {
 		if (
 			!(await this.canPersistCompactionState(
@@ -2453,6 +2478,24 @@ export class LocalRuntimeHost implements RuntimeHost {
 			return { updated: false };
 		}
 		return await this.enqueueCompactionStateWrite(session, async () => {
+			// ACT-CLINEMM-CMP06-DURABLE-COMMIT-AUTHORITY-01: THE DURABLE
+			// COMMIT BOUNDARY.
+			//
+			// This action runs when the write reaches the FRONT of the
+			// session's compaction-state write queue. That is the last
+			// point at which the durable replacement can still be refused:
+			// once `persistSessionCompactionState` is entered the atomic
+			// file replacement begins, and cancelling after that would be a
+			// ROLLBACK of an already committed compaction, which this
+			// contract does not do.
+			//
+			// A write that was QUEUED when the turn was cancelled is
+			// therefore refused here: nothing is written, the previously
+			// installed state remains in force, and the in-memory state is
+			// NOT advanced.
+			if (abortSignal?.aborted === true) {
+				return { updated: false };
+			}
 			const currentState = session.compactionState;
 			const currentStateStillProjects =
 				currentState !== undefined &&
