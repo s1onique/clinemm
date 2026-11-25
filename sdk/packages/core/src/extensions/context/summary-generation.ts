@@ -1,5 +1,5 @@
 import { createHandlerAsync } from "@cline/llms";
-import type { AgentModelFinishReason } from "@cline/shared";
+import type { AgentModelFinishReason, BasicLogger } from "@cline/shared";
 import type { ProviderConfig } from "../../types/provider-settings";
 
 /**
@@ -71,8 +71,21 @@ export interface SummaryUsage {
  * an absent one stays ABSENT.
  */
 export interface NormalizedUsageEvent {
-	inputTokens?: number;
-	outputTokens?: number;
+	/**
+	 * ACT-CLINEMM-CMP08-TERMINAL-BOUNDED-CORRECTION-01 (A2): the input and
+	 * output counters are MANDATORY.
+	 *
+	 * The producer's own contract (`ApiStreamUsageChunk`) makes them
+	 * mandatory: they are the request's input and output sizes, and every
+	 * provider reports them. They are therefore NOT optional counters, and
+	 * the collector does not need to invent an absent-value case for them.
+	 */
+	inputTokens: number;
+	outputTokens: number;
+	/**
+	 * The OPTIONAL counters. They are optional because the provider may not
+	 * report them — NOT because they may be reported as zero.
+	 */
 	cacheReadTokens?: number;
 	cacheWriteTokens?: number;
 	totalCost?: number;
@@ -125,17 +138,39 @@ function collectUsageChunk(
 	if (accumulated !== undefined) {
 		return accumulated;
 	}
-	const cacheReadTokens = chunk.cacheReadTokens ?? 0;
-	const cacheWriteTokens = chunk.cacheWriteTokens ?? 0;
-	const totalCost = chunk.totalCost ?? 0;
-	const reasoningTokenCount = chunk.thoughtsTokenCount ?? 0;
+	// ACT-CLINEMM-CMP08-TERMINAL-BOUNDED-CORRECTION-01 (A2) — PRESENCE,
+	// NOT POSITIVITY.
+	//
+	// The normalized contract makes `inputTokens`/`outputTokens` MANDATORY
+	// and the rest OPTIONAL (`ApiStreamUsageChunk`). An OPTIONAL counter is
+	// optional because the provider did not report it — NOT because it
+	// reported it as zero.
+	//
+	// The previous implementation collapsed the two cases: an absent counter
+	// became zero, and the zero was then dropped because it was not
+	// POSITIVE. An explicitly reported zero cost, cache count or reasoning
+	// count therefore became ABSENT, and the accounting downstream could no
+	// longer tell "the provider reported zero" from "the provider said
+	// nothing".
+	//
+	// So the optional counters are carried by PRESENCE: a counter the
+	// provider reported is carried even when it is zero, and a counter it
+	// did not report stays ABSENT. The mandatory counters are carried
+	// through as they are, because the normalized contract guarantees
+	// them.
 	return {
-		inputTokens: chunk.inputTokens ?? 0,
-		outputTokens: chunk.outputTokens ?? 0,
-		...(cacheReadTokens > 0 ? { cacheReadTokens } : {}),
-		...(cacheWriteTokens > 0 ? { cacheWriteTokens } : {}),
-		...(totalCost > 0 ? { totalCost } : {}),
-		...(reasoningTokenCount > 0 ? { reasoningTokenCount } : {}),
+		inputTokens: chunk.inputTokens,
+		outputTokens: chunk.outputTokens,
+		...(chunk.cacheReadTokens !== undefined
+			? { cacheReadTokens: chunk.cacheReadTokens }
+			: {}),
+		...(chunk.cacheWriteTokens !== undefined
+			? { cacheWriteTokens: chunk.cacheWriteTokens }
+			: {}),
+		...(chunk.totalCost !== undefined ? { totalCost: chunk.totalCost } : {}),
+		...(chunk.thoughtsTokenCount !== undefined
+			? { reasoningTokenCount: chunk.thoughtsTokenCount }
+			: {}),
 	};
 }
 
@@ -197,6 +232,15 @@ export async function generateSummary(options: {
 		totalCost?: number;
 		reasoningTokenCount?: number;
 	}) => void;
+	/**
+	 * ACT-CLINEMM-CMP08-TERMINAL-BOUNDED-CORRECTION-01 (A1) — THE DIAGNOSTIC
+	 * CHANNEL.
+	 *
+	 * The EXISTING logger of the calling seam. It is used ONLY to report a
+	 * delivery failure of the usage sink; it is not a second accounting
+	 * channel and it carries no accounting state.
+	 */
+	logger?: BasicLogger;
 }) {
 	// The PRE-FLIGHT check is unconditional: an already-cancelled
 	// generation never reaches the transport, so it never dispatches a
@@ -318,6 +362,24 @@ export async function generateSummary(options: {
 	 * It NEVER reports when the provider reported no usage: an absent
 	 * provider metric is unknown, and it is never turned into a zero-cost
 	 * inference.
+	 *
+	 * ACT-CLINEMM-CMP08-TERMINAL-BOUNDED-CORRECTION-01 (A1) — THE ACCOUNTING
+	 * FAILURE NEVER REPLACES THE GENERATION'S OUTCOME.
+	 *
+	 * The finalization runs in a `finally`, so it runs WHILE a terminal
+	 * exception is already in flight. Before this correction the sink was
+	 * invoked WITHOUT an exception boundary: a sink that threw replaced the
+	 * in-flight exception in the `finally`, so the generation ended with the
+	 * ACCOUNTING failure and the TRANSPORT failure — the authoritative
+	 * outcome of a paid inference — was LOST.
+	 *
+	 * The sink invocation is therefore bounded: a delivery failure is
+	 * REPORTED through the existing diagnostic channel (the logger) and
+	 * NEVER rethrown. The generation's own outcome — a normal return, a
+	 * transport failure or a cancellation — stays authoritative.
+	 *
+	 * No second accounting ledger and no retry subsystem is introduced: the
+	 * sink is called exactly as before, exactly once.
 	 */
 	let usageReported = false;
 	const finalizeUsage = (): void => {
@@ -328,11 +390,21 @@ export async function generateSummary(options: {
 		if (usage === undefined || options.reportUsage === undefined) {
 			return;
 		}
-		options.reportUsage({
-			requestId,
-			kind: "summarization",
-			...usage,
-		});
+		try {
+			options.reportUsage({
+				requestId,
+				kind: "summarization",
+				...usage,
+			});
+		} catch (error) {
+			// ACT-CLINEMM-CMP08-TERMINAL-BOUNDED-CORRECTION-01 (A1): the
+			// delivery failure is DIAGNOSED, not escalated. Escalating it
+			// would replace the generation's authoritative outcome.
+			options.logger?.error?.(
+				"Failed to deliver the summarization's provider-reported usage.",
+				{ requestId, error },
+			);
+		}
 	};
 	/**
 	 * The cancellation check performed at a point where the stream is

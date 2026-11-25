@@ -336,6 +336,10 @@ export async function runAgenticCompaction(options: {
 					});
 				}
 			: undefined,
+		// ACT-CLINEMM-CMP08-TERMINAL-BOUNDED-CORRECTION-01 (A1): the
+		// existing diagnostic channel of this seam. It is used ONLY to
+		// report a usage-delivery failure; it carries no accounting state.
+		logger: options.logger,
 	});
 	options.logger?.debug("Generated compaction summary", {
 		outputChars: summaryResult.text.length,
