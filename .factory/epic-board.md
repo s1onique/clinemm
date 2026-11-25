@@ -42138,3 +42138,170 @@ catalog, compaction and PCK, the provider registry architecture and
 redacted-thinking ingestion are all UNTOUCHED. The redacted-thinking
 successor remains open. The authority establishes ROUTE identity only; it
 does not claim universal account, model or conversation compatibility.
+
+# ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01 — GO_EXECUTION_PROGRESS_CLASSIFIER_DOGFOOD — 2026-11-25
+
+```text
+ACT_ID: ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01
+TYPE: bounded implementation (execution-progress classifier correction)
+VERDICT: GO_EXECUTION_PROGRESS_CLASSIFIER_DOGFOOD
+ENTRY_HEAD: 788e221979e96463275386c8f102e516f61d7966
+BRANCH: main
+PREDECESSOR_EVIDENCE: ACT-CLINEMM-AUTONOMOUS-RECOVERY-TRIGGER-FORENSICS-01
+EVIDENCE: .factory/evidence/ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01/
+  CAUSAL-SUMMARY.md
+  counterfactual-ledger.1795612311440_l9mhl.json
+  counterfactual-ledger.1795619309746_8h3tn.json
+  round-ledger.json
+  replay/replay.ts
+SCOPE: classifier + execution-outcome authority only. R2 NOT redesigned.
+  R3 NOT implemented. Compaction UNCHANGED. PLAN UNCHANGED.
+  R2 default OFF UNCHANGED. Command authorization / sandbox UNCHANGED.
+```
+
+**THE REPRODUCED DEFECT WAS THE CLASSIFIER'S OPTIMISTIC DEFAULT, NOT SSH.**
+The predecessor's decision shape was
+`isInspectionCommandInput(input) ? "inspected" : "executed"` — anything the
+classifier failed to recognise as an inspection became EXECUTION. The
+independent review reproduced SEVEN counterexamples against the production
+classifier; SSH was only ONE manifestation of that general optimism.
+
+```text
+SSH_INSPECTION_CLASSIFICATION=REPAIRED
+  ssh host 'grep -n foo bar' : executed -> inspected
+  The REMOTE PAYLOAD is classified, not the local first token. OpenSSH
+  separates the destination from the command sent for remote execution, so
+  ssh is a TRANSPORT WRAPPER. Options are recognised (an option's VALUE is
+  never mistaken for the destination), the destination is the first
+  non-option argument, and the payload is the remainder. A dynamically
+  constructed payload (here document, command substitution, backtick) yields
+  an HONEST UNCERTAINTY disposition.
+
+SHELL_ASSIGNMENT_CONSERVATION=REPAIRED
+  L=/tmp; grep -n foo bar : executed -> inspected
+  L=/tmp grep -n foo bar  : executed -> inspected
+  export X=1; ls          : executed -> inspected
+  SETUP is not work. A bare assignment, an export, an unset and a `cd` are
+  setup segments; an assignment PREFIX does not change the command's
+  classification.
+
+MUTATION_CLASSIFICATION=REPAIRED
+  git tag new-tag  : inspected -> executed  (the CREATING form mutates)
+  git status > file: inspected -> executed  (a redirect to a real file
+                                            writes; the command guard is
+                                            the authority)
+  A recognised inspection subcommand carrying a mutating construct is an
+  EXECUTION. `sed -i`, `find -delete` and remote mutation stay execution.
+
+EXECUTION_FAILURE_AUTHORITY=REPAIRED
+  { output: [{ exitCode: 1, ok: true }], isError: false }
+    host verdict    : undefined -> "failed"
+    runtime verdict : executed  -> "failed"
+  The host used to DECLINE a failed observation, and the runtime's fallback
+  then re-classified the SAME call as an execution because it checked only
+  the dispatch `isError` flag. The host's authoritative negative observation
+  DISAPPEARED at that boundary. The failure is now reported EXPLICITLY.
+
+MISSING_RESULT_DISPOSITION=REPAIRED
+  An observation with NO output is "failed", never a successful execution.
+  DOCUMENTED RESIDUAL LIMITATION: a plain-text observation (e.g.
+  { output: "ok" }) carries no explicit execution outcome and cannot be
+  distinguished from a completed command whose outcome was never reported;
+  it is therefore treated as a COMPLETED observation, classified by the
+  command's shape. Stated as a limitation, not as a claim of complete
+  outcome detection.
+
+UNKNOWN_COMMAND_DISPOSITION=DOCUMENTED
+  An unrecognised program is still reported as an execution, because the
+  runtime must not declare a stall on the basis of a command whose semantics
+  were never established. What changed is that the three-way classification
+  keeps `unknown` DISTINCT from a recognised execution internally; the
+  conservative reporting is now a documented policy rather than an artefact
+  of the two-way shape. No shell interpreter was introduced.
+
+LEGITIMATE_PROGRESS_CONSERVATION=PASS
+  220 of Session B's 232 rounds are classified IDENTICALLY by the predecessor
+  and the repaired classifier; Session A conserves 34 of 34. The principal
+  production runtime witness's CONSERVATION control: a genuine remote build
+  resets the streak, so a build+inspection trajectory injects NO corrective
+  instruction. A failed executable experiment is recorded as evidence, is
+  NOT a stall, and does NOT reset the streak.
+
+BACKGROUND_WAIT_CONSERVATION=PASS
+  A STILL RUNNING observation is still a DECLINE, so the runtime's `awaiting`
+  reading governs. The existing R1 conservation suite (11/11) and the R2
+  bounded-objective suites (35/35) are GREEN.
+
+HISTORICAL_REPLAY_FIDELITY=REPAIRED
+  The predecessor replay's result-collection loop broke out as soon as it
+  found ANY later tool-calling assistant message ANYWHERE in the run,
+  including messages BEHIND the scan cursor, truncating the collection after
+  the first following user message. The SUCCESSOR artifact scans to the
+  ACTUAL next round boundary and collects BY TOOL-CALL IDENTITY; a missing
+  result is recorded as UNAVAILABLE_FROM_TRACE, never assumed successful.
+  Session A: 34 rounds, 0 missing. Session B: 232 rounds, 0 missing.
+  The predecessor's OBSERVED R1 injection identities are reproduced EXACTLY
+  (run 2 rounds 8 and 22; message indices 26 and 55; streak 5), matching
+  the transcript's own runtime notices at message indices 28 and 57.
+
+SESSION_A_COUNTERFACTUAL_ELIGIBILITY=HYPOTHESIS_ONLY
+  Repaired injections: run-2 round 8 (msg 26) and run-2 round 22 (msg 55).
+  allowance_exhausted NOT reached. The reviewer's reference discriminator
+  (rounds 8 / 13 / 18) was produced by hand-CHANGING nine rounds; the full
+  correction changes only what the production classifier now recognises.
+  The reference is a discriminator, not a mandatory result.
+
+SESSION_B_COUNTERFACTUAL_ELIGIBILITY=HYPOTHESIS_ONLY
+  12 rounds change executed -> inspected: message indices 36, 46, 60, 62,
+  64, 66, 68, 70, 76, 82, 162, 176. These are the `L=/nix/store/...` Nim
+  library reconnaissance rounds — the six consecutive rounds immediately
+  before the first successful edit (messages 60-70) are exactly the
+  sequence the review reported. Session B's R1 eligibility moves from NONE
+  to run-2 round 25 (msg 68). A second R1 eligibility and
+  allowance_exhausted are NOT reached.
+
+REVIEWER_CAUSAL_CORRECTION=CONFIRMED
+  The predecessor report's one-sentence summary reversed the session
+  difference. The corrected replay shows Session A's remote inspections are
+  already counted as inspections (its injections are UNCHANGED by the
+  repair), while Session B's six reconnaissance rounds before the first
+  edit WERE false productivity. Session B's initial reconnaissance was
+  underdetected exactly as the reviewer reported.
+
+R2_ENTRY_REACHABILITY=ESTABLISHED
+  The principal production runtime witness drives the REAL AgentRuntime with
+  the REAL production host classifier over a deterministic trajectory of
+  recognised remote source inspections: the predecessor misclassifies them,
+  the corrected classifier increments the streak, the EXISTING R1 allowance
+  is consumed (attempt 1/2 and attempt 2/2), and the EXISTING R2 entry
+  condition — the R1 `allowance_exhausted` branch — becomes REACHABLE. No
+  new recovery mechanism; the R1 threshold (5), the R1 allowance (2), the
+  R2 activation limits and the R2 selection limits are UNCHANGED.
+
+ACT_OWNED_DIAGNOSTICS=NONE
+  core typecheck: 45 diagnostics before AND after, byte-identical sorted
+  sets. shared and agents typecheck: 0. agents full suite: the identical
+  9 files / 43 tests failing before and after (pre-existing: abort-cause
+  retention, recovery qualification). core
+  bash.supervised.bash-startup-env.test.ts: 4 failures, reproduced on the
+  predecessor. Biome: no findings in the changed files. `bun run build:sdk`
+  succeeded.
+
+FINAL_HEAD: (this commit)
+TRACKED_DIRT: (none beyond this ACT's own files)
+```
+
+**THE PRODUCTION CORRECTION IS THREE FILES.**
+`sdk/packages/core/src/extensions/tools/execution-progress-classifier.ts`
+(three-way classification, setup/transport recognition, mutation detection,
+explicit `failed` verdict),
+`sdk/packages/shared/src/agents/execution-stagnation.ts` (the new `failed`
+round-productivity verdict) and
+`sdk/packages/agents/src/agent-runtime.ts` (the fallback no longer launders
+a failed or missing outcome into a productive execution).
+
+**THE GO VERDICT DOES NOT ESTABLISH LIVE BEHAVIORAL EFFECTIVENESS.** It
+authorises the next isolated R2 dogfood build. The R2 entry condition is
+reachable under the corrected classifier, but NEITHER replayed session
+reaches it, and no model behaviour was observed.
+

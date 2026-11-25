@@ -78,6 +78,32 @@ export type ExecutionRoundProductivity =
 	/** The round executed a command that ran something (a test, a build, a probe). */
 	| "executed"
 	/**
+	 * ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01.
+	 *
+	 * The round attempted an execution whose OUTCOME WAS NOT A SUCCESSFUL
+	 * EXECUTION: the command FAILED, or the execution outcome was MISSING.
+	 *
+	 * WHY THIS VERDICT EXISTS
+	 * -----------------------
+	 * A failed executable experiment IS valuable engineering evidence — the
+	 * agent obtained a real result. But a failed command is not the same
+	 * observation as a SUCCESSFUL execution, and conflating the two lets a
+	 * generic command failure become positive evidence of progress.
+	 *
+	 * Before this verdict existed, the host classifier correctly DECLINED a
+	 * failed observation (it had no authority to claim success about a
+	 * command that failed), but the runtime's fallback then counted the very
+	 * same tool call as `"executed"` because it checked only the dispatch
+	 * `isError` flag. The host's authoritative negative observation
+	 * DISAPPEARED at the fallback.
+	 *
+	 * A FAILED round therefore does NOT reset the stagnation streak, but it
+	 * is also NOT treated as a stall: it is a distinct observation that the
+	 * accounting records without claiming progress. A failed test is a real
+	 * result, not a stall.
+	 */
+	| "failed"
+	/**
 	 * The round only INSPECTED (read a file, searched, listed) — successful,
 	 * but not progress toward the deliverable.
 	 */
@@ -531,6 +557,15 @@ export function createExecutionStagnationAccounting(): ExecutionStagnationAccoun
  * measures CONSECUTIVE unproductive rounds, so a single productive round
  * clears it. A round that is legitimately `awaiting` also resets the
  * streak, because waiting on running work is not stalling.
+ *
+ * ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01: a `failed` round
+ * does NOT reset the streak, because a failed command is not a SUCCESSFUL
+ * execution and therefore not positive evidence of progress. It is also not
+ * treated as a stall in its own right: the streak counts it, and the
+ * runtime's own corrective instruction asks for the next smallest useful
+ * experiment — which is exactly the right response to a failed experiment.
+ * A failed test is a real result, not a stall, and this function never
+ * claims otherwise.
  *
  * The function is pure: it RETURNS the next accounting and never mutates
  * the input.

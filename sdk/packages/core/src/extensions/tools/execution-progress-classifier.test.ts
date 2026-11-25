@@ -127,13 +127,19 @@ describe("ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 / host classifier", () =>
 		expect(
 			classify("run_commands", { commands: ["bun test"] }, { output: "x" }),
 		).toBe("executed");
-		// A FAILED command: no opinion — the runtime decides.
+		// A FAILED command: the host reports the failure explicitly.
+		//
+		// ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01: the host
+		// used to DECLINE here, and the runtime's fallback then reported the
+		// same call as an execution — the host's authoritative negative
+		// observation disappeared at that boundary. The failure is now
+		// reported explicitly, so it survives the boundary.
 		expect(
 			classify(
 				"run_commands",
 				{ commands: ["git log"] },
 				{ output: "x", isError: true },
 			),
-		).toBeUndefined();
+		).toBe("failed");
 	});
 });

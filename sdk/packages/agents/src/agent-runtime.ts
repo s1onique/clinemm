@@ -1246,6 +1246,20 @@ export class AgentRuntime {
 		editAttempts: number;
 		successfulEdits: number;
 		executedCommands: number;
+		/**
+		 * ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01.
+		 *
+		 * How many command calls in this round produced an OUTCOME that was
+		 * NOT a successful execution: the command FAILED, or the execution
+		 * outcome was MISSING.
+		 *
+		 * A failed executable experiment is real engineering evidence, but it
+		 * is NOT positive evidence of PROGRESS, so it does not reset the
+		 * stagnation streak. It is counted separately so that a generic
+		 * command failure can never be laundered into a productive
+		 * execution by the runtime's fallback.
+		 */
+		failedExecutions: number;
 		awaitingBackgroundWork: boolean;
 		/**
 		 * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-01.
@@ -1261,6 +1275,7 @@ export class AgentRuntime {
 		editAttempts: 0,
 		successfulEdits: 0,
 		executedCommands: 0,
+		failedExecutions: 0,
 		awaitingBackgroundWork: false,
 		receipts: [],
 	};
@@ -2228,7 +2243,23 @@ export class AgentRuntime {
 				if (classified.awaiting) {
 					this.executionRoundFacts.awaitingBackgroundWork = true;
 				} else if (result?.isError !== true) {
-					this.executionRoundFacts.executedCommands += 1;
+					// ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01:
+					// the dispatch `isError` flag ALONE does not establish a
+					// SUCCESSFUL execution. A command whose structured
+					// result reports a failure — or whose outcome is MISSING
+					// — is a FAILED execution, not a productive one.
+					//
+					// The host's authoritative negative observation must not
+					// disappear at this fallback: the host already declines
+					// a failed observation (it has no authority to claim
+					// success about a command that failed), and this
+					// fallback used to OVERRIDE that decline by counting
+					// the very same call as an execution.
+					if (this.executionOutcomeIsUnsuccessful(result)) {
+						this.executionRoundFacts.failedExecutions += 1;
+					} else {
+						this.executionRoundFacts.executedCommands += 1;
+					}
 				}
 				return;
 			}
@@ -2326,6 +2357,12 @@ export class AgentRuntime {
 					this.executionRoundFacts.executedCommands += 1;
 				}
 				return;
+			case "failed":
+				// ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01:
+				// the host's authoritative FAILED observation is recorded as
+				// a failed execution, never as a productive one.
+				this.executionRoundFacts.failedExecutions += 1;
+				return;
 			case "awaiting":
 				this.executionRoundFacts.awaitingBackgroundWork = true;
 				return;
@@ -2335,6 +2372,84 @@ export class AgentRuntime {
 			default:
 				return;
 		}
+	}
+
+	/**
+	 * ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01.
+	 *
+	 * Whether an execution's OUTCOME was NOT a successful execution.
+	 *
+	 * Three observations are distinguished:
+	 *
+	 *   - a FAILED outcome — the structured result reports a non-zero exit
+	 *     code or an explicit `ok: false`;
+	 *   - a MISSING outcome — the result carries no execution outcome at
+	 *     all, so nothing established that the command ran successfully;
+	 *   - a SUCCESSFUL outcome — the structured result reports a successful
+	 *     execution.
+	 *
+	 * A MISSING outcome is NOT treated as a successful execution: the
+	 * dispatch `isError` flag alone does not establish that a command ran
+	 * and succeeded. It is also NOT treated as a failure of the agent's
+	 * work — it is simply not positive evidence of progress.
+	 *
+	 * The check is DATA-SHAPE driven: it reads the explicit `exitCode` and
+	 * `ok` fields the production tools set, never prose.
+	 */
+	private executionOutcomeIsUnsuccessful(
+		result: { output: unknown; isError?: boolean } | undefined,
+	): boolean {
+		if (result === undefined) {
+			// No result at all: the execution outcome is MISSING.
+			return true;
+		}
+		if (result.isError === true) {
+			return true;
+		}
+		return this.outputReportsFailureShape(result.output);
+	}
+
+	/**
+	 * Whether a structured result reports a FAILED execution.
+	 *
+	 * The failure is read from the EXPLICIT fields the production tools
+	 * set: the observed `exitCode` (a non-zero code is a failure) and the
+	 * `ok` flag (false is a failure). The production tools return their
+	 * result as an ARRAY of operation results, so the array envelope is
+	 * walked as well. No prose is parsed.
+	 *
+	 * A result that carries NO execution outcome at all (neither `exitCode`
+	 * nor `ok`) is a MISSING outcome, not a failure, so it returns false
+	 * here; the MISSING case is handled by the caller.
+	 */
+	private outputReportsFailureShape(output: unknown): boolean {
+		if (typeof output === "string") {
+			try {
+				return this.outputReportsFailureShape(JSON.parse(output));
+			} catch {
+				// Not JSON: a plain-text output carries no explicit failure
+				// marker, so the outcome is not established as a failure.
+				return false;
+			}
+		}
+		if (!output || typeof output !== "object") {
+			return false;
+		}
+		const record = output as Record<string, unknown>;
+		if (record.ok === false) {
+			return true;
+		}
+		if (typeof record.exitCode === "number" && record.exitCode !== 0) {
+			return true;
+		}
+		if (Array.isArray(output)) {
+			for (const entry of output) {
+				if (this.outputReportsFailureShape(entry)) {
+					return true;
+				}
+			}
+		}
+		return false;
 	}
 
 	/**
@@ -2351,6 +2466,13 @@ export class AgentRuntime {
 	 *                  legitimate wait is not a stall.
 	 *   - `inspected`— the round only inspected (read/search/list).
 	 *   - `idle`     — the round made no tool call at all.
+	 *
+	 * ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01: a `failed`
+	 * round — a command whose outcome was a FAILURE or was MISSING — is
+	 * reported as `failed`, NOT as `executed`. A failed command is real
+	 * evidence, but it is not a SUCCESSFUL execution, and reporting it as
+	 * one would let a generic command failure become positive evidence of
+	 * progress.
 	 */
 	private classifyExecutionRound(): ExecutionRoundProductivity {
 		const facts = this.executionRoundFacts;
@@ -2362,6 +2484,9 @@ export class AgentRuntime {
 		}
 		if (facts.executedCommands > 0) {
 			return "executed";
+		}
+		if (facts.failedExecutions > 0) {
+			return "failed";
 		}
 		if (facts.toolNames.length === 0) {
 			return "idle";
@@ -3487,6 +3612,7 @@ export class AgentRuntime {
 			editAttempts: 0,
 			successfulEdits: 0,
 			executedCommands: 0,
+			failedExecutions: 0,
 			awaitingBackgroundWork: false,
 			receipts: [],
 		};

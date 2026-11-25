@@ -32,9 +32,49 @@
  *   - anything else — a test run, a build, a probe, an unknown program —
  *     is an EXECUTION, because running it produced EXECUTABLE EVIDENCE.
  *
- * The default is deliberately "executed": the runtime must not declare a
- * stall on the basis of an unrecognised command. Only a positively
- * recognised inspection is excluded from progress.
+ * ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01
+ * -------------------------------------------------------
+ * The original decision shape was:
+ *
+ *     return isInspectionCommandInput(input) ? "inspected" : "executed";
+ *
+ * That shape has NO distinction between recognised execution, unrecognised
+ * inspection, shell environment setup and unknown command semantics: anything
+ * the classifier fails to positively recognise as an inspection becomes
+ * EXECUTION. The independent review reproduced SEVEN counterexamples against
+ * the production classifier — the SSH defect is only ONE manifestation of
+ * that general optimism.
+ *
+ * The correction introduces a THREE-WAY command classification:
+ *
+ *   - `inspection` — positively recognised read-only work;
+ *   - `execution`   — positively recognised work that ran something;
+ *   - `unknown`     — the classifier cannot establish the semantics.
+ *
+ * and it recognises the SETUP and TRANSPORT shapes that used to hide an
+ * inspection behind an unrecognised first token:
+ *
+ *   - ordinary shell assignment / export segments (`L=/tmp`, `export X=1`)
+ *     are SETUP, not work;
+ *   - environment assignments PRECEDING a command do not change that
+ *     command's classification;
+ *   - common environment inspection commands (`uname`, `env`, `id`, ...)
+ *     are inspections;
+ *   - `ssh` is a TRANSPORT WRAPPER: the remote payload is classified, not
+ *     the local first token. OpenSSH explicitly separates the destination
+ *     from the command and arguments sent for remote execution, so the
+ *     remote command is the command that determines what actually ran.
+ *
+ * The classification of an UNKNOWN command remains CONSERVATIVE with
+ * respect to declaring a stall: an unknown command is reported as an
+ * execution, because the runtime must not declare a stall on the basis of a
+ * command whose semantics were never established. What changed is that the
+ * classifier no longer CONFLATES an unrecognised inspection with an
+ * established execution, and it no longer lets setup/transport shapes mask a
+ * positively recognisable inspection.
+ *
+ * THIS IS A RECOVERY HEURISTIC, NOT A SECURITY BOUNDARY. The command
+ * authorization and sandbox policy are unchanged by this module.
  */
 import type { ExecutionStagnationPolicy } from "@cline/shared";
 import { findFileEditingCommand } from "./command-guard";
@@ -72,10 +112,42 @@ const INSPECTION_PROGRAMS: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01.
+ *
+ * The COMMON ENVIRONMENT INSPECTION programs.
+ *
+ * These read the environment and the system identity; they build nothing,
+ * test nothing, install nothing and produce no deliverable. They were
+ * previously unrecognised, so an environment reconnaissance round was
+ * reported as a productive execution.
+ */
+const ENVIRONMENT_INSPECTION_PROGRAMS: ReadonlySet<string> = new Set([
+	"arch",
+	"df",
+	"du",
+	"env",
+	"hostname",
+	"id",
+	"lscpu",
+	"lsblk",
+	"mount",
+	"printenv",
+	"uname",
+	"uptime",
+	"who",
+	"whoami",
+]);
+
+/**
  * The `git` SUBCOMMANDS that are pure inspection.
  *
  * `git stash`, `git commit`, `git checkout`, `git reset` etc. mutate the
  * repository and are therefore EXECUTION, not inspection.
+ *
+ * ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01: `git tag` is
+ * listed here because the LISTING form (`git tag`) only reads the tag
+ * namespace. The CREATING form (`git tag <name>`) is a mutation and is
+ * excluded by the argument check below.
  */
 const INSPECTION_GIT_SUBCOMMANDS: ReadonlySet<string> = new Set([
 	"blame",
@@ -94,6 +166,15 @@ const INSPECTION_GIT_SUBCOMMANDS: ReadonlySet<string> = new Set([
 	"tag",
 	"whatchanged",
 ]);
+
+/**
+ * The `git` SUBCOMMANDS whose ARGS are never a listing but always a
+ * creation, even in the `git tag` family.
+ *
+ * `git tag <name>` creates a tag; `git tag` alone lists them. The listing
+ * form is the only inspection.
+ */
+const GIT_MUTATING_TAG_SUBCOMMANDS: ReadonlySet<string> = new Set(["tag"]);
 
 /**
  * Wrapper programs that only invoke the command that follows them, and the
@@ -216,35 +297,402 @@ function unwrap(tokens: string[]): { program: string; args: string[] } {
 }
 
 /**
- * Whether ONE command segment is a pure inspection.
+ * ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01.
+ *
+ * The SSH TRANSPORT WRAPPER.
+ *
+ * OpenSSH explicitly separates the remote DESTINATION from the command and
+ * arguments sent for remote execution. So `ssh` is a TRANSPORT, not a
+ * productivity classification: what ran is the REMOTE command, and the
+ * remote command is what must be classified.
+ *
+ * This module supports only the BOUNDED, STATICALLY RECOGNISABLE command
+ * shapes needed by the real witnesses:
+ *
+ *   ssh [options] destination 'remote command'
+ *   ssh [options] destination remote-command
+ *
+ * The destination is identified by the first NON-OPTION argument. OpenSSH
+ * options are recognised so an option's VALUE is never mistaken for the
+ * destination, and so an option is never mistaken for the remote command.
+ *
+ * A payload that cannot be statically established — a dynamically constructed
+ * command, a here-document, a shell metacharacter that changes the meaning
+ * of the payload — yields `undefined`, and the caller keeps its HONEST
+ * UNCERTAINTY disposition instead of claiming a semantic reading.
  */
-function segmentIsInspection(segment: string): boolean {
-	const tokens = segment.split(/\s+/).filter(Boolean);
-	const { program, args } = unwrap(tokens);
-	if (program.length === 0) {
+const SSH_OPTIONS_WITH_VALUE: ReadonlySet<string> = new Set([
+	"-b",
+	"-c",
+	"-D",
+	"-E",
+	"-e",
+	"-F",
+	"-I",
+	"-i",
+	"-J",
+	"-L",
+	"-l",
+	"-m",
+	"-O",
+	"-o",
+	"-p",
+	"-Q",
+	"-R",
+	"-S",
+	"-W",
+	"-w",
+]);
+
+/**
+ * The result of recognising an SSH invocation.
+ */
+interface SshInvocation {
+	/** The remote payload, as written, or `undefined` when it is not statically recognisable. */
+	readonly payload: string | undefined;
+}
+
+/**
+ * Recognise an `ssh` invocation and extract its remote payload.
+ *
+ * Returns `undefined` when the segment is not an `ssh` invocation at all.
+ * The returned payload is `undefined` when the invocation IS an ssh
+ * invocation but its payload cannot be established statically — the caller
+ * then keeps its uncertainty disposition.
+ */
+function readSshInvocation(tokens: string[]): SshInvocation | undefined {
+	const program = tokens[0]?.split("/").pop()?.toLowerCase();
+	if (program !== "ssh") {
+		return undefined;
+	}
+	let index = 1;
+	// Skip the OpenSSH options. An option that takes a value consumes the
+	// next token, so the value is never mistaken for the destination.
+	while (index < tokens.length) {
+		const token = tokens[index];
+		if (!token.startsWith("-") || token === "-") {
+			break;
+		}
+		if (token === "--") {
+			index += 1;
+			break;
+		}
+		if (SSH_OPTIONS_WITH_VALUE.has(token)) {
+			index += 2;
+			continue;
+		}
+		// A `--option=value` form carries its own value.
+		index += 1;
+	}
+	// The DESTINATION is the first non-option argument.
+	if (index >= tokens.length) {
+		return { payload: undefined };
+	}
+	index += 1;
+	// Everything after the destination is the REMOTE COMMAND.
+	const remote = tokens.slice(index);
+	if (remote.length === 0) {
+		// `ssh host` with no command opens an interactive session: it is
+		// not a statically recognisable inspection or execution.
+		return { payload: undefined };
+	}
+	// The remote command is normally a SINGLE quoted argument
+	// (`ssh host 'grep -n foo bar'`). Its quotes are shell quoting, not part
+	// of the command, so they are stripped before the payload is classified.
+	// A single unquoted remote command (`ssh host grep -n foo bar`) keeps
+	// its own token boundaries.
+	const unquoted = remote.map((token) => stripOuterQuotes(token));
+	return { payload: unquoted.join(" ") };
+}
+
+/**
+ * Strip ONE layer of matching outer quotes from a token.
+ *
+ * `'grep -n foo bar'` becomes `grep -n foo bar`; `"x"` becomes `x`. A token
+ * without matching outer quotes is returned unchanged.
+ */
+function stripOuterQuotes(token: string): string {
+	if (token.length < 2) {
+		return token;
+	}
+	const first = token[0];
+	const last = token[token.length - 1];
+	if ((first === "'" || first === '"') && last === first) {
+		return token.slice(1, -1);
+	}
+	return token;
+}
+
+/**
+ * Whether a remote payload contains a construct whose meaning cannot be
+ * established statically.
+ *
+ * A here-document, a command substitution or a backtick substitution
+ * produces a command whose text is not knowable from the payload alone.
+ */
+function payloadIsDynamic(payload: string): boolean {
+	return /<<|`|\$\(/.test(payload);
+}
+
+/**
+ * ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01.
+ *
+ * The classification of ONE command segment.
+ *
+ * The three-way result distinguishes "positively recognised inspection",
+ * "positively recognised execution" and "semantics not established". The
+ * distinction matters because the ORIGINAL two-way shape reported EVERY
+ * unrecognised segment as an execution, which is exactly how an
+ * unrecognised reconnaissance round became false productivity.
+ */
+type SegmentClassification = "inspection" | "execution" | "unknown";
+
+/**
+ * Whether a token is an ordinary shell ASSIGNMENT (`NAME=value`).
+ *
+ * The same shape the command guard already recognises, so the two layers
+ * agree about what a shell assignment is.
+ */
+const SHELL_ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*\+?=/;
+
+/**
+ * Whether a command segment is pure SHELL SETUP.
+ *
+ * Setup prepares the environment for the command that follows; it does not
+ * itself observe or change anything. It is neither inspection nor
+ * execution — it is not work.
+ *
+ * The recognised setup shapes are:
+ *
+ *   - an ordinary assignment: `L=/tmp`
+ *   - an assignment with a command substitution: `L=$(pwd)`
+ *   - `export NAME=value` / bare `export NAME`
+ *   - `unset NAME`
+ *   - `cd <dir>` (the shell's working directory only)
+ *   - a `VAR=value` prefix on the FOLLOWING command
+ */
+function segmentIsSetup(segment: string): boolean {
+	const tokens = splitTokens(segment);
+	if (tokens.length === 0) {
 		return false;
 	}
-	// `cd <dir>` only changes the shell's working directory: it is setup,
-	// not work. It is always an inspection segment.
-	if (program === "cd") {
+	const first = tokens[0];
+	if (first === "export" || first === "unset") {
 		return true;
 	}
+	if (first === "cd") {
+		// `cd` only changes the shell's working directory: it is setup, not
+		// work.
+		return true;
+	}
+	if (SHELL_ASSIGNMENT.test(first)) {
+		// `L=/tmp` on its own is setup. `L=/tmp cmd` is a command WITH an
+		// assignment prefix, which is handled by the prefix stripping, not
+		// here — a bare assignment segment has exactly one token.
+		return tokens.length === 1;
+	}
+	return false;
+}
+
+/**
+ * Strip the leading shell ASSIGNMENT prefixes from a token list.
+ *
+ * `L=/tmp grep -n foo bar` is the `grep` command with an environment
+ * assignment in front of it. The assignment does not change what the
+ * command DOES, so it must not change the command's classification.
+ *
+ * The `export`/`unset`/`cd` setup forms are NOT stripped here: they are
+ * handled as their own segments.
+ */
+function stripAssignmentPrefixes(tokens: string[]): string[] {
+	let index = 0;
+	while (
+		index < tokens.length &&
+		SHELL_ASSIGNMENT.test(tokens[index]) &&
+		// A `NAME=value` prefix only counts when it is followed by
+		// something that could be a command.
+		index < tokens.length - 1
+	) {
+		index += 1;
+	}
+	return tokens.slice(index);
+}
+
+/**
+ * Split a command segment into tokens, respecting QUOTES.
+ *
+ * A quoted token (`'grep -n foo'`) is ONE token even though it contains
+ * spaces, so the assignment prefix check never sees a fragment of a quoted
+ * string.
+ */
+function splitTokens(segment: string): string[] {
+	const tokens: string[] = [];
+	let current = "";
+	let quote: '"' | "'" | undefined;
+	let escaped = false;
+	let sawContent = false;
+	for (const char of segment) {
+		if (escaped) {
+			current += char;
+			sawContent = true;
+			escaped = false;
+			continue;
+		}
+		if (char === "\\") {
+			current += char;
+			sawContent = true;
+			escaped = true;
+			continue;
+		}
+		if (quote !== undefined) {
+			current += char;
+			if (char === quote) {
+				quote = undefined;
+			}
+			continue;
+		}
+		if (char === '"' || char === "'") {
+			current += char;
+			quote = char;
+			sawContent = true;
+			continue;
+		}
+		if (char === " " || char === "\t") {
+			if (sawContent) {
+				tokens.push(current);
+				current = "";
+				sawContent = false;
+			}
+			continue;
+		}
+		current += char;
+		sawContent = true;
+	}
+	if (sawContent) {
+		tokens.push(current);
+	}
+	return tokens;
+}
+
+/**
+ * Classify ONE command segment.
+ *
+ * The order of the checks matters:
+ *
+ *   1. SETUP — an assignment, an export, an unset, a `cd`. Setup is not
+ *      work; it neither observes nor changes anything.
+ *   2. TRANSPORT — an `ssh` invocation. The REMOTE payload is classified,
+ *      because the remote command is the command that ran.
+ *   3. MUTATION — a recognised inspection program whose invocation carries
+ *      a mutating construct (`sed -i`, `find -delete`, an output
+ *      redirection to a real file, `git tag <name>`). A mutation is an
+ *      execution of the deliverable.
+ *   4. INSPECTION — a recognised inspection program with no mutating
+ *      construct.
+ *   5. UNKNOWN — anything else. The semantics were not established.
+ */
+function classifySegment(segment: string): SegmentClassification {
+	const tokens = splitTokens(segment);
+	if (tokens.length === 0) {
+		return "unknown";
+	}
+	// (1) SETUP.
+	if (segmentIsSetup(segment)) {
+		return "inspection";
+	}
+	// An environment assignment PREFIX does not change what the command
+	// does: `L=/tmp grep -n foo bar` is the `grep` command.
+	const effective = stripAssignmentPrefixes(tokens);
+	if (effective.length === 0) {
+		return "inspection";
+	}
+	// (2) TRANSPORT.
+	const ssh = readSshInvocation(effective);
+	if (ssh !== undefined) {
+		if (ssh.payload === undefined || payloadIsDynamic(ssh.payload)) {
+			// The remote payload could not be established statically: the
+			// classifier keeps its HONEST UNCERTAINTY disposition and does
+			// not claim a semantic reading.
+			return "unknown";
+		}
+		return classifyRemotePayload(ssh.payload);
+	}
+	const { program, args } = unwrap(effective);
+	if (program.length === 0) {
+		return "unknown";
+	}
+	// (3) MUTATION.
 	if (program === "git") {
 		const subcommand = args[0]?.toLowerCase();
-		return (
-			subcommand !== undefined && INSPECTION_GIT_SUBCOMMANDS.has(subcommand)
-		);
+		if (subcommand === undefined) {
+			return "unknown";
+		}
+		if (!INSPECTION_GIT_SUBCOMMANDS.has(subcommand)) {
+			return "execution";
+		}
+		if (
+			GIT_MUTATING_TAG_SUBCOMMANDS.has(subcommand) &&
+			args.length > 1 &&
+			!args.slice(1).some((arg) => arg.startsWith("-"))
+		) {
+			// `git tag <name>` CREATES a tag: a mutation.
+			return "execution";
+		}
+		// A recognised inspection subcommand can still be a MUTATION when
+		// the invocation carries a mutating construct — `git status > file`
+		// writes a file. The command guard is the authority for that
+		// question, exactly as it is for `sed -i` and `find -delete`.
+		if (findFileEditingCommand(segment) !== undefined) {
+			return "execution";
+		}
+		return "inspection";
 	}
-	if (!INSPECTION_PROGRAMS.has(program)) {
-		return false;
+	if (
+		!INSPECTION_PROGRAMS.has(program) &&
+		!ENVIRONMENT_INSPECTION_PROGRAMS.has(program)
+	) {
+		// (5) UNKNOWN — the semantics were not established. The caller
+		// reports this conservatively as an execution, but the distinction
+		// is preserved here so the classifier does not CONFLATE an
+		// unrecognised command with a recognised one.
+		return "unknown";
 	}
-	// `sed -i` edits in place; `find -delete` deletes. Neither is
-	// inspection. The existing command guard already knows how to detect
-	// file-modifying constructs, so it is the authority for that question.
+	// `sed -i` edits in place; `find -delete` deletes; `git status > file`
+	// writes a file. None is inspection. The existing command guard already
+	// knows how to detect file-modifying constructs, so it is the authority
+	// for that question.
 	if (findFileEditingCommand(segment) !== undefined) {
-		return false;
+		return "execution";
 	}
-	return true;
+	// (4) INSPECTION.
+	return "inspection";
+}
+
+/**
+ * Classify a REMOTE payload — the command that actually ran on the other
+ * side of an SSH transport.
+ *
+ * The payload is split into its own segments, so a remote command that
+ * mixes a read with a build is classified as an execution, exactly like the
+ * equivalent local command.
+ */
+function classifyRemotePayload(payload: string): SegmentClassification {
+	const segments = splitSegments(payload);
+	if (segments.length === 0) {
+		return "unknown";
+	}
+	let sawInspection = false;
+	for (const remoteSegment of segments) {
+		const classification = classifySegment(remoteSegment);
+		if (classification === "execution") {
+			return "execution";
+		}
+		if (classification === "unknown") {
+			return "unknown";
+		}
+		sawInspection = true;
+	}
+	return sawInspection ? "inspection" : "unknown";
 }
 
 /**
@@ -253,6 +701,11 @@ function segmentIsInspection(segment: string): boolean {
  * A command list is an inspection only when EVERY segment in it is an
  * inspection. One real execution in the list makes the whole call an
  * execution.
+ *
+ * ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01: a SETUP segment
+ * (`L=/tmp`, `export X=1`) does not make the call an execution — setup is
+ * not work, so a call whose only non-inspection segments are setup segments
+ * is still an inspection.
  */
 export function isInspectionCommandInput(input: unknown): boolean {
 	const record = (input ?? {}) as { commands?: unknown };
@@ -268,7 +721,7 @@ export function isInspectionCommandInput(input: unknown): boolean {
 		}
 		for (const segment of splitSegments(command)) {
 			sawSegment = true;
-			if (!segmentIsInspection(segment)) {
+			if (classifySegment(segment) !== "inspection") {
 				return false;
 			}
 		}
@@ -284,28 +737,36 @@ export function isInspectionCommandInput(input: unknown): boolean {
  * command in it is a recognised inspection program, and defers to the
  * runtime (`undefined`) for every other tool, so the runtime keeps its own
  * structural classification for reads and edits.
+ *
+ * ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01 — EXECUTION
+ * OUTCOME AUTHORITY
+ * -----------------------------------------------
+ * The hook used to DECLINE a failed observation, on the correct grounds that
+ * the host has no authority to claim success about a command that failed.
+ * But a DECLINE is not a verdict: the runtime's fallback then re-classified
+ * the very same tool call as an EXECUTION, because the fallback checked only
+ * the dispatch `isError` flag. The host's authoritative negative observation
+ * DISAPPEARED at that boundary.
+ *
+ * The hook now reports the failure EXPLICITLY, with the `failed` verdict, so
+ * the observation survives the boundary:
+ *
+ *   - a FAILED outcome (a non-zero exit code, an explicit `ok: false`) is
+ *     `failed`;
+ *   - a MISSING outcome (the result carries no execution outcome at all) is
+ *     `failed` too — a missing result must not establish successful
+ *     execution;
+ *   - a STILL RUNNING observation remains a DECLINE, because a legitimate
+ *     wait is neither an execution nor a failure and the runtime's own
+ *     structural reading owns it;
+ *   - every other command call is `inspected` or `executed` according to the
+ *     command classification.
  */
 export function createHostExecutionProgressClassifier(): NonNullable<
 	ExecutionStagnationPolicy["classifyToolCall"]
 > {
 	return (toolName, input, result) => {
 		if (toolName !== "run_commands") {
-			return undefined;
-		}
-		if (result?.isError === true) {
-			// A failed command produced no evidence either way; let the
-			// runtime's own classification decide.
-			return undefined;
-		}
-		// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (AMENDMENT-01):
-		// a FAILED observation is declined too.
-		//
-		// The production `command_status` snapshot of a job that failed
-		// carries the observed exit code and the terminal state. The host
-		// classifier must not claim an INSPECTION verdict about a command
-		// that failed: the failed command did not read anything, it ran
-		// and failed. The runtime's own structural reading governs.
-		if (observationReportsFailure(result?.output)) {
 			return undefined;
 		}
 		// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (AMENDMENT-01):
@@ -322,6 +783,29 @@ export function createHostExecutionProgressClassifier(): NonNullable<
 		// and the `isRunning` / `stillRunning` flags), never a prose read.
 		if (observationReportsStillRunning(result?.output)) {
 			return undefined;
+		}
+		// ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01: the
+		// EXECUTION OUTCOME is authoritative.
+		//
+		// A FAILED observation — the production `command_status` snapshot of
+		// a job that failed carries the observed exit code and the terminal
+		// state — is reported as `failed`. The host must not claim an
+		// INSPECTION verdict about a command that failed: the failed command
+		// did not read anything, it ran and failed.
+		//
+		// A MISSING outcome is reported as `failed` too: neither a
+		// successful dispatch nor an absent result establishes that the
+		// command ran and succeeded.
+		if (result?.isError === true || observationReportsFailure(result?.output)) {
+			return "failed";
+		}
+		if (result === undefined || result.output === undefined) {
+			// The observation carries NO execution outcome: either the result
+			// is absent entirely, or it carries no output at all. Neither a
+			// successful dispatch nor an absent result establishes that the
+			// command ran and succeeded, so this is not positive evidence of
+			// progress.
+			return "failed";
 		}
 		return isInspectionCommandInput(input) ? "inspected" : "executed";
 	};

@@ -119,26 +119,37 @@ describe("ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (AMENDMENT-01) / host cla
 		).toBeUndefined();
 	});
 
-	it("HC2: the installed host classifier declines a FAILED command observation", () => {
+	it("HC2: the installed host classifier reports a FAILED command observation as 'failed'", () => {
 		const classify = createHostExecutionProgressClassifier();
-		// A failed `run_commands` call is declined by the `isError` guard.
+		// ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01: the
+		// host USED TO DECLINE a failed command. The decline was correct on
+		// its own terms — the host has no authority to claim an inspection
+		// verdict about a command that failed — but a DECLINE is not a
+		// verdict, and the runtime's fallback then re-classified the very
+		// same call as an EXECUTION because the fallback checked only the
+		// dispatch `isError` flag. The host's authoritative negative
+		// observation DISAPPEARED at that boundary.
+		//
+		// The host now reports the failure EXPLICITLY, so the observation
+		// survives the boundary and a generic command failure can never
+		// become positive evidence of progress.
 		expect(
 			classify(
 				"run_commands",
 				{ commands: ["git log"] },
 				{ output: "command failed", isError: true },
 			),
-		).toBeUndefined();
+		).toBe("failed");
 		// A failed command whose result carries the production failure
-		// envelope is declined too — the host does not claim an inspection
-		// verdict about a command that failed.
+		// envelope is reported as 'failed' too — the host does not claim an
+		// inspection verdict about a command that failed.
 		expect(
 			classify(
 				"run_commands",
 				{ commands: ["git log"] },
 				{ output: productionFailedSnapshot() },
 			),
-		).toBeUndefined();
+		).toBe("failed");
 	});
 
 	it("HC3: the installed host classifier declines a non-`run_commands` tool", () => {
