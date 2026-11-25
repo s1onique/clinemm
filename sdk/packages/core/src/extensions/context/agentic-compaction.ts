@@ -187,6 +187,26 @@ export async function runAgenticCompaction(options: {
 		maxInputTokens: options.context.budget.request.maxInputTokens,
 		triggerTokens: options.context.budget.request.triggerTokens,
 	});
+	// ACT-CLINEMM-CMP05-CANCELLATION-AUTHORITY-01 — THE CANCELLATION
+	// AUTHORITY.
+	//
+	// The compaction's abort signal is the SINGLE authority on cancellation,
+	// and it reaches this boundary as `options.context.abortSignal`. It was
+	// previously INERT here: the acceptance decision never consulted it, so
+	// a cancelled compaction still installed and published a replacement
+	// summary.
+	//
+	// The summarizer transport is invoked WITHOUT the signal, and that is
+	// DELIBERATE and UNCHANGED. The transport contract is not this ACT's
+	// subject, and interrupting it would make the late-success case
+	// unreachable: the transport would throw instead of reporting its
+	// successful completion, and the requirement is precisely that a
+	// summarizer which SUBSEQUENTLY REPORTS SUCCESS must still lose to the
+	// cancellation.
+	//
+	// The authority is therefore exercised where it belongs: at the
+	// ACCEPTANCE DECISION below, which reads the signal AFTER the summarizer
+	// returned. One authority, one decision, one diagnosis.
 	const summaryResult = await generateSummary({
 		providerConfig: summarizerProviderConfig,
 		systemPrompt:
@@ -221,10 +241,26 @@ export async function runAgenticCompaction(options: {
 	// A provider-reported successful TRANSPORT is NOT sufficient when a
 	// separate completion signal reports truncation: a known negative
 	// terminal signal overrides the success flag and the non-empty text.
+	//
+	// ACT-CLINEMM-CMP05-CANCELLATION-AUTHORITY-01: CANCELLATION is such a
+	// negative signal, and it is read HERE — at the decision point, AFTER
+	// the summarizer returned — rather than captured before it started.
+	//
+	// Reading it at the decision point is what makes the authority
+	// unconditional: a cancellation signalled at ANY moment before this
+	// boundary (before the summarizer started, during it, or after it
+	// reported a successful terminal response) is observed by the SAME
+	// read. A late provider success therefore cannot authorize the
+	// installation of a summary the user already cancelled.
+	const cancelled = options.context.abortSignal?.aborted === true;
 	const acceptance = classifySummaryTerminalStatus({
 		incompleteReason: summaryResult.incompleteReason,
 		failed: summaryResult.failed,
 		completed: summaryResult.completed,
+		// ACT-CLINEMM-CMP05-CANCELLATION-AUTHORITY-01: the cancellation
+		// signal. The acceptance contract already ranks it ABOVE every
+		// other signal, so it wins over a late provider success.
+		cancelled,
 		// ACT-CLINEMM-CMP04-TERMINAL-ACCEPTANCE-CONSERVATION-01: the
 		// reported terminal reason.
 		//

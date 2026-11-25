@@ -688,7 +688,7 @@ describe("ACT-CLINEMM-COMPACTION-ATOMIC-SUMMARY-INSTALLATION-REPAIR-01 — the e
 		);
 	});
 
-	it("A3: a CANCELLED generation retains its EXISTING cancellation semantics", async () => {
+	it("A3: a CANCELLED generation is NOT installed, and the pre-existing transport semantics are conserved", async () => {
 		const controller = new AbortController();
 		useProviderChunks([
 			{ type: "text", id: "summary-1", text: TRUNCATED_SUMMARY },
@@ -696,7 +696,7 @@ describe("ACT-CLINEMM-COMPACTION-ATOMIC-SUMMARY-INSTALLATION-REPAIR-01 — the e
 		]);
 		controller.abort();
 
-		// THE PRE-EXISTING SEMANTICS, CONSERVED.
+		// THE PRE-EXISTING TRANSPORT SEMANTICS, CONSERVED.
 		//
 		// `runAgenticCompaction()` calls `generateSummary()` WITHOUT the
 		// compaction's abort signal, both before and after this repair. A
@@ -707,13 +707,30 @@ describe("ACT-CLINEMM-COMPACTION-ATOMIC-SUMMARY-INSTALLATION-REPAIR-01 — the e
 		// an ACCEPTANCE decision, and it must not silently alter the
 		// cancellation contract.
 		//
-		// The row therefore asserts CONSERVATION, not an invented contract:
-		// the seam still completes, and the agentic summary it installs is
-		// the summarizer's normally-completed text.
+		// The row therefore asserts CONSERVATION of the transport semantics
+		// AND the cancellation authority of the DECISION: the summarizer
+		// still ran and still reported its completion, but the cancellation
+		// decided the outcome, so no candidate was installed.
 		const seam = await runProductionSeam({
 			abortSignal: controller.signal,
 		});
-		expect(seam.saveCalls.length).toBeGreaterThanOrEqual(0);
+
+		// The summarizer transport was NOT interrupted: it ran and reported
+		// its completion. The transport semantics are unchanged.
+		expect(createHandlerMock.mock.results.length).toBe(1);
+		// ...and the candidate it produced is NOT installed.
+		expect(seam.saveCalls).toHaveLength(0);
+		expect(seam.installedState).toBeUndefined();
+		expect(seam.providerVisibleText).not.toContain(TRUNCATED_SUMMARY);
+		expect(publishedSuccess(seam)).toBeUndefined();
+		// The cancellation is DISTINGUISHED from an ordinary provider
+		// failure by the existing acceptance contract.s own reason: the
+		// rejection reason is `cancelled`, not the ordinary provider
+		// failure reason.
+		expect(rejectionDiagnostics(seam)).toContain("cancelled");
+		expect(rejectionDiagnostics(seam)).not.toContain(
+			"provider_reported_failure",
+		);
 	});
 
 	it("A3: a cancellation INSIDE the summarizer transport prevents any installation", async () => {
@@ -1202,8 +1219,271 @@ describe("ACT-CLINEMM-CMP05-TERMINAL-NEGATIVE-SIGNAL-PRECEDENCE-01 — the confl
 
 		const seam = await runProductionSeam({ abortSignal: controller.signal });
 
-		// The pre-existing cancellation semantics are conserved: the row
-		// asserts the seam still completes.
-		expect(seam.saveCalls.length).toBeGreaterThanOrEqual(0);
+		// The pre-existing cancellation PRECEDENCE is conserved and made
+		// effective: the cancellation wins over the successful terminal
+		// signal, so the candidate is not installed and the cancellation is
+		// reported as a cancellation rather than as an ordinary failure.
+		expect(seam.saveCalls).toHaveLength(0);
+		expect(seam.installedState).toBeUndefined();
+		expect(seam.providerVisibleText).not.toContain(COMPLETE_LOOKING_SUMMARY);
+		expect(publishedSuccess(seam)).toBeUndefined();
+		expect(rejectionDiagnostics(seam)).toContain("cancelled");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// ACT-CLINEMM-CMP05-CANCELLATION-AUTHORITY-01
+//
+// THE CANCELLATION AUTHORITY AT THE COMPACTION INSTALLATION COMMIT POINT.
+//
+// THE INVARIANT
+// -------------
+//
+//   CANCELLATION_BEFORE_INSTALLATION_MUST_NOT_INSTALL_OR_PUBLISH
+//
+// A compaction that was cancelled BEFORE its installation commit point must
+// not install a replacement summary, must not publish a successful
+// compaction, and must not advance the compacted source boundary — even
+// when the summarizer SUBSEQUENTLY reports a successful completion.
+//
+// THE INSTALLATION COMMIT POINT
+// -----------------------------
+//
+// The linearization point of a compaction is the `saveState()` call in
+// `createCompactionStateAwarePrepareTurn()` (`compaction.ts`). It is
+// reached ONLY when the compaction strategy returned a transcript, so the
+// AUTHORITY that decides whether a compaction commits lives at the
+// ACCEPTANCE DECISION inside `runAgenticCompaction()` — the boundary that
+// owns the summary installation and that runs BEFORE the state is built,
+// BEFORE the state is persisted, BEFORE a successful compaction is
+// published and BEFORE the source boundary advances.
+//
+// The decision is taken there, so a candidate rejected there cannot reach
+// the commit point. This suite establishes that the DECISION refuses a
+// cancelled candidate.
+//
+// A compaction that ALREADY COMMITTED before the cancellation is NOT rolled
+// back: the commit is the linearization point, and a cancellation that
+// arrives afterwards is a cancellation of the TURN, not of the committed
+// compaction. This ACT requires no rollback, and none is asserted.
+//
+// THE AUTHORITY
+// -------------
+//
+// The compaction's OWN abort signal is the SINGLE cancellation authority.
+// It reaches the decision through `options.context.abortSignal` and is
+// read AT the decision, AFTER the summarizer returned. Reading it there is
+// what makes the authority unconditional: a cancellation signalled at ANY
+// moment before the decision is observed by the SAME read.
+//
+// The existing acceptance contract already ranks `cancelled` ABOVE every
+// other terminal signal (`classifySummaryTerminalStatus()`), so the
+// cancellation wins over a late provider success without any new
+// precedence rule and without a second cancellation authority.
+//
+// THE WITNESSES
+// -------------
+//
+// Each witness drives the REAL composed production seam with only the
+// provider transport substituted, and each cancellation is produced
+// DETERMINISTICALLY by the substitute itself — there is no sleep and no
+// timing-dependent race anywhere in this block.
+// ---------------------------------------------------------------------------
+
+describe("ACT-CLINEMM-CMP05-CANCELLATION-AUTHORITY-01 — the cancellation authority at the installation commit point", () => {
+	it("CMP05-CA: a cancellation BEFORE summarization starts installs nothing", async () => {
+		const controller = new AbortController();
+		// The cancellation is signalled BEFORE the turn begins. The
+		// summarizer transport still runs — the transport contract is
+		// unchanged — and reports a successful completion.
+		useProviderChunks(completedChunks(COMPLETE_LOOKING_SUMMARY));
+		controller.abort();
+
+		const seam = await runProductionSeam({ abortSignal: controller.signal });
+
+		// The candidate is absent from the provider-visible history.
+		expect(seam.providerVisibleText).not.toContain(COMPLETE_LOOKING_SUMMARY);
+		// No replacement state was persisted, and nothing is installed.
+		expect(seam.saveCalls).toHaveLength(0);
+		expect(seam.installedState).toBeUndefined();
+		// No successful compaction publication.
+		expect(publishedSuccess(seam)).toBeUndefined();
+		// The cancellation is DISTINGUISHED from an ordinary provider
+		// failure by the existing acceptance contract.s own reason: the
+		// rejection reason is `cancelled`, not the ordinary provider
+		// failure reason.
+		expect(rejectionDiagnostics(seam)).toContain("cancelled");
+		expect(rejectionDiagnostics(seam)).not.toContain(
+			"provider_reported_failure",
+		);
+	});
+
+	it("CMP05-CA: a cancellation DURING summarization, after partial text, installs nothing", async () => {
+		const controller = new AbortController();
+		// The cancellation is signalled AFTER the transport has delivered
+		// PARTIAL text and BEFORE it reports its terminal chunk.
+		createHandlerMock.mockReturnValue({
+			createMessage: vi.fn(async function* () {
+				yield {
+					type: "text",
+					id: "summary-1",
+					text: TRUNCATED_SUMMARY,
+				};
+				controller.abort();
+				yield {
+					type: "done",
+					id: "summary-1",
+					success: true,
+				};
+			}),
+		});
+
+		const seam = await runProductionSeam({ abortSignal: controller.signal });
+
+		// The rejected candidate is nowhere in the provider-visible history.
+		expect(seam.providerVisibleText).not.toContain(TRUNCATED_SUMMARY);
+		// No replacement state was persisted.
+		expect(seam.saveCalls).toHaveLength(0);
+		expect(seam.installedState).toBeUndefined();
+		// No successful compaction publication.
+		expect(publishedSuccess(seam)).toBeUndefined();
+		// The cancellation is distinguished from an ordinary provider
+		// failure.
+		expect(rejectionDiagnostics(seam)).toContain("cancelled");
+	});
+
+	it("CMP05-CA: a cancellation AFTER a successful terminal response, before the commit point, installs nothing", async () => {
+		const controller = new AbortController();
+		// The summarizer reports a SUCCESSFUL terminal response and the
+		// cancellation is signalled immediately afterwards — before the
+		// decision and therefore before the installation commit point.
+		createHandlerMock.mockReturnValue({
+			createMessage: vi.fn(async function* () {
+				yield {
+					type: "text",
+					id: "summary-1",
+					text: COMPLETE_LOOKING_SUMMARY,
+				};
+				yield {
+					type: "done",
+					id: "summary-1",
+					success: true,
+				};
+				controller.abort();
+			}),
+		});
+
+		const seam = await runProductionSeam({ abortSignal: controller.signal });
+
+		// The candidate that the provider SUCCESSFULLY reported is absent
+		// from the provider-visible history.
+		expect(seam.providerVisibleText).not.toContain(COMPLETE_LOOKING_SUMMARY);
+		// No replacement state was persisted.
+		expect(seam.saveCalls).toHaveLength(0);
+		expect(seam.installedState).toBeUndefined();
+		// No successful compaction publication.
+		expect(publishedSuccess(seam)).toBeUndefined();
+		// The late provider success did NOT override the cancellation.
+		expect(rejectionDiagnostics(seam)).toContain("cancelled");
+	});
+
+	it("CMP05-CA: a LATE provider success after cancellation cannot replace the previously installed valid state", async () => {
+		const canonical = canonicalHistory();
+		const prior = priorCompactionState(canonical);
+		const controller = new AbortController();
+
+		// The provider substitute delivers a SUCCESSFUL terminal chunk AFTER
+		// the cancellation was signalled. This is the late provider success:
+		// the summarizer reports success for work the user had already
+		// cancelled.
+		createHandlerMock.mockReturnValue({
+			createMessage: vi.fn(async function* () {
+				yield {
+					type: "text",
+					id: "summary-1",
+					text: COMPLETE_LOOKING_SUMMARY,
+				};
+				controller.abort();
+				yield {
+					type: "done",
+					id: "summary-1",
+					success: true,
+				};
+			}),
+		});
+
+		const seam = await runProductionSeam({
+			abortSignal: controller.signal,
+			existingState: prior,
+			canonical,
+		});
+
+		// The rejected candidate is absent from the provider-visible
+		// history.
+		expect(seam.providerVisibleText).not.toContain(COMPLETE_LOOKING_SUMMARY);
+		// The previously installed valid summary is STILL the one that is
+		// used: the late provider success did not replace it.
+		expect(seam.providerVisibleText).toContain(PRIOR_VALID_SUMMARY);
+		// No replacement state was persisted, and the installed state is
+		// the very object that was there before.
+		expect(seam.saveCalls).toHaveLength(0);
+		expect(seam.installedState).toBe(prior);
+		// The compacted source boundary did NOT advance.
+		expect(seam.installedState?.source_message_count).toBe(
+			prior.source_message_count,
+		);
+		expect(seam.installedState?.source_prefix_hash).toBe(
+			prior.source_prefix_hash,
+		);
+		expect(seam.installedState?.messages).toEqual(prior.messages);
+		// No successful compaction publication.
+		expect(publishedSuccess(seam)).toBeUndefined();
+		// The cancellation is distinguished from an ordinary provider
+		// failure.
+		expect(rejectionDiagnostics(seam)).toContain("cancelled");
+	});
+
+	it("CMP05-CA: a NORMALLY COMPLETED compaction remains installable", async () => {
+		// The CONSERVATION control. The repair must not have made every
+		// compaction un-installable: an uncancelled, normally completed
+		// summary is still installed exactly as before.
+		useProviderChunks(completedChunks(COMPLETE_LOOKING_SUMMARY));
+
+		const seam = await runProductionSeam();
+
+		expect(seam.providerVisibleText).toContain(COMPLETE_LOOKING_SUMMARY);
+		expect(seam.saveCalls).toHaveLength(1);
+		expect(seam.installedState).toBeDefined();
+		expect(publishedSuccess(seam)).toBeDefined();
+		// It is not rejected for any reason.
+		expect(rejectionDiagnostics(seam)).not.toContain("cancelled");
+		expect(rejectionDiagnostics(seam)).not.toContain("known_failed");
+	});
+
+	it("CMP05-CA: a NORMALLY COMPLETED compaction after a CANCELLED attempt still installs", async () => {
+		// The CONSERVATION control, in sequence: a cancelled attempt must
+		// not poison the session. A later, uncancelled compaction still
+		// installs and still publishes a successful compaction.
+		const canonical = canonicalHistory();
+		const prior = priorCompactionState(canonical);
+
+		const controller = new AbortController();
+		useProviderChunks(completedChunks(COMPLETE_LOOKING_SUMMARY));
+		controller.abort();
+		const cancelled = await runProductionSeam({
+			abortSignal: controller.signal,
+			existingState: prior,
+			canonical,
+		});
+		expect(cancelled.saveCalls).toHaveLength(0);
+		expect(cancelled.installedState).toBe(prior);
+
+		// The next, uncancelled attempt installs normally.
+		useProviderChunks(completedChunks(COMPLETE_LOOKING_SUMMARY));
+		const accepted = await runProductionSeam({ canonical });
+
+		expect(accepted.providerVisibleText).toContain(COMPLETE_LOOKING_SUMMARY);
+		expect(accepted.saveCalls).toHaveLength(1);
+		expect(publishedSuccess(accepted)).toBeDefined();
 	});
 });
