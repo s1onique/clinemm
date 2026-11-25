@@ -54,6 +54,42 @@ export interface CompactionSummaryMetadata {
 
 export type EstimateMessageTokens = (message: MessageWithMetadata) => number;
 
+/**
+ * ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01.
+ *
+ * THE CANCELLATION CLASSIFIER.
+ *
+ * Whether an error is the compaction's own cancellation.
+ *
+ * It lives here, in the SHARED compaction module, because TWO boundaries
+ * need it and one of them is DOWNSTREAM of the other:
+ *
+ *   - the compaction seam (`compaction.ts`), which decides whether a
+ *     cancelled compaction is re-thrown or falls back to basic compaction;
+ *   - the agentic compactor (`agentic-compaction.ts`), which converts a
+ *     cancellation reported by the summarizer TRANSPORT into the SAME
+ *     acceptance verdict the decision point produces.
+ *
+ * It is NOT duplicated: both boundaries read this ONE classifier, so they
+ * cannot disagree about what a cancellation is.
+ *
+ * The rule is unchanged from the seam's original: an aborted signal is a
+ * cancellation regardless of the error, and an `AbortError`-shaped error is
+ * a cancellation even when the signal has not been observed as aborted.
+ */
+export function isCompactionCancellation(
+	error: unknown,
+	abortSignal: AbortSignal | undefined,
+): boolean {
+	if (abortSignal?.aborted) {
+		return true;
+	}
+	return (
+		error instanceof Error &&
+		(error.name === "AbortError" || error.name === "AgentRuntimeAbortError")
+	);
+}
+
 function isPositiveFiniteNumber(value: unknown): value is number {
 	return typeof value === "number" && Number.isFinite(value) && value > 0;
 }

@@ -50,6 +50,7 @@ import {
 	DEFAULT_PRESERVE_RECENT_TOKENS,
 	DEFAULT_TARGET_RATIO,
 	findLatestSummaryIndex,
+	isCompactionCancellation,
 	MAX_INPUT_UNDERESTIMATE_FACTOR,
 	normalizeUserContextCeiling,
 	resolveEffectiveMaxInputTokens,
@@ -281,18 +282,10 @@ export interface ContextCompactionPrepareTurnOptions {
 
 const LONG_CONVERSATION_TARGET_RATIO = 0.5;
 
-function isCompactionCancellation(
-	error: unknown,
-	abortSignal: AbortSignal,
-): boolean {
-	if (abortSignal.aborted) {
-		return true;
-	}
-	return (
-		error instanceof Error &&
-		(error.name === "AbortError" || error.name === "AgentRuntimeAbortError")
-	);
-}
+// ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01: the cancellation
+// classifier now lives in `compaction-shared.ts`, because the agentic
+// compactor needs the SAME rule and `compaction.ts` already imports that
+// module — a local copy here would let the two boundaries drift.
 
 /**
  * ACT-CLINEMM-CMP05-CANCELLATION-COMMIT-AUTHORITY-01.
@@ -340,6 +333,73 @@ function isInstallationCancelled(
 	abortSignal: AbortSignal | undefined,
 ): boolean {
 	return abortSignal?.aborted === true;
+}
+
+/**
+ * ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01 — THE
+ * INSTALLATION OUTCOME.
+ *
+ * What the host reports about a compaction installation.
+ *
+ * - `installed: true` — the state was durably installed.
+ * - `installed: false` with `reason: "cancelled"` — the durable commit
+ *   boundary refused the replacement because the turn was cancelled.
+ * - `installed: false` with `reason: "persistence_failed"` — the durable
+ *   replacement FAILED.
+ *
+ * The reason exists so a PERSISTENCE FAILURE is not reported as a
+ * cancellation. The two are DIFFERENT facts: a cancellation is the user's
+ * intent and is not retried; a persistence failure is a fault and may be.
+ */
+export interface CompactionInstallationOutcome {
+	readonly installed: boolean;
+	readonly reason?: "cancelled" | "persistence_failed";
+}
+
+/**
+ * ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01 — THE HOST'S
+ * INSTALLATION REPORT.
+ *
+ * Everything a host may return from `saveState`.
+ *
+ * `void` is part of it because a host that installs the state and reports
+ * NOTHING is the historical contract, and such a function must stay
+ * assignable to the `saveState` signature.
+ */
+export type CompactionInstallationReport =
+	| void
+	| boolean
+	| CompactionInstallationOutcome;
+
+/**
+ * ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01 — THE OUTCOME
+ * NORMALIZER.
+ *
+ * It maps the host's return value onto ONE shape, and it is deliberately
+ * CONSERVATIVE:
+ *
+ * - `undefined` / `void` — the host reports no outcome, which is the
+ *   HISTORICAL contract: the installation is treated as committed;
+ * - `true` — installed;
+ * - `false` — refused, with the reason UNKNOWN. The refusal is reported as
+ *   a cancellation, which is the pre-existing behaviour, so no existing
+ *   host's diagnosis changes;
+ * - the object form — installed or refused, with the host's own reason.
+ */
+function normalizeInstallationOutcome(
+	outcome: CompactionInstallationReport | undefined,
+): { installed: boolean; reason?: "cancelled" | "persistence_failed" } {
+	if (outcome === undefined || outcome === null) {
+		return { installed: true };
+	}
+	if (typeof outcome === "boolean") {
+		return outcome
+			? { installed: true }
+			: { installed: false, reason: "cancelled" };
+	}
+	return outcome.installed
+		? { installed: true }
+		: { installed: false, reason: outcome.reason ?? "cancelled" };
 }
 
 /**
@@ -460,9 +520,15 @@ function createDeferredCompactionSuccessPublication(input: {
 		},
 		publishRefused: (metadata) => {
 			pending = null;
+			// ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01: the
+			// refusal REASON is reported truthfully. The `reason` the caller
+			// supplies is the authority; a persistence failure is not
+			// reported as a cancellation.
+			const reason =
+				typeof metadata.reason === "string" ? metadata.reason : "cancelled";
 			input.emitStatusNotice?.("compaction-skipped", {
 				phase: "skipped",
-				rejectionReason: "cancelled",
+				rejectionReason: reason,
 				...metadata,
 			});
 		},
@@ -2018,12 +2084,33 @@ export function createCompactionStateAwarePrepareTurn(input: {
 	 *   - `false` — the installation was REFUSED at the durable commit
 	 *     boundary, so nothing was written and the success notice must
 	 *     NOT be published.
+	 *
+	 * ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01 — THE
+	 * REFUSAL REASON.
+	 *
+	 * A bare `false` says only THAT the installation was refused, not WHY.
+	 * The seam cannot tell a CANCELLATION from a PERSISTENCE FAILURE, and
+	 * it used to report both as `cancelled` — a misclassification, because
+	 * a persistence failure is a DIFFERENT fact with a DIFFERENT remedy.
+	 *
+	 * The host may therefore return an OBJECT carrying the reason:
+	 *
+	 *   - `{ installed: false, reason: "cancelled" }` — the durable commit
+	 *     boundary refused the replacement because the turn was cancelled;
+	 *   - `{ installed: false, reason: "persistence_failed" }` — the
+	 *     durable replacement FAILED.
+	 *
+	 * The object form is ADDITIVE: a host that returns `undefined`,
+	 * `true` or `false` behaves EXACTLY as before. Only a host that opts in
+	 * to the object form gets the truthful diagnosis.
 	 */
 	saveState?: (
 		state: SessionCompactionState,
 		sourceMessages: CoreCompactionContext["messages"],
 		abortSignal?: AbortSignal,
-	) => void | boolean | Promise<void | boolean>;
+	) =>
+		| CompactionInstallationReport
+		| Promise<CompactionInstallationReport>;
 	/**
 	 * ACT-CLINEMM-COMPACTION-TASK-CONTRACT-CONSERVATION-REPAIR01: an
 	 * additional ceiling on the effective request input limit, applied on top
@@ -2351,34 +2438,64 @@ export function createCompactionStateAwarePrepareTurn(input: {
 					// seam's own check. The host therefore consults the SAME
 					// signal at the DURABLE COMMIT BOUNDARY and refuses the
 					// replacement there.
-					const installed = await input.saveState?.(
-						nextState,
-						context.messages,
-						context.abortSignal,
+					const installed = normalizeInstallationOutcome(
+						await input.saveState?.(
+							nextState,
+							context.messages,
+							context.abortSignal,
+						),
 					);
-					if (installed === false) {
+					if (!installed.installed) {
 						// The installation was REFUSED at the durable commit
 						// boundary: nothing was written, so no successful
 						// compaction may be published and the previously
 						// installed state remains in force.
+						//
+						// ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01:
+						// the refusal REASON is reported truthfully. A
+						// PERSISTENCE FAILURE is not a cancellation and is
+						// not reported as one.
+						const refusalReason =
+							installed.reason === "persistence_failed"
+								? "persistence_failed"
+								: "cancelled";
 						input.logger?.log?.(
-							"Skipped agentic compaction: the turn was cancelled before the compaction was durably installed",
+							refusalReason === "cancelled"
+								? "Skipped agentic compaction: the turn was cancelled before the compaction was durably installed"
+								: "Skipped agentic compaction: the compaction could not be durably installed",
 							{
 								severity: "warn",
-								rejectionReason: "cancelled",
+								rejectionReason: refusalReason,
 								phase: "durable_commit",
 							},
 						);
 						successPublication.publishRefused({
-							kind: "cancelled_before_durable_commit",
-							reason: "cancelled",
+							kind:
+								refusalReason === "cancelled"
+									? "cancelled_before_durable_commit"
+									: "persistence_failed_at_durable_commit",
+							reason: refusalReason,
 							iteration: context.iteration,
 						});
-						return publishWorkingContextEstimate(
-							contractedMessages,
-							systemPrompt ?? context.systemPrompt,
+						// ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01
+						// — THE REFUSED CANDIDATE IS NOT RETURNED.
+						//
+						// The candidate was NOT installed: nothing was written
+						// and the previously installed state remains in force.
+						// Returning `contractedMessages` would nevertheless
+						// hand the REJECTED candidate to the provider as this
+						// turn's working transcript, so the refusal would
+						// hold in the persisted sidecar but NOT in the
+						// request the model actually sees.
+						//
+						// The refusal therefore returns the ORIGINAL messages,
+						// exactly as the installation-refusal path below
+						// does. The rejected candidate is absent from the
+						// provider-visible projection.
+						return publishWorkingContextEstimateMetadataOnly(
+							context.messages,
+							context.systemPrompt,
 							context.tools,
-							contractMaxRequestTokens,
 						);
 					}
 					// The installation committed, so the success notice may
@@ -2653,27 +2770,42 @@ export function createCompactionStateAwarePrepareTurn(input: {
 			// when the turn is cancelled after this seam's own check; the
 			// host consults the SAME signal at the DURABLE COMMIT BOUNDARY
 			// and refuses the replacement there.
-			const installed = await input.saveState?.(
-				nextState,
-				context.messages,
-				context.abortSignal,
+			const installed = normalizeInstallationOutcome(
+				await input.saveState?.(
+					nextState,
+					context.messages,
+					context.abortSignal,
+				),
 			);
-			if (installed === false) {
+			if (!installed.installed) {
 				// The installation was REFUSED at the durable commit
 				// boundary: nothing was written, so no successful
 				// compaction may be published and the previously installed
 				// state remains in force.
+				//
+				// ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01:
+				// the refusal REASON is reported truthfully. A PERSISTENCE
+				// FAILURE is not a cancellation and is not reported as one.
+				const refusalReason =
+					installed.reason === "persistence_failed"
+						? "persistence_failed"
+						: "cancelled";
 				input.logger?.log?.(
-					"Skipped agentic compaction: the turn was cancelled before the compaction was durably installed",
+					refusalReason === "cancelled"
+						? "Skipped agentic compaction: the turn was cancelled before the compaction was durably installed"
+						: "Skipped agentic compaction: the compaction could not be durably installed",
 					{
 						severity: "warn",
-						rejectionReason: "cancelled",
+						rejectionReason: refusalReason,
 						phase: "durable_commit",
 					},
 				);
 				successPublication.publishRefused({
-					kind: "cancelled_before_durable_commit",
-					reason: "cancelled",
+					kind:
+						refusalReason === "cancelled"
+							? "cancelled_before_durable_commit"
+							: "persistence_failed_at_durable_commit",
+					reason: refusalReason,
 					iteration: context.iteration,
 				});
 				return publishWorkingContextEstimateMetadataOnly(

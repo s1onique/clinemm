@@ -726,7 +726,7 @@ describe("ACT-CLINEMM-COMPACTION-ATOMIC-SUMMARY-INSTALLATION-REPAIR-01 — the e
 		);
 	});
 
-	it("A3: a CANCELLED generation is NOT installed, and the pre-existing transport semantics are conserved", async () => {
+	it("A3: a CANCELLED generation is NOT installed, and the cancellation decides the outcome", async () => {
 		const controller = new AbortController();
 		useProviderChunks([
 			{ type: "text", id: "summary-1", text: TRUNCATED_SUMMARY },
@@ -734,29 +734,32 @@ describe("ACT-CLINEMM-COMPACTION-ATOMIC-SUMMARY-INSTALLATION-REPAIR-01 — the e
 		]);
 		controller.abort();
 
-		// THE PRE-EXISTING TRANSPORT SEMANTICS, CONSERVED.
+		// ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01 — THE
+		// TRANSPORT SEMANTICS ARE NOW PROPAGATED.
 		//
-		// `runAgenticCompaction()` calls `generateSummary()` WITHOUT the
-		// compaction's abort signal, both before and after this repair. A
-		// cancellation signalled at the COMPACTION level therefore does not
-		// interrupt the summarizer transport, and the summarizer's own
-		// completion decides the outcome. That is the behaviour that existed
-		// at ENTRY_HEAD and this ACT does NOT change it: the repair only adds
-		// an ACCEPTANCE decision, and it must not silently alter the
-		// cancellation contract.
+		// Before this ACT, `runAgenticCompaction()` called `generateSummary()`
+		// WITHOUT the compaction's abort signal, so a cancelled compaction
+		// still PAID for a full provider inference: the summarizer ran and
+		// reported its completion, and only then did the acceptance decision
+		// discard the candidate.
 		//
-		// The row therefore asserts CONSERVATION of the transport semantics
-		// AND the cancellation authority of the DECISION: the summarizer
-		// still ran and still reported its completion, but the cancellation
-		// decided the outcome, so no candidate was installed.
+		// The signal is now threaded to the summarizer transport, so an
+		// ALREADY-CANCELLED compaction never reaches it: ZERO physical
+		// provider requests are dispatched, and the cancelled candidate is
+		// never produced at all.
+		//
+		// The cancellation AUTHORITY of the DECISION is unchanged: the
+		// decision still decides the outcome, and the diagnosis is still the
+		// existing one — `cancelled`, never a provider failure and never an
+		// empty response.
 		const seam = await runProductionSeam({
 			abortSignal: controller.signal,
 		});
 
-		// The summarizer transport was NOT interrupted: it ran and reported
-		// its completion. The transport semantics are unchanged.
-		expect(createHandlerMock.mock.results.length).toBe(1);
-		// ...and the candidate it produced is NOT installed.
+		// The summarizer transport was NOT reached: no provider request was
+		// dispatched for a compaction the user had already cancelled.
+		expect(createHandlerMock.mock.results.length).toBe(0);
+		// ...and the candidate is NOT installed.
 		expect(seam.saveCalls).toHaveLength(0);
 		expect(seam.installedState).toBeUndefined();
 		expect(seam.providerVisibleText).not.toContain(TRUNCATED_SUMMARY);

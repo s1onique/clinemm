@@ -67,6 +67,7 @@ import { join } from "node:path";
 import type { MessageWithMetadata } from "@cline/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FileSessionService } from "../../session/services/file-session-service";
+import { MessageBuilder } from "../../session/services/message-builder";
 import type { CoreSessionConfig } from "../../types/config";
 import { LocalRuntimeHost as RuntimeHostUnderTest } from "./local-runtime-host";
 import { type StartSessionInput, splitCoreSessionConfig } from "./runtime-host";
@@ -173,6 +174,12 @@ type HeldBackend = {
 	readonly requested: () => Array<{ sessionId: string; state: unknown }>;
 	/** Opens the held write, letting the queue advance. */
 	readonly release: () => void;
+	/**
+	 * ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01: re-arms the
+	 * deterministic gate so the NEXT durable replacement is held by a fresh
+	 * gate the test opens explicitly.
+	 */
+	readonly holdNext: () => void;
 	/** Makes every subsequent durable replacement fail deterministically. */
 	readonly rejectAll: (error: Error) => void;
 	/** The absolute path of the session's durable compaction sidecar. */
@@ -190,7 +197,7 @@ type HeldBackend = {
  */
 function createHeldBackend(sessionsDir: string): HeldBackend {
 	const real = new FileSessionService(sessionsDir);
-	const gate = createGate();
+	let gate = createGate();
 	const requested: Array<{ sessionId: string; state: unknown }> = [];
 	const arrivals: Array<() => void> = [];
 	let attempts = 0;
@@ -233,6 +240,22 @@ function createHeldBackend(sessionsDir: string): HeldBackend {
 		release: () => {
 			released = true;
 			gate.open();
+		},
+		/**
+		 * ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01 — RE-ARM
+		 * THE GATE.
+		 *
+		 * The gate is one-shot by default: `release()` opens it for good.
+		 * A witness that must hold a SECOND write needs to re-arm it, so
+		 * the second write is held by its own gate and the test stays in
+		 * control of exactly when it advances.
+		 *
+		 * This changes nothing about the PRODUCTION path: it is the same
+		 * deterministic gate, re-armed.
+		 */
+		holdNext: () => {
+			released = false;
+			gate = createGate();
 		},
 		rejectAll: (error: Error) => {
 			rejection = error;
@@ -320,6 +343,26 @@ function buildPrepareTurnContext(input: {
 		},
 		emitStatusNotice: input.emitStatusNotice ?? (() => {}),
 	};
+}
+
+/**
+ * The provider-visible projection of a seam's RETURNED transcript.
+ *
+ * The returned transcript is what the runtime actually sends to the
+ * provider on the next turn. A candidate that was refused must be ABSENT
+ * from it: the refusal has to hold not only in the persisted sidecar but
+ * also in the transcript the provider sees.
+ *
+ * The projection is produced by the REAL `MessageBuilder`, so it is the
+ * same projection the production runtime builds.
+ */
+function providerVisibleProjection(
+	result: Record<string, unknown> | undefined,
+): string {
+	const messages = (result?.messages ?? []) as unknown as Parameters<
+		MessageBuilder["buildForApi"]
+	>[0];
+	return JSON.stringify(new MessageBuilder().buildForApi(messages));
 }
 
 /**
@@ -481,7 +524,7 @@ describe("ACT-CLINEMM-CMP06-DURABLE-COMMIT-AUTHORITY-01 — the durable commit a
 		held.release();
 
 		await first;
-		await second;
+		const secondResult = await second;
 
 		// The candidate must NOT have been persisted: the store must hold
 		// the PRIOR state, not the candidate.
@@ -490,6 +533,16 @@ describe("ACT-CLINEMM-CMP06-DURABLE-COMMIT-AUTHORITY-01 — the durable commit a
 		const persistedText = JSON.stringify(persisted);
 		expect(persistedText).toContain("CANDIDATE SUMMARY 1");
 		expect(persistedText).not.toContain("CANDIDATE SUMMARY 2");
+
+		// ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01 — THE
+		// RETURNED PROVIDER-VISIBLE PROJECTION.
+		//
+		// The refusal must hold in the transcript the runtime actually
+		// sends to the provider, not only in the persisted sidecar. The
+		// REJECTED candidate must be ABSENT from the projection the refused
+		// installation returned.
+		const refusedProjection = providerVisibleProjection(secondResult);
+		expect(refusedProjection).not.toContain("CANDIDATE SUMMARY 2");
 
 		// No successful compaction may be published for the refused
 		// installation: only the FIRST (legitimately committed)
@@ -623,12 +676,41 @@ describe("ACT-CLINEMM-CMP06-DURABLE-COMMIT-AUTHORITY-01 — the durable commit a
 			}),
 		);
 		await held.attempted(2);
-		await rejected;
+		const rejectedResult = await rejected;
 
 		// No successful compaction was published for the rejected write.
 		expect(
 			notices.filter((entry) => entry.message.endsWith("compacted")),
 		).toHaveLength(0);
+
+		// ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01 — A
+		// PERSISTENCE FAILURE IS NOT A CANCELLATION.
+		//
+		// The turn was NOT cancelled: the abort signal never fired. The
+		// write failed because the durable replacement was REJECTED, which
+		// is a DIFFERENT fact with a DIFFERENT remedy — a persistence
+		// failure is retried or surfaced, a cancellation is not.
+		//
+		// The compaction's own diagnostics must therefore NOT report this
+		// as a cancellation. The signal is the authority, and it never
+		// fired.
+		expect(controller.signal.aborted).toBe(false);
+		const rejectedNotices = notices.filter((entry) =>
+			entry.message.endsWith("compaction-skipped"),
+		);
+		for (const notice of rejectedNotices) {
+			const metadata = (notice.metadata ?? {}) as Record<string, unknown>;
+			expect(metadata.rejectionReason).not.toBe("cancelled");
+			expect(metadata.phase).not.toBe("durable_commit");
+		}
+
+		// ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01 — THE
+		// RETURNED PROVIDER-VISIBLE PROJECTION.
+		//
+		// The rejected candidate must be absent from the transcript the
+		// runtime actually sends to the provider.
+		const rejectedProjection = providerVisibleProjection(rejectedResult);
+		expect(rejectedProjection).not.toContain("SUMMARY 2");
 
 		// The prior valid persisted state remains BYTE-IDENTICAL: the
 		// rejected replacement was never exposed.
@@ -822,9 +904,31 @@ describe("ACT-CLINEMM-CMP06-DURABLE-COMMIT-AUTHORITY-01 — the durable commit a
 		);
 		await held.attempted();
 
-		// ── the REFUSED installation: submitted BEHIND the held write, so
-		// it is still QUEUED when the cancellation is signalled.
-		const second = prepareTurn(
+		// ── the PRIOR installation is RELEASED and allowed to commit, so
+		//    the durable bytes exist and can be SNAPSHOTTED BEFORE the
+		//    refused operation.
+		//
+		// ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01 — THE
+		// BYTE-CONSERVATION WITNESS IS CORRECTED.
+		//
+		// The witness previously took BOTH snapshots AFTER the refused
+		// operation, so it compared the file with ITSELF and could not
+		// distinguish "the refused candidate never reached the file" from
+		// "the refused candidate reached the file and the file happened to
+		// be unchanged". The BEFORE snapshot is what makes the comparison a
+		// conservation proof.
+		held.release();
+		await first;
+
+		// The PRIOR snapshot: taken from the bytes that are actually on
+		// disk, BEFORE the refused operation is even submitted.
+		const priorBytes = readFileSync(held.compactionPath(sessionId), "utf8");
+		expect(priorBytes).toContain("SUMMARY 1");
+
+		// ── WRITE #2: the HOLDING write. It reaches the store and is held
+		//    there by the deterministic gate, so WRITE #3 stays QUEUED.
+		held.holdNext();
+		const holding = prepareTurn(
 			buildPrepareTurnContext({
 				sessionId,
 				messages: [...messages, ...canonicalMessagesFrom(messages.length, 2)],
@@ -832,31 +936,54 @@ describe("ACT-CLINEMM-CMP06-DURABLE-COMMIT-AUTHORITY-01 — the durable commit a
 				emitStatusNotice: notice,
 			}),
 		);
-		await drainMicrotasks(5);
-		expect(held.attempts()).toBe(1);
+		await held.attempted(2);
 
+		// ── WRITE #3: the REFUSED installation, submitted BEHIND the held
+		//    write, so it is still QUEUED when the cancellation is signalled
+		//    and BEFORE the atomic replacement of the holding write begins.
+		const second = prepareTurn(
+			buildPrepareTurnContext({
+				sessionId,
+				messages: [
+					...messages,
+					...canonicalMessagesFrom(messages.length, 4),
+				],
+				abortSignal: controller.signal,
+				emitStatusNotice: notice,
+			}),
+		);
+		await drainMicrotasks(5);
+		// PROVEN: the refused write has NOT reached the store — it is still
+		// queued behind the holding write.
+		expect(held.attempts()).toBe(2);
+
+		// ── CANCELLATION: signalled while WRITE #3 is still QUEUED.
 		controller.abort(new Error("cmp06: user cancelled the turn"));
 		held.release();
-		await first;
-		await second;
+		await holding;
+		const secondResult = await second;
 
-		// The snapshot is captured AFTER the refused operation, from the
-		// bytes that are actually on disk, and it is compared against the
-		// state the production reader restores. The refused candidate never
-		// reached the durable file, so the installed state is the FIRST
-		// installation's.
-		const priorBytes = readFileSync(held.compactionPath(sessionId), "utf8");
-		const priorState = await held.backend.readSessionCompactionState(sessionId);
-		expect(priorBytes).toContain("SUMMARY 1");
-
-		// The durable bytes are unchanged.
+		// The REFUSED candidate never reached the durable file. The file
+		// holds the HOLDING write's state, which committed while the refused
+		// write was still queued — and the refused candidate is absent from
+		// it.
 		const afterBytes = readFileSync(held.compactionPath(sessionId), "utf8");
-		expect(afterBytes).toBe(priorBytes);
+		expect(afterBytes).not.toContain("SUMMARY 3");
+		expect(afterBytes).not.toBe(priorBytes);
 
-		// The restored state is unchanged, and the refused candidate never
-		// reaches the provider-visible history.
+		// The restored state is the HOLDING write's, and the refused
+		// candidate never reaches it.
 		const restored = await held.backend.readSessionCompactionState(sessionId);
-		expect(restored).toEqual(priorState);
-		expect(JSON.stringify(restored)).not.toContain("SUMMARY 2");
+		expect(restored).toBeDefined();
+		expect(JSON.stringify(restored)).toContain("SUMMARY 2");
+		expect(JSON.stringify(restored)).not.toContain("SUMMARY 3");
+
+		// ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01 — THE
+		// RETURNED PROVIDER-VISIBLE PROJECTION.
+		//
+		// The refused candidate must be absent from the transcript the
+		// runtime actually sends to the provider.
+		const refusedProjection = providerVisibleProjection(secondResult);
+		expect(refusedProjection).not.toContain("SUMMARY 3");
 	});
 });

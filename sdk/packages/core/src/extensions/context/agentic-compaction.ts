@@ -196,22 +196,81 @@ export async function runAgenticCompaction(options: {
 	// a cancelled compaction still installed and published a replacement
 	// summary.
 	//
-	// The summarizer transport is invoked WITHOUT the signal, and that is
-	// DELIBERATE and UNCHANGED. The transport contract is not this ACT's
-	// subject, and interrupting it would make the late-success case
-	// unreachable: the transport would throw instead of reporting its
-	// successful completion, and the requirement is precisely that a
-	// summarizer which SUBSEQUENTLY REPORTS SUCCESS must still lose to the
-	// cancellation.
+	// The authority is exercised at TWO points, and both read the SAME
+	// signal. There is no second cancellation authority.
 	//
-	// The authority is therefore exercised where it belongs: at the
-	// ACCEPTANCE DECISION below, which reads the signal AFTER the summarizer
-	// returned. One authority, one decision, one diagnosis.
+	//   1. HERE, at the TRANSPORT — the signal is handed to the summarizer
+	//      transport, which forwards it into the provider configuration
+	//      (`createHandlerAsync({ ..., abortSignal })`). From there the
+	//      EXISTING transport chain carries it to the transport's own
+	//      cancellation boundary (`ProviderConfig.abortSignal` ->
+	//      `GatewayStreamRequest.signal` -> `provider.stream(request, {
+	//      signal })` -> the vendor client's `abortSignal`). This is an
+	//      EFFICIENCY mechanism: it stops an unnecessary inference after
+	//      the user cancelled. It is NOT the correctness mechanism, and it
+	//      does not replace the acceptance decision below.
+	//
+	//   2. AT THE ACCEPTANCE DECISION below, which reads the signal AFTER
+	//      the summarizer returned. This is the CORRECTNESS mechanism, and
+	//      it is what refuses a candidate the provider reported as
+	//      successful when the compaction was cancelled.
+	//
+	// ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01 — THE
+	// PROPAGATION.
+	//
+	// Before this ACT the transport was invoked WITHOUT the signal, so a
+	// cancelled compaction still PAID for a full provider inference: the
+	// work was dispatched, streamed, and only then discarded at the
+	// acceptance decision. The sibling path `summarizeConversation()`
+	// already forwarded its signal the same way, and `generateSummary()`
+	// already accepted and forwarded a `signal` — the mechanism EXISTED
+	// and was simply not used here.
+	//
+	// The signal threaded here is the SAME `options.context.abortSignal`
+	// the acceptance decision reads. It is not a new controller, it is not
+	// an independent authority, and it introduces no new state.
+	//
+	// THE LATE-SUCCESS CASE IS STILL REACHABLE.
+	//
+	// A provider that IGNORES the cancellation and reports a successful
+	// completion is still refused by the acceptance decision below: the
+	// transport cancellation is an efficiency mechanism, never a
+	// replacement for acceptance correctness.
+	//
+	// ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01 — WHAT THE
+	// TRANSPORT'S CANCELLATION DOES.
+	//
+	// With the signal threaded, the summarizer transport can now END by
+	// THROWING the cancellation: the transport's own boundary fired, or the
+	// transport's between-chunks check observed the abort.
+	//
+	// That throw PROPAGATES, exactly as the pre-existing contract requires:
+	// a cancellation inside the summarizer transport is re-thrown by the
+	// compaction seam and is NOT fallen back to basic compaction. This ACT
+	// does NOT change that — the transport's terminal semantics are
+	// unchanged.
+	//
+	// The acceptance authority below is unchanged too, and it remains
+	// reachable: a transport that IGNORES the cancellation and reports a
+	// successful completion returns NORMALLY, and the acceptance decision
+	// refuses that candidate. That is the case the CMP-05 ACT established,
+	// and the propagation has not weakened it.
 	const summaryResult = await generateSummary({
 		providerConfig: summarizerProviderConfig,
 		systemPrompt:
 			"Summarize the provided coding session into a concise continuation note with detailed next steps.",
 		request: summaryRequest,
+		// ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01: the
+		// compaction's OWN cancellation authority, threaded to the
+		// summarizer transport.
+		signal: options.context.abortSignal,
+		// ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01: the
+		// cancellation is REPORTED as a terminal fact of the generation
+		// rather than thrown by the transport, so the ACCEPTANCE DECISION
+		// below remains the single authority that decides what a cancelled
+		// generation means — and remains reachable for a transport that
+		// IGNORES the cancellation and reports a successful completion.
+		cancellationReporting: "report",
 	});
 	options.logger?.debug("Generated compaction summary", {
 		outputChars: summaryResult.text.length,
@@ -252,7 +311,24 @@ export async function runAgenticCompaction(options: {
 	// reported a successful terminal response) is observed by the SAME
 	// read. A late provider success therefore cannot authorize the
 	// installation of a summary the user already cancelled.
-	const cancelled = options.context.abortSignal?.aborted === true;
+	// ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01: the
+	// cancellation is read from BOTH sources, and they are the SAME
+	// authority observed at two moments:
+	//
+	//   - `options.context.abortSignal?.aborted` — the signal read AT the
+	//     decision point, which is the unconditional form of the
+	//     authority: a cancellation signalled at ANY moment before this
+	//     boundary is observed by this same read;
+	//   - `summaryResult.cancelled` — the cancellation the TRANSPORT
+	//     reported while the generation was under way.
+	//
+	// Reading both keeps the authority unconditional AND keeps the
+	// transport's own report from being silently dropped. Neither source
+	// can authorize an installation: the acceptance contract ranks
+	// cancellation above every other terminal signal.
+	const cancelled =
+		options.context.abortSignal?.aborted === true ||
+		summaryResult.cancelled === true;
 	const acceptance = classifySummaryTerminalStatus({
 		incompleteReason: summaryResult.incompleteReason,
 		failed: summaryResult.failed,
@@ -282,7 +358,20 @@ export async function runAgenticCompaction(options: {
 	// NO text at all and the distinct reason is more useful to an operator
 	// than the generic empty-output diagnostic alone.
 	const unexpectedToolCall = summaryResult.usedTools;
-	if (!rawSummary) {
+	// ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01 — A
+	// CANCELLED GENERATION IS NOT AN EMPTY RESPONSE.
+	//
+	// With the cancellation authority threaded to the transport, a cancelled
+	// generation produces NO TEXT: the transport ended, so there is nothing
+	// to install. The EMPTY branch below would then diagnose that as an
+	// `empty_response` — an ordinary provider symptom — which is a
+	// MISDIAGNOSIS: the generation was not empty, it was CANCELLED.
+	//
+	// The cancellation therefore takes the ACCEPTANCE branch, which reports
+	// the acceptance contract's own reason (`cancelled`). The empty-summary
+	// diagnostic is preserved unchanged for every generation that really was
+	// empty.
+	if (!rawSummary && !cancelled) {
 		options.logger?.log(
 			"Skipped agentic compaction: summarizer returned no summary text",
 			{

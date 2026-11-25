@@ -1315,7 +1315,15 @@ export class LocalRuntimeHost implements RuntimeHost {
 					// INSTALLATION OUTCOME. `false` means the durable commit
 					// boundary refused the replacement (nothing was written), so
 					// the seam must not publish a successful compaction.
-					return result.updated;
+					//
+					// ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01:
+					// the outcome carries the REFUSAL REASON, so the seam can
+					// tell a cancellation from a persistence failure and
+					// report the truthful diagnosis.
+					return {
+						installed: result.updated,
+						...(result.reason ? { reason: result.reason } : {}),
+					};
 				} catch (error) {
 					configWithProvider.logger?.error?.(
 						"Failed to persist session compaction state",
@@ -1336,7 +1344,12 @@ export class LocalRuntimeHost implements RuntimeHost {
 				}
 				// The durable replacement FAILED, so nothing was installed.
 				// The seam must not publish a successful compaction for it.
-				return false;
+				//
+				// ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01:
+				// the failure is reported as a PERSISTENCE FAILURE, not as a
+				// cancellation. The turn was not cancelled — the write
+				// failed — and the two facts have different remedies.
+				return { installed: false, reason: "persistence_failed" };
 			},
 		});
 
@@ -2465,7 +2478,7 @@ export class LocalRuntimeHost implements RuntimeHost {
 		 * installation check, not a second cancellation authority.
 		 */
 		abortSignal?: AbortSignal,
-	): Promise<{ updated: boolean }> {
+	): Promise<{ updated: boolean; reason?: "cancelled" | "persistence_failed" }> {
 		if (
 			!(await this.canPersistCompactionState(
 				session.sessionId,
@@ -2475,7 +2488,15 @@ export class LocalRuntimeHost implements RuntimeHost {
 				sourceMessages,
 			))
 		) {
-			return { updated: false };
+			// The state was refused BEFORE the durable commit boundary: it
+			// does not project onto the session's messages.
+			//
+			// ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01: this
+			// is NOT a cancellation. The turn was not cancelled — the
+			// candidate was rejected as unprojectable — and the two facts
+			// have different remedies. Reporting it as a cancellation
+			// misleads an operator into thinking the user stopped the turn.
+			return { updated: false, reason: "persistence_failed" };
 		}
 		return await this.enqueueCompactionStateWrite(session, async () => {
 			// ACT-CLINEMM-CMP06-DURABLE-COMMIT-AUTHORITY-01: THE DURABLE
@@ -2493,8 +2514,12 @@ export class LocalRuntimeHost implements RuntimeHost {
 			// therefore refused here: nothing is written, the previously
 			// installed state remains in force, and the in-memory state is
 			// NOT advanced.
+			//
+			// ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01: the
+			// refusal REASON is reported, so a cancellation is not confused
+			// with a stale-state skip or with a persistence failure.
 			if (abortSignal?.aborted === true) {
-				return { updated: false };
+				return { updated: false, reason: "cancelled" as const };
 			}
 			const currentState = session.compactionState;
 			const currentStateStillProjects =

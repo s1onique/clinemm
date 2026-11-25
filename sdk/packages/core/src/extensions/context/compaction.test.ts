@@ -2146,24 +2146,37 @@ describe("createContextCompactionPrepareTurn", () => {
 			logger: { debug: vi.fn(), log },
 		});
 
-		await expect(
-			prepareTurn?.({
-				agentId: "agent-1",
-				conversationId: "conv-1",
-				parentAgentId: null,
-				iteration: 1,
-				abortSignal: controller.signal,
-				systemPrompt: "You are helpful.",
-				tools: [],
-				messages,
-				apiMessages: messages,
-				model: {
-					id: "mock-model",
-					provider: "anthropic",
-					info: { id: "mock-model", maxInputTokens: 10 },
-				},
-			}),
-		).rejects.toBe(providerError);
+		// ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01 — THE
+		// CANCELLATION IS NOW PROPAGATED TO THE TRANSPORT.
+		//
+		// The compaction was cancelled BEFORE summarization began, so the
+		// summarizer transport is never reached: the provider is never asked,
+		// and the provider error it would have thrown never arises. The
+		// compaction is SKIPPED instead, and the ACCEPTANCE authority
+		// refuses the cancelled candidate.
+		//
+		// The row's actual subject — that a cancelled agentic compaction
+		// does NOT fall back to basic compaction — is unchanged and is
+		// asserted below exactly as before.
+		await prepareTurn?.({
+			agentId: "agent-1",
+			conversationId: "conv-1",
+			parentAgentId: null,
+			iteration: 1,
+			abortSignal: controller.signal,
+			systemPrompt: "You are helpful.",
+			tools: [],
+			messages,
+			apiMessages: messages,
+			model: {
+				id: "mock-model",
+				provider: "anthropic",
+				info: { id: "mock-model", maxInputTokens: 10 },
+			},
+		});
+		// The provider was never asked: no physical request was dispatched
+		// for a compaction the user had already cancelled.
+		expect(createHandlerMock).not.toHaveBeenCalled();
 		expect(log).not.toHaveBeenCalledWith(
 			"Agentic compaction failed; falling back to basic compaction",
 			expect.anything(),
