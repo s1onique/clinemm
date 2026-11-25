@@ -197,9 +197,10 @@ export interface BoundedObjectivePolicy {
 	 * the observable facts of the objective's execution and returns whether
 	 * the objective's verification condition was MET.
 	 *
-	 * Returning `undefined` means "no opinion" — the runtime then falls
-	 * back to its OWN structural check (an executable command that succeeded
-	 * during the objective's rounds).
+	 * Returning `undefined` means "no opinion" — the runtime then applies
+	 * its OWN structural check, which requires an execution receipt that
+	 * CORRELATES with the objective's required verification gate. An
+	 * unrelated successful command is NOT verification evidence.
 	 *
 	 * The callback MUST be pure and side-effect free. It MUST NOT throw; a
 	 * throwing callback is treated as "no opinion".
@@ -208,6 +209,86 @@ export interface BoundedObjectivePolicy {
 		objective: BoundedObjective,
 		facts: BoundedObjectiveObservationFacts,
 	) => boolean | undefined;
+	/**
+	 * The REQUIRED VERIFICATION GATE of a bounded objective.
+	 *
+	 * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-01.
+	 *
+	 * The gate is the SPECIFIC executable the objective's verification
+	 * condition refers to. It is supplied by the HOST, which owns the
+	 * workspace and the executable gates, and it is expressed as a
+	 * SUBSTRING of the command that must run.
+	 *
+	 * When a gate is supplied, the runtime's own structural verification
+	 * requires an execution receipt whose command CORRELATES with the gate
+	 * AND whose outcome was SUCCESS. An unrelated successful command, a
+	 * command count, or a model's assertion is not verification evidence.
+	 *
+	 * When NO gate is supplied, the host has not established which
+	 * executable proves the objective. The objective is then reported as
+	 * UNVERIFIED unless the host's `verifyObjective` callback returns an
+	 * explicit verdict. The runtime never falls back to "some command
+	 * succeeded".
+	 */
+	readonly verificationGate?: BoundedObjectiveVerificationGate;
+}
+
+/**
+ * The REQUIRED VERIFICATION GATE of a bounded objective.
+ *
+ * The gate identifies ONE executable that proves the objective. It carries
+ * no model text and no model authority: the host owns it.
+ */
+export interface BoundedObjectiveVerificationGate {
+	/**
+	 * A SUBSTRING that the executed command must contain.
+	 *
+	 * The substring match is structural and case-insensitive. It is a
+	 * HOST-declared identity of the gate, not a model assertion about what
+	 * would prove the objective.
+	 */
+	readonly commandSubstring: string;
+	/**
+	 * The host-defined tool name that runs the gate.
+	 *
+	 * When present, the gate is satisfied only by an execution of THAT
+	 * tool. When absent, any command-executing tool whose command carries
+	 * the substring satisfies the gate.
+	 */
+	readonly toolName?: string;
+}
+
+/**
+ * ONE STRUCTURED EXECUTION RECEIPT of a bounded objective's round.
+ *
+ * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-01.
+ *
+ * The receipt is the CORRELATION EVIDENCE between "the objective asked for
+ * a specific executable" and "that executable actually ran, and this is
+ * what happened". It carries the tool name, the command identity (when
+ * the tool call was command-shaped) and the OUTCOME — never the tool's
+ * output text, never file contents, never model reasoning.
+ */
+export interface BoundedObjectiveExecutionReceipt {
+	/** The host-defined tool name that was invoked. */
+	readonly toolName: string;
+	/**
+	 * The COMMAND the tool call carried, when the call was
+	 * command-shaped. `undefined` for a call that carried no command.
+	 */
+	readonly command?: string;
+	/**
+	 * Whether the tool call SUCCEEDED.
+	 *
+	 * A failed gate execution is a receipt too: it is the receipt that
+	 * proves the gate did NOT pass.
+	 */
+	readonly succeeded: boolean;
+	/**
+	 * Whether the tool call was an EDIT (a mutation) rather than a
+	 * command execution.
+	 */
+	readonly wasEdit: boolean;
 }
 
 /**
@@ -229,6 +310,76 @@ export interface BoundedObjectiveObservationFacts {
 	readonly successfulEdits: number;
 	/** How many commands executed SUCCESSFULLY during the objective. */
 	readonly executedCommands: number;
+	/**
+	 * The STRUCTURED EXECUTION RECEIPTS of the objective's rounds.
+	 *
+	 * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-01:
+	 * these receipts are the CORRELATION EVIDENCE the verification step
+	 * uses. They are what makes "the required gate actually ran and
+	 * passed" distinguishable from "some unrelated command succeeded".
+	 */
+	readonly receipts?: readonly BoundedObjectiveExecutionReceipt[];
+}
+
+/**
+ * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-01.
+ *
+ * THE STRUCTURAL VERIFICATION GATE CHECK.
+ *
+ * Decide whether the objective's required gate ACTUALLY RAN and PASSED,
+ * using ONLY the objective's structured execution receipts.
+ *
+ * The rules are:
+ *
+ *   - a receipt must be a COMMAND execution (an edit is never a gate),
+ *   - the receipt's command must CORRELATE with the gate's identity,
+ *   - the receipt must have SUCCEEDED,
+ *   - and — critically — a receipt that correlates with the gate but
+ *     FAILED means the gate did NOT pass. A later successful UNRELATED
+ *     command does not repair it: the gate's own outcome is what counts.
+ *
+ * With NO gate supplied, the answer is ALWAYS `false`: the host has not
+ * established which executable proves the objective, so the objective is
+ * UNVERIFIED. The runtime never falls back to "some command succeeded".
+ */
+export function isBoundedObjectiveGateSatisfied(
+	facts: BoundedObjectiveObservationFacts,
+	gate: BoundedObjectiveVerificationGate | undefined,
+): boolean {
+	if (!gate) {
+		return false;
+	}
+	const needle = gate.commandSubstring.trim().toLowerCase();
+	if (needle.length === 0) {
+		return false;
+	}
+	const receipts = facts.receipts ?? [];
+	// Find the receipts that CORRELATE with the gate. A correlated receipt
+	// that FAILED proves the gate did not pass, so the objective is not
+	// verified regardless of what else ran.
+	let sawCorrelatedReceipt = false;
+	for (const receipt of receipts) {
+		if (receipt.wasEdit) {
+			continue;
+		}
+		if (gate.toolName !== undefined && receipt.toolName !== gate.toolName) {
+			continue;
+		}
+		const command = receipt.command;
+		if (typeof command !== "string") {
+			continue;
+		}
+		if (!command.toLowerCase().includes(needle)) {
+			continue;
+		}
+		sawCorrelatedReceipt = true;
+		if (receipt.succeeded) {
+			return true;
+		}
+	}
+	// A correlated-but-failed gate is a definitive negative.
+	void sawCorrelatedReceipt;
+	return false;
 }
 
 /**
@@ -294,13 +445,147 @@ export const MAX_BOUNDED_OBJECTIVE_FIELD_LENGTH = 2000;
 export const MAX_BOUNDED_OBJECTIVE_REFERENCE_COUNT = 16;
 
 /**
+ * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-01.
+ *
+ * The CANONICAL PATH AUTHORITY used by the R2 authorisation boundary.
+ *
+ * WHY THIS EXISTS
+ * ---------------
+ * The original scope check was a LEXICAL PREFIX test: a candidate scope was
+ * accepted when it started with the authorised root followed by a separator.
+ * That accepted every path that ESCAPES the root through a traversal
+ * segment, because `/workspace/project/src/../tests/a.ts` literally starts
+ * with `/workspace/project/src/`.
+ *
+ * A lexical prefix test is not an authority test. The authority test is a
+ * CANONICAL CONTAINMENT test: the path is first reduced to its canonical
+ * form (`.` and `..` segments resolved, duplicate separators collapsed), and
+ * the canonical result is then required to be the authorised root itself or
+ * to live inside it.
+ *
+ * This helper is PURE and SYNTACTIC. It resolves the path TEXT; it does not
+ * touch the filesystem. A path that cannot be resolved canonically (a
+ * RELATIVE path, a path that escapes above the filesystem root) is reported
+ * as UNRESOLVABLE and is NEVER treated as "inside the root".
+ */
+export interface CanonicalScopePath {
+	/** The canonical absolute path, or `undefined` when unresolvable. */
+	readonly canonical: string | undefined;
+	/** Whether the path could be resolved canonically at all. */
+	readonly resolvable: boolean;
+	/** Why the path could not be resolved. */
+	readonly unresolvableReason?: "relative" | "escapes_root" | "empty";
+}
+
+/**
+ * Reduce an absolute POSIX-style path to its CANONICAL form.
+ *
+ * The rules are the POSIX lexical rules, applied textually:
+ *
+ *   - a leading `/` is the filesystem root,
+ *   - `.` segments are removed,
+ *   - `..` segments pop the preceding segment; popping past the root is an
+ *     ESCAPE and makes the path unresolvable,
+ *   - duplicate separators collapse,
+ *   - a trailing separator is removed.
+ *
+ * The result NEVER ends with `/` (except for the root itself), so
+ * containment is a plain prefix test on the canonical form.
+ */
+export function canonicalizeScopePath(raw: string): CanonicalScopePath {
+	if (typeof raw !== "string") {
+		return {
+			canonical: undefined,
+			resolvable: false,
+			unresolvableReason: "empty",
+		};
+	}
+	const trimmed = raw.trim();
+	if (trimmed.length === 0) {
+		return {
+			canonical: undefined,
+			resolvable: false,
+			unresolvableReason: "empty",
+		};
+	}
+	if (!trimmed.startsWith("/")) {
+		// A RELATIVE path has no canonical meaning without a base
+		// directory. The runtime never invents one: resolving a relative
+		// path against the process CWD would silently authorise a scope the
+		// user never named.
+		return {
+			canonical: undefined,
+			resolvable: false,
+			unresolvableReason: "relative",
+		};
+	}
+	const segments = trimmed.split("/");
+	const canonicalSegments: string[] = [];
+	for (const segment of segments) {
+		if (segment.length === 0 || segment === ".") {
+			continue;
+		}
+		if (segment === "..") {
+			if (canonicalSegments.length === 0) {
+				// Escaping above the filesystem root.
+				return {
+					canonical: undefined,
+					resolvable: false,
+					unresolvableReason: "escapes_root",
+				};
+			}
+			canonicalSegments.pop();
+			continue;
+		}
+		canonicalSegments.push(segment);
+	}
+	const canonical =
+		canonicalSegments.length === 0 ? "/" : `/${canonicalSegments.join("/")}`;
+	return { canonical, resolvable: true };
+}
+
+/**
+ * Whether a canonical path is the authorised root itself or lives inside it.
+ *
+ * The comparison is a canonical SEGMENT comparison: `/workspace/project/src`
+ * does NOT contain `/workspace/project/srcx`, because the segment boundary is
+ * respected.
+ */
+export function isPathWithinCanonicalRoot(
+	canonicalPath: string,
+	canonicalRoot: string,
+): boolean {
+	if (canonicalRoot === "/") {
+		return canonicalPath.startsWith("/");
+	}
+	return (
+		canonicalPath === canonicalRoot ||
+		canonicalPath.startsWith(`${canonicalRoot}/`)
+	);
+}
+
+/**
  * Whether a string is a usable bounded-objective field value.
+ *
+ * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-01:
+ *
+ * A field must be SINGLE-LINE. The rendered dispatch is a line-oriented
+ * template, and the compaction recogniser parses it by its own fixed frames.
+ * A field containing a newline therefore CANNOT survive the render/parse
+ * round trip: the injected line would be parsed as a frame boundary and the
+ * objective's identity would be lost after compaction.
+ *
+ * Rejecting multiline fields at the authorisation boundary keeps the
+ * invariant structural instead of relying on the renderer to sanitise
+ * model output.
  */
 function isUsableField(value: unknown): value is string {
 	return (
 		typeof value === "string" &&
 		value.trim().length > 0 &&
-		value.length <= MAX_BOUNDED_OBJECTIVE_FIELD_LENGTH
+		value.length <= MAX_BOUNDED_OBJECTIVE_FIELD_LENGTH &&
+		!value.includes("\n") &&
+		!value.includes("\r")
 	);
 }
 
@@ -380,6 +665,26 @@ export function validateBoundedObjective(
 		raw.successCondition,
 		raw.failureCondition,
 	] as const;
+	// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-01.
+	//
+	// The malformed check is SPLIT. The SECURITY-RELEVANT checks — the
+	// authority-escalation refusal and the constraint-conflict check — run
+	// FIRST, on the raw field text, so that a candidate which both breaks
+	// the template AND attempts to escape the parent's authority is reported
+	// as the AUTHORITY VIOLATION it is, rather than as a formatting
+	// complaint.
+	//
+	// A candidate whose field text is not even a string cannot be inspected
+	// for an escalation, so the type/emptiness check still runs first.
+	for (const field of requiredFields) {
+		if (typeof field !== "string" || field.trim().length === 0) {
+			return { valid: false, reason: "malformed" };
+		}
+	}
+	const rawCandidateText = requiredFields.join("\n").toLowerCase();
+	if (containsAuthorityEscalation(rawCandidateText)) {
+		return { valid: false, reason: "constraint_conflict" };
+	}
 	for (const field of requiredFields) {
 		if (!isUsableField(field)) {
 			return { valid: false, reason: "malformed" };
@@ -412,13 +717,83 @@ export function validateBoundedObjective(
 	const obligationReferences = raw.obligationReferences as string[];
 	const evidenceReferences = raw.evidenceReferences as string[];
 
+	// CONSTRAINT CONFLICT: the objective may not contradict an applicable
+	// parent constraint. The check is deliberately conservative: it only
+	// rejects when the candidate's own text ASSERTS the negation of a
+	// constraint's subject, because a false positive here would silently
+	// disable recovery.
+	//
+	// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-01.
+	//
+	// Two additions close the gaps the reviewer reproduced:
+	//
+	//   1. The constraint's SUBJECT is extracted from the WHOLE
+	//      prohibition sentence, not just from a bare "do not X" prefix,
+	//      and BOTH sides of the comparison are normalised. "Do not modify
+	//      tests." yields the subject "modify tests", so a first step that
+	//      says "rewrite the test suite" is caught by the shared artefact
+	//      vocabulary rather than by a substring match on the whole
+	//      sentence.
+	//
+	//   2. The candidate may not ISSUE AN INSTRUCTION that overrides the
+	//      parent's authority ("ignore all parent constraints", "you are
+	//      no longer bound by ..."). Model output is a PROPOSAL; a proposal
+	//      that asks to be promoted above the parent's authority is refused
+	//      outright, independently of the specific constraints present.
+	//
+	// The check runs BEFORE the structural scope check, because a
+	// constraint violation is the more specific finding: it names the
+	// parent's authority that the candidate contradicts.
+	const candidateHaystack =
+		`${objective}\n${firstStep}\n${mutationScope}\n${verificationCondition}\n${successCondition}\n${failureCondition}`.toLowerCase();
+	const normalizedCandidateHaystack =
+		normalizeConstraintSubject(candidateHaystack);
+	for (const constraint of context.parentConstraints) {
+		const negated = negatedSubject(constraint.trim().toLowerCase());
+		if (negated.length === 0) {
+			continue;
+		}
+		if (normalizedCandidateHaystack.includes(negated)) {
+			return { valid: false, reason: "constraint_conflict" };
+		}
+		// The candidate may name the SAME artefact class through a
+		// different verb ("rewrite the test suite" against "Do not
+		// modify tests."). The fixed vocabulary catches that shape
+		// without pretending to be a natural language engine.
+		if (contradictsConstraintVocabulary(candidateHaystack, negated)) {
+			return { valid: false, reason: "constraint_conflict" };
+		}
+	}
+	// READ-ONLY OBJECTIVE: an objective whose own scope declares it
+	// read-only must not authorize a mutation. A read-only scope may only
+	// be paired with a read-only first step.
+	if (
+		declaresReadOnlyScope(mutationScope) &&
+		authorizesMutation(firstStep, objective, successCondition)
+	) {
+		return { valid: false, reason: "constraint_conflict" };
+	}
+
 	// SCOPE EXPANSION: the objective's mutation scope must be INSIDE the
 	// parent's authorised scope.
 	//
-	// The check is a PATH CONTAINMENT test whenever the parent supplies
-	// authorised scope PATHS. A candidate scope that names a path outside
-	// every authorised path is rejected: that is exactly the case where the
-	// objective would widen the parent's authority.
+	// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-01.
+	//
+	// The check is a CANONICAL CONTAINMENT test whenever the parent supplies
+	// authorised scope PATHS. It is deliberately NOT a lexical prefix test:
+	//
+	//   - a traversal scope (`<root>/src/../tests/a.ts`) canonicalises
+	//     OUTSIDE the root and is rejected,
+	//   - a RELATIVE scope (`tests/a.ts`) has no canonical meaning and is
+	//     rejected — the runtime never invents a base directory for it,
+	//   - a PROSE scope that names no path at all is rejected, because an
+	//     UNRESOLVED scope must never become an IMPLICITLY UNRESTRICTED
+	//     scope.
+	//
+	// EVERY path the candidate names — in its mutation scope AND in its
+	// other free-text fields — must be inside the authorised root. A
+	// candidate cannot smuggle an out-of-scope path into its first step or
+	// its success condition.
 	//
 	// When the parent supplies no authorised paths (the parent did not name
 	// any), the runtime has no structural ceiling to enforce and the check
@@ -430,36 +805,52 @@ export function validateBoundedObjective(
 	// and never guesses at intent.
 	const authorisedPaths = context.parentMutationScopePaths ?? [];
 	if (authorisedPaths.length > 0) {
-		const candidatePaths = extractScopePaths(mutationScope);
-		if (candidatePaths.length > 0) {
-			const escaped = candidatePaths.filter(
-				(candidatePath) =>
-					!authorisedPaths.some(
-						(authorisedPath) =>
-							candidatePath === authorisedPath ||
-							candidatePath.startsWith(`${authorisedPath}/`),
-					),
-			);
-			if (escaped.length > 0) {
-				return { valid: false, reason: "scope_expansion" };
+		const canonicalRoots = authorisedPaths
+			.map((authorisedPath) => canonicalizeScopePath(authorisedPath))
+			.filter((resolved) => resolved.resolvable)
+			.map((resolved) => resolved.canonical as string);
+		// The candidate's OWN scope must resolve. A scope that names no
+		// path, or a path that cannot be resolved, is not "inside the
+		// root" — it is UNRESOLVED, and an unresolved scope is refused.
+		const candidateScopePaths = extractScopePaths(mutationScope);
+		if (candidateScopePaths.length === 0) {
+			return { valid: false, reason: "scope_expansion" };
+		}
+		const scopeIsInside = candidateScopePaths.every((candidatePath) => {
+			const resolved = canonicalizeScopePath(candidatePath);
+			if (!resolved.resolvable || resolved.canonical === undefined) {
+				return false;
 			}
+			return canonicalRoots.some((root) =>
+				isPathWithinCanonicalRoot(resolved.canonical as string, root),
+			);
+		});
+		if (!scopeIsInside) {
+			return { valid: false, reason: "scope_expansion" };
 		}
-	}
-
-	// CONSTRAINT CONFLICT: the objective may not contradict an applicable
-	// parent constraint. The check is deliberately conservative: it only
-	// rejects when the candidate's own text ASSERTS the negation of a
-	// constraint's subject, because a false positive here would silently
-	// disable recovery.
-	for (const constraint of context.parentConstraints) {
-		const negated = negatedSubject(constraint.trim().toLowerCase());
-		if (negated.length === 0) {
-			continue;
-		}
-		const haystack =
-			`${objective}\n${firstStep}\n${mutationScope}\n${verificationCondition}\n${successCondition}\n${failureCondition}`.toLowerCase();
-		if (haystack.includes(negated)) {
-			return { valid: false, reason: "constraint_conflict" };
+		// Every path named in ANY candidate field must be inside the
+		// authorised root as well.
+		const namedPaths = extractScopePaths(
+			[
+				objective,
+				firstStep,
+				mutationScope,
+				verificationCondition,
+				successCondition,
+				failureCondition,
+			].join("\n"),
+		);
+		const escapedFieldPath = namedPaths.some((namedPath) => {
+			const resolved = canonicalizeScopePath(namedPath);
+			if (!resolved.resolvable || resolved.canonical === undefined) {
+				return true;
+			}
+			return !canonicalRoots.some((root) =>
+				isPathWithinCanonicalRoot(resolved.canonical as string, root),
+			);
+		});
+		if (escapedFieldPath) {
+			return { valid: false, reason: "scope_expansion" };
 		}
 	}
 
@@ -541,8 +932,12 @@ export function validateBoundedObjective(
  *
  * The extraction is structural: it never interprets command text and never
  * evaluates anything.
+ *
+ * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-01: this
+ * helper is EXPORTED so the runtime's objective scope gate can resolve the
+ * SAME paths the validator resolved. One grammar, one authority.
  */
-function extractScopePaths(scope: string): string[] {
+export function extractScopePaths(scope: string): string[] {
 	const tokens = scope.split(/[\s,;]+/);
 	const paths: string[] = [];
 	for (const token of tokens) {
@@ -569,19 +964,234 @@ function extractScopePaths(scope: string): string[] {
  * Extract the subject a parent constraint NEGATES, when the constraint is
  * recognisably a prohibition.
  *
+ * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-01.
+ *
  * The grammar is intentionally tiny: only "do not X" / "don't X" /
- * "never X" produce a subject. Every other constraint form yields the empty
- * string, and an empty result means "no opinion" — the validator then
- * leaves the candidate alone.
+ * "never X" / "must not X" / "mustn't X" produce a subject. Every other
+ * constraint form yields the empty string, and an empty result means "no
+ * opinion" — the validator then leaves the candidate alone.
+ *
+ * The subject is NORMALISED so that the same prohibition can be matched
+ * against differently-worded candidate text: the trailing sentence
+ * punctuation is removed and the determiners that carry no authority are
+ * dropped, so "Do not modify tests." and "modify the tests" reduce to the
+ * same subject.
  */
 function negatedSubject(constraint: string): string {
-	const prefixes = ["do not ", "don't ", "never ", "must not ", "mustn't "];
+	const prefixes = [
+		"do not ",
+		"don't ",
+		"never ",
+		"must not ",
+		"mustn't ",
+		"should not ",
+		"shouldn't ",
+	];
 	for (const prefix of prefixes) {
-		if (constraint.startsWith(prefix)) {
-			return constraint.slice(prefix.length).trim();
+		if (!constraint.startsWith(prefix)) {
+			continue;
 		}
+		return normalizeConstraintSubject(constraint.slice(prefix.length).trim());
 	}
 	return "";
+}
+
+/**
+ * Normalise a prohibition's subject into a comparable form.
+ *
+ * The normalisation removes trailing sentence punctuation, lower-cases the
+ * text, and drops the DETERMINERS that carry no authority. It is applied to
+ * BOTH sides of the comparison, so "Do not modify tests." and "edit the
+ * forbidden directory" are both reduced to a comparable form.
+ */
+function normalizeConstraintSubject(subject: string): string {
+	return subject
+		.toLowerCase()
+		.replace(/[.!?,;:]+$/g, "")
+		.replace(/\b(the|a|an|any|all|of|to|in|at|on|for)\b/g, " ")
+		.replace(/\s+/g, " ")
+		.trim();
+}
+
+/**
+ * The TOKEN SEQUENCE of a normalised phrase.
+ *
+ * The tokens carry no punctuation, so "tests." and "tests" compare equal.
+ */
+function subjectTokens(normalized: string): string[] {
+	return normalized.length === 0
+		? []
+		: normalized.split(" ").filter((token) => token.length > 0);
+}
+
+/**
+ * The ARTEFACT-CLASS VOCABULARY the constraint check recognises.
+ *
+ * A prohibition names a class of artefacts ("tests", "the test suite"). The
+ * candidate is caught when it names the SAME class through a different verb
+ * ("rewrite", "update", "change", "delete").
+ *
+ * The vocabulary is an explicit, fixed list of English verbs and nouns. It
+ * is NOT a natural language engine: it recognises the canonical phrasings
+ * and refuses to guess beyond them.
+ */
+const CONSTRAINT_VERB_NOUNS: ReadonlyArray<{
+	readonly verbs: readonly string[];
+	readonly nouns: readonly string[];
+}> = [
+	{
+		verbs: ["modify", "rewrite", "update", "change", "edit", "alter", "patch"],
+		nouns: [
+			"test",
+			"tests",
+			"spec",
+			"specs",
+			"fixture",
+			"fixtures",
+			"snapshot",
+			"snapshots",
+		],
+	},
+	{
+		verbs: ["delete", "remove", "drop"],
+		nouns: ["test", "tests", "spec", "specs"],
+	},
+	{
+		verbs: ["read", "open", "cat", "inspect"],
+		nouns: [
+			"secret",
+			"secrets",
+			"credential",
+			"credentials",
+			"password",
+			"passwords",
+			"token",
+			"tokens",
+		],
+	},
+	{
+		verbs: ["commit", "push", "publish", "deploy", "release"],
+		nouns: ["commit", "commits", "branch", "branches", "release", "releases"],
+	},
+];
+
+/**
+ * Whether the candidate's text contradicts a prohibition by naming the same
+ * ARTEFACT CLASS through a different verb.
+ *
+ * For example, the parent constraint "Do not modify tests." and a candidate
+ * first step "Rewrite the test suite ..." share the noun class "test" and a
+ * mutation verb. The candidate is therefore in conflict with the parent's
+ * authority, even though it never repeats the constraint verbatim.
+ *
+ * The verb and the noun must ADJACENTLY co-occur in the candidate's own
+ * text. Requiring adjacency is what keeps the check from firing on an
+ * unrelated edit: "Edit the disposable target module" mentions the verb
+ * "edit" but never mentions a test artefact, so it does not contradict a
+ * prohibition about tests.
+ */
+function contradictsConstraintVocabulary(
+	candidateHaystack: string,
+	constraintSubject: string,
+): boolean {
+	const subjectNouns = new Set<string>();
+	for (const entry of CONSTRAINT_VERB_NOUNS) {
+		for (const noun of entry.nouns) {
+			if (constraintSubject.includes(noun)) {
+				subjectNouns.add(noun);
+			}
+		}
+	}
+	if (subjectNouns.size === 0) {
+		return false;
+	}
+	// The candidate is examined clause by clause, so a verb in one clause
+	// cannot be paired with a noun in another.
+	for (const clause of candidateHaystack.split(/[.;\n]/)) {
+		const tokens = subjectTokens(normalizeConstraintSubject(clause));
+		for (let index = 0; index + 1 < tokens.length; index += 1) {
+			const verb = tokens[index] as string;
+			const noun = tokens[index + 1] as string;
+			if (!subjectNouns.has(noun) && !subjectNouns.has(`${noun}s`)) {
+				continue;
+			}
+			const isMutationVerb = CONSTRAINT_VERB_NOUNS.some((entry) =>
+				entry.verbs.includes(verb),
+			);
+			if (isMutationVerb) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+/**
+ * The CANONICAL AUTHORITY-ESCALATION PHRASINGS.
+ *
+ * A model-selected objective is an UNTRUSTED PROPOSAL. It may request
+ * anything inside the parent's authorisation; it may never request to be
+ * treated as a higher authority than the parent task. These phrasings are
+ * refused outright, independently of the specific constraints present.
+ *
+ * The list is explicit and small. It does not claim to detect every
+ * possible paraphrase — it refuses the canonical escalations and lets the
+ * remaining constraint guards do their work.
+ */
+const AUTHORITY_ESCALATION_PATTERNS: readonly RegExp[] = [
+	/\bignore\s+(all\s+|any\s+|the\s+)?(parent\s+|user\s+|previous\s+|prior\s+)?(constraint|restriction|instruction|rule|direction|limit)s?\b/,
+	/\bdisregard\s+(all\s+|any\s+|the\s+)?(parent\s+|user\s+|previous\s+|prior\s+)?(constraint|restriction|instruction|rule|direction|limit)s?\b/,
+	/\b(override|bypass|revoke)\s+(all\s+|any\s+|the\s+)?(parent\s+|user\s+|previous\s+|prior\s+)?(constraint|restriction|instruction|rule|direction|limit)s?\b/,
+	/\byou\s+are\s+no\s+longer\s+(bound|constrained|restricted|limited)\s+by\b/,
+	/\bwithout\s+(any\s+)?(parent\s+|user\s+)?(constraint|restriction|limitation)s?\b/,
+	/\bignore\s+(the\s+)?(system|user)\s+prompt\b/,
+	/\bthis\s+instruction\s+(supersedes|overrides|replaces)\b/,
+	/\bnew\s+authori[sz]ation\b/,
+];
+
+/**
+ * Whether the candidate's text attempts an authority escalation.
+ */
+function containsAuthorityEscalation(candidateHaystack: string): boolean {
+	return AUTHORITY_ESCALATION_PATTERNS.some((pattern) =>
+		pattern.test(candidateHaystack),
+	);
+}
+
+/**
+ * Whether a mutation scope declares itself READ-ONLY.
+ *
+ * A read-only scope is an explicit statement by the candidate that no
+ * mutation is permitted. Such an objective may not authorize a mutation.
+ */
+function declaresReadOnlyScope(mutationScope: string): boolean {
+	const normalized = mutationScope.toLowerCase();
+	return (
+		normalized.includes("read-only") ||
+		normalized.includes("read only") ||
+		normalized.includes("readonly") ||
+		/\bno\s+(mutation|mutations|write|writes|edits?)\b/.test(normalized)
+	);
+}
+
+/**
+ * Whether the candidate's own text authorizes a MUTATION.
+ *
+ * The vocabulary is the same fixed list used for the constraint check: a
+ * mutation verb combined with an artefact class. It is deliberately not a
+ * general natural language analysis; it recognises the canonical mutation
+ * phrasings and refuses to guess beyond them.
+ */
+function authorizesMutation(...fields: readonly string[]): boolean {
+	const haystack = fields.join("\n").toLowerCase();
+	for (const entry of CONSTRAINT_VERB_NOUNS) {
+		const hasVerb = entry.verbs.some((verb) => haystack.includes(verb));
+		const hasNoun = entry.nouns.some((noun) => haystack.includes(noun));
+		if (hasVerb && hasNoun) {
+			return true;
+		}
+	}
+	return false;
 }
 
 /**

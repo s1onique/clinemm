@@ -279,6 +279,30 @@ export interface HostClientContext {
 	isMultiRoot: boolean
 }
 
+/**
+ * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-01.
+ *
+ * The EXPLICIT DOGFOOD OPT-IN for the R2 bounded-objective recovery.
+ *
+ * R2 is EXPERIMENTAL. It is NOT enabled for ordinary production sessions.
+ * This predicate is the ONLY thing that can enable it, and it is an
+ * environment opt-in rather than a persisted setting:
+ *
+ *   - it is a per-invocation deliberate choice,
+ *   - it cannot be enabled by accident by a workspace file, a project file
+ *     or a task payload,
+ *   - it is ABSENT from every ordinary session, and with the policy key
+ *     absent the runtime behaves EXACTLY as it did before R2 existed:
+ *     no selection inference, no dispatch, no recovery, no accounting.
+ *
+ * The value must be exactly "1" or "true" (case-insensitive). Any other
+ * value — including an empty string — leaves R2 disabled.
+ */
+export function isBoundedObjectiveDogfoodEnabled(): boolean {
+	const raw = process.env.CLINE_BOUNDED_OBJECTIVE_DOGFOOD
+	return typeof raw === "string" && (raw.trim() === "1" || raw.trim().toLowerCase() === "true")
+}
+
 export async function resolveClineRequestClientContext(): Promise<HostClientContext> {
 	const [hostIdentity, isMultiRoot] = await Promise.all([resolveHostIdentity(), resolveIsMultiRootWorkspace()])
 	return {
@@ -1587,15 +1611,31 @@ export async function buildSessionConfig(input: SessionConfigInput): Promise<Cor
 					// "unproductive" round is the requested behaviour, not a
 					// stall.
 					//
-					// EXPERIMENTAL: absent this policy the runtime behaves
-					// exactly as before. There is no settings UI and no new
-					// persistence.
-					boundedObjectivePolicy: {
-						enabled: true,
-						maxActivations: 2,
-						maxObjectiveRounds: 8,
-						maxSelectionInferences: 1,
-					},
+					// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01
+					// (AMENDMENT-01): R2 IS EXPLICITLY EXPERIMENTAL.
+					//
+					// It is NOT enabled for ordinary production sessions.
+					// The whole `boundedObjectivePolicy` key is ABSENT
+					// unless the DOGFOOD opt-in is explicitly selected, and
+					// with the key absent the runtime behaves EXACTLY as
+					// before: no selection inference, no dispatch, no
+					// recovery, no accounting.
+					//
+					// The dogfood selection is deliberately an ENVIRONMENT
+					// opt-in rather than a persisted setting: it is a
+					// per-invocation deliberate choice, it cannot be
+					// enabled by accident by a workspace or a project
+					// file, and it is absent from every ordinary session.
+					...(isBoundedObjectiveDogfoodEnabled()
+						? {
+								boundedObjectivePolicy: {
+									enabled: true,
+									maxActivations: 2,
+									maxObjectiveRounds: 8,
+									maxSelectionInferences: 1,
+								},
+							}
+						: {}),
 				}),
 		...reasoningConfig,
 		...(maxTokensPerTurn !== undefined ? { maxTokensPerTurn } : {}),

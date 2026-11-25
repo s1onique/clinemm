@@ -244,7 +244,11 @@ vi.mock("@shared/services/Logger", () => ({
 // Harness
 // ---------------------------------------------------------------------------
 
-const envSnapshot = { HOME: process.env.HOME, CLINE_DIR: process.env.CLINE_DIR }
+const envSnapshot = {
+	HOME: process.env.HOME,
+	CLINE_DIR: process.env.CLINE_DIR,
+	CLINE_BOUNDED_OBJECTIVE_DOGFOOD: process.env.CLINE_BOUNDED_OBJECTIVE_DOGFOOD,
+}
 let isolatedHomeDir = ""
 
 beforeEach(() => {
@@ -267,6 +271,11 @@ beforeEach(() => {
 afterEach(() => {
 	process.env.HOME = envSnapshot.HOME
 	process.env.CLINE_DIR = envSnapshot.CLINE_DIR
+	if (envSnapshot.CLINE_BOUNDED_OBJECTIVE_DOGFOOD === undefined) {
+		delete process.env.CLINE_BOUNDED_OBJECTIVE_DOGFOOD
+	} else {
+		process.env.CLINE_BOUNDED_OBJECTIVE_DOGFOOD = envSnapshot.CLINE_BOUNDED_OBJECTIVE_DOGFOOD
+	}
 	rmSync(isolatedHomeDir, { recursive: true, force: true })
 })
 
@@ -285,11 +294,24 @@ async function buildProductionConfig(mode: "act" | "plan") {
 }
 
 // ---------------------------------------------------------------------------
-// Q1 / Q2 — the producer activates the R2 policy in ACT mode only
+// Q1 / Q2 — the producer activates the R2 policy only under the EXPLICIT
+//           DOGFOOD opt-in, and only in ACT mode
 // ---------------------------------------------------------------------------
 
 describe("ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 / Q1-Q2", () => {
-	it("Q1: ACT mode activates the INTENDED R2 policy", async () => {
+	it("Q1: an ORDINARY ACT session does NOT activate the R2 policy — R2 stays EXPERIMENTAL", async () => {
+		// No dogfood opt-in: the ordinary production path.
+		delete process.env.CLINE_BOUNDED_OBJECTIVE_DOGFOOD
+		const config = await buildProductionConfig("act")
+		// The whole block is ABSENT, not merely disabled. With the policy
+		// absent the runtime behaves EXACTLY as it did before R2 existed.
+		expect(config.boundedObjectivePolicy).toBeUndefined()
+		// R1's ACT-only scoping is unchanged.
+		expect(config.executionStagnationPolicy).toBeDefined()
+	})
+
+	it("Q1b: the EXPLICIT dogfood opt-in activates the INTENDED R2 policy", async () => {
+		process.env.CLINE_BOUNDED_OBJECTIVE_DOGFOOD = "1"
 		const config = await buildProductionConfig("act")
 		const policy = config.boundedObjectivePolicy
 		expect(policy).toBeDefined()
@@ -301,7 +323,8 @@ describe("ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 / Q1-Q2", () => {
 		expect(policy?.maxSelectionInferences).toBe(1)
 	})
 
-	it("Q2: PLAN mode does NOT activate the R2 policy", async () => {
+	it("Q2: PLAN mode does NOT activate the R2 policy even under the dogfood opt-in", async () => {
+		process.env.CLINE_BOUNDED_OBJECTIVE_DOGFOOD = "1"
 		const config = await buildProductionConfig("plan")
 		// The whole block is ABSENT, not merely disabled. In PLAN mode the
 		// agent is forbidden to edit, so an unproductive round is the
@@ -319,6 +342,9 @@ describe("ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 / Q1-Q2", () => {
 
 describe("ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 / Q3", () => {
 	it("Q3: the R2 policy REACHES THE ACTUAL RUNTIME (it survives the host's AgentConfig forwarding seam)", async () => {
+		// The EXPLICIT dogfood opt-in: R2 is experimental and is not
+		// enabled for ordinary production sessions.
+		process.env.CLINE_BOUNDED_OBJECTIVE_DOGFOOD = "1"
 		const config = await buildProductionConfig("act")
 		expect(config.boundedObjectivePolicy).toBeDefined()
 
@@ -381,6 +407,8 @@ describe("ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 / Q4", () => {
 		const { AgentRuntime } = await import("@cline/agents")
 
 		// The policy the PRODUCTION producer actually built.
+		// The EXPLICIT dogfood opt-in: R2 is experimental.
+		process.env.CLINE_BOUNDED_OBJECTIVE_DOGFOOD = "1"
 		const config = await buildProductionConfig("act")
 		const policy = config.boundedObjectivePolicy
 		expect(policy).toBeDefined()

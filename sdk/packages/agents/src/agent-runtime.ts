@@ -49,9 +49,11 @@ import {
 	applyExecutionStagnationDecision,
 	assertProviderRequestWithinBudget,
 	type BoundedObjective,
+	type BoundedObjectiveExecutionReceipt,
 	type BoundedObjectiveObservationFacts,
 	type BoundedObjectivePolicy,
 	buildCompletionToolReminderMessage,
+	canonicalizeScopePath,
 	captureAgentUnexpectedReasoningTokens,
 	captureSdkError,
 	captureTaskLifecycleEvent,
@@ -65,7 +67,10 @@ import {
 	EDIT_OBSERVATION_SINK_METADATA_KEY,
 	estimateRequestInputTokens,
 	estimateTokens,
+	extractScopePaths,
 	foldExecutionRound,
+	isBoundedObjectiveGateSatisfied,
+	isPathWithinCanonicalRoot,
 	isProviderDispatchRecordRequired,
 	MODEL_BEHAVIOR_TRACE_UNAVAILABLE,
 	MODEL_BEHAVIOR_WIRE_REASONING_REQUEST_ID_METADATA_KEY,
@@ -647,6 +652,71 @@ function parseBoundedObjectiveCandidate(text: string): unknown | undefined {
 	return undefined;
 }
 
+/**
+ * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-01.
+ *
+ * Extract the COMMAND IDENTITY of ONE tool call.
+ *
+ * The identity is the command TEXT the call carried — never the tool's
+ * OUTPUT. It is what makes a required verification gate correlatable with
+ * the execution that was supposed to run it.
+ *
+ * The shapes are the ones the runtime's own command classification already
+ * recognises: a `commands` ARRAY of strings, a single `command` string, or
+ * a `cmd` string. A call that carries no command yields `undefined`.
+ */
+function extractToolCallCommandIdentity(input: unknown): string | undefined {
+	if (typeof input === "string") {
+		return input.length > 0 ? input : undefined;
+	}
+	if (typeof input !== "object" || input === null) {
+		return undefined;
+	}
+	const record = input as Record<string, unknown>;
+	const commands = record.commands;
+	if (Array.isArray(commands)) {
+		const parts = commands
+			.filter((entry): entry is string => typeof entry === "string")
+			.map((entry) => entry.trim())
+			.filter((entry) => entry.length > 0);
+		return parts.length > 0 ? parts.join(" && ") : undefined;
+	}
+	if (typeof record.command === "string" && record.command.trim().length > 0) {
+		return record.command.trim();
+	}
+	if (typeof record.cmd === "string" && record.cmd.trim().length > 0) {
+		return record.cmd.trim();
+	}
+	return undefined;
+}
+
+/**
+ * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-01.
+ *
+ * Extract the TARGET PATH of ONE mutating tool call.
+ *
+ * The shapes are the ones the runtime's own edit classification already
+ * recognises: a `path` string, or a `file_path` string. A call that
+ * carries no explicit path yields `undefined`.
+ *
+ * The runtime never derives a target path from command TEXT: the
+ * command-policy layer and the sandbox remain the authority for command
+ * contents, and guessing would be provider-specific string matching.
+ */
+function extractToolCallTargetPath(input: unknown): string | undefined {
+	if (typeof input !== "object" || input === null) {
+		return undefined;
+	}
+	const record = input as Record<string, unknown>;
+	for (const key of ["path", "file_path"]) {
+		const value = record[key];
+		if (typeof value === "string" && value.trim().length > 0) {
+			return value.trim();
+		}
+	}
+	return undefined;
+}
+
 export class AgentRuntimeAbortError extends Error {
 	readonly reason?: unknown;
 
@@ -1177,12 +1247,22 @@ export class AgentRuntime {
 		successfulEdits: number;
 		executedCommands: number;
 		awaitingBackgroundWork: boolean;
+		/**
+		 * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-01.
+		 *
+		 * The STRUCTURED EXECUTION RECEIPTS of this round. Each receipt
+		 * carries the tool name, the command identity (when the call was
+		 * command-shaped) and the outcome — the CORRELATION EVIDENCE the
+		 * R2 verification gate uses.
+		 */
+		receipts: BoundedObjectiveExecutionReceipt[];
 	} = {
 		toolNames: [],
 		editAttempts: 0,
 		successfulEdits: 0,
 		executedCommands: 0,
 		awaitingBackgroundWork: false,
+		receipts: [],
 	};
 	/**
 	 * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 (R2).
@@ -2114,12 +2194,28 @@ export class AgentRuntime {
 			);
 			if (hostVerdict !== undefined) {
 				this.applyHostProductivityVerdict(hostVerdict, result);
+				this.recordBoundedObjectiveReceipt(
+					toolName,
+					input,
+					result,
+					hostVerdict === "edited",
+				);
 				return;
 			}
 			const classified = this.classifyToolCallProductivity(
 				toolName,
 				input,
 				result,
+			);
+			// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-01:
+			// the STRUCTURED RECEIPT is recorded for EVERY tool call, so the
+			// R2 verification gate can correlate the required executable
+			// with its actual outcome.
+			this.recordBoundedObjectiveReceipt(
+				toolName,
+				input,
+				result,
+				classified.kind === "edit",
 			);
 			if (classified.kind === "edit") {
 				this.executionRoundFacts.editAttempts += 1;
@@ -2154,6 +2250,39 @@ export class AgentRuntime {
 		} catch {
 			// Observation isolation: instrumentation NEVER affects a tool call.
 		}
+	}
+
+	/**
+	 * Record ONE STRUCTURED EXECUTION RECEIPT for the current round.
+	 *
+	 * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-01.
+	 *
+	 * The receipt is the CORRELATION EVIDENCE the R2 verification gate
+	 * uses. It records:
+	 *
+	 *   - the host-defined tool name,
+	 *   - the COMMAND IDENTITY of the call, when the call was
+	 *     command-shaped (the commands are joined into one identity
+	 *     string — the receipt never carries the tool's OUTPUT),
+	 *   - the OUTCOME (success or failure),
+	 *   - and whether the call was an EDIT.
+	 *
+	 * A failed command is a receipt too. It is the receipt that proves the
+	 * required gate did NOT pass.
+	 */
+	private recordBoundedObjectiveReceipt(
+		toolName: string,
+		input: unknown,
+		result: { output: unknown; isError?: boolean } | undefined,
+		wasEdit: boolean,
+	): void {
+		const command = extractToolCallCommandIdentity(input);
+		this.executionRoundFacts.receipts.push({
+			toolName,
+			...(command === undefined ? {} : { command }),
+			succeeded: result?.isError !== true,
+			wasEdit,
+		});
 	}
 
 	/**
@@ -2513,6 +2642,7 @@ export class AgentRuntime {
 			editAttempts: 0,
 			successfulEdits: 0,
 			executedCommands: 0,
+			receipts: [],
 		};
 		await this.emit({
 			type: "status-notice",
@@ -2951,6 +3081,11 @@ export class AgentRuntime {
 	 * The facts are the SAME structural observations the stagnation
 	 * accounting already collects. They are the input to the verification
 	 * step.
+	 *
+	 * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-01:
+	 * the round's STRUCTURED EXECUTION RECEIPTS are folded in as well.
+	 * The receipts are what makes the required gate correlatable with its
+	 * actual outcome.
 	 */
 	private accumulateBoundedObjectiveFacts(): void {
 		const objective = this.activeBoundedObjective;
@@ -2967,6 +3102,10 @@ export class AgentRuntime {
 				this.boundedObjectiveFacts.successfulEdits + facts.successfulEdits,
 			executedCommands:
 				this.boundedObjectiveFacts.executedCommands + facts.executedCommands,
+			receipts: [
+				...(this.boundedObjectiveFacts.receipts ?? []),
+				...facts.receipts,
+			],
 		};
 	}
 
@@ -2977,20 +3116,30 @@ export class AgentRuntime {
 	 * the verification consults the OBSERVABLE tool outcomes of the
 	 * objective's own execution.
 	 *
-	 * The host MAY supply a more precise judgement (it owns the workspace
-	 * and the executable gates). When it declines, the runtime falls back
-	 * to its OWN structural check.
+	 * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-01.
 	 *
-	 * The structural check requires an EXECUTED COMMAND. A successful
-	 * native edit is NOT sufficient: an edit only shows that the file
-	 * changed, never that the change is correct. For a regression
-	 * objective the expected discriminator is the test that fails before
-	 * the edit and passes after it; for a repair objective it is the
-	 * relevant focused verification. Both are executable commands, and an
-	 * inspection never satisfies either.
+	 * The previous fallback — "at least one command executed successfully"
+	 * — is REMOVED. It accepted an UNRELATED successful command as proof
+	 * that the objective's own verification condition had been met, which
+	 * is exactly the failure the reviewer reproduced.
 	 *
-	 * The check therefore requires at least one SUCCESSFULLY EXECUTED
-	 * command during the objective's own rounds.
+	 * The verification now has TWO authorities, in order:
+	 *
+	 *   1. The HOST's `verifyObjective` callback. It owns the workspace and
+	 *      the executable gates, so its verdict is authoritative. Returning
+	 *      `undefined` means "no opinion" — and a THROWING callback is
+	 *      treated as "no opinion" too.
+	 *
+	 *   2. The RUNTIME'S OWN STRUCTURAL GATE CHECK. It requires an
+	 *      execution receipt whose COMMAND CORRELATES with the host's
+	 *      declared verification gate AND whose outcome was SUCCESS. A
+	 *      successful edit is not sufficient: an edit only shows that the
+	 *      file changed, never that the change is correct. A successful
+	 *      UNRELATED command is not sufficient either.
+	 *
+	 * When the host declared NO gate and its callback declined, the
+	 * objective is UNVERIFIED. The runtime reports that honestly instead
+	 * of manufacturing a success.
 	 */
 	private isBoundedObjectiveVerified(): boolean {
 		const objective = this.activeBoundedObjective;
@@ -3009,10 +3158,15 @@ export class AgentRuntime {
 				}
 			} catch {
 				// A throwing host callback is treated as "no opinion"; the
-				// runtime's own structural check applies.
+				// runtime's own structural gate check applies. A host that
+				// cannot establish the verification is NOT evidence of
+				// verification.
 			}
 		}
-		return this.boundedObjectiveFacts.executedCommands > 0;
+		return isBoundedObjectiveGateSatisfied(
+			this.boundedObjectiveFacts,
+			policy?.verificationGate,
+		);
 	}
 
 	/**
@@ -3096,6 +3250,180 @@ export class AgentRuntime {
 	}
 
 	/**
+	 * CLOSE OUT an ACTIVE bounded objective at the run's TERMINAL
+	 * boundary.
+	 *
+	 * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-01.
+	 *
+	 * The in-loop evaluation only runs when the run CONTINUES. When the
+	 * run ends with an objective still active, the objective would
+	 * otherwise disappear without a verdict — the runtime would have
+	 * consumed its activation allowance and produced no machine-readable
+	 * fact at all.
+	 *
+	 * This method produces that fact TRUTHFULLY:
+	 *
+	 *   - if the objective's required verification gate HAS passed by the
+	 *     time the run ends, the objective is reported COMPLETED,
+	 *   - otherwise it is reported FAILED, with the reason
+	 *     `objective_run_ended_without_verification`.
+	 *
+	 * It NEVER manufactures success, and it NEVER completes the parent
+	 * task: the parent's completion contract is unchanged.
+	 */
+	private async finalizeActiveBoundedObjective(): Promise<void> {
+		const objective = this.activeBoundedObjective;
+		if (!objective) {
+			return;
+		}
+		this.accumulateBoundedObjectiveFacts();
+		const verified = this.isBoundedObjectiveVerified();
+		this.activeBoundedObjective = undefined;
+		if (verified) {
+			this.lastBoundedObjectiveOutcome = {
+				kind: "completed",
+				objective,
+			};
+			await this.emit({
+				type: "status-notice",
+				snapshot: this.snapshot(),
+				message: `bounded objective verified: ${objective.objective} — returning execution to the parent task`,
+				metadata: {
+					kind: "bounded_objective_recovery",
+					reason: "bounded_objective_verified",
+					phase: "objective_verified",
+					iteration: this.state.iteration,
+					objective: objective.objective,
+					rounds: this.boundedObjectiveFacts.rounds,
+					executedCommands: this.boundedObjectiveFacts.executedCommands,
+					successfulEdits: this.boundedObjectiveFacts.successfulEdits,
+				},
+			});
+			await this.emitBoundedObjectiveOutcome(undefined);
+			return;
+		}
+		this.lastBoundedObjectiveOutcome = {
+			kind: "failed",
+			reason: "objective_run_ended_without_verification",
+			objective,
+		};
+		await this.emit({
+			type: "status-notice",
+			snapshot: this.snapshot(),
+			message: `bounded objective did not verify before the run ended — returning execution to the parent task without claiming success`,
+			metadata: {
+				kind: "bounded_objective_recovery",
+				reason: "bounded_objective_unverified",
+				phase: "objective_failed",
+				iteration: this.state.iteration,
+				objective: objective.objective,
+				rounds: this.boundedObjectiveFacts.rounds,
+			},
+		});
+		await this.emitBoundedObjectiveOutcome(
+			"objective_run_ended_without_verification",
+		);
+	}
+
+	/**
+	 * THE OBJECTIVE SCOPE GATE — the refusal decision.
+	 *
+	 * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-01.
+	 *
+	 * Returns a refusal reason when the tool call would MUTATE a path
+	 * outside the ACTIVE objective's authorised scope, and `undefined`
+	 * otherwise.
+	 *
+	 * WHAT IT ENFORCES
+	 * -----------------
+	 * The active objective may only NARROW the parent's authority, and the
+	 * narrowing is enforced HERE — at the tool-execution boundary — not
+	 * merely asserted in the dispatch text the model reads.
+	 *
+	 * WHAT IT DOES NOT CLAIM
+	 * ----------------------
+	 * The gate is honest about its own limits:
+	 *
+	 *   - It applies to tool calls whose input carries an EXPLICIT path.
+	 *     A command tool whose command text names a path is NOT inspected:
+	 *     the runtime never parses command text, because that would be
+	 *     provider-specific string matching. The COMMAND-POLICY layer and
+	 *     the SANDBOX remain the authority for command contents.
+	 *   - It applies only while an objective is active.
+	 *   - It applies only when the objective's scope resolved to a
+	 *     canonical root. An objective whose scope did NOT resolve has no
+	 *     narrower scope to enforce; the parent's own authorisation remains
+	 *     the only authority in that case, and the runtime says so rather
+	 *     than pretending a narrower scope exists.
+	 */
+	private refuseToolCallOutsideActiveObjectiveScope(
+		toolName: string,
+		input: unknown,
+	): string | undefined {
+		const objective = this.activeBoundedObjective;
+		if (!objective) {
+			return undefined;
+		}
+		// The gate applies to MUTATIONS only. A read-only tool call cannot
+		// widen the parent's authority.
+		const classified = this.classifyToolCallProductivity(
+			toolName,
+			input,
+			undefined,
+		);
+		if (classified.kind !== "edit") {
+			return undefined;
+		}
+		const targetPath = extractToolCallTargetPath(input);
+		if (targetPath === undefined) {
+			return undefined;
+		}
+		const scopeRoots = this.resolveActiveObjectiveScopeRoots(objective);
+		if (scopeRoots.length === 0) {
+			// The objective's scope did NOT resolve to a canonical root.
+			// There is no narrower scope to enforce. The parent's own
+			// authorisation — enforced by the existing workspace, sandbox
+			// and command-policy layers — remains the only authority.
+			return undefined;
+		}
+		const resolvedTarget = canonicalizeScopePath(targetPath);
+		const targetCanonical = resolvedTarget.canonical;
+		if (!resolvedTarget.resolvable || targetCanonical === undefined) {
+			// A path that cannot be canonicalised cannot be shown to be
+			// inside the scope, so the mutation is refused.
+			return `Tool "${toolName}" was refused by the active bounded objective: the target path could not be resolved against the objective's authorised mutation scope`;
+		}
+		const inside = scopeRoots.some((root) =>
+			isPathWithinCanonicalRoot(targetCanonical, root),
+		);
+		if (inside) {
+			return undefined;
+		}
+		return `Tool "${toolName}" was refused by the active bounded objective: the target path is outside the objective's authorised mutation scope`;
+	}
+
+	/**
+	 * The CANONICAL ROOTS of the ACTIVE objective's authorised mutation
+	 * scope.
+	 *
+	 * Returns an EMPTY list when the objective's scope could not be
+	 * resolved — the honest representation of "there is no narrower scope
+	 * to enforce".
+	 */
+	private resolveActiveObjectiveScopeRoots(
+		objective: BoundedObjective,
+	): string[] {
+		const roots: string[] = [];
+		for (const candidate of extractScopePaths(objective.mutationScope)) {
+			const resolved = canonicalizeScopePath(candidate);
+			if (resolved.resolvable && resolved.canonical !== undefined) {
+				roots.push(resolved.canonical);
+			}
+		}
+		return roots;
+	}
+
+	/**
 	 * Emit the explicit internal recovery outcome.
 	 *
 	 * It is the machine-readable fact a future R3 consumer acts on. It
@@ -3169,6 +3497,7 @@ export class AgentRuntime {
 			successfulEdits: 0,
 			executedCommands: 0,
 			awaitingBackgroundWork: false,
+			receipts: [],
 		};
 	}
 
@@ -3392,6 +3721,7 @@ export class AgentRuntime {
 			editAttempts: 0,
 			successfulEdits: 0,
 			executedCommands: 0,
+			receipts: [],
 		};
 		this.lastBoundedObjectiveOutcome = undefined;
 
@@ -3569,6 +3899,12 @@ export class AgentRuntime {
 						}
 						continue;
 					}
+					// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01
+					// (AMENDMENT-01): close out an ACTIVE bounded
+					// objective at the run's TERMINAL boundary, so the
+					// recovery produces a truthful machine-readable
+					// verdict instead of disappearing with the run.
+					await this.finalizeActiveBoundedObjective();
 					const result = this.finishRun("completed", finalAssistantMessage);
 					await this.callAfterRunHooks(result);
 					await this.emit({
@@ -6898,6 +7234,43 @@ export class AgentRuntime {
 					...existingMeta,
 					inputParseError: validationError,
 				};
+			}
+		}
+
+		// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-01:
+		// THE OBJECTIVE SCOPE GATE.
+		//
+		// While a bounded objective is ACTIVE, the runtime enforces the
+		// objective's MUTATION SCOPE at the tool-execution boundary: a
+		// tool call that would mutate a path OUTSIDE the objective's
+		// authorised scope is refused BEFORE it reaches the approval chain
+		// and BEFORE the executor runs.
+		//
+		// This is the CONSERVATION of the parent's authorisation: the
+		// objective may only narrow the parent's authority, and the
+		// narrowing is enforced, not merely stated in the dispatch text.
+		//
+		// The gate is deliberately narrow and honest about its limits:
+		//
+		//   - it applies to tool calls whose input carries an EXPLICIT
+		//     path — the shape the runtime's own edit classification
+		//     already recognises,
+		//   - it applies only while an objective is active,
+		//   - and it applies only when the objective's scope RESOLVED to a
+		//     canonical root. When the objective's scope could not be
+		//     resolved to a canonical path, there is NO narrower scope to
+		//     enforce, and the runtime does NOT pretend otherwise: the
+		//     parent's own authorisation remains the only authority, and
+		//     the objective is reported as carrying an UNENFORCEABLE
+		//     scope.
+		if (tool && !skipReason) {
+			const scopeRefusal = this.refuseToolCallOutsideActiveObjectiveScope(
+				toolCall.toolName,
+				input,
+			);
+			if (scopeRefusal) {
+				skipReason = scopeRefusal;
+				approvalOutcome = "skipped";
 			}
 		}
 

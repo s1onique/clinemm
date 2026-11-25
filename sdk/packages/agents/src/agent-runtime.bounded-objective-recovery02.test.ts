@@ -475,6 +475,15 @@ describe("ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 / principal witness", 
 				maxActivations: 2,
 				maxObjectiveRounds: 8,
 				maxSelectionInferences: 1,
+				// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01
+				// (AMENDMENT-01): the REQUIRED VERIFICATION GATE. The
+				// objective is verified ONLY by the execution of this
+				// specific executable. An unrelated successful command is
+				// not verification evidence.
+				verificationGate: {
+					commandSubstring: "check-value",
+					toolName: "run_commands",
+				},
 			},
 		});
 
@@ -1110,6 +1119,14 @@ describe("ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 / remaining controls",
 				maxActivations: 2,
 				maxObjectiveRounds: 8,
 				maxSelectionInferences: 1,
+				// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01
+				// (AMENDMENT-01): the required verification gate. The
+				// objective is verified by the execution of THIS
+				// executable alone — not by "some command succeeded".
+				verificationGate: {
+					commandSubstring: "collect-evidence",
+					toolName: "run_commands",
+				},
 			},
 		});
 		const notices: string[] = [];

@@ -1,4 +1,131 @@
 
+# ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 (AMENDMENT-01) — GO_R2_BOUNDED_OBJECTIVE_DOGFOOD — 2026-11-25
+
+```text
+ACT_ID: ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-01
+TYPE: bounded runtime-seam repair (R2 bounded-objective authorisation and verification)
+VERDICT: GO_R2_BOUNDED_OBJECTIVE_DOGFOOD
+SCOPE: R2 only. R3 identified as the extension point, NOT implemented.
+PREDECESSOR: 4c7d54c2230b8edf17cd098d4319fb7d86046bce
+BRANCH: main
+EVIDENCE: docs/acts/ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01.md
+```
+
+**THE HALT WAS AUTHORITY NOT CONSERVED.** The predecessor's architecture was
+accepted. The reviewer independently executed the PRODUCTION validator and
+reproduced SEVEN invalid acceptances. A model-selected objective was being
+treated as an AUTHORIZATION GRANT rather than as an UNTRUSTED PROPOSAL.
+
+**P0-1 — THE AUTHORISATION BOUNDARY IS NOW A CANONICAL AUTHORITY.**
+
+  - The scope check is no longer a LEXICAL PREFIX test. It is a CANONICAL
+    CONTAINMENT test: `.` and `..` segments are resolved, duplicate
+    separators collapse, and the canonical result must be the authorised
+    root itself or live inside it. `<root>/src/../tests/a.ts` therefore
+    canonicalises OUTSIDE the root and is rejected.
+  - A RELATIVE scope is rejected: it has no canonical meaning, and the
+    runtime never invents a base directory for it.
+  - An UNRESOLVED scope is rejected: a prose scope ("the entire
+    repository") never becomes an IMPLICITLY UNRESTRICTED scope.
+  - EVERY path the candidate names — in its mutation scope AND in its other
+    free-text fields — must be inside the authorised root. A candidate
+    cannot smuggle an out-of-scope path into its first step.
+  - Model-generated PROSE cannot expand parent authorisation. A candidate
+    that ASSERTS the negation of a parent constraint is rejected, including
+    through a shared artefact-class vocabulary ("rewrite the test suite"
+    against "Do not modify tests."), and a candidate that ISSUES an
+    instruction overriding the parent's authority ("ignore all parent
+    constraints") is refused outright.
+  - A READ-ONLY objective may not authorize a mutation.
+  - A MULTILINE field is rejected: the rendered dispatch is a line-oriented
+    template and a newline would break the render/parse round trip that
+    carries the objective's identity across compaction.
+  - Model-generated objective fields are NEVER promoted into independently
+    authoritative system instructions: the objective remains a runtime-owned
+    REQUEST PROJECTION on the privileged channel, and the canonical
+    transcript is not mutated.
+
+**P0-2 — THE VERIFICATION BOUNDARY NO LONGER ACCEPTS AN UNRELATED COMMAND.**
+
+  - The predecessor's fallback — "at least one command executed
+    successfully" — is REMOVED. It accepted an UNRELATED successful
+    command as proof that the objective's own condition had been met.
+  - The runtime now records STRUCTURED EXECUTION RECEIPTS (tool name,
+    command identity, outcome) and the verification requires a receipt
+    whose command CORRELATES with the HOST-DECLARED verification gate AND
+    whose outcome was SUCCESS. A successful edit is not sufficient; a
+    successful unrelated command is not sufficient; a correlated gate that
+    FAILED is a definitive negative.
+  - When the host declares NO gate and its `verifyObjective` callback
+    declines or THROWS, the objective is reported UNVERIFIED. The runtime
+    never manufactures a success.
+  - An active objective is now closed out at the run's TERMINAL boundary
+    with a truthful verdict, so a recovery that ends with the run produces
+    a machine-readable fact instead of disappearing.
+  - A completed objective does NOT automatically satisfy the parent's
+    obligations.
+
+**EXECUTION AUTHORISATION IS CONSERVED AT THE TOOL BOUNDARY.** While an
+objective is active, a tool call that would mutate a path OUTSIDE the
+objective's authorised scope is REFUSED before it reaches the approval
+chain and before the executor runs. The gate is deliberately narrow and
+honest: it applies to tool calls carrying an EXPLICIT path, the runtime
+never parses command text (the command-policy layer and the sandbox remain
+the authority for command contents), and an objective whose scope did NOT
+resolve has NO narrower scope to enforce — the parent's own authorisation
+remains the only authority in that case.
+
+**THE COMPACTION CONSERVATION IS EXERCISED THROUGH THE ACTUAL RUNTIME.** No
+canonical transcript objective carrier was manufactured. The objective
+survives the request-preparation/compaction transition because it is
+RUNTIME-OWNED STATE re-projected on every request, while the compaction
+replaces the request's MESSAGES. The same active objective remains
+effective after compaction; the recovery allowance is NOT replenished; the
+parent's authorisation remains intact; after the objective completes,
+subsequent requests no longer carry it as active authority; and a LATER
+compaction cannot resurrect a completed objective. No second persistent
+task lifecycle was introduced.
+
+**R2 REMAINS EXPLICITLY EXPERIMENTAL.** The predecessor enabled R2 for
+every ordinary ACT-mode production session. The whole
+`boundedObjectivePolicy` key is now ABSENT unless an EXPLICIT dogfood
+opt-in is selected (`CLINE_BOUNDED_OBJECTIVE_DOGFOOD=1`). With the key
+absent the runtime behaves EXACTLY as it did before R2 existed: no
+selection inference, no dispatch, no recovery, no accounting. The opt-in is
+an environment choice rather than a persisted setting, so it cannot be
+enabled by accident by a workspace or a project file.
+
+**THE RED/GREEN IS MEASURED AGAINST THE PRODUCTION IMPLEMENTATION.**
+
+  @cline/shared   RED: 7 of the reproduced invalid acceptances fail against
+                  the predecessor's validator. GREEN: 23/23 focused
+                  pure-contract tests pass (13 pre-existing + 10
+                  amendment regressions).
+  @cline/agents   RED: 5 of 6 objective-verification regressions fail
+                  against the predecessor's runtime; the adversarial
+                  witness fails (the unauthorised mutation was EXECUTED).
+                  GREEN: 24/24 focused R2 tests pass across 5 files (12
+                  pre-existing + 12 amendment witnesses: verification,
+                  adversarial, compaction, accounting).
+  @cline/core     typecheck delta ZERO against the baseline diagnostic set
+                  (45 observed = 45 baseline, deduped). The affected
+                  context/tools suites pass (44/44).
+  apps/vscode     the R2 production-reachability bridge witness passes
+                  (5/5) with the dogfood gate asserted in both
+                  directions: an ordinary ACT session does NOT activate
+                  R2, the explicit opt-in DOES.
+  Biome           clean on every changed file.
+
+NO paid inference. NO VSIX build. NO ordinary/full-suite reruns beyond the
+affected packages' own focused suites. NO Factory documentation campaign.
+NO new workflow framework. NO R3.
+
+**THE GO VERDICT DOES NOT CLAIM LIVE BEHAVIOURAL EFFECTIVENESS.** A
+synthetic witness does not establish that a live model WOULD select a
+useful objective, nor that a live failure recovers behaviourally. The
+verdict is a bounded dogfood authorisation for a mechanism whose two P0
+authority boundaries are now closed and mechanically witnessed.
+
 # ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — GO_R2_BOUNDED_OBJECTIVE_DOGFOOD — 2026-11-25
 
 ```text

@@ -431,3 +431,141 @@ select a useful objective for the frozen session, nor that the frozen
 failure recovers behaviourally. The offline replay establishes eligibility
 and available evidence, not behavioural recovery. The live behavioural claim
 remains open, exactly as it did for R1.
+
+---
+
+# AMENDMENT-01 — HALT_R2_OBJECTIVE_AUTHORITY_NOT_CONSERVED
+
+Predecessor: `4c7d54c2230b8edf17cd098d4319fb7d86046bce`.
+
+The R2 architecture is accepted. This amendment repairs only the OBJECTIVE
+AUTHORIZATION, the OBJECTIVE VERIFICATION, and the directly related
+production delivery witnesses. No redesign.
+
+## A1. The halt
+
+The reviewer independently executed the PRODUCTION validator and reproduced
+these invalid acceptances, given parent mutation scope `/workspace/project/src`
+and constraint `Do not modify tests.`:
+
+| # | Case | Predecessor |
+|---|------|-------------|
+| 1 | `/workspace/project/src/../tests/a.ts` | ACCEPTED |
+| 2 | `tests/a.ts` | ACCEPTED |
+| 3 | prose scope `the entire repository` | ACCEPTED |
+| 4 | allowed mutationScope + a firstStep that rewrites tests | ACCEPTED |
+| 5 | a multiline firstStep instructing the model to ignore parent constraints | ACCEPTED |
+| 6 | a multiline objective validates but cannot survive render/parse round trip | ACCEPTED |
+
+And separately: the objective VERIFICATION accepted an UNRELATED successful
+command as proof that the objective's own verification condition had been
+met.
+
+## A2. The authorization repair
+
+A model-selected objective is an UNTRUSTED PROPOSAL, not an authorization
+grant. The repair reuses the existing production workspace, sandbox,
+tool-policy and parent-task authority mechanisms. It does NOT implement a
+general natural-language authorization engine.
+
+- **Structural scope validation uses the existing canonical path authority**
+  rather than lexical prefix matching: `canonicalizeScopePath` resolves `.`
+  and `..` segments and collapses duplicate separators; the canonical result
+  must be the authorised root itself or live inside it, on a segment
+  boundary.
+- **An unresolved mutation scope never becomes an implicitly unrestricted
+  scope.** A relative path has no canonical meaning and is refused; a prose
+  scope that names no path is refused.
+- **Model-generated prose cannot expand parent authorization.** A candidate
+  that asserts the negation of a parent constraint is refused, including
+  through a shared artefact-class vocabulary; a candidate that issues an
+  instruction overriding the parent's authority is refused outright.
+- **Model-generated objective fields are not promoted into independently
+  authoritative system instructions.** The objective remains a runtime-owned
+  request projection on the privileged channel; the canonical transcript is
+  not mutated.
+- **Actual tool execution remains subject to the original parent
+  authorization and any enforceable narrower objective scope.** While an
+  objective is active, a tool call that would mutate a path outside the
+  objective's authorised scope is refused before approval and before the
+  executor runs.
+- **A read-only objective does not authorize mutation.**
+
+**Where the existing system cannot establish a narrower enforceable mutation
+scope, the limitation is represented honestly.** The scope gate applies to
+tool calls carrying an EXPLICIT path; the runtime never parses command text
+(the command-policy layer and the sandbox remain the authority for command
+contents); and an objective whose scope did not resolve has NO narrower scope
+to enforce — the parent's own authorization remains the only authority in that
+case. No claim is made that arbitrary natural-language constraints have been
+mechanically validated.
+
+**Unsafe or unresolvable selection is rejected without asking the operator to
+intervene.** The attempted recovery allowance is consumed and a truthful
+failed recovery outcome is returned
+(`bounded objective recovery outcome: failed (selection_rejected:<reason>)`).
+
+## A3. The verification repair
+
+The discriminator — an objective requiring a specific executable regression,
+followed by an UNRELATED successful command — now asserts that the objective
+is NOT reported verified. The suite also covers: the required command
+executed but failed; a successful edit without verification; host
+verification unavailable or throwing; and the actual required executable
+gate succeeding.
+
+**The fallback that treated any successful command as objective verification
+is removed.** The runtime now records STRUCTURED EXECUTION RECEIPTS (tool
+name, command identity, outcome) and correlates them with the host-declared
+verification gate. If the required verification cannot be established, the
+objective is reported as UNVERIFIED. A model assertion, a command count or a
+successful unrelated operation is not verification evidence. A completed
+objective does not automatically satisfy parent obligations.
+
+## A4. The production witness
+
+The principal witness is strengthened once: real `AgentRuntime`, the actual
+production tool execution boundary, a disposable workspace, an actual
+executable regression with observable RED and GREEN outcomes, and scripted
+model responses only at the model boundary. It asserts the sequence R1
+exhausted → R2 selected → objective authorized → relevant mutation → exact
+verification gate passes → objective completed → parent continuation, and it
+adds an adversarial trajectory in which the model attempts an unauthorized
+mutation and an unrelated successful verification command. Neither may
+establish objective success. No paid inference.
+
+## A5. The compaction conservation
+
+No canonical transcript objective carrier was manufactured. The active
+runtime-owned objective is exercised through the actual
+request-preparation/compaction transition. The same active objective remains
+effective after compaction; the recovery allowance is not replenished; parent
+authorization remains intact; after objective completion, subsequent requests
+no longer carry it as active authority; and a later compaction cannot
+resurrect a completed objective. The existing runtime-owned state is reused
+and no second persistent task lifecycle is introduced.
+
+## A6. The small accounting controls
+
+The selection-inference allowance is checked against the specified
+per-activation contract (one inference per activation; a failed selection
+consumes it and is never retried). Cancellation during selection and during
+active objective execution is exercised. No general cancellation or
+provider-transport work was added.
+
+**R2 remains EXPLICITLY EXPERIMENTAL.** It is not enabled for ordinary
+production sessions: the whole `boundedObjectivePolicy` key is absent unless
+the dogfood configuration is deliberately selected
+(`CLINE_BOUNDED_OBJECTIVE_DOGFOOD=1`).
+
+## A7. Verification
+
+| Check | Result |
+|-------|--------|
+| Focused authorization regressions | RED 7/8 against the predecessor's validator; GREEN 23/23 |
+| Focused objective-verification regressions | RED 5/6 against the predecessor's runtime; GREEN 6/6 |
+| Principal runtime witness | GREEN 24/24 across 5 R2 files |
+| R1 conservation controls | GREEN 17/17 |
+| Actual compaction-delivery controls | GREEN 44/44 |
+| Affected typecheck | `@cline/shared` clean; `@cline/agents` clean; `@cline/core` delta ZERO against the baseline diagnostic set (45 = 45, deduped) |
+| Biome | clean on every changed file |

@@ -6,18 +6,25 @@
 
 export type {
 	BoundedObjective,
+	BoundedObjectiveExecutionReceipt,
 	BoundedObjectiveObservationFacts,
 	BoundedObjectivePolicy,
 	BoundedObjectiveRejectionReason,
 	BoundedObjectiveValidation,
+	BoundedObjectiveVerificationGate,
 } from "./bounded-objective";
 // ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01: the runtime
 // bounded-objective contract, shared by its producer (the agent runtime's
 // R2 recovery boundary), its validator, and the compaction task-contract
 // conservation path so the active objective's identity survives compaction.
 export {
+	type CanonicalScopePath,
+	canonicalizeScopePath,
 	DEFAULT_BOUNDED_OBJECTIVE_POLICY,
+	extractScopePaths,
+	isBoundedObjectiveGateSatisfied,
 	isBoundedObjectiveInstruction,
+	isPathWithinCanonicalRoot,
 	MAX_BOUNDED_OBJECTIVE_FIELD_LENGTH,
 	MAX_BOUNDED_OBJECTIVE_REFERENCE_COUNT,
 	parseBoundedObjectiveInstruction,
