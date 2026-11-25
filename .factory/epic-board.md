@@ -41561,3 +41561,88 @@ histories or model responses (everything under the gitignored `tmp/` tree) |
 VSIX packaging NOT EXECUTED | installed-live NOT EXECUTED | the whole SDK
 regression suite NOT RUN (no production dependency changed, as the ACT
 requires) | git diff --check CLEAN
+
+# ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION02-AMENDMENT02 — GO_PROVIDER_REASONING_REPAIR_INTEGRATION — 2026-11-25
+
+```text
+ACT_ID: ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION02-AMENDMENT02
+TYPE: bounded authority-construction correction (one P0 fail-open + one P0 credential-exposure)
+VERDICT: GO_PROVIDER_REASONING_REPAIR_INTEGRATION
+ENTRY_HEAD: c5ed60513ce8d0b2a38ec9b4372e5f70c2668576
+BRANCH: act/provider-reasoning-continuity-p0-01
+EVIDENCE: .factory/evidence/ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01/
+  04-exit-report.md
+  06-correction02-origin-authority.md
+  07-correction02-amendment-02-authority.md
+```
+
+**THE TWO AMENDMENT DEFECTS, REPRODUCED ON THE PREDECESSOR, THEN CLOSED.**
+
+```text
+UNRESOLVED_ROUTE_AUTHORITY=NONE
+  The predecessor returned the NONEMPTY SENTINEL "<providerId>\u0000" for an
+  unresolved route, so two DIFFERENT unresolved routes compared EQUAL and the
+  replay predicate granted authority across a boundary that was never
+  established. Absence is now EXPLICIT (the authority is `string | undefined`),
+  so two unresolved routes have NOTHING to compare.
+  RED: expected 'unresolved-route\u0000' to be undefined
+       expected 'unresolved-a\u0000' to be undefined
+
+MALFORMED_ROUTE_AUTHORITY=NONE
+  An invalid endpoint is an unresolved route, not a route.
+  RED: expected 'anthropic\u0000not a url' to be undefined
+
+PERSISTED_AUTHORITY_CREDENTIAL_EXCLUSION=PASS
+  The predecessor persisted the COMPLETE configured base URL, so a
+  credential-bearing URL reached the PERSISTED production content block:
+    "originAuthority": "anthropic\u0000https://user:supersecret@example.com/v1"
+  The base URL is now parsed and INSPECTED; user information, a query string
+  and a fragment each produce NO authority, so no credential-bearing URL is
+  persisted. The PATH is retained in full (it is route identity under this
+  repository's configuration contract), which is what keeps a same-host /
+  different-path pair two DISTINCT routes.
+  RED: expected '[{"id":"msg__z_Uph4i",…' not to contain
+       'SYNTHETIC-CREDENTIAL-a1b2c3'
+
+SAME_HOST_DIFFERENT_PATH_ISOLATION=PASS
+  O2b asserts the ACTUAL requested path ("/tenant-b/v1/messages") and the
+  forbidden-payload exclusion on EVERY destination attempt.
+
+ORIGIN_BOOKKEEPING_WIRE_EXCLUSION=PASS
+  The obsolete "__clineReasoningOrigin" assertion was replaced with an
+  assertion against the ACTUAL "originAuthority" field.
+
+SWITCH_BACK_NONVACUOUS=PASS
+  The compatible switch-back request collection is asserted non-empty before
+  it is looped over.
+
+COMPATIBLE_ROUTE_REPLAY=PASS
+  Ordinary credential-free MiniMax and Anthropic replay is byte-for-byte
+  unchanged; the normal default-provider resolution is not regressed.
+
+FOCUSED_GATE=PASS
+  agents 15/15, core 47/47, llms 499/514 (the 15 failures are the IDENTICAL
+  pre-existing resolvePortableReasoning baseline, verified by re-running on
+  the predecessor).
+
+ACT_OWNED_DIAGNOSTICS=NONE
+  The core ordinary gate's one added identity is a LOAD-SENSITIVE
+  plugin-worker TIMEOUT test; it fails IDENTICALLY on the predecessor when
+  run in isolation. Typechecks: llms/shared/agents exit 0; core has ZERO new
+  diagnostics (byte-identical sorted diagnostic set). Biome: no findings.
+
+SECRET_SCANNING=NOT_EXECUTED
+  The gitleaks binary is not installed in this environment. The explicit
+  NOT_EXECUTED disposition is retained for the integration environment.
+```
+
+**SCOPE.** The production correction is two files:
+`sdk/packages/llms/src/providers/ai-sdk.ts` (the authority construction and
+the destination-authority value type) and
+`sdk/packages/shared/src/llms/messages.ts` (a documentation comment).
+`agent-message-codec.ts` and `agent-runtime.ts` are UNCHANGED by this
+amendment. AgentRuntime block accumulation, reasoning effort, the model
+catalog, compaction and PCK, the provider registry architecture and
+redacted-thinking ingestion are all UNTOUCHED. The redacted-thinking
+successor remains open. The authority establishes ROUTE identity only; it
+does not claim universal account, model or conversation compatibility.

@@ -100,6 +100,33 @@ ORIGIN_CORRECTION_NECESSITY        PROVEN (ablation F)
 The CORRECTION02 evidence is in
 `06-correction02-origin-authority.md`.
 
+--- CORRECTION02 / AMENDMENT-02 (the fail-closed, credential-free authority) ---
+
+UNRESOLVED_ROUTE_AUTHORITY            NONE (absence is EXPLICIT; there is no
+                                      nonempty sentinel)
+MALFORMED_ROUTE_AUTHORITY             NONE (an invalid endpoint is an
+                                      unresolved route)
+PERSISTED_AUTHORITY_CREDENTIAL_EXCLUSION PASS (user information, a
+                                      credential-bearing query and a fragment
+                                      produce NO authority, so no
+                                      credential-bearing URL is persisted)
+SAME_HOST_DIFFERENT_PATH_ISOLATION    PASS (O2b: the ACTUAL requested path
+                                      is asserted, and the foreign opaque
+                                      payload is excluded on EVERY attempt)
+ORIGIN_BOOKKEEPING_WIRE_EXCLUSION     PASS (asserted against the ACTUAL
+                                      `originAuthority` field)
+SWITCH_BACK_NONVACUOUS                PASS (the switch-back collection is
+                                      asserted non-empty before it is looped)
+COMPATIBLE_ROUTE_REPLAY                PASS (O5 / RT1-RT6: byte-for-byte
+                                      unchanged)
+FOCUSED_GATE                           PASS (15/15 agents, 47/47 core,
+                                      499/514 llms — the 15 llms failures
+                                      are the IDENTICAL pre-existing baseline)
+ACT_OWNED_DIAGNOSTICS                  NONE
+
+The AMENDMENT-02 evidence is in
+`07-correction02-amendment-02-authority.md`.
+
 FOCUSED_REGRESSION_GATE              PASS (238/238)
 TYPECHECK_GATE                      PASS (exit 0)
 ORDINARY_GATE                       PASS_WITH_PRE_EXISTING_FAILURES (1189 passed, 17 pre-existing failures in 3 unrelated suites)

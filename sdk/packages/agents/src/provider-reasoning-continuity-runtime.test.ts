@@ -24,6 +24,7 @@
  */
 
 import { createGateway } from "@cline/llms";
+import { createAnthropicProvider } from "@cline/llms/providers/ai-sdk";
 import type {
 	AgentMessage,
 	AgentModelRequest,
@@ -96,6 +97,38 @@ function textBlock(index: number, text: string): string[] {
 	];
 }
 
+/**
+ * A turn that issues an opaque signed reasoning block and a tool call.
+ *
+ * It is module-scoped so the origin-authority discriminators and the
+ * unresolved-route discriminators share ONE fixture.
+ */
+function anthropicTurn(): Response {
+	return new Response(
+		[
+			MESSAGE_START,
+			...thinkingBlock(0, REASONING_A, SIGNATURE_A),
+			...toolUseBlock(1, TOOL_CALL_ID),
+			'event: message_delta\ndata: {"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"output_tokens":10}}\n\n',
+			MESSAGE_STOP,
+		].join(""),
+		{ headers: { "content-type": "text/event-stream" } },
+	);
+}
+
+/** A turn that ends the run with plain text and no opaque payload. */
+function plainTurn(): Response {
+	return new Response(
+		[
+			MESSAGE_START,
+			...textBlock(0, "DONE"),
+			'event: message_delta\ndata: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":5}}\n\n',
+			MESSAGE_STOP,
+		].join(""),
+		{ headers: { "content-type": "text/event-stream" } },
+	);
+}
+
 type CapturedBody = Record<string, unknown>;
 
 /**
@@ -138,10 +171,6 @@ function makeFetch(responses: (() => Response)[]) {
 	return {
 		fetchImpl,
 		calls,
-		/** The bodies, in request order. */
-		bodies: calls.map((call) => call.body),
-		/** The EFFECTIVE URLs, in request order. */
-		urls: calls.map((call) => call.url),
 	};
 }
 
@@ -371,9 +400,12 @@ describe("provider reasoning continuity through the REAL AgentRuntime", () => {
 		});
 
 		// The ClineMM-owned origin bookkeeping NEVER reaches the provider.
-		expect(JSON.stringify(calls[1].body)).not.toContain(
-			"__clineReasoningOrigin",
-		);
+		//
+		// ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION02 (A3):
+		// the obsolete `__clineReasoningOrigin` key no longer exists — it
+		// was renamed to `originAuthority` — so the assertion is made
+		// against the ACTUAL field name.
+		expect(JSON.stringify(calls[1].body)).not.toContain("originAuthority");
 	});
 
 	it("RT3: conserves an EMPTY signed thinking block", async () => {
@@ -762,32 +794,16 @@ describe("origin authority discriminators (CORRECTION02)", () => {
 	const ANTHROPIC_OFFICIAL_BASE_URL = "https://api.anthropic.com/v1";
 	/** A DISTINCT endpoint under the SAME provider id. */
 	const ANTHROPIC_OTHER_BASE_URL = "https://eu.api.anthropic.com/v1";
+	/**
+	 * The SAME HOST as the official endpoint but a DIFFERENT PATH.
+	 *
+	 * ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION02 (A3):
+	 * the route identity must carry the PATH, because two routes that
+	 * share a hostname and differ only by path are distinct trust
+	 * domains.
+	 */
+	const ANTHROPIC_OTHER_PATH_BASE_URL = "https://api.anthropic.com/tenant-b/v1";
 	const M31_MODEL_ID = "MiniMax-M3.1-Flash";
-
-	function anthropicTurn(): Response {
-		return new Response(
-			[
-				MESSAGE_START,
-				...thinkingBlock(0, REASONING_A, SIGNATURE_A),
-				...toolUseBlock(1, TOOL_CALL_ID),
-				'event: message_delta\ndata: {"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"output_tokens":10}}\n\n',
-				MESSAGE_STOP,
-			].join(""),
-			{ headers: { "content-type": "text/event-stream" } },
-		);
-	}
-
-	function plainTurn(): Response {
-		return new Response(
-			[
-				MESSAGE_START,
-				...textBlock(0, "DONE"),
-				'event: message_delta\ndata: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":5}}\n\n',
-				MESSAGE_STOP,
-			].join(""),
-			{ headers: { "content-type": "text/event-stream" } },
-		);
-	}
 
 	function makeRuntime(input: {
 		providerId: string;
@@ -824,6 +840,18 @@ describe("origin authority discriminators (CORRECTION02)", () => {
 	 */
 	function hostsOf(calls: CapturedCall[]): string[] {
 		return calls.map((call) => new URL(call.url).host);
+	}
+
+	/**
+	 * ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION02 (A3).
+	 *
+	 * The PATH of every EFFECTIVE URL the transport reached.
+	 *
+	 * The path is part of the ROUTE identity, so a same-host /
+	 * different-path pair is only distinguishable by it.
+	 */
+	function pathsOf(calls: CapturedCall[]): string[] {
+		return calls.map((call) => new URL(call.url).pathname);
 	}
 
 	it("O1: an originless opaque reasoning payload is NOT replayed", async () => {
@@ -925,6 +953,76 @@ describe("origin authority discriminators (CORRECTION02)", () => {
 		}
 	});
 
+	it("O2b: the SAME host on a DIFFERENT PATH does not replay the opaque payload", async () => {
+		// ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION02 (A3).
+		//
+		// The route identity includes the PATH, so two endpoints that
+		// share a HOSTNAME and differ only by PATH are two DISTINCT
+		// routes and two DISTINCT trust domains. A gateway that serves
+		// several tenants on one hostname, one path each, is the ordinary
+		// shape of this case.
+		//
+		// The discriminator asserts the ACTUAL requested path, so a
+		// differently-labelled fixture cannot satisfy it.
+		const sourceExecutions: string[] = [];
+		const { fetchImpl: sourceFetch, calls: sourceCalls } = makeFetch([
+			anthropicTurn,
+			plainTurn,
+		]);
+		const source = makeRuntime({
+			providerId: "anthropic",
+			modelId: MODEL_ID,
+			baseUrl: ANTHROPIC_OFFICIAL_BASE_URL,
+			fetchImpl: sourceFetch,
+			executions: sourceExecutions,
+		});
+		const first = await source.run("SYNTHETIC-PROMPT");
+		expect(sourceExecutions).toEqual([TOOL_NAME]);
+
+		// (1) The intended SOURCE endpoint was exercised, at the SOURCE
+		// path.
+		expect(hostsOf(sourceCalls)).toEqual(
+			sourceCalls.map(() => "api.anthropic.com"),
+		);
+		expect(pathsOf(sourceCalls)).toEqual(sourceCalls.map(() => "/v1/messages"));
+		// The source produced the opaque payload.
+		expect(JSON.stringify(sourceCalls[1].body)).toContain(SIGNATURE_A);
+
+		// The DESTINATION is the SAME HOST on a DIFFERENT PATH.
+		const destExecutions: string[] = [];
+		const { fetchImpl: destFetch, calls: destCalls } = makeFetch([plainTurn]);
+		const destination = makeRuntime({
+			providerId: "anthropic",
+			modelId: MODEL_ID,
+			baseUrl: ANTHROPIC_OTHER_PATH_BASE_URL,
+			fetchImpl: destFetch,
+			executions: destExecutions,
+		});
+		destination.restore(first.messages);
+		await destination.run("SYNTHETIC-PROMPT");
+
+		// (3) At least one destination request occurred.
+		expect(destCalls.length).toBeGreaterThanOrEqual(1);
+		// (2) The intended DESTINATION endpoint was exercised — the SAME
+		// host, and the ACTUAL requested path is the DIFFERENT one.
+		expect(hostsOf(destCalls)).toEqual(
+			destCalls.map(() => "api.anthropic.com"),
+		);
+		expect(pathsOf(destCalls)).toEqual(
+			destCalls.map(() => "/tenant-b/v1/messages"),
+		);
+		// The host is the SAME, so only the PATH can distinguish the two
+		// routes — this is precisely the case the path must carry.
+		expect([...new Set(hostsOf(destCalls))]).toEqual([
+			...new Set(hostsOf(sourceCalls)),
+		]);
+
+		// (4) EVERY destination request excludes the foreign opaque payload.
+		for (const call of destCalls) {
+			expect(JSON.stringify(call.body)).not.toContain(SIGNATURE_A);
+		}
+	});
+
 	it("O3: the REVERSE direction (MiniMax -> native Anthropic) does not replay", async () => {
 		const sourceExecutions: string[] = [];
 		const { fetchImpl: sourceFetch, calls: sourceCalls } = makeFetch([
@@ -999,6 +1097,199 @@ describe("origin authority discriminators (CORRECTION02)", () => {
 					signature: SIGNATURE_A,
 				},
 			]);
+		}
+	});
+});
+
+/**
+ * ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION02 (A1).
+ *
+ * The UNRESOLVED-ROUTE discriminators.
+ *
+ * A route is UNRESOLVED when the gateway registry cannot establish a base
+ * URL for it. That is the PRODUCTION shape of a custom / extension
+ * provider registration that declares no base URL, and of the builtin
+ * providers that declare no default base URL (`claude-code`, `opencode`,
+ * `dify`, `vertex`, `bedrock`, `sapaicore`).
+ *
+ * THE PREDECESSOR DEFECT: the unresolved route produced the NONEMPTY
+ * SENTINEL `"<providerId>\u0000"`. The replay predicate accepted equal
+ * nonempty strings, so TWO unresolved routes compared EQUAL and an opaque
+ * payload crossed a boundary that was never established.
+ *
+ * THE CORRECTION: absence is EXPLICIT. An unresolved route has NO
+ * authority VALUE, so there is nothing for the replay predicate to
+ * compare and nothing for it to accept.
+ */
+describe("unresolved-route authority discriminators (CORRECTION02 A1)", () => {
+	/**
+	 * A gateway whose provider registration declares NO base URL, so the
+	 * registry resolves NO route.
+	 *
+	 * The transport still reaches the provider SDK's own default endpoint,
+	 * so the route IS genuinely exercised on the wire — the route was
+	 * simply never ESTABLISHED by the registry.
+	 */
+	function unresolvedGateway(providerId: string, fetchImpl: typeof fetch) {
+		return createGateway({
+			builtins: false,
+			providers: [
+				{
+					manifest: {
+						id: providerId,
+						name: "Unresolved Route",
+						defaultModelId: MODEL_ID,
+						models: [
+							{
+								id: MODEL_ID,
+								name: MODEL_ID,
+								providerId,
+								capabilities: ["reasoning"],
+							},
+						],
+					},
+					createProvider: createAnthropicProvider,
+				},
+			],
+			providerConfigs: [{ providerId, apiKey: "test-key", fetch: fetchImpl }],
+		});
+	}
+
+	/** The origin authority the RUNTIME recorded for the reasoning part. */
+	function recordedAuthority(
+		messages: readonly { content: { type: string }[] }[],
+	): unknown {
+		return (
+			messages
+				.flatMap((message) => message.content)
+				.find((part) => part.type === "reasoning")?.metadata as
+				| Record<string, unknown>
+				| undefined
+		)?.originAuthority;
+	}
+
+	it("A1: an UNRESOLVED route records NO origin authority", async () => {
+		const executions: string[] = [];
+		const { fetchImpl, calls } = makeFetch([anthropicTurn, plainTurn]);
+		const runtime = createAgentRuntime({
+			model: unresolvedGateway("unresolved-route", fetchImpl).createAgentModel({
+				providerId: "unresolved-route",
+				modelId: MODEL_ID,
+			}),
+			tools: [makeTool(executions)],
+			requestToolApproval: () => ({ approved: true }),
+			telemetry: telemetryMock(),
+		});
+		const result = await runtime.run("SYNTHETIC-PROMPT");
+
+		// The route really was exercised on the wire.
+		expect(calls.length).toBeGreaterThanOrEqual(1);
+		// The opaque payload really was accumulated.
+		const reasoning = result.messages
+			.flatMap((message) => message.content)
+			.find((part) => part.type === "reasoning");
+		expect(
+			(reasoning?.metadata as Record<string, unknown> | undefined)?.signature,
+		).toBe(SIGNATURE_A);
+		// But NO origin authority was recorded, because no route was
+		// established.
+		expect(recordedAuthority(result.messages)).toBeUndefined();
+	});
+
+	it("A1: TWO unresolved routes do NOT share an authority", async () => {
+		const firstExecutions: string[] = [];
+		const { fetchImpl: firstFetch } = makeFetch([anthropicTurn, plainTurn]);
+		const first = createAgentRuntime({
+			model: unresolvedGateway("unresolved-a", firstFetch).createAgentModel({
+				providerId: "unresolved-a",
+				modelId: MODEL_ID,
+			}),
+			tools: [makeTool(firstExecutions)],
+			requestToolApproval: () => ({ approved: true }),
+			telemetry: telemetryMock(),
+		});
+		const firstResult = await first.run("SYNTHETIC-PROMPT");
+
+		const secondExecutions: string[] = [];
+		const { fetchImpl: secondFetch } = makeFetch([anthropicTurn, plainTurn]);
+		const second = createAgentRuntime({
+			model: unresolvedGateway("unresolved-b", secondFetch).createAgentModel({
+				providerId: "unresolved-b",
+				modelId: MODEL_ID,
+			}),
+			tools: [makeTool(secondExecutions)],
+			requestToolApproval: () => ({ approved: true }),
+			telemetry: telemetryMock(),
+		});
+		const secondResult = await second.run("SYNTHETIC-PROMPT");
+
+		// Neither route carries an authority VALUE at all, so there is
+		// nothing for the replay predicate to compare.
+		expect(recordedAuthority(firstResult.messages)).toBeUndefined();
+		expect(recordedAuthority(secondResult.messages)).toBeUndefined();
+	});
+
+	it("A1: an opaque payload issued by an UNRESOLVED route is NOT replayed to an UNRESOLVED destination", async () => {
+		// THE BEHAVIOURAL PROOF of A1.
+		//
+		// BOTH routes are UNRESOLVED. Under the predecessor, each produced
+		// the nonempty sentinel `"<providerId>\u0000"`, so the SOURCE's
+		// recorded origin and the DESTINATION's authority were the SAME
+		// STRING, the replay predicate accepted them, and the opaque
+		// payload crossed a boundary that was never established.
+		const sourceExecutions: string[] = [];
+		const { fetchImpl: sourceFetch, calls: sourceCalls } = makeFetch([
+			anthropicTurn,
+			plainTurn,
+		]);
+		const source = createAgentRuntime({
+			model: unresolvedGateway(
+				"unresolved-route",
+				sourceFetch,
+			).createAgentModel({
+				providerId: "unresolved-route",
+				modelId: MODEL_ID,
+			}),
+			tools: [makeTool(sourceExecutions)],
+			requestToolApproval: () => ({ approved: true }),
+			telemetry: telemetryMock(),
+		});
+		const first = await source.run("SYNTHETIC-PROMPT");
+
+		// The SOURCE route really was exercised on the wire, and it really
+		// did accumulate the opaque payload.
+		expect(sourceCalls.length).toBeGreaterThanOrEqual(1);
+		const sourceReasoning = first.messages
+			.flatMap((message) => message.content)
+			.find((part) => part.type === "reasoning");
+		expect(
+			(sourceReasoning?.metadata as Record<string, unknown> | undefined)
+				?.signature,
+		).toBe(SIGNATURE_A);
+
+		// ---- The UNRESOLVED DESTINATION route ----
+		const destExecutions: string[] = [];
+		const { fetchImpl: destFetch, calls: destCalls } = makeFetch([
+			plainTurn,
+			plainTurn,
+		]);
+		const destination = createAgentRuntime({
+			model: unresolvedGateway("unresolved-route", destFetch).createAgentModel({
+				providerId: "unresolved-route",
+				modelId: MODEL_ID,
+			}),
+			tools: [makeTool(destExecutions)],
+			requestToolApproval: () => ({ approved: true }),
+			telemetry: telemetryMock(),
+		});
+		destination.restore(first.messages);
+		await destination.run("SYNTHETIC-SECOND-PROMPT");
+
+		// The destination route WAS exercised on the wire.
+		expect(destCalls.length).toBeGreaterThanOrEqual(1);
+		// AND the opaque payload was withheld from EVERY attempt.
+		for (const call of destCalls) {
+			expect(JSON.stringify(call.body)).not.toContain(SIGNATURE_A);
 		}
 	});
 });

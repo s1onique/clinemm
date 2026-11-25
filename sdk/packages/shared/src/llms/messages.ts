@@ -187,8 +187,11 @@ export interface ThinkingContent {
 	 *
 	 * It is:
 	 *
-	 *   - CREDENTIAL-FREE: it identifies a ROUTE (provider id plus the
-	 *     effective endpoint), never an account, a key or a header,
+	 *   - CREDENTIAL-FREE: it identifies a ROUTE (the provider id, the
+	 *     endpoint origin and the endpoint path), never an account, a key
+	 *     or a header. A base URL that carries user information, a query
+	 *     string or a fragment produces NO authority at all, so a
+	 *     credential-bearing URL is never persisted,
 	 *   - OPTIONAL and BACKWARD-COMPATIBLE: a stored record written before
 	 *     this field existed simply has none, and such a record is not
 	 *     replayed across a route boundary,

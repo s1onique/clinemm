@@ -25,6 +25,7 @@ import type {
 	AgentToolContext,
 	ContentBlock,
 	ITelemetryService,
+	MessageWithMetadata,
 } from "@cline/shared";
 import { describe, expect, it } from "vitest";
 import {
@@ -367,6 +368,9 @@ describe("restored origin enforcement (CORRECTION02 O4/O5)", () => {
 		expect(backCalls.map((call) => new URL(call.url).host)).toEqual(
 			backCalls.map(() => "api.anthropic.com"),
 		);
+		// The switch-back collection MUST be non-empty: a vacuous loop over
+		// zero requests would prove nothing about the replay.
+		expect(backCalls.length).toBeGreaterThanOrEqual(1);
 		for (const call of backCalls) {
 			const thinking = assistantBlocks(call.body).filter(
 				(block) => block.type === "thinking",
@@ -379,5 +383,196 @@ describe("restored origin enforcement (CORRECTION02 O4/O5)", () => {
 				},
 			]);
 		}
+	});
+});
+
+/**
+ * ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION02 (A1/A2).
+ *
+ * The ROUTE-AUTHORITY discriminators.
+ *
+ * These observe the PERSISTED production content block — the record that
+ * actually reaches disk and is restored after a session restart — and NOT
+ * merely the outbound provider body.
+ *
+ * The authority decides whether an opaque provider-owned payload may be
+ * replayed to a destination. It therefore has two independent obligations:
+ *
+ *   A1 — an UNRESOLVED or MALFORMED route must NOT produce a valid
+ *        authority, so two unresolved routes can never compare equal and
+ *        grant replay authority across an unestablished boundary;
+ *   A2 — a PERSISTED authority must be CREDENTIAL-FREE.
+ */
+describe("route authority discriminators (CORRECTION02 A1/A2)", () => {
+	/**
+	 * A synthetic, obviously-fake credential. It is NOT a real secret; it
+	 * exists so the discriminator can prove that a credential-bearing URL
+	 * never reaches the persisted record.
+	 */
+	const SYNTHETIC_CREDENTIAL = "SYNTHETIC-CREDENTIAL-a1b2c3";
+
+	/** The authority of the PERSISTED production content block. */
+	function persistedAuthority(
+		messages: readonly MessageWithMetadata[],
+	): string | undefined {
+		const thinking = messages
+			.flatMap((message) =>
+				Array.isArray(message.content) ? message.content : [],
+			)
+			.find(
+				(block): block is Extract<ContentBlock, { type: "thinking" }> =>
+					block.type === "thinking",
+			);
+		return thinking?.originAuthority;
+	}
+
+	/**
+	 * Run the REAL runtime against a configured base URL and return the
+	 * PERSISTED production content block's authority.
+	 *
+	 * `baseUrl: undefined` is the UNRESOLVED-ROUTE case: the provider
+	 * (`dify`) has no default base URL, so the registry cannot resolve one.
+	 */
+	async function persistedForBaseUrl(
+		baseUrl: string | undefined,
+		providerId = "anthropic",
+	): Promise<string | undefined> {
+		const { createGateway } = await import("@cline/llms");
+		const { fetchImpl } = makeFetch([anthropicTurn, plainTurn]);
+		const gateway = createGateway({
+			providerConfigs: [
+				{
+					providerId,
+					apiKey: "test-key",
+					...(baseUrl === undefined ? {} : { baseUrl }),
+					fetch: fetchImpl,
+				},
+			],
+		});
+		const runtime = createAgentRuntime({
+			model: gateway.createAgentModel({
+				providerId,
+				modelId: MODEL_ID,
+			}),
+			tools: [makeTool([])],
+			requestToolApproval: () => ({ approved: true }),
+			telemetry: telemetryMock(),
+		});
+		const result = await runtime.run("SYNTHETIC-PROMPT");
+		return persistedAuthority(
+			result.messages.map(agentMessageToMessageWithMetadata),
+		);
+	}
+
+	it("A1: an EMPTY or WHITESPACE-ONLY base URL produces NO authority", async () => {
+		expect(await persistedForBaseUrl("")).toBeUndefined();
+		expect(await persistedForBaseUrl("   ")).toBeUndefined();
+	});
+
+	it("A1: an INVALID base URL produces NO authority", async () => {
+		expect(await persistedForBaseUrl("not a url")).toBeUndefined();
+		expect(await persistedForBaseUrl("://missing-scheme")).toBeUndefined();
+	});
+
+	it("A1: a MISSING or INVALID provider identity produces NO authority", async () => {
+		// The provider id is the FIRST part of the authority. With no
+		// provider id there is no route identity at all.
+		expect(
+			await persistedForBaseUrl("https://api.anthropic.com/v1", "   "),
+		).toBeUndefined();
+	});
+
+	it("A1: a VALID route produces a NONEMPTY authority, and equal routes MATCH", async () => {
+		const first = await persistedForBaseUrl(ANTHROPIC_BASE_URL);
+		const second = await persistedForBaseUrl(ANTHROPIC_BASE_URL);
+		expect(typeof first).toBe("string");
+		expect(first).not.toBe("");
+		expect(first).toBe(second);
+	});
+
+	it("A2: a base URL with USER INFORMATION persists NO credential", async () => {
+		const authority = await persistedForBaseUrl(
+			`https://user:${SYNTHETIC_CREDENTIAL}@api.anthropic.com/v1`,
+		);
+		// The route is credential-bearing, so NO authority is established
+		// at all — nothing credential-bearing is persisted.
+		expect(authority).toBeUndefined();
+	});
+
+	it("A2: a base URL with a CREDENTIAL-BEARING QUERY persists NO credential", async () => {
+		const authority = await persistedForBaseUrl(
+			`https://api.anthropic.com/v1?api_key=${SYNTHETIC_CREDENTIAL}`,
+		);
+		expect(authority).toBeUndefined();
+	});
+
+	it("A2: a base URL with a FRAGMENT persists NO credential", async () => {
+		const authority = await persistedForBaseUrl(
+			`https://api.anthropic.com/v1#${SYNTHETIC_CREDENTIAL}`,
+		);
+		expect(authority).toBeUndefined();
+	});
+
+	it("A2: a base URL with a CREDENTIAL-BEARING PATH COMPONENT keeps the PATH and no other component", async () => {
+		// The path is ROUTE IDENTITY under this repository's configuration
+		// contract (credentials travel in `apiKey` and `headers`), so it is
+		// RETAINED IN FULL. It is therefore the ONE component that can
+		// carry an operator-placed secret, and the disposition is stated
+		// explicitly rather than hidden behind a lossy transform.
+		//
+		// The discriminator proves the RETAINED component is the PATH and
+		// that the rest of the URL never leaks into the record.
+		const authority = await persistedForBaseUrl(
+			`https://api.anthropic.com/v1/${SYNTHETIC_CREDENTIAL}`,
+		);
+		expect(typeof authority).toBe("string");
+		// The credential-free parts are present and exact.
+		expect(authority).toContain("api.anthropic.com");
+		expect(authority).toContain("/v1");
+		// The USER INFORMATION / QUERY / FRAGMENT forms never appear.
+		expect(authority).not.toContain("@");
+		expect(authority).not.toContain("?");
+		expect(authority).not.toContain("#");
+	});
+
+	it("A2: the PERSISTED authority of an ordinary route carries NO credential", async () => {
+		const authority = await persistedForBaseUrl(ANTHROPIC_BASE_URL);
+		expect(typeof authority).toBe("string");
+		expect(authority).not.toContain(SYNTHETIC_CREDENTIAL);
+		expect(authority).not.toContain("test-key");
+		expect(authority).not.toContain("@");
+		expect(authority).not.toContain("?");
+		expect(authority).not.toContain("#");
+	});
+
+	it("A2: the PERSISTED record of a credential-bearing route carries NO credential", async () => {
+		// The acceptance authority is the PERSISTED production content
+		// block, not merely the outbound provider body.
+		const { createGateway } = await import("@cline/llms");
+		const { fetchImpl } = makeFetch([anthropicTurn, plainTurn]);
+		const gateway = createGateway({
+			providerConfigs: [
+				{
+					providerId: "anthropic",
+					apiKey: "test-key",
+					baseUrl: `https://user:${SYNTHETIC_CREDENTIAL}@api.anthropic.com/v1`,
+					fetch: fetchImpl,
+				},
+			],
+		});
+		const runtime = createAgentRuntime({
+			model: gateway.createAgentModel({
+				providerId: "anthropic",
+				modelId: MODEL_ID,
+			}),
+			tools: [makeTool([])],
+			requestToolApproval: () => ({ approved: true }),
+			telemetry: telemetryMock(),
+		});
+		const result = await runtime.run("SYNTHETIC-PROMPT");
+		const persisted = result.messages.map(agentMessageToMessageWithMetadata);
+		const serialized = JSON.stringify(persisted);
+		expect(serialized).not.toContain(SYNTHETIC_CREDENTIAL);
+		expect(persistedAuthority(persisted)).toBeUndefined();
 	});
 });

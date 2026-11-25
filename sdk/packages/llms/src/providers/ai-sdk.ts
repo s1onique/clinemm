@@ -773,14 +773,19 @@ function toAiSdkMessages(
 		 * ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION02 (A1).
 		 *
 		 * The ORIGIN AUTHORITY of the request the messages are replayed
-		 * into (the provider id plus the effective endpoint).
+		 * into (the provider id plus the effective route).
 		 *
 		 * It is REQUIRED: an opaque reasoning payload may only be replayed
 		 * when the destination's authority is positively established. There
 		 * is deliberately no permissive fallback — a caller that cannot
 		 * establish the destination identity gets NO opaque replay authority.
+		 *
+		 * The VALUE may be `undefined`, which is how an UNRESOLVED
+		 * destination route (no base URL, an invalid base URL, or a
+		 * credential-bearing base URL) is represented. An unresolved
+		 * destination grants NO replay authority.
 		 */
-		destinationAuthority: string;
+		destinationAuthority: string | undefined;
 	},
 ) {
 	const includeReasoning = options?.includeReasoning ?? true;
@@ -1555,9 +1560,23 @@ const REASONING_METADATA_ORIGIN_KEY = "originAuthority";
  *   - the provider id, and
  *   - the EFFECTIVE endpoint (the resolved base URL), when one is known.
  *
- * The endpoint is CREDENTIAL-FREE by construction: the API key is a
- * separate configuration field, never part of the base URL. The value is
- * therefore safe to persist alongside the payload.
+ * CREDENTIAL FREEDOM (A2). The authority is PERSISTED alongside the
+ * payload, so it must never carry a credential. The repository's provider
+ * configuration contract places credentials in `apiKey` / `apiKeyResolver` /
+ * `apiKeyEnv` / `headers` — NEVER in the base URL — but the base URL is
+ * still SYNTACTICALLY capable of carrying one (the configuration schema
+ * accepts any `z.string().url()`, including user information, query
+ * strings and fragments). The route identity is therefore built ONLY from
+ * the URL components that are provably credential-free and provably
+ * route-identity, and a URL that carries any other component produces NO
+ * authority at all (fail closed) rather than a value that would either
+ * leak a credential or silently drop an identity-bearing component.
+ *
+ * ABSENCE IS EXPLICIT (A1). The authority is `string | undefined`, and
+ * `undefined` means "this route is UNRESOLVED". There is deliberately no
+ * nonempty sentinel: a sentinel would make two DIFFERENT unresolved routes
+ * compare EQUAL and would grant replay authority across a boundary that was
+ * never established.
  *
  * The two parts are joined with a separator that cannot occur in either,
  * so the composite cannot be forged by moving characters between them.
@@ -1565,7 +1584,7 @@ const REASONING_METADATA_ORIGIN_KEY = "originAuthority";
 function buildReasoningOriginAuthority(input: {
 	providerId: string;
 	baseUrl: string | undefined;
-}): string {
+}): string | undefined {
 	// ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION02 (A2).
 	//
 	// The EFFECTIVE ROUTE, not merely the logical provider id and not the
@@ -1585,19 +1604,59 @@ function buildReasoningOriginAuthority(input: {
 	//   - Only trailing slashes are normalized, so `/v1` and `/v1/` are the
 	//     same route while `/v1` and `/v2` are not.
 	//
-	// CREDENTIAL FREEDOM: the API key is a separate configuration field
-	// and is never part of the base URL, so this value carries no
-	// credential, no authorization header and no credential-bearing URL.
+	// CREDENTIAL EXCLUSION. The URL is parsed and then INSPECTED; a URL
+	// that carries ANY of the following produces NO authority:
 	//
-	// LIMITATION (stated explicitly): endpoint identity establishes the
-	// ROUTE that issued a payload. It does NOT by itself prove every
-	// account-, model- or conversation-level compatibility condition that
-	// a provider may require; it is the strongest cheap, existing,
-	// credential-free route identity the repository has.
-	const endpoint = input.baseUrl?.trim().replace(/\/+$/, "");
-	return endpoint
-		? `${input.providerId}\u0000${endpoint}`
-		: `${input.providerId}\u0000`;
+	//   - USER INFORMATION (`https://user:secret@host/...`) — a
+	//     credential. It is not route identity, and stripping it would
+	//     make two different effective routes indistinguishable.
+	//   - a QUERY STRING (`?api_key=...`) — the canonical credential
+	//     carrier in a URL. It cannot be told apart from route identity
+	//     by shape, so it is refused rather than persisted or stripped.
+	//   - a FRAGMENT (`#...`) — never transmitted to the server, so it
+	//     cannot be route identity, and it may carry a credential.
+	//   - a URL that does not parse — an invalid endpoint, and therefore
+	//     an unresolved route.
+	//
+	// The PATH is RETAINED IN FULL, because it is route identity under this
+	// repository's configuration contract (credentials travel in `apiKey`
+	// and `headers`, never in the path). Retaining it is what keeps a
+	// same-host / different-path pair two DISTINCT routes.
+	//
+	// LIMITATION (stated explicitly): route identity establishes the ROUTE
+	// that issued a payload. It does NOT by itself prove every account-,
+	// model- or conversation-level compatibility condition that a provider
+	// may require.
+	const providerId = input.providerId?.trim();
+	if (!providerId) {
+		return undefined;
+	}
+	const rawBaseUrl = input.baseUrl?.trim();
+	if (!rawBaseUrl) {
+		return undefined;
+	}
+	let url: URL;
+	try {
+		url = new URL(rawBaseUrl);
+	} catch {
+		// An INVALID endpoint is an UNRESOLVED route, not a route.
+		return undefined;
+	}
+	if (url.username.length > 0 || url.password.length > 0) {
+		return undefined;
+	}
+	if (url.search.length > 0) {
+		return undefined;
+	}
+	if (url.hash.length > 0) {
+		return undefined;
+	}
+	const origin = url.origin;
+	if (!origin || origin === "null") {
+		return undefined;
+	}
+	const path = url.pathname.replace(/\/+$/, "");
+	return `${providerId}\u0000${origin}\u0000${path}`;
 }
 
 /**
@@ -1618,7 +1677,7 @@ function buildReasoningOriginAuthority(input: {
  */
 function mayReplayOpaqueReasoning(input: {
 	origin: unknown;
-	destinationAuthority: string;
+	destinationAuthority: string | undefined;
 }): boolean {
 	// ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION02 (A1).
 	//
@@ -1630,7 +1689,10 @@ function mayReplayOpaqueReasoning(input: {
 	//   - only POSITIVELY ESTABLISHED COMPATIBLE origins grant authority.
 	//
 	// The destination authority is REQUIRED by the caller, so a missing
-	// destination can never be reached through the ordinary request path.
+	// destination can never be reached through the ordinary request path —
+	// but its VALUE may be `undefined`, which is exactly how an UNRESOLVED
+	// destination route is represented. An unresolved destination therefore
+	// grants NO authority, exactly like a malformed one.
 	if (typeof input.origin !== "string" || input.origin.length === 0) {
 		return false;
 	}
