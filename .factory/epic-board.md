@@ -1,4 +1,92 @@
-# ACT-CLINEMM-COMPACTION-ATOMIC-SUMMARY-INSTALLATION-REPAIR-01 — GO_COMPACTION_FIDELITY_REPAIR — 2026-11-25
+# ACT-CLINEMM-CMP04-TERMINAL-ACCEPTANCE-CONSERVATION-01 — GO_CMP04_TERMINAL_ACCEPTANCE_CONSERVED — 2026-11-25
+
+```text
+ACT_ID:       ACT-CLINEMM-CMP04-TERMINAL-ACCEPTANCE-CONSERVATION-01
+TYPE:         bounded conservation witness + adapter contract repair
+VERDICT:      GO_CMP04_TERMINAL_ACCEPTANCE_CONSERVED
+ENTRY_HEAD:   4bca917fd58919bb13c5344998da9a53ce5afac7
+SUBJECT_HEAD: e14504e2e (the conservation witness and the bounded change)
+BRANCH:       main
+EPIC:         CMP-04
+```
+
+**THE PREDECESSOR'S TRANSPORT REPAIR WAS ACCEPTED. THIS ACT PROVES ITS
+CONSEQUENCE THROUGH THE PRODUCTION ACCEPTANCE PATH, AND CLOSES A SMALL
+ADAPTER CONTRACT DEFECT.**
+
+The predecessor (`4bca917fd`) established that a Gemini stream which ends
+WITHOUT the provider reporting a terminal reason produces gateway
+`finish.reason === "unknown"`, and that the compatibility adapter must not
+report such a stream as a SUCCESSFUL completion. That was proven **at the
+compatibility boundary**. What it did NOT establish is the consequence that
+matters for the compaction contract: a summary produced by such a stream must
+not be **INSTALLED** as the replacement for the compacted history.
+
+**THE WITNESS IS RED AGAINST THE DEFECTIVE PREDECESSOR.** With the
+predecessor's mapping (`success: event.reason !== "error"`), the
+unestablished Gemini summary **WAS INSTALLED**: it replaced the compacted
+history and reached the provider-visible output. Against the repaired source
+it is rejected. The RED was produced by restoring the predecessor's mapping
+in `compat.ts` and rebuilding — not by manufacturing a new production defect.
+
+**THE WITNESS SUBSTITUTES EXACTLY ONE THING: THE EXTERNAL PROVIDER
+BOUNDARY.** It drives the ACTUAL production composition — the state-aware
+wrapper, the compaction seam, the agentic compactor, the summarizer
+transport, the **REAL** handler factory, the **REAL** compatibility adapter
+and the **REAL** gateway — and substitutes only the HTTP `fetch`. The Gemini
+SSE fixtures are the ones the transport probe established. Every acceptance
+decision under test is taken by the REAL production code.
+
+**THE CONTROL MATRIX IS SATISFIED.** A Gemini text followed by an ABSENT
+finish reason is rejected; a Gemini text followed by a normal STOP is
+accepted and installed; the established MAX-TOKEN and CONTENT-FILTER
+rejections are conserved; and a previously installed valid state remains
+byte-identical after the rejection (no replacement persisted, the compacted
+source boundary does not advance).
+
+**THE BOUNDED CHANGE: THE REPORTED TERMINAL REASON NOW REACHES THE
+ACCEPTANCE DECISION.** The transport reports an unestablished completion and
+a known failure the same way — `success: false` — so `failed` alone cannot
+tell them apart. `generateSummary()` **discarded** the reported reason
+entirely, and the acceptance contract therefore classified an unestablished
+completion as a **known failure**. The reason is now carried through the
+transport, and the contract distinguishes the two: `unestablished_completion`
+is not a known failure, it is a completion the provider never ESTABLISHED.
+**The verdict is unchanged** — both are not installable — but the diagnosis
+is not, and the diagnosis is what an operator reads. `unknown` is preserved
+AS `unknown`: it is not converted into a normal completion, and it is not
+converted into an invented provider failure.
+
+**THE ADAPTER CONTRACT DEFECT IS CLOSED.** `ApiStreamDoneChunk.finishReason`
+was typed as an arbitrary `string`, and the consumer cast it back with an
+unchecked `as AgentModelFinishReason`. It is now typed as
+`AgentModelFinishReason` itself — the SAME vocabulary, not an arbitrary
+string — so no consumer has to cast and no consumer can silently receive a
+reason outside the union. The **negative-signal precedence is preserved**: a
+chunk that reports a FAILED stream with an error message is a FAILURE
+(`error`), and the reported reason does not launder it into an unestablished
+completion, which would lose the runtime's error recovery. A legacy handler
+that reports no reason at all keeps its previous mapping.
+
+**THE PERSISTENCE FRAMEWORK WAS NOT REDESIGNED.** No new persistence layer,
+no new provider registry, no documentation campaign, no full-suite rerun.
+
+```text
+RED (defective predecessor):  2 CMP04 rows FAILED | 22 pre-existing rows PASSED
+GREEN (repaired source):      24 passed (the whole acceptance regression)
+ADAPTER CONTRACT:             19 passed (apihandler-agent-model-adapter)
+TRANSPORT PROPAGATION:          9 passed (summary-generation.terminal-status)
+DURABLE PERSISTENCE:           2 passed
+LLMS PROVIDERS:              190 passed (compat / finish-reason / gateway)
+CORE CONTEXT+LLMS SUITE:    1 338 passed | 0 failed (95 files)
+TYPECHECK:                  73 errors -> 73 errors, ZERO DELTA; 0 ACT-owned
+BIOME:                      clean on all 8 changed files
+SDK BUILD:                  SUCCEEDED (bun --production -F './sdk/packages/*')
+GITLEAKS:                   no leaks found
+INFERENCE REQUESTS:          0
+```
+
+**A successor ACT is NOT started automatically.**
 
 ```text
 ACT_ID:       ACT-CLINEMM-COMPACTION-ATOMIC-SUMMARY-INSTALLATION-REPAIR-01
