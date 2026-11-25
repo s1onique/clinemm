@@ -76,7 +76,7 @@ TYPECHECK_GATE                      PASS (exit 0)
 ORDINARY_GATE                       PASS_WITH_PRE_EXISTING_FAILURES (1189 passed, 17 pre-existing failures in 3 unrelated suites)
 ACT_OWNED_DIAGNOSTICS               NONE
 
-FINAL_HEAD                          a20fe940d91003dd5b4ff4a48ce904d26bdcf0b3
+FINAL_HEAD                          9079c4cd238b1b61533fe8873ed444ecb979bf40
 ACT_BRANCH                          act/provider-reasoning-continuity-p0-01
 WORKTREE_PATH                       /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm-second/.worktrees/act-pr-p0-01
 TRACKED_DIRT                        none
@@ -95,7 +95,7 @@ The CORRECTION01 evidence is in
 |---|---|
 | `ENTRY_HEAD` | `1d45a8d845eca27bce311949a08fca7868f211cd` |
 | `RED_SUBJECT_HEAD` | `1d45a8d845eca27bce311949a08fca7868f211cd` |
-| `FINAL_HEAD` | `a20fe940d91003dd5b4ff4a48ce904d26bdcf0b3` |
+| `FINAL_HEAD` | `9079c4cd238b1b61533fe8873ed444ecb979bf40` |
 | `ACT_BRANCH` | `act/provider-reasoning-continuity-p0-01` |
 | `WORKTREE_PATH` | `/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm-second/.worktrees/act-pr-p0-01` |
 | `TRACKED_DIRT` | none (clean at exit) |
@@ -221,11 +221,13 @@ dependency tree are untouched; no permanent diagnostic field was added.
 
 ```
 branch: act/provider-reasoning-continuity-p0-01
-commit: a20fe940d91003dd5b4ff4a48ce904d26bdcf0b3
-message: docs(factory): add the provider reasoning continuity P0 exit report
-parent:  57fc492d5451b9f95085a7fcace226cf68506dc0
 
-  (the production repair itself:)
+  (CORRECTION01 — the block-identity and origin correction:)
+commit: 9079c4cd238b1b61533fe8873ed444ecb979bf40
+message: fix(llms): preserve reasoning block identity and bound the reasoning origin
+parent:  8687d4e3790900c5d9ed88ff49d0c0bf83c02c0c
+
+  (the original production repair:)
 commit: 57fc492d5451b9f95085a7fcace226cf68506dc0
 message: fix(llms): preserve provider reasoning across tool rounds
 parent:  1d45a8d845eca27bce311949a08fca7868f211cd
