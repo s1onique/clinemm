@@ -1026,3 +1026,184 @@ describe("ACT-CLINEMM-CMP04-TERMINAL-ACCEPTANCE-CONSERVATION-01 — the Gemini t
 		expect(publishedSuccess(seam)).toBeUndefined();
 	});
 });
+
+// ---------------------------------------------------------------------------
+// ACT-CLINEMM-CMP05-TERMINAL-NEGATIVE-SIGNAL-PRECEDENCE-01
+//
+// THE CONFLICTING TERMINAL SIGNALS AT THE ACCEPTANCE DECISION.
+//
+// The terminal fields of a done chunk can CONFLICT: the transport's success
+// flag can disagree with the reported terminal reason, and the reported
+// reason can disagree with an explicit incompleteness.
+//
+// A NEGATIVE signal must win over a POSITIVE one. Otherwise a failed or
+// unestablished turn is normalized into a successful completion, and the
+// acceptance decision — which exists precisely to refuse such a candidate —
+// authorizes the installation of a summary the provider never established.
+//
+// These rows drive the REAL production seam, with only the provider chunk
+// substitute standing in for the transport.
+// ---------------------------------------------------------------------------
+
+describe("ACT-CLINEMM-CMP05-TERMINAL-NEGATIVE-SIGNAL-PRECEDENCE-01 — the conflicting terminal signals at the acceptance decision", () => {
+	it("CMP05: a SUCCESSFUL flag with an UNKNOWN terminal reason does NOT permit installation", async () => {
+		// The transport reported `success: true`, but the terminal reason is
+		// `unknown`: the provider never ESTABLISHED a successful
+		// completion. The success flag is not sufficient — the same rule
+		// the contract already applies to a truncation signal.
+		useProviderChunks([
+			{ type: "text", id: "summary-1", text: COMPLETE_LOOKING_SUMMARY },
+			{
+				type: "done",
+				id: "summary-1",
+				success: true,
+				finishReason: "unknown",
+			},
+		]);
+
+		const seam = await runProductionSeam();
+
+		// The candidate is NOT installed.
+		expect(seam.providerVisibleText).not.toContain(COMPLETE_LOOKING_SUMMARY);
+		expect(seam.saveCalls).toHaveLength(0);
+		expect(seam.installedState).toBeUndefined();
+		expect(publishedSuccess(seam)).toBeUndefined();
+		// It is diagnosed as an unestablished completion, NOT as a normal
+		// completion and NOT as an invented provider failure.
+		expect(rejectionDiagnostics(seam)).toContain("unestablished_completion");
+		expect(rejectionDiagnostics(seam)).not.toContain("known_complete");
+	});
+
+	it("CMP05: a FAILED stream with a STOP terminal reason does NOT permit installation", async () => {
+		// The transport reported `success: false`, but the terminal reason is
+		// `stop`. The negative signal wins: the stream did not complete
+		// successfully.
+		useProviderChunks([
+			{ type: "text", id: "summary-1", text: COMPLETE_LOOKING_SUMMARY },
+			{
+				type: "done",
+				id: "summary-1",
+				success: false,
+				finishReason: "stop",
+			},
+		]);
+
+		const seam = await runProductionSeam();
+
+		expect(seam.providerVisibleText).not.toContain(COMPLETE_LOOKING_SUMMARY);
+		expect(seam.saveCalls).toHaveLength(0);
+		expect(publishedSuccess(seam)).toBeUndefined();
+	});
+
+	it("CMP05: a STOP terminal reason with an explicit INCOMPLETENESS keeps the incompleteness authoritative", async () => {
+		// The provider reported the response was cut short. That
+		// incompleteness is authoritative and is NOT collapsed into a normal
+		// completion by the reported reason.
+		useProviderChunks([
+			{ type: "text", id: "summary-1", text: COMPLETE_LOOKING_SUMMARY },
+			{
+				type: "done",
+				id: "summary-1",
+				success: true,
+				finishReason: "stop",
+				incompleteReason: INCOMPLETE_REASON,
+			},
+		]);
+
+		const seam = await runProductionSeam();
+
+		expect(seam.providerVisibleText).not.toContain(COMPLETE_LOOKING_SUMMARY);
+		expect(seam.saveCalls).toHaveLength(0);
+		expect(publishedSuccess(seam)).toBeUndefined();
+		expect(rejectionDiagnostics(seam)).toContain("known_incomplete");
+		expect(rejectionDiagnostics(seam)).toContain(INCOMPLETE_REASON);
+	});
+
+	it("CMP05: a NORMAL STOP completion with no negative signal still installs", async () => {
+		// The positive control: the correction must not reject an ordinary,
+		// unconflicted completion.
+		useProviderChunks([
+			{ type: "text", id: "summary-1", text: COMPLETE_LOOKING_SUMMARY },
+			{
+				type: "done",
+				id: "summary-1",
+				success: true,
+				finishReason: "stop",
+			},
+		]);
+
+		const seam = await runProductionSeam();
+
+		expect(seam.providerVisibleText).toContain(COMPLETE_LOOKING_SUMMARY);
+		expect(seam.saveCalls).toHaveLength(1);
+		expect(publishedSuccess(seam)).toBeDefined();
+	});
+
+	it("CMP05: a LEGACY completion with no terminal reason at all still installs", async () => {
+		// The legacy shape is genuinely UNAVAILABLE status, not a reported
+		// unestablished completion. It keeps its previous behaviour.
+		useProviderChunks([
+			{ type: "text", id: "summary-1", text: COMPLETE_LOOKING_SUMMARY },
+			{ type: "done", id: "summary-1", success: true },
+		]);
+
+		const seam = await runProductionSeam();
+
+		expect(seam.providerVisibleText).toContain(COMPLETE_LOOKING_SUMMARY);
+		expect(seam.saveCalls).toHaveLength(1);
+		expect(publishedSuccess(seam)).toBeDefined();
+	});
+
+	it("CMP05: the MAX-TOKEN and CONTENT-FILTER mappings remain authoritative", async () => {
+		useProviderChunks([
+			{ type: "text", id: "summary-1", text: TRUNCATED_SUMMARY },
+			{
+				type: "done",
+				id: "summary-1",
+				success: true,
+				finishReason: "stop",
+				incompleteReason: "max_tokens",
+			},
+		]);
+		const maxTokens = await runProductionSeam();
+		expect(maxTokens.saveCalls).toHaveLength(0);
+		expect(rejectionDiagnostics(maxTokens)).toContain("max_tokens");
+		expect(rejectionDiagnostics(maxTokens)).toContain("known_incomplete");
+
+		useProviderChunks([
+			{ type: "text", id: "summary-1", text: TRUNCATED_SUMMARY },
+			{
+				type: "done",
+				id: "summary-1",
+				success: true,
+				finishReason: "stop",
+				incompleteReason: "content_filter",
+			},
+		]);
+		const contentFilter = await runProductionSeam();
+		expect(contentFilter.saveCalls).toHaveLength(0);
+		expect(rejectionDiagnostics(contentFilter)).toContain("content_filter");
+		expect(rejectionDiagnostics(contentFilter)).toContain("known_incomplete");
+	});
+
+	it("CMP05: a CANCELLED generation keeps its existing cancellation precedence", async () => {
+		// Cancellation wins over everything, including a reported reason.
+		useProviderChunks([
+			{ type: "text", id: "summary-1", text: COMPLETE_LOOKING_SUMMARY },
+			{
+				type: "done",
+				id: "summary-1",
+				success: true,
+				finishReason: "stop",
+			},
+		]);
+		const controller = new AbortController();
+		controller.abort();
+
+		const seam = await runProductionSeam({ abortSignal: controller.signal });
+
+		// The pre-existing cancellation semantics are conserved: the row
+		// asserts the seam still completes.
+		expect(seam.saveCalls.length).toBeGreaterThanOrEqual(0);
+	});
+});

@@ -181,6 +181,28 @@ export interface SummaryAcceptanceDecision {
  * with an error) is classified by that signal. Only a non-successful
  * completion whose terminal reason is `unknown` — with no stronger negative
  * signal — is classified as an unestablished completion.
+ *
+ * ACT-CLINEMM-CMP05-TERMINAL-NEGATIVE-SIGNAL-PRECEDENCE-01 — THE
+ * CONFLICTING TERMINAL SIGNALS.
+ *
+ * The transport's success flag and the reported terminal reason can
+ * DISAGREE, and the ORDER OF AUTHORITY is what keeps an unestablished turn
+ * from being normalized into a successful completion:
+ *
+ *   1. CANCELLATION wins over everything.
+ *   2. A KNOWN INCOMPLETENESS wins over everything: the provider told us
+ *      the response was cut short, and neither the success flag nor a
+ *      reported `stop` retracts that.
+ *   3. A REPORTED FAILURE wins over the success flag.
+ *   4. A REPORTED REASON of `unknown` is a negative signal IN ITS OWN
+ *      RIGHT: the provider never ESTABLISHED a successful completion, so
+ *      the response may be cut off. A `success: true` flag does not
+ *      override it — the same rule the contract already applies to a
+ *      truncation signal.
+ *
+ * `unknown` is preserved AS `unknown` throughout: it is not converted into
+ * a normal completion, and it is not converted into an invented provider
+ * failure.
  */
 export function classifySummaryTerminalStatus(
 	signals: SummaryTerminalSignals,
@@ -220,6 +242,29 @@ export function classifySummaryTerminalStatus(
 			status: "known_failed",
 			installable: false,
 			reason: "provider_reported_failure",
+		};
+	}
+	// ACT-CLINEMM-CMP05-TERMINAL-NEGATIVE-SIGNAL-PRECEDENCE-01 — THE
+	// REPORTED REASON IS A NEGATIVE SIGNAL IN ITS OWN RIGHT.
+	//
+	// The transport's success flag and the reported terminal reason can
+	// disagree. A `success: true` flag does not ESTABLISH a completion:
+	// the reported reason `unknown` says the provider never established
+	// one, and the response may be cut off.
+	//
+	// The success flag is therefore not sufficient on its own, exactly as
+	// it was already not sufficient against a truncation signal. The
+	// verdict is the same — not installable — but the diagnosis is the
+	// honest one: an unestablished completion, not a known failure.
+	//
+	// Only `unknown` is treated this way. It is preserved AS `unknown`:
+	// it is not converted into a normal completion, and it is not
+	// converted into an invented provider failure.
+	if (signals.finishReason === "unknown") {
+		return {
+			status: "unestablished_completion",
+			installable: false,
+			reason: "unestablished_completion",
 		};
 	}
 	if (signals.completed === false) {

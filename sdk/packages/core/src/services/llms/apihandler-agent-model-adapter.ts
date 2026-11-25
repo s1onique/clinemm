@@ -124,23 +124,27 @@ function doneFinishReason(chunk: ApiStreamDoneChunk): AgentModelFinishReason {
 	// be laundered into an "unestablished completion" and would lose the
 	// runtime's error recovery.
 	//
+	// ACT-CLINEMM-CMP05-TERMINAL-NEGATIVE-SIGNAL-PRECEDENCE-01 — THE
+	// CONFLICTING TERMINAL SIGNALS.
+	//
+	// The terminal fields of a done chunk can disagree with each other, and
+	// the ORDER OF AUTHORITY is what keeps a failed turn from being
+	// normalized into a successful completion:
+	//
+	//   1. An explicit INCOMPLETENESS is authoritative. The provider told
+	//      us the response was cut short; a reported `stop` does not
+	//      retract that, and the established max-token / content-filter
+	//      mappings survive a conflicting reason.
+	//   2. A REPORTED FAILURE (`success: false`) is authoritative. A
+	//      reported reason does not turn a failed stream into a successful
+	//      completion, whatever that reason says.
+	//   3. Only then is the reported reason consulted.
+	//
 	// `unknown` is preserved AS `unknown`. It is not converted into a normal
 	// completion, and it is not converted into an invented provider failure:
 	// it means exactly what the shared contract says it means — the response
 	// may be cut off and an authoritative successful completion has NOT been
 	// established.
-	if (chunk.success === false) {
-		// A reported error message is a FAILURE. A reported `unknown` is not:
-		// it is an UNEStablished completion, which the runtime handles as an
-		// incomplete turn rather than as an error.
-		if (chunk.error !== undefined || chunk.finishReason === undefined) {
-			return "error";
-		}
-		return chunk.finishReason;
-	}
-	if (chunk.finishReason !== undefined) {
-		return chunk.finishReason;
-	}
 	if (
 		chunk.incompleteReason === "max_output_tokens" ||
 		chunk.incompleteReason === "max-tokens"
@@ -152,6 +156,27 @@ function doneFinishReason(chunk: ApiStreamDoneChunk): AgentModelFinishReason {
 		chunk.incompleteReason === "content-filter"
 	) {
 		return "content-filter";
+	}
+	if (chunk.success === false) {
+		// A reported error message is a FAILURE. A reported `unknown` is not:
+		// it is an UNEStablished completion, which the runtime handles as an
+		// incomplete turn rather than as an error.
+		//
+		// Any OTHER reported reason on a failed stream is also not a
+		// successful completion: the stream failed, so the reason cannot
+		// make it one.
+		if (
+			chunk.error !== undefined ||
+			chunk.finishReason === undefined ||
+			chunk.finishReason === "stop" ||
+			chunk.finishReason === "tool-calls"
+		) {
+			return "error";
+		}
+		return chunk.finishReason;
+	}
+	if (chunk.finishReason !== undefined) {
+		return chunk.finishReason;
 	}
 	return "stop";
 }

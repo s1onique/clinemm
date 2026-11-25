@@ -288,6 +288,68 @@ describe("createAgentModelFromApiHandler", () => {
 		expect(events.at(-1)).toMatchObject({ type: "finish", reason: "unknown" });
 	});
 
+	// ACT-CLINEMM-CMP05-TERMINAL-NEGATIVE-SIGNAL-PRECEDENCE-01 — THE
+	// CONFLICTING TERMINAL SIGNALS.
+	//
+	// The terminal fields of a done chunk can CONFLICT. A negative signal
+	// must win over a positive one, or a failed/unestablished turn is
+	// normalized into a successful completion and the consumer cannot tell
+	// the difference.
+	it("does not normalize a FAILED stream with a stop reason into a successful completion", async () => {
+		// `success: false` says the stream did NOT complete successfully.
+		// `finishReason: "stop"` says the provider reported a normal
+		// completion. The NEGATIVE signal wins: the stream failed.
+		const handler = fakeHandler([
+			{ type: "done", success: false, finishReason: "stop", id: "x" },
+		]);
+		const model = createAgentModelFromApiHandler(handler);
+		const events = await collect(model.stream(baseRequest));
+
+		expect(events.at(-1)).toMatchObject({ type: "finish", reason: "error" });
+		expect((events.at(-1) as { reason?: string }).reason).not.toBe("stop");
+	});
+
+	it("does not let a stop reason override an explicit INCOMPLETENESS", async () => {
+		// The provider reported the response was cut short. That
+		// incompleteness is authoritative: the reason must not collapse it
+		// into a normal completion.
+		const handler = fakeHandler([
+			{
+				type: "done",
+				success: true,
+				finishReason: "stop",
+				incompleteReason: "max_output_tokens",
+				id: "x",
+			},
+		]);
+		const model = createAgentModelFromApiHandler(handler);
+		const events = await collect(model.stream(baseRequest));
+
+		expect(events.at(-1)).toMatchObject({
+			type: "finish",
+			reason: "max-tokens",
+		});
+	});
+
+	it("keeps the CONTENT-FILTER incompleteness authoritative over a stop reason", async () => {
+		const handler = fakeHandler([
+			{
+				type: "done",
+				success: true,
+				finishReason: "stop",
+				incompleteReason: "content_filter",
+				id: "x",
+			},
+		]);
+		const model = createAgentModelFromApiHandler(handler);
+		const events = await collect(model.stream(baseRequest));
+
+		expect(events.at(-1)).toMatchObject({
+			type: "finish",
+			reason: "content-filter",
+		});
+	});
+
 	it("forwards the abort signal to the handler", async () => {
 		const handler = fakeHandler([{ type: "text", text: "x", id: "x" }]);
 		const controller = new AbortController();
