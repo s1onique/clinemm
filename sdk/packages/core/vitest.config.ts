@@ -1,4 +1,8 @@
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
+
+const rootDir = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
 	// ACT-CLINEMM-MODEL-BEHAVIOR-TRACE01:
@@ -15,6 +19,44 @@ export default defineConfig({
 	},
 	ssr: {
 		noExternal: ["zod"],
+	},
+	resolve: {
+		alias: [
+			// ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION01:
+			//
+			// The published `@cline/agents` / `@cline/llms` / `@cline/shared`
+			// entry points at `dist/`, which is not built in a source checkout.
+			// A suite that needs the REAL runtime and the REAL gateway
+			// therefore has to resolve those packages to their SOURCE entry
+			// points.
+			//
+			// This is the SAME alias mechanism `sdk/packages/llms/vitest.config.ts`
+			// already uses for `@cline/shared`.
+			{
+				find: /^@cline\/agents\/(.+)$/,
+				replacement: resolve(rootDir, "../agents/src/$1"),
+			},
+			{
+				find: /^@cline\/agents$/,
+				replacement: resolve(rootDir, "../agents/src/index.ts"),
+			},
+			{
+				find: /^@cline\/llms\/(.+)$/,
+				replacement: resolve(rootDir, "../llms/src/$1"),
+			},
+			{
+				find: /^@cline\/llms$/,
+				replacement: resolve(rootDir, "../llms/src/index.ts"),
+			},
+			{
+				find: /^@cline\/shared\/(.+)$/,
+				replacement: resolve(rootDir, "../shared/src/$1"),
+			},
+			{
+				find: /^@cline\/shared$/,
+				replacement: resolve(rootDir, "../shared/src/index.ts"),
+			},
+		],
 	},
 	test: {
 		environment: "node",

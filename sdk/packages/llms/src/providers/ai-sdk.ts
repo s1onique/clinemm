@@ -414,6 +414,10 @@ function buildAiSdkRequestMessages(
 ) {
 	const aiMessages = toAiSdkMessages(request.messages, systemPrompt, {
 		includeReasoning: shouldIncludeReasoningHistory(request, context),
+		// ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION01:
+		// the ORIGIN provider of this request. It bounds the replay of
+		// opaque provider-owned reasoning metadata.
+		requestProviderId: request.providerId,
 		supportedInputModalities:
 			context.model.modalities?.input ??
 			(context.model.capabilities
@@ -761,6 +765,13 @@ function toAiSdkMessages(
 	options?: {
 		includeReasoning?: boolean;
 		supportedInputModalities?: readonly string[];
+		/**
+		 * ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION01.
+		 *
+		 * The ORIGIN provider of the request the messages are replayed
+		 * into.
+		 */
+		requestProviderId?: string;
 	},
 ) {
 	const includeReasoning = options?.includeReasoning ?? true;
@@ -781,8 +792,33 @@ function toAiSdkMessages(
 					continue;
 				}
 				const metadata = part.metadata as Record<string, unknown> | undefined;
-				const signature = metadata?.signature;
-				const redactedData = metadata?.redactedData;
+				// ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION01.
+				//
+				// The ORIGIN boundary for opaque provider-owned reasoning
+				// metadata.
+				//
+				// The Anthropic thinking signature and the redacted-thinking
+				// payload are ISSUED BY one endpoint and authenticate a block to
+				// it. Replaying them to a DIFFERENT origin would disclose one
+				// endpoint's opaque metadata to another.
+				//
+				// The issuing provider is recorded WITH the payload when it is
+				// extracted (see `extractReasoningMetadata`). When that origin
+				// is KNOWN and differs from the request's provider, the opaque
+				// metadata is withheld. The reasoning TEXT is preserved — it is
+				// not opaque.
+				//
+				// When the origin is UNKNOWN (no recorded origin), the metadata
+				// is replayed: the absence of origin information is not evidence
+				// of a cross-origin replay, and dropping it would silently lose
+				// a provider-required signature.
+				const origin = metadata?.[REASONING_METADATA_ORIGIN_KEY];
+				const sameOrigin =
+					typeof origin !== "string" ||
+					options?.requestProviderId === undefined ||
+					origin === options.requestProviderId;
+				const signature = sameOrigin ? metadata?.signature : undefined;
+				const redactedData = sameOrigin ? metadata?.redactedData : undefined;
 				content.push({
 					type: "reasoning",
 					text: sanitizeSurrogates(part.text),
@@ -1014,7 +1050,7 @@ function buildRecoverableToolErrorMetadata(input: {
 	toolName: string;
 }): Record<string, unknown> {
 	return buildToolCallMetadata({
-		metadata: mergeToolCallMetadata(extractReasoningMetadata(input.part), {
+		metadata: mergeToolCallMetadata(extractGoogleThoughtMetadata(input.part), {
 			inputParseError: `Tool call ${input.toolName} was rejected before execution: ${input.errorMessage}`,
 			aiSdkToolError: input.errorMessage,
 		}),
@@ -1422,28 +1458,19 @@ function suppressDanglingStreamPromises(
 }
 
 /**
- * ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01.
+ * The GOOGLE / VERTEX thought metadata carried by a stream part.
  *
- * The provider-owned reasoning METADATA carried by a stream part.
+ * `thoughtSignature` is the opaque signature the Gemini family attaches to
+ * a thought block. It travels in `providerMetadata.google` /
+ * `providerMetadata.vertex`.
  *
- * Two families exist and BOTH are required for reasoning continuity:
- *
- *   - GOOGLE / VERTEX `thoughtSignature` — the opaque signature the Gemini
- *     family attaches to a thought block. It travels in
- *     `providerMetadata.google` / `providerMetadata.vertex`.
- *   - ANTHROPIC `signature` / `redactedData` — the opaque signature the
- *     Anthropic family attaches to a thinking block. It travels in
- *     `providerMetadata.anthropic`.
- *
- * The Anthropic family is the Anthropic-COMPATIBLE transport too, so the
- * MiniMax M3 / M3.1 Flash routes deliver their thinking signature through
- * this bucket.
- *
- * The metadata is OPAQUE and PROVIDER-OWNED: it is carried verbatim, it is
- * never synthesized, and it is never carried across a provider transition
- * (the outbound conversion reads it per provider bucket).
+ * This is the ORIGINAL extraction scope. It is deliberately kept SEPARATE
+ * from the Anthropic reasoning metadata (below): the Google/Vertex thought
+ * signature is a TOOL-CALL-scoped concept (it authorises the continuation
+ * of a tool call), while the Anthropic signature is a REASONING-BLOCK-scoped
+ * concept (it authenticates a thinking block).
  */
-function extractReasoningMetadata(
+function extractGoogleThoughtMetadata(
 	part: AiSdkStreamPart,
 ): Record<string, unknown> | undefined {
 	const metadata: Record<string, unknown> = {};
@@ -1467,11 +1494,6 @@ function extractReasoningMetadata(
 		providerMetadata?.vertex && typeof providerMetadata.vertex === "object"
 			? (providerMetadata.vertex as Record<string, unknown>)
 			: undefined;
-	const anthropicMetadata =
-		providerMetadata?.anthropic &&
-		typeof providerMetadata.anthropic === "object"
-			? (providerMetadata.anthropic as Record<string, unknown>)
-			: undefined;
 
 	if (
 		typeof metadata.thoughtSignature !== "string" &&
@@ -1488,6 +1510,66 @@ function extractReasoningMetadata(
 	) {
 		metadata.thought_signature = googleMetadata.thought_signature;
 	}
+
+	return Object.keys(metadata).length > 0 ? metadata : undefined;
+}
+
+/**
+ * ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION01.
+ *
+ * The ClineMM-owned metadata key that records the ORIGIN provider of an
+ * opaque provider-owned reasoning payload.
+ *
+ * It lives inside the reasoning part's metadata bag so it travels with the
+ * payload through accumulation and persistence, and it is READ ONLY by the
+ * outbound conversion. It is never sent to a provider: the outbound
+ * conversion consumes it and does not forward it.
+ */
+const REASONING_METADATA_ORIGIN_KEY = "__clineReasoningOrigin";
+
+/**
+ * ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01.
+ *
+ * The provider-owned reasoning METADATA carried by a REASONING stream part.
+ *
+ * Two families exist and BOTH are required for reasoning continuity:
+ *
+ *   - GOOGLE / VERTEX `thoughtSignature` — the opaque signature the Gemini
+ *     family attaches to a thought block. It travels in
+ *     `providerMetadata.google` / `providerMetadata.vertex`.
+ *   - ANTHROPIC `signature` / `redactedData` — the opaque signature the
+ *     Anthropic family attaches to a thinking block. It travels in
+ *     `providerMetadata.anthropic`.
+ *
+ * The Anthropic family is the Anthropic-COMPATIBLE transport too, so the
+ * MiniMax M3 / M3.1 Flash routes deliver their thinking signature through
+ * this bucket.
+ *
+ * The metadata is OPAQUE and PROVIDER-OWNED: it is carried verbatim, it is
+ * never synthesized, and it is never carried across a provider transition
+ * (the outbound conversion reads it per provider bucket).
+ *
+ * ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION01 (A2): this
+ * extractor is used ONLY on the REASONING path. The tool-call path and the
+ * recoverable-tool-error path keep the original Google/Vertex-only scope,
+ * so the Anthropic opaque reasoning metadata is not broadened into
+ * unrelated tool-call or error records.
+ */
+function extractReasoningMetadata(
+	part: AiSdkStreamPart,
+	issuingProviderId?: string,
+): Record<string, unknown> | undefined {
+	const metadata: Record<string, unknown> = {};
+
+	const providerMetadata =
+		part.providerMetadata && typeof part.providerMetadata === "object"
+			? (part.providerMetadata as Record<string, unknown>)
+			: undefined;
+	const anthropicMetadata =
+		providerMetadata?.anthropic &&
+		typeof providerMetadata.anthropic === "object"
+			? (providerMetadata.anthropic as Record<string, unknown>)
+			: undefined;
 
 	// ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01: the Anthropic
 	// thinking-block signature and the redacted-thinking payload.
@@ -1506,6 +1588,35 @@ function extractReasoningMetadata(
 		typeof anthropicMetadata?.redactedData === "string"
 	) {
 		metadata.redactedData = anthropicMetadata.redactedData;
+	}
+
+	// The Google/Vertex thought signature is COMPOSED from the shared
+	// extractor rather than re-implemented, so the two extraction
+	// implementations cannot drift apart.
+	const googleMetadata = extractGoogleThoughtMetadata(part);
+	if (googleMetadata) {
+		Object.assign(metadata, googleMetadata);
+	}
+
+	// ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION01.
+	//
+	// The ORIGIN of the opaque metadata.
+	//
+	// The Anthropic thinking signature and the redacted-thinking payload
+	// are ISSUED BY one endpoint and authenticate a block to it. Replaying
+	// them to a DIFFERENT origin discloses one endpoint's opaque metadata
+	// to another, so the issuing provider is recorded WITH the metadata and
+	// the outbound conversion checks it before replaying.
+	//
+	// The origin is recorded only when the metadata actually carries an
+	// Anthropic opaque payload, and it is recorded under a ClineMM-owned
+	// key, so it never alters the provider's own metadata shape.
+	if (
+		issuingProviderId !== undefined &&
+		(typeof metadata.signature === "string" ||
+			typeof metadata.redactedData === "string")
+	) {
+		metadata[REASONING_METADATA_ORIGIN_KEY] = issuingProviderId;
 	}
 
 	return Object.keys(metadata).length > 0 ? metadata : undefined;
@@ -1652,15 +1763,29 @@ async function* emitAiSdkEvents(
 					// even when its text is empty, so the provider-owned metadata
 					// survives to the accumulated reasoning part. An event with
 					// neither text nor metadata remains a no-op.
-					const metadata = extractReasoningMetadata(part);
+					const metadata = extractReasoningMetadata(part, request.providerId);
 					if (text || metadata) {
 						if (text) {
 							sawVisibleContent = true;
 						}
+						// ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION01.
+						//
+						// The provider's reasoning BLOCK identity. The resolved
+						// AI SDK's `reasoning-delta` part carries the provider's
+						// content-block id (the Anthropic content block index),
+						// which is what distinguishes two independently signed
+						// thinking blocks inside ONE assistant turn.
+						//
+						// Without it the runtime merges adjacent reasoning deltas
+						// into a single part, so two signed blocks collapse into
+						// one and only the LAST signature survives — the other
+						// signature is silently lost.
+						const blockId = typeof part.id === "string" ? part.id : undefined;
 						yield {
 							type: "reasoning-delta",
 							text,
 							metadata,
+							...(blockId !== undefined ? { blockId } : {}),
 						};
 					}
 					continue;
@@ -1784,7 +1909,7 @@ async function* emitAiSdkEvents(
 						input: typeof input === "string" ? undefined : input,
 						inputText,
 						metadata: buildToolCallMetadata({
-							metadata: extractReasoningMetadata(part),
+							metadata: extractGoogleThoughtMetadata(part),
 							request,
 							context,
 						}),

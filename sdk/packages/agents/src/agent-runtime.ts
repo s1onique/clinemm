@@ -3083,6 +3083,15 @@ export class AgentRuntime {
 		let requestId: string | undefined;
 		let accumulatedText = "";
 		let accumulatedReasoning = "";
+		// ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION01.
+		//
+		// The provider's CURRENT reasoning block identity.
+		//
+		// It is tracked OUTSIDE the reasoning part's metadata on purpose: the
+		// metadata bag is PROVIDER-OWNED (it carries the provider's opaque
+		// signature and redacted payload) and must not receive a
+		// ClineMM-internal field.
+		let activeReasoningBlockId: string | undefined;
 
 		// RSMT01: raise modelStreaming BEFORE the for-await
 		// loop so observers that subscribe to snapshot()
@@ -3149,7 +3158,29 @@ export class AgentRuntime {
 					case "reasoning-delta": {
 						accumulatedReasoning += event.text;
 						const last = sequence.at(-1);
-						if (last?.type === "part" && last.part.type === "reasoning") {
+						// ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION01.
+						//
+						// A provider response may contain SEVERAL independently
+						// signed reasoning blocks (the Anthropic Messages contract
+						// allows multiple `thinking` blocks in one assistant turn).
+						// Merging them into ONE part loses a signature: a merged
+						// block can carry only ONE signature, so every block but the
+						// last would be silently dropped on the wire.
+						//
+						// The provider's block identity (`event.blockId`, the AI
+						// SDK's reasoning part id) therefore STARTS A NEW reasoning
+						// part when it changes. When the identity is absent the
+						// previous merge behaviour is kept, so a provider that does
+						// not expose block identity is unaffected.
+						const sameBlock =
+							event.blockId === undefined ||
+							(event.blockId !== undefined &&
+								event.blockId === activeReasoningBlockId);
+						if (
+							last?.type === "part" &&
+							last.part.type === "reasoning" &&
+							sameBlock
+						) {
 							last.part.text += event.text;
 							last.part.redacted = event.redacted ?? last.part.redacted;
 							last.part.metadata = event.metadata ?? last.part.metadata;
@@ -3163,6 +3194,9 @@ export class AgentRuntime {
 									metadata: event.metadata,
 								},
 							});
+						}
+						if (event.blockId !== undefined) {
+							activeReasoningBlockId = event.blockId;
 						}
 						await this.emit({
 							type: "assistant-reasoning-delta",

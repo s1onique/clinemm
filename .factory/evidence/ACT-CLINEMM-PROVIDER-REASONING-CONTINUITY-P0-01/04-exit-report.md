@@ -36,6 +36,41 @@ MINIMAX_LOW_WIRE_EFFORT             CORRECT
 REDACTED_REASONING_DISPOSITION       DISTINCT_PRE_EXISTING_DEFECT (successor ACT recommended)
 COMPACTION_DISPOSITION              CONSERVED
 
+--- CORRECTION01 (ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION01) ---
+
+REAL_RUNTIME_SEAM                    VERIFIED
+REAL_TOOL_CONTINUATION              VERIFIED
+REAL_RUNTIME_RED                    REPRODUCED (on the pristine production)
+REAL_RUNTIME_GREEN                  PASS
+
+MULTI_BLOCK_PRODUCTION_DEFECT       REPRODUCED (and repaired)
+BLOCK_IDENTITY_LOSS_BOUNDARY        IDENTIFIED (the translator's reasoning branch)
+BLOCK_IDENTITY_NECESSITY            PROVEN (ablation D)
+BLOCK_IDENTITY_GREEN                PASS
+EXACT_ORDERED_WIRE_CONSERVATION     PASS
+
+SAME_ADAPTER_ORIGIN_CONSERVATION    PASS (a newly reachable origin violation was
+                                     REPRODUCED and repaired; ablation E)
+PRODUCTION_CODEC_ROUNDTRIP          PASS
+SESSION_RESTORE                     PASS
+PRODUCTION_COMPACTION               NOT_EXECUTED
+RETAINED_PART_SERIALIZATION         PASS
+
+REASONING_BLOCK_IDENTITY_PROPAGATION VERIFIED (the AI SDK's existing reasoning-part
+                                     id is propagated; no new event protocol)
+TOOL_CALL_METADATA_SCOPE            CONSERVED (A2: the Anthropic extraction is
+                                     confined to the reasoning path)
+RECOVERABLE_TOOL_ERROR_METADATA_SCOPE CONSERVED (A2)
+EMPTY_SIGNED_REASONING_CONSERVATION PASS (A3)
+
+MINIMAX_SIGNED_CONTRACT             VERIFIED
+MINIMAX_UNSIGNED_CONTRACT           UNESTABLISHED
+MINIMAX_LOW_BASELINE_WIRE_EFFORT    CORRECT
+MINIMAX_LOW_EFFORT_REPAIR_REQUIRED  NO
+MINIMAX_LOW_EFFORT_PRODUCTION_DELTA NONE
+MINIMAX_LOW_RUNTIME_WIRE_CONSERVATION PASS
+HISTORICAL_INSTALLED_UI_TO_WIRE_CORRELATION UNKNOWN
+
 FOCUSED_REGRESSION_GATE              PASS (238/238)
 TYPECHECK_GATE                      PASS (exit 0)
 ORDINARY_GATE                       PASS_WITH_PRE_EXISTING_FAILURES (1189 passed, 17 pre-existing failures in 3 unrelated suites)
@@ -50,6 +85,9 @@ INTEGRATION                         NOT_AUTHORIZED (isolated branch only)
 VSIX_PACKAGING                      NOT_AUTHORIZED
 LIVE_PROVIDER_QUALIFICATION         NOT_AUTHORIZED
 ```
+
+The CORRECTION01 evidence is in
+`05-correction01-real-runtime-and-block-identity.md`.
 
 ## 2. Handoff identity
 

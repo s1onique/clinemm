@@ -856,6 +856,27 @@ export type AgentModelEvent =
 			text: string;
 			redacted?: boolean;
 			metadata?: unknown;
+			/**
+			 * ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION01.
+			 *
+			 * The identity of the PROVIDER'S reasoning block this delta
+			 * belongs to.
+			 *
+			 * A provider response may contain SEVERAL independently signed
+			 * reasoning blocks (the Anthropic Messages contract allows
+			 * multiple `thinking` blocks in one assistant turn). Each block
+			 * has its own text and its own opaque signature, and they must
+			 * NOT be merged: a merged block cannot carry two signatures, so
+			 * one of them would be silently lost.
+			 *
+			 * The value is the provider's own content-block identifier (the
+			 * AI SDK's reasoning part id, which is the Anthropic content
+			 * block index). It is a TRANSIENT stream-event field: it is not
+			 * persisted and it is not part of the message schema. When it is
+			 * absent the runtime keeps its previous behaviour and merges
+			 * adjacent reasoning deltas into one part.
+			 */
+			blockId?: string;
 	  }
 	| {
 			type: "tool-call-delta";

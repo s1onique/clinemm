@@ -106,66 +106,6 @@ function allBlocksOf(
 }
 
 describe("neighbouring-behaviour conservation controls", () => {
-	it("R9: the reasoning signature survives a persistence round trip", async () => {
-		const { fetchImpl, calls } = makeFetch([
-			() =>
-				sse([
-					MESSAGE_START,
-					...thinkingBlock(REASONING, SIGNATURE),
-					MESSAGE_STOP,
-				]),
-		]);
-		const gateway = createGateway({
-			providerConfigs: [
-				{
-					providerId: "minimax",
-					apiKey: "test-key",
-					baseUrl: "https://api.minimax.io/anthropic/v1",
-					fetch: fetchImpl,
-				},
-			],
-		});
-		const request = {
-			providerId: "minimax",
-			modelId: "MiniMax-M3.1-Flash",
-			messages: [userMessage()],
-			reasoning: { enabled: true, effort: "low" },
-		};
-		const events: AgentModelEvent[] = [];
-		for await (const event of await gateway.stream(request as never)) {
-			events.push(event);
-		}
-		const turn = assistantTurn(events);
-
-		// PERSIST: the assistant turn is serialized to JSON and read back,
-		// exactly as a session store would.
-		const persisted = JSON.parse(JSON.stringify(turn)) as AgentMessage;
-		const restoredReasoning = persisted.content.find(
-			(part) => part.type === "reasoning",
-		);
-		expect(restoredReasoning?.type).toBe("reasoning");
-		expect(restoredReasoning?.text).toBe(REASONING);
-		expect(
-			(restoredReasoning?.metadata as Record<string, unknown> | undefined)
-				?.signature,
-		).toBe(SIGNATURE);
-
-		// RESTORE: the restored turn is replayed and must reach the wire.
-		await (async () => {
-			for await (const _event of await gateway.stream({
-				...request,
-				messages: [userMessage(), persisted],
-			} as never)) {
-				// drain
-			}
-		})();
-		const thinking = allBlocksOf(calls[1]).find(
-			(block) => block.type === "thinking",
-		);
-		expect(thinking?.thinking).toBe(REASONING);
-		expect(thinking?.signature).toBe(SIGNATURE);
-	});
-
 	it("R11: the Google/Vertex thought-signature behaviour is conserved", async () => {
 		// The Gemini family's `thoughtSignature` rides on the TOOL CALL,
 		// not on the reasoning part: the AI SDK surfaces it as
@@ -306,7 +246,7 @@ describe("neighbouring-behaviour conservation controls", () => {
 		expect(serialized).not.toContain('"thinking"');
 	});
 
-	it("R15: a compaction-retained reasoning part stays protocol-valid", async () => {
+	it("R15: a retained reasoning part stays protocol-valid on the wire", async () => {
 		// Compaction REPLACES the history with a summary. The retained
 		// reasoning must still be protocol-valid when replayed: a retained
 		// SIGNED reasoning part carries its signature, and a retained
@@ -340,6 +280,17 @@ describe("neighbouring-behaviour conservation controls", () => {
 		}
 		const retained = assistantTurn(events);
 
+		// DISPOSITION:
+		//
+		//   RETAINED_PART_SERIALIZATION = PASS
+		//   PRODUCTION_COMPACTION        = NOT_EXECUTED
+		//
+		// This case proves that a RETAINED reasoning part stays
+		// protocol-valid on the wire. It does NOT exercise the production
+		// compaction path: the compaction retention seam lives in
+		// `@cline/core`'s context extension, which is a separate subsystem
+		// and is deliberately NOT rewritten or driven by this ACT.
+		//
 		// The retained part is protocol-valid: it carries the signature the
 		// provider emitted, so the Anthropic serializer accepts it.
 		await (async () => {
