@@ -12,7 +12,7 @@ predecessor on every input tested.
 
 ```text
 ENTRY_HEAD=1d45a8d845eca27bce311949a08fca7868f211cd
-SUBJECT_HEAD=<recorded in the closure commit; a commit cannot contain its own hash>
+SUBJECT_HEAD=7a88dd10aafc20d5957d77b8616e752342cf6a42
 
 PRODUCTION_SANITIZER_RED=REPRODUCED (12 watchdog terminations on the ladder)
 PATHOLOGICAL_OPERATION_ISOLATED=YES (2 operations: credential-assignment
@@ -507,7 +507,7 @@ INFERENCE_REQUESTS=0
 
 ```text
 ENTRY_HEAD=1d45a8d845eca27bce311949a08fca7868f211cd
-SUBJECT_HEAD=<recorded in the closure commit; a commit cannot contain its own hash>
+SUBJECT_HEAD=7a88dd10aafc20d5957d77b8616e752342cf6a42
 
 PRODUCTION_SANITIZER_RED=REPRODUCED
 PATHOLOGICAL_OPERATION_ISOLATED=YES

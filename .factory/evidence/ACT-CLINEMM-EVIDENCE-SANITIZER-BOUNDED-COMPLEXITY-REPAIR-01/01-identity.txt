@@ -1,7 +1,7 @@
 ACT-CLINEMM-EVIDENCE-SANITIZER-BOUNDED-COMPLEXITY-REPAIR-01 — IDENTITY
 =========================================================================
 ENTRY_HEAD            = 1d45a8d845eca27bce311949a08fca7868f211cd
-SUBJECT_HEAD          = <recorded in the closure commit; a commit cannot contain its own hash>
+SUBJECT_HEAD          = 7a88dd10aafc20d5957d77b8616e752342cf6a42
 EXPECTED_PREDECESSOR  = 1d45a8d845eca27bce311949a08fca7868f211cd  (MATCH)
 BRANCH                = main
 TRACKED_TREE_AT_ENTRY = clean

@@ -41568,9 +41568,9 @@ requires) | git diff --check CLEAN
 
 **ENTRY_HEAD = 1d45a8d845eca27bce311949a08fca7868f211cd** (the expected
 predecessor, verified; the tree was clean and there were no stashes).
-**SUBJECT_HEAD:** the source HEAD carrying the bounded implementation tree
-(recorded in the closure commit, because a commit cannot contain its own
-hash).
+**SUBJECT_HEAD = 7a88dd10aafc20d5957d77b8616e752342cf6a42** (the source HEAD carrying the bounded implementation
+tree; this closure commit changes NO production code, so the implementation
+commit stays `7a88dd10aafc20d5957d77b8616e752342cf6a42`).
 
 **VERDICT = GO_EVIDENCE_REFERENCE_TRUST_REPAIR.**
 
