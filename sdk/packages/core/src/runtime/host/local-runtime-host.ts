@@ -42,7 +42,6 @@ import {
 	resolvePckDeadlineMs,
 } from "../../extensions/context/precompaction-knowledge-checkpoint/runtime";
 import { generateSummary } from "../../extensions/context/summary-generation";
-import { resolveConnectionProviderConfig } from "../../services/llms/handler-factory";
 import type {
 	McpAppResourceReadRequest,
 	McpAppsRuntime,
@@ -66,6 +65,7 @@ import type { TeamEvent } from "../../extensions/tools/team";
 import type { HookEventPayload } from "../../hooks";
 import { buildTelemetryAgentIdentity } from "../../services/agent-events";
 import { resolveWorkspacePath } from "../../services/config";
+import { resolveConnectionProviderConfig } from "../../services/llms/handler-factory";
 import { prepareLocalRuntimeBootstrap } from "../../services/local-runtime-bootstrap";
 import {
 	executePluginCommand,
@@ -152,6 +152,7 @@ import {
 } from "../orchestration/runtime-oauth-token-manager";
 import type { RuntimeBuilder } from "../orchestration/session-runtime";
 import { SessionRuntime } from "../orchestration/session-runtime-orchestrator";
+import { markHostRuntimeControl } from "../turn-queue/host-runtime-control-brand";
 import { PendingPromptsController } from "../turn-queue/pending-prompt-service";
 import { manifestToSessionRecord } from "./history";
 import { AgentEventBridge } from "./local/agent-event-bridge";
@@ -170,16 +171,13 @@ import {
 	type SubAgentStartTracker,
 } from "./local/spawn-tool";
 import { loadUserFileContent } from "./local/user-files";
-import {
-	markHostRuntimeControl,
-} from "../turn-queue/host-runtime-control-brand";
 import type {
+	HostOwnershipFactsSnapshotInternal,
 	ListSessionsOptions,
 	PendingPromptsServiceApi,
 	ResolvedStartSessionInput,
 	RestoreSessionInput,
 	RestoreSessionResult,
-	HostOwnershipFactsSnapshotInternal,
 	RuntimeHost,
 	RuntimeHostSubscribeOptions,
 	SendSessionInput,
@@ -629,10 +627,10 @@ export class LocalRuntimeHost implements RuntimeHost {
 			// to prevent a stale read at Q5 from being read as
 			// "queue is empty" (fail-closed on unknown sessionId).
 			count: (sessionId) => {
-				if (!sessionId) return { available: false }
-				const active = this.sessions.get(sessionId)
-				if (!active) return { available: false }
-				return { available: true, count: active.pendingPrompts.length }
+				if (!sessionId) return { available: false };
+				const active = this.sessions.get(sessionId);
+				if (!active) return { available: false };
+				return { available: true, count: active.pendingPrompts.length };
 			},
 		};
 		this.eventBridge = new AgentEventBridge({
@@ -1172,8 +1170,9 @@ export class LocalRuntimeHost implements RuntimeHost {
 					// shared summarizer/agent configuration is never mutated
 					// and the ordinary summarizer's and the working agent's
 					// retries are preserved exactly.
-					const pckCheckpointProviderConfig =
-						applyPckPhysicalRequestPolicy(effectiveCheckpointProviderConfig);
+					const pckCheckpointProviderConfig = applyPckPhysicalRequestPolicy(
+						effectiveCheckpointProviderConfig,
+					);
 					return await generateSummary({
 						providerConfig: pckCheckpointProviderConfig,
 						systemPrompt,
@@ -1206,35 +1205,34 @@ export class LocalRuntimeHost implements RuntimeHost {
 			// byte-identical to the pre-ACT behaviour.
 			...(adjudicationRegistry
 				? {
-					adjudication: {
-						registry: adjudicationRegistry,
-						...(configWithProvider.adjudication?.vocabulary
-							? { vocabulary: configWithProvider.adjudication.vocabulary }
-							: {}),
-						...(configWithProvider.adjudication?.revisionResolver
-							? {
-								revisionResolver:
-									configWithProvider.adjudication.revisionResolver,
-							}
-							: {}),
-						// ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01:
-						// the acquisition-time records.
-						//
-						// They are derived from the CANONICAL HISTORY, which is
-						// the DURABLE authority: the records ride on the
-						// persisted tool-result blocks, so a session recreated
-						// from the persisted transcript restores them with no
-						// in-memory handover and no workspace re-read.
-						...(configWithProvider.adjudication?.revisionResolver
-							? {
-									getAcquisitions: (
-										canonicalMessages: readonly LlmsProviders.MessageWithMetadata[],
-									) =>
-										buildAcquisitionEvidenceLedger(canonicalMessages),
-								}
-							: {}),
-					},
-				}
+						adjudication: {
+							registry: adjudicationRegistry,
+							...(configWithProvider.adjudication?.vocabulary
+								? { vocabulary: configWithProvider.adjudication.vocabulary }
+								: {}),
+							...(configWithProvider.adjudication?.revisionResolver
+								? {
+										revisionResolver:
+											configWithProvider.adjudication.revisionResolver,
+									}
+								: {}),
+							// ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01:
+							// the acquisition-time records.
+							//
+							// They are derived from the CANONICAL HISTORY, which is
+							// the DURABLE authority: the records ride on the
+							// persisted tool-result blocks, so a session recreated
+							// from the persisted transcript restores them with no
+							// in-memory handover and no workspace re-read.
+							...(configWithProvider.adjudication?.revisionResolver
+								? {
+										getAcquisitions: (
+											canonicalMessages: readonly LlmsProviders.MessageWithMetadata[],
+										) => buildAcquisitionEvidenceLedger(canonicalMessages),
+									}
+								: {}),
+						},
+					}
 				: {}),
 			// ACT-CLINEMM-COMPACTION-TASK-CONTRACT-CONSERVATION-REPAIR01:
 			// use the SAME configured operating ceiling as the compaction
@@ -1269,7 +1267,9 @@ export class LocalRuntimeHost implements RuntimeHost {
 						"Compaction prepareTurn ran before the session runtime was created",
 					);
 				}
-				if (typeof agent.prepareProviderMessagesForBudgetAccounting === "function") {
+				if (
+					typeof agent.prepareProviderMessagesForBudgetAccounting === "function"
+				) {
 					return await agent.prepareProviderMessagesForBudgetAccounting(
 						messages,
 					);
@@ -1320,15 +1320,29 @@ export class LocalRuntimeHost implements RuntimeHost {
 					// the outcome carries the REFUSAL REASON, so the seam can
 					// tell a cancellation from a persistence failure and
 					// report the truthful diagnosis.
+					//
+					// ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01
+					// (AMENDMENT-02 §5) — THE OUTCOME IS A DISCRIMINATED
+					// UNION, NOT A CAST.
+					//
+					// The previous form built an optional-reason object and
+					// CAST it into the union, so the type system never checked
+					// that an unsuccessful installation actually carried a
+					// reason. The producer now CONSTRUCTS the union: an
+					// unsuccessful outcome is impossible to express without an
+					// established refusal reason.
+					//
+					// The LEGACY shapes are untouched: the boolean `false` and
+					// the reason-less object keep their historical meaning
+					// elsewhere; only this producer opts into the structured
+					// form.
+					if (result.updated) {
+						return { installed: true };
+					}
 					return {
-						installed: result.updated,
-						...(result.reason ? { reason: result.reason } : {}),
-					} as
-						| { installed: true }
-						| {
-								installed: false;
-								reason: "cancelled" | "persistence_failed" | "stale_state";
-						  };
+						installed: false,
+						reason: result.reason ?? "persistence_failed",
+					};
 				} catch (error) {
 					configWithProvider.logger?.error?.(
 						"Failed to persist session compaction state",
@@ -1452,21 +1466,21 @@ export class LocalRuntimeHost implements RuntimeHost {
 			// messages still wins.
 			hooks: adjudicationRegistry
 				? {
-					...bootstrap.hooks,
-					beforeModel: async (ctx) => {
-						const withHandles = attachEvidenceHandlesToAgentMessages(
-							ctx.request.messages,
-							adjudicationRegistry,
-						);
-						const control = await bootstrap.hooks?.beforeModel?.({
-							...ctx,
-							request: { ...ctx.request, messages: withHandles },
-						});
-						return control
-							? { ...control, messages: control.messages ?? withHandles }
-							: { messages: withHandles };
-					},
-				}
+						...bootstrap.hooks,
+						beforeModel: async (ctx) => {
+							const withHandles = attachEvidenceHandlesToAgentMessages(
+								ctx.request.messages,
+								adjudicationRegistry,
+							);
+							const control = await bootstrap.hooks?.beforeModel?.({
+								...ctx,
+								request: { ...ctx.request, messages: withHandles },
+							});
+							return control
+								? { ...control, messages: control.messages ?? withHandles }
+								: { messages: withHandles };
+						},
+					}
 				: bootstrap.hooks,
 			extensions,
 			hookErrorMode: configWithProvider.hookErrorMode,
@@ -2159,11 +2173,13 @@ export class LocalRuntimeHost implements RuntimeHost {
 	 * `undefined` returned here and the absent-method case in
 	 * `SdkSessionHost` / `ClineCore`.
 	 */
-	getActiveRuntimeSnapshot(sessionId: string | undefined): LiveAgentRuntimeStateSnapshot | undefined {
-		if (!sessionId) return undefined
-		const active = this.sessions.get(sessionId)
-		if (!active) return undefined
-		return active.agent.snapshot?.()
+	getActiveRuntimeSnapshot(
+		sessionId: string | undefined,
+	): LiveAgentRuntimeStateSnapshot | undefined {
+		if (!sessionId) return undefined;
+		const active = this.sessions.get(sessionId);
+		if (!active) return undefined;
+		return active.agent.snapshot?.();
 	}
 
 	/**
@@ -2205,11 +2221,15 @@ export class LocalRuntimeHost implements RuntimeHost {
 	 * method-absent and returns-undefined cases collapse to a
 	 * single fallback at the C3 capability projection.
 	 */
-	getActiveRuntimeToolNames(sessionId: string | undefined): readonly string[] | undefined {
-		if (!sessionId) return undefined
-		const active = this.sessions.get(sessionId)
-		if (!active) return undefined
-		return [...active.runtime.tools, ...(active.config.extraTools ?? [])].map((t) => t.name)
+	getActiveRuntimeToolNames(
+		sessionId: string | undefined,
+	): readonly string[] | undefined {
+		if (!sessionId) return undefined;
+		const active = this.sessions.get(sessionId);
+		if (!active) return undefined;
+		return [...active.runtime.tools, ...(active.config.extraTools ?? [])].map(
+			(t) => t.name,
+		);
 	}
 
 	/**
@@ -2262,17 +2282,19 @@ export class LocalRuntimeHost implements RuntimeHost {
 	 * Read-only: never mutates runtime/session state, never inserts
 	 * state-post events, never schedules timers.
 	 */
-	captureHostOwnershipFacts(sessionId: string | undefined): HostOwnershipFactsSnapshotInternal | undefined {
-		if (!sessionId) return undefined
-		const active = this.sessions.get(sessionId)
-		if (!active) return undefined
+	captureHostOwnershipFacts(
+		sessionId: string | undefined,
+	): HostOwnershipFactsSnapshotInternal | undefined {
+		if (!sessionId) return undefined;
+		const active = this.sessions.get(sessionId);
+		if (!active) return undefined;
 		return {
 			lastInteractiveTurnFinishReason: active.lastInteractiveTurnFinishReason,
 			sessionStatus: active.status,
 			pendingPromptCount: active.pendingPrompts.length,
 			drainingPendingPrompts: active.drainingPendingPrompts,
 			agentCanStartRun: active.agent.canStartRun?.() ?? false,
-		}
+		};
 	}
 
 	async listSessions(
@@ -2483,10 +2505,13 @@ export class LocalRuntimeHost implements RuntimeHost {
 		 * installation check, not a second cancellation authority.
 		 */
 		abortSignal?: AbortSignal,
-	): Promise<{
-		updated: boolean;
-		reason?: "cancelled" | "persistence_failed" | "stale_state";
-	}> {
+	): Promise<
+		| { updated: true }
+		| {
+				updated: false;
+				reason: "cancelled" | "persistence_failed" | "stale_state";
+		  }
+	> {
 		if (
 			!(await this.canPersistCompactionState(
 				session.sessionId,
@@ -2670,21 +2695,24 @@ export class LocalRuntimeHost implements RuntimeHost {
 	 * a permanent listener registry here.
 	 */
 	subscribeRecoveryStateChange(
-		listener: (sessionId: string, recovery: AgentRuntimeRecoverySnapshot) => void,
+		listener: (
+			sessionId: string,
+			recovery: AgentRuntimeRecoverySnapshot,
+		) => void,
 	): () => void {
-		const unsubscribers: Array<() => void> = []
+		const unsubscribers: Array<() => void> = [];
 		for (const active of this.sessions.values()) {
-			unsubscribers.push(active.agent.subscribeRecoveryStateChange(listener))
+			unsubscribers.push(active.agent.subscribeRecoveryStateChange(listener));
 		}
 		return () => {
 			for (const unsub of unsubscribers) {
 				try {
-					unsub()
+					unsub();
 				} catch {
 					// defensive: subscriber already detached
 				}
 			}
-		}
+		};
 	}
 
 	/**
@@ -2700,24 +2728,24 @@ export class LocalRuntimeHost implements RuntimeHost {
 	subscribeRuntimeEvents(
 		listener: (sessionId: string, event: AgentRuntimeEvent) => void,
 	): () => void {
-		const unsubscribers: Array<() => void> = []
+		const unsubscribers: Array<() => void> = [];
 		for (const active of this.sessions.values()) {
-			const sessionId = active.sessionId
+			const sessionId = active.sessionId;
 			unsubscribers.push(
 				active.agent.subscribeRuntimeEvents((event) => {
-					listener(sessionId, event)
+					listener(sessionId, event);
 				}),
-			)
+			);
 		}
 		return () => {
 			for (const unsub of unsubscribers) {
 				try {
-					unsub()
+					unsub();
 				} catch {
 					// defensive: subscriber already detached
 				}
 			}
-		}
+		};
 	}
 
 	async updateSessionModel(sessionId: string, modelId: string): Promise<void> {
@@ -3174,13 +3202,13 @@ export class LocalRuntimeHost implements RuntimeHost {
 			// WeakSet membership check — CORRECTION03's
 			// `Symbol.for`/`Object.defineProperty` mechanism has been
 			// removed entirely.
-			let runInput: AgentMessage | string | undefined
+			let runInput: AgentMessage | string | undefined;
 			if (runtimeControlKind !== undefined) {
 				const messageMetadata: Record<string, unknown> = {
 					runtimeAuthority: "host_runtime_control",
 					kind: runtimeControlKind,
 					userRunSpan: 0,
-				}
+				};
 				const envelope: AgentMessage = {
 					id: `runtime-control-${Date.now()}`,
 					// role:"user" is load-bearing — see (a)-(d) above.
@@ -3188,13 +3216,13 @@ export class LocalRuntimeHost implements RuntimeHost {
 					content: [{ type: "text", text: prompt }],
 					createdAt: Date.now(),
 					metadata: messageMetadata,
-				}
+				};
 				// Register the envelope into the module-private WeakSet.
 				// This is the entire attack surface for marking; there
 				// is no Symbol property, no metadata discriminator, and
 				// no other credential to forge.
-				markHostRuntimeControl(envelope)
-				runInput = envelope
+				markHostRuntimeControl(envelope);
+				runInput = envelope;
 			}
 			// R3: upstream threads the (possibly brand-gated) run input into the
 			// agent call. The fork keeps its own abort re-issue authority below

@@ -30,27 +30,28 @@ import { generateSummary } from "./summary-generation";
 const MIN_AGENTIC_SUMMARY_INPUT_TOKENS = 1_024;
 
 /**
- * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 — THE PHYSICAL
- * REQUEST IDENTITY OF THE SUMMARIZATION INFERENCE.
+ * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 (AMENDMENT-02 §4) —
+ * THE PHYSICAL REQUEST IDENTITY OF THE SUMMARIZATION INFERENCE.
  *
  * The summarization request is a REAL provider request, distinct from the
  * main model request, and its usage has to be attributed to THAT request.
  *
- * The identity is derived from the compaction invocation itself:
- * `(conversationId, iteration, agentId)`. It is stable for one summarization
- * request and distinct across two summarization requests of the same
- * conversation, so a SECOND summarization request is independently
- * attributed rather than merged into the first.
+ * The identity is the transport's OWN per-request identity — the
+ * `gw_<nanoid>` the compatibility adapter stamps on the stream it
+ * returns. It is a PHYSICAL identity: a fresh one per `createMessage`
+ * call, i.e. per physical provider request.
  *
- * It is NOT the main model's request identity: the summarization request is
- * a different physical request to the provider, and conflating the two
- * would make the summarization's cost indistinguishable from the agent's
- * own turn.
+ * It is deliberately NOT a logical identity derived from the compaction's
+ * position (`conversationId`, `iteration`, `agentId`): two summarization
+ * invocations that share ONE logical iteration are TWO physical provider
+ * requests, and a logical tuple cannot tell them apart. The transport's
+ * own identity can.
+ *
+ * It is NOT the main model's request identity either: the summarization
+ * request is a different physical request to the provider, and conflating
+ * the two would make the summarization's cost indistinguishable from the
+ * agent's own turn.
  */
-function summarizationInferenceId(context: CoreCompactionContext): string {
-	return `summarization:${context.conversationId}:${context.iteration}:${context.agentId}`;
-}
-
 export function buildAgenticSummaryInputBudget(options: {
 	messages: CoreCompactionContext["messages"];
 	targetTokens: number;
@@ -293,29 +294,49 @@ export async function runAgenticCompaction(options: {
 		// generation means — and remains reachable for a transport that
 		// IGNORES the cancellation and reports a successful completion.
 		cancellationReporting: "report",
+		// ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01
+		// (AMENDMENT-02 §1) — THE USAGE SINK.
+		//
+		// The usage leaves the summarizer through this channel, and the
+		// summarizer FINALIZES it on EVERY exit — the normal return and
+		// the exceptional one alike. A transport that fails after the
+		// provider already reported its usage ends the generation by
+		// THROWING, and the usage of that PAID inference was paid for
+		// whether or not the caller ever saw the result.
+		//
+		// The report is NOT tied to the acceptance decision, to the
+		// persistence outcome or to the UI publication: a rejected summary
+		// is not free inference.
+		//
+		// ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01
+		// (AMENDMENT-02 §1): the caller does NOT report the usage again.
+		// There is ONE delivery path, and it is this one.
+		reportUsage: options.context.reportAuxiliaryUsage
+			? (usage) => {
+					options.context.reportAuxiliaryUsage?.({
+						// ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01
+						// (AMENDMENT-02 §4): the PHYSICAL request identity, as
+						// reported by the transport itself.
+						inferenceId: usage.requestId ?? "summarization",
+						kind: usage.kind,
+						inputTokens: usage.inputTokens,
+						outputTokens: usage.outputTokens,
+						...(usage.cacheReadTokens !== undefined
+							? { cacheReadTokens: usage.cacheReadTokens }
+							: {}),
+						...(usage.cacheWriteTokens !== undefined
+							? { cacheWriteTokens: usage.cacheWriteTokens }
+							: {}),
+						...(usage.totalCost !== undefined
+							? { totalCost: usage.totalCost }
+							: {}),
+						...(usage.reasoningTokenCount !== undefined
+							? { reasoningTokenCount: usage.reasoningTokenCount }
+							: {}),
+					});
+				}
+			: undefined,
 	});
-	// ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 — THE USAGE
-	// IS REPORTED HERE, BEFORE THE ACCEPTANCE DECISION.
-	//
-	// The provider already DID the work and already reported what it cost.
-	// Whether the candidate is accepted, rejected, cancelled or refused at
-	// the persistence boundary does not change that: a rejected summary is
-	// not free inference.
-	//
-	// The report is therefore made IMMEDIATELY, on the way out of the
-	// summarizer, and it is NOT tied to the acceptance decision, to the
-	// persistence outcome or to the UI publication.
-	//
-	// The usage stays ABSENT when the provider reported none: an absent
-	// provider metric is unknown, and it is never turned into a zero-cost
-	// inference.
-	if (summaryResult.usage) {
-		options.context.reportAuxiliaryUsage?.({
-			inferenceId: summarizationInferenceId(options.context),
-			kind: "summarization",
-			...summaryResult.usage,
-		});
-	}
 	options.logger?.debug("Generated compaction summary", {
 		outputChars: summaryResult.text.length,
 		reasoningChars: summaryResult.reasoningChars,

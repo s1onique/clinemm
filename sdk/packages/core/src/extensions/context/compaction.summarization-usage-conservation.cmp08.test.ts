@@ -1,5 +1,5 @@
 /**
- * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01.
+ * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 (AMENDMENT-02).
  *
  * THE SUMMARIZATION USAGE CONSERVATION WITNESSES.
  *
@@ -18,33 +18,46 @@
  *     provider usage.
  *   - A CANCELLED summary was still paid for.
  *   - A summary refused at the PERSISTENCE boundary was still paid for.
+ *   - A summary whose transport FAILED after the provider reported its usage
+ *     was still paid for.
  *
  * So the usage is accounted exactly once, irrespective of whether the
  * candidate became installed state.
  *
  * ============================================================================
- * THE ACCOUNTING OWNER
+ * THE ACCOUNTING OWNER — AND WHY THIS SUITE IS NOW COMPOSED
  * ============================================================================
  *
  * There is NO second accounting ledger. The usage travels the EXISTING
- * mechanism:
+ * mechanism, and this suite drives that mechanism END TO END:
  *
  *   the provider's usage chunk
- *     -> generateSummary()            (reads the chunk off the stream)
- *       -> runAgenticCompaction()     (reports it OUT OF BAND, before the
- *                                      acceptance decision)
+ *     -> generateSummary()              (reads the chunk off the stream)
+ *       -> runAgenticCompaction()       (hands the usage to the sink)
  *         -> the compaction seam's usage channel
- *           -> the agent runtime's updateUsage()   (the SAME accumulation
- *                                                    the main model's usage
- *                                                    uses)
+ *           -> the agent runtime's updateUsage()  (the SAME accumulation the
+ *                                                   main model's usage uses)
  *             -> the `usage-updated` runtime event
- *               -> runtime-event-adapter.translateUsage()
+ *               -> RuntimeEventAdapter.translateUsage()
  *                 -> the `AgentEvent { type: "usage" }`
- *                   -> handleAgentEvent()   (THE PRODUCTION CONSUMER)
+ *                   -> AgentEventBridge -> handleAgentEvent()
  *                     -> ctx.usageBySession  (THE OBSERVABLE RESULT)
  *
- * The witness below observes the PRODUCTION CONSUMER's observable result
- * (`ctx.usageBySession`), not the producer's local bookkeeping.
+ * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 (AMENDMENT-02 §2):
+ * the PRINCIPAL witness is COMPOSED over the REAL production pieces — the
+ * real `SessionRuntime`, the real `AgentRuntime`, the real compaction
+ * preparation, the real runtime-event adapter and the real accounting
+ * consumer. Only the EXTERNAL PROVIDER BOUNDARY is substituted.
+ *
+ * The earlier form of this suite hand-built an `AgentEvent` and fed it
+ * straight to `handleAgentEvent()`. That BYPASSED the session runtime's
+ * forwarding, the runtime's `updateUsage()` and the runtime-event
+ * translation, so it could not observe whether the production accounting
+ * CONNECTION actually carried the usage — only whether the consumer
+ * accumulates a delta it is handed. The composed witness below closes that
+ * gap, and it establishes NECESSITY by disabling only the new
+ * auxiliary-usage forwarding connection and observing the principal witness
+ * fail.
  *
  * ============================================================================
  * WHAT THIS SUITE DOES NOT CLAIM
@@ -55,12 +68,16 @@
  * The remote termination remains UNVERIFIED.
  *
  * It does NOT estimate missing provider usage. An absent provider metric
- * stays ABSENT and is never turned into a zero-cost inference.
+ * stays ABSENT and is never turned into a zero-cost inference. An
+ * EXPLICITLY REPORTED ZERO is a DIFFERENT fact and is conserved as one.
  */
 
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type * as LlmsProviders from "@cline/llms";
 import type { MessageWithMetadata } from "@cline/shared";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	type AgentEventContext,
 	handleAgentEvent,
@@ -117,10 +134,36 @@ const SECOND_USAGE = {
 	thoughtsTokenCount: 7,
 } as const;
 
-/** The usage the provider reports for a request that reports NO metrics. */
-const UNREPORTED_USAGE = {
+/**
+ * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 (AMENDMENT-02 §4) —
+ * THE EXPLICITLY REPORTED ZERO.
+ *
+ * The provider DID report a usage event for this request, and the metrics
+ * it reported were ZERO. That is a DIFFERENT fact from "the provider
+ * reported no usage": the inference happened, and the provider accounted it
+ * as costing nothing.
+ *
+ * The earlier fixture called this `UNREPORTED_USAGE`, which claimed the
+ * opposite of what it modelled. It is renamed so the distinction is
+ * legible: an EXPLICIT ZERO is conserved as an explicit zero, and the
+ * ABSENT case is modelled separately (no usage chunk at all).
+ */
+const EXPLICIT_ZERO_USAGE = {
 	inputTokens: 0,
 	outputTokens: 0,
+} as const;
+
+/**
+ * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 (AMENDMENT-02 §4) —
+ * THE MAIN AGENT'S OWN USAGE.
+ *
+ * The main model's usage, reported by the runtime the same way the
+ * summarization's usage is reported.
+ */
+const MAIN_AGENT_USAGE = {
+	inputTokens: 5_000,
+	outputTokens: 500,
+	totalCost: 0.5,
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -176,8 +219,31 @@ function canonicalHistory(): MessageWithMetadata[] {
 	];
 }
 
+/**
+ * The canonical history as the RUNTIME's own agent messages.
+ *
+ * The compaction summarizes the conversation that precedes the current
+ * turn, so the composed chain seeds the runtime with a transcript long
+ * enough for the production cut-index arithmetic to select a candidate.
+ */
+function agentMessagesFromCanonicalHistory(): MessageWithMetadata[] {
+	return [
+		userTurn("Inspect the deploy pipeline and report what you found."),
+		{
+			role: "assistant",
+			content: [
+				{
+					type: "text",
+					text: "I inspected deploy.env and found three environment keys.",
+				},
+			],
+		},
+		userTurn("Continue with the rollback check."),
+	];
+}
+
 // ---------------------------------------------------------------------------
-// The PRODUCTION ACCOUNTING CONSUMER.
+// THE PRODUCTION ACCOUNTING CONSUMER.
 //
 // `handleAgentEvent` is the component that owns provider-usage accounting in
 // production. Its observable result is `ctx.usageBySession`.
@@ -305,6 +371,11 @@ interface SeamRun {
 	readonly reportedUsage: readonly ReportedUsage[];
 	/** How many physical provider requests were dispatched. */
 	readonly physicalRequests: () => number;
+	/**
+	 * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01
+	 * (AMENDMENT-02 §1): the error the seam ended with, if any.
+	 */
+	readonly error: () => unknown;
 }
 
 interface SeamOptions {
@@ -413,21 +484,26 @@ async function runProductionSeam(options: SeamOptions = {}): Promise<SeamRun> {
 	});
 
 	const canonical = [...(options.canonical ?? canonicalHistory())];
-	await prepareTurn({
-		agentId: "agent-1",
-		conversationId: "conv-1",
-		parentAgentId: null,
-		iteration: 1,
-		abortSignal: options.abortSignal ?? new AbortController().signal,
-		systemPrompt: SYSTEM_PROMPT,
-		tools: [],
-		messages: canonical,
-		apiMessages: canonical,
-		model: outerModel,
-		emitStatusNotice: (message: string, metadata: unknown) => {
-			notices.push({ message, metadata });
-		},
-	});
+	let error: unknown;
+	try {
+		await prepareTurn({
+			agentId: "agent-1",
+			conversationId: "conv-1",
+			parentAgentId: null,
+			iteration: 1,
+			abortSignal: options.abortSignal ?? new AbortController().signal,
+			systemPrompt: SYSTEM_PROMPT,
+			tools: [],
+			messages: canonical,
+			apiMessages: canonical,
+			model: outerModel,
+			emitStatusNotice: (message: string, metadata: unknown) => {
+				notices.push({ message, metadata });
+			},
+		});
+	} catch (caught) {
+		error = caught;
+	}
 
 	return {
 		saveCalls,
@@ -435,6 +511,7 @@ async function runProductionSeam(options: SeamOptions = {}): Promise<SeamRun> {
 		logs,
 		reportedUsage,
 		physicalRequests: () => physicalRequests,
+		error: () => error,
 	};
 }
 
@@ -447,19 +524,26 @@ async function runProductionSeam(options: SeamOptions = {}): Promise<SeamRun> {
 function useProviderChunks(
 	chunks: readonly Record<string, unknown>[],
 	onRequest?: () => void,
+	requestId = "gw_cmp08_request",
 ): void {
-	createHandlerMock.mockImplementation(async () => {
-		onRequest?.();
-		return {
-			// The transport contract: `createMessage` is a FUNCTION that
-			// RETURNS the async stream. It is not the stream itself.
-			createMessage: vi.fn(async function* () {
+	createHandlerMock.mockImplementation(async () => ({
+		// The transport contract: `createMessage` is a FUNCTION that
+		// RETURNS the async stream. It is not the stream itself.
+		//
+		// The REAL compatibility adapter stamps its own per-request identity
+		// (`gw_<nanoid>`) on the stream it RETURNS, and the summarizer reads
+		// it from there. The substitute reproduces that contract exactly.
+		createMessage: vi.fn(() => {
+			onRequest?.();
+			const stream = (async function* () {
 				for (const chunk of chunks) {
 					yield chunk;
 				}
-			}),
-		};
-	});
+			})();
+			(stream as unknown as { id?: string }).id = requestId;
+			return stream;
+		}),
+	}));
 }
 
 /** A usage chunk in the transport's own shape. */
@@ -755,10 +839,10 @@ describe("ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 — the conserva
 
 	// ── CASE G ─────────────────────────────────────────────────────────────
 
-	it("G: accounts NOTHING when the provider reported no usage", async () => {
+	it("G: accounts an EXPLICITLY REPORTED ZERO as an explicit zero, and an ABSENT usage as absent", async () => {
 		useProviderChunks([
 			{ type: "text", id: "summary-1", text: COMPLETE_LOOKING_SUMMARY },
-			usageChunk(UNREPORTED_USAGE),
+			usageChunk(EXPLICIT_ZERO_USAGE),
 			{ type: "done", id: "summary-1", success: true },
 		]);
 
@@ -769,9 +853,9 @@ describe("ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 — the conserva
 		// The candidate was installed.
 		expect(seam.saveCalls).toHaveLength(1);
 
-		// The provider reported a usage chunk with NO metrics. The
-		// accounting is therefore zero-valued, and — critically — it is NOT
-		// an invented cost: the reported values are the provider's own.
+		// The provider reported a usage event whose metrics were ZERO.
+		// The accounting is therefore zero-valued, and — critically — it is
+		// NOT an invented cost: the reported values are the provider's own.
 		expect(seam.reportedUsage).toHaveLength(1);
 		expect(seam.reportedUsage[0].inputTokens).toBe(0);
 		expect(seam.reportedUsage[0].outputTokens).toBe(0);
@@ -782,26 +866,246 @@ describe("ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 — the conserva
 		expect(harness.observedEvents()).toBe(1);
 		expect(harness.accumulated().inputTokens).toBe(0);
 		expect(harness.accumulated().totalCost).toBe(0);
+
+		// The ABSENT case is a DIFFERENT fact: the provider reported NO
+		// usage event at all. Nothing is reported, and nothing is invented.
+		useProviderChunks([
+			{ type: "text", id: "summary-1", text: COMPLETE_LOOKING_SUMMARY },
+			{ type: "done", id: "summary-1", success: true },
+		]);
+		const absentSeam = await runProductionSeam({ notices, saveCalls });
+		expect(absentSeam.reportedUsage).toHaveLength(0);
 	});
 });
 
 // ---------------------------------------------------------------------------
-// THE AGGREGATION AND DUPLICATION CONTROLS.
+// ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 (AMENDMENT-02 §1) —
+// THE EXCEPTIONAL TERMINATION.
+//
+// THE USAGE-LOSS BOUNDARY.
+//
+// The usage is observed INSIDE the provider stream. A transport that FAILS
+// after the provider already reported its usage ends the generation by
+// THROWING — so a report made only after `generateSummary()` RETURNS never
+// happens at all, and the usage of a PAID inference is lost on the floor.
+//
+// The witnesses below drive the production summarizer with:
+//
+//   - a usage event carrying exact nonzero metrics, and
+//   - a subsequent transport exception,
+//
+// in BOTH shapes:
+//
+//   - a NON-CANCELLATION transport failure, and
+//   - a CANCELLATION raised by the transport's own boundary.
+//
+// And they require:
+//
+//   - the previously observed usage reaches accounting EXACTLY ONCE,
+//   - the ORIGINAL terminal exception remains AUTHORITATIVE,
+//   - NO rejected summary is installed,
+//   - NO successful compaction is published.
 // ---------------------------------------------------------------------------
 
-describe("ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 — the aggregation controls", () => {
+describe("ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 (AMENDMENT-02 §1) — the exceptional termination", () => {
 	/**
-	 * The usage-event contract: a provider reports the usage of ONE request
-	 * per usage chunk, and the chunk's counters are that request's own
-	 * numbers — a DELTA, never a running total.
-	 *
-	 * A provider MAY emit more than one usage chunk for a single request.
-	 * The transport contract does not forbid it, and each chunk reports the
-	 * usage of the request it belongs to, so the correct semantics is to
-	 * SUM them. Taking only the last would silently discard usage the
-	 * provider already reported.
+	 * The REAL summarizer, driven with the REAL transport contract and a
+	 * deterministic provider substitute.
 	 */
-	it("SUMS the usage chunks a provider emitted for ONE request", async () => {
+	async function runSummarizer(options: {
+		chunks: readonly Record<string, unknown>[];
+		after?: () => void;
+		throwAfter?: Error;
+		signal?: AbortSignal;
+	}): Promise<{
+		reported: {
+			requestId: string | undefined;
+			kind: string;
+			inputTokens: number;
+			outputTokens: number;
+			cacheReadTokens?: number;
+			cacheWriteTokens?: number;
+			totalCost?: number;
+			reasoningTokenCount?: number;
+		}[];
+		error: unknown;
+	}> {
+		createHandlerMock.mockImplementation(async () => ({
+			createMessage: vi.fn(() => {
+				const stream = (async function* () {
+					for (const chunk of options.chunks) {
+						yield chunk;
+					}
+					options.after?.();
+					if (options.throwAfter) {
+						throw options.throwAfter;
+					}
+				})();
+				// The transport's own per-request identity, on the STREAM — the
+				// same place the real compatibility adapter puts it.
+				(stream as unknown as { id?: string }).id = "gw_cmp08_physical_request";
+				return stream;
+			}),
+		}));
+		const { generateSummary } = await import("./summary-generation");
+		const reported: {
+			requestId: string | undefined;
+			kind: string;
+			inputTokens: number;
+			outputTokens: number;
+			cacheReadTokens?: number;
+			cacheWriteTokens?: number;
+			totalCost?: number;
+			reasoningTokenCount?: number;
+		}[] = [];
+		let error: unknown;
+		try {
+			await generateSummary({
+				providerConfig: {
+					providerId: "anthropic",
+					modelId: "mock-model",
+				} as never,
+				systemPrompt: SYSTEM_PROMPT,
+				request: "summarize this",
+				...(options.signal ? { signal: options.signal } : {}),
+				reportUsage: (usage) => reported.push(usage),
+			});
+		} catch (caught) {
+			error = caught;
+		}
+		return { reported, error };
+	}
+
+	it("conserves the usage a provider reported before a NON-CANCELLATION transport failure, and keeps the exception authoritative", async () => {
+		const transportFailure = new Error(
+			"cmp08: the transport failed mid-summary",
+		);
+		const { reported, error } = await runSummarizer({
+			chunks: [
+				{ type: "text", id: "summary-1", text: COMPLETE_LOOKING_SUMMARY },
+				usageChunk(FIRST_USAGE),
+			],
+			throwAfter: transportFailure,
+		});
+
+		// The ORIGINAL terminal exception remains AUTHORITATIVE: it is the
+		// error the generation ended with, and it is not replaced or
+		// swallowed by the accounting.
+		expect(error).toBe(transportFailure);
+		expect((error as Error).message).toMatch(/transport failed mid-summary/i);
+
+		// The previously observed usage reaches accounting EXACTLY ONCE,
+		// with the provider's own numbers.
+		expect(reported).toHaveLength(1);
+		expect(reported[0]).toMatchObject({
+			kind: "summarization",
+			inputTokens: FIRST_USAGE.inputTokens,
+			outputTokens: FIRST_USAGE.outputTokens,
+			cacheReadTokens: FIRST_USAGE.cacheReadTokens,
+			cacheWriteTokens: FIRST_USAGE.cacheWriteTokens,
+			totalCost: FIRST_USAGE.totalCost,
+			reasoningTokenCount: FIRST_USAGE.thoughtsTokenCount,
+		});
+
+		// The PHYSICAL request identity is the transport's own.
+		expect(reported[0].requestId).toBe("gw_cmp08_physical_request");
+	});
+
+	it("conserves the usage a provider reported before a CANCELLATION raised by the transport, and keeps the cancellation authoritative", async () => {
+		const controller = new AbortController();
+		const cancellation = new Error("cmp08: the transport was cancelled");
+		const { reported, error } = await runSummarizer({
+			chunks: [
+				{ type: "text", id: "summary-1", text: COMPLETE_LOOKING_SUMMARY },
+				usageChunk(FIRST_USAGE),
+			],
+			after: () => controller.abort(cancellation),
+			throwAfter: cancellation,
+			signal: controller.signal,
+		});
+
+		// The CANCELLATION remains authoritative.
+		expect(error).toBe(cancellation);
+
+		// The usage is conserved EXACTLY ONCE.
+		expect(reported).toHaveLength(1);
+		expect(reported[0].inputTokens).toBe(FIRST_USAGE.inputTokens);
+	});
+
+	it("installs NO rejected AGENTIC summary when the transport fails after reporting its usage, and still conserves the usage", async () => {
+		// The transport fails AFTER the provider reported its usage.
+		createHandlerMock.mockImplementation(async () => ({
+			createMessage: vi.fn(() => {
+				const stream = (async function* () {
+					yield {
+						type: "text",
+						id: "summary-1",
+						text: COMPLETE_LOOKING_SUMMARY,
+					};
+					yield usageChunk(FIRST_USAGE);
+					throw new Error("cmp08: the transport failed mid-summary");
+				})();
+				(stream as unknown as { id?: string }).id = "gw_cmp08_failed_request";
+				return stream;
+			}),
+		}));
+
+		const notices: { message: string; metadata: unknown }[] = [];
+		const saveCalls: unknown[] = [];
+		const seam = await runProductionSeam({ notices, saveCalls });
+
+		// The transport failure was NOT swallowed silently: the seam
+		// reported it and fell back to the basic strategy. That fallback is
+		// the PRE-EXISTING production behaviour for a non-cancellation
+		// transport failure, and this ACT does not change it.
+		expect(
+			seam.logs.some((line) =>
+				line.includes("falling back to basic compaction"),
+			),
+		).toBe(true);
+
+		// NO rejected AGENTIC summary is installed: the agentic candidate
+		// never reached the installation boundary.
+		const installed = seam.saveCalls[0] as { summary?: string } | undefined;
+		expect(installed?.summary).not.toBe(COMPLETE_LOOKING_SUMMARY);
+
+		// And the usage is still conserved: the inference was paid for.
+		// This is the whole point of the repair.
+		expect(seam.reportedUsage).toHaveLength(1);
+		expect(seam.reportedUsage[0].inputTokens).toBe(FIRST_USAGE.inputTokens);
+		expect(seam.reportedUsage[0].inferenceId).toBe("gw_cmp08_failed_request");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 (AMENDMENT-02 §3) —
+// THE NORMALIZED USAGE-EVENT SEMANTICS.
+//
+// THE CONTRACT, READ FROM THE PRODUCTION CHAIN
+//
+// The RESOLVED provider adapter (`@cline/llms`'s `ai-sdk` provider) emits
+// EXACTLY ONE `usage` event per physical request, and that event is the
+// request's own CUMULATIVE SNAPSHOT: the AI SDK's `stream.usage` ("complete
+// usage data") or the finish part's `totalUsage` ("Usage snapshot at end of
+// stream"). It is NOT an incremental delta, and it is NOT a running total
+// across requests.
+//
+// The runtime then ADDS each reported usage into its cumulative state
+// (`AgentRuntime.updateUsage()`), and the runtime-event adapter
+// DIFFERENCES that cumulative back into a per-request DELTA for the
+// production consumer.
+//
+// So the collector must NOT sum a provider's chunks: summation is correct
+// only for deltas, and it would DOUBLE the request's usage if a provider
+// ever emitted more than one chunk. The FIRST report is the request's
+// authoritative usage.
+//
+// These witnesses observe the REAL normalized adapter's contract, not the
+// raw provider protocol.
+// ---------------------------------------------------------------------------
+
+describe("ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 (AMENDMENT-02 §3) — the normalized usage-event semantics", () => {
+	it("takes the FIRST reported usage as the request's authoritative usage and does NOT double it", async () => {
 		useProviderChunks([
 			{ type: "text", id: "summary-1", text: COMPLETE_LOOKING_SUMMARY },
 			usageChunk({
@@ -828,57 +1132,20 @@ describe("ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 — the aggregat
 		const saveCalls: unknown[] = [];
 		const seam = await runProductionSeam({ notices, saveCalls });
 
-		// ONE inference, ONE report, with the SUM of the provider's chunks.
+		// ONE inference, ONE report, carrying the request's AUTHORITATIVE
+		// usage — the provider's first (and, for the resolved adapter,
+		// only) report. The second chunk does not DOUBLE it.
 		expect(seam.reportedUsage).toHaveLength(1);
 		expect(seam.reportedUsage[0]).toMatchObject({
-			inputTokens: 300,
-			outputTokens: 30,
-			cacheReadTokens: 7,
-			cacheWriteTokens: 3,
-			totalCost: 0.75,
+			inputTokens: 100,
+			outputTokens: 10,
+			cacheReadTokens: 3,
+			cacheWriteTokens: 1,
+			totalCost: 0.5,
 		});
 	});
 
-	it("attributes a SECOND summarization request INDEPENDENTLY", async () => {
-		useProviderChunks([
-			{ type: "text", id: "summary-1", text: COMPLETE_LOOKING_SUMMARY },
-			usageChunk(FIRST_USAGE),
-			{ type: "done", id: "summary-1", success: true },
-		]);
-
-		const notices: { message: string; metadata: unknown }[] = [];
-		const saveCalls: unknown[] = [];
-		const first = await runProductionSeam({ notices, saveCalls });
-
-		useProviderChunks([
-			{ type: "text", id: "summary-2", text: COMPLETE_LOOKING_SUMMARY },
-			usageChunk(SECOND_USAGE, "summary-2"),
-			{ type: "done", id: "summary-2", success: true },
-		]);
-
-		const second = await runProductionSeam({ notices, saveCalls });
-
-		// Two INDEPENDENT reports. The second is not merged into the first.
-		expect(first.reportedUsage).toHaveLength(1);
-		expect(second.reportedUsage).toHaveLength(1);
-		expect(first.reportedUsage[0].inputTokens).toBe(FIRST_USAGE.inputTokens);
-		expect(second.reportedUsage[0].inputTokens).toBe(SECOND_USAGE.inputTokens);
-
-		// The consumer accumulates BOTH, exactly once each.
-		const harness = createUsageConsumerHarness();
-		for (const usage of [...first.reportedUsage, ...second.reportedUsage]) {
-			accountThroughProductionConsumer(harness, usage);
-		}
-		expect(harness.observedEvents()).toBe(2);
-		expect(harness.accumulated().inputTokens).toBe(
-			FIRST_USAGE.inputTokens + SECOND_USAGE.inputTokens,
-		);
-		expect(harness.accumulated().outputTokens).toBe(
-			FIRST_USAGE.outputTokens + SECOND_USAGE.outputTokens,
-		);
-	});
-
-	it("does NOT double-count through both the transport and the runtime accounting", async () => {
+	it("preserves the input, output, cache-read, cache-write, reasoning and cost fields the provider actually reported", async () => {
 		useProviderChunks([
 			{ type: "text", id: "summary-1", text: COMPLETE_LOOKING_SUMMARY },
 			usageChunk(FIRST_USAGE),
@@ -889,25 +1156,20 @@ describe("ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 — the aggregat
 		const saveCalls: unknown[] = [];
 		const seam = await runProductionSeam({ notices, saveCalls });
 
-		// The provider reported the usage ONCE, and the compaction reported
-		// it ONCE. There is no second report of the same inference, so the
-		// consumer's total is the provider's number — not twice it.
 		expect(seam.reportedUsage).toHaveLength(1);
-		const harness = createUsageConsumerHarness();
-		for (const usage of seam.reportedUsage) {
-			accountThroughProductionConsumer(harness, usage);
-		}
-		expect(harness.observedEvents()).toBe(1);
-		expect(harness.accumulated().inputTokens).toBe(FIRST_USAGE.inputTokens);
-		expect(harness.accumulated().inputTokens).not.toBe(
-			FIRST_USAGE.inputTokens * 2,
-		);
+		const reported = seam.reportedUsage[0];
+		expect(reported.inputTokens).toBe(FIRST_USAGE.inputTokens);
+		expect(reported.outputTokens).toBe(FIRST_USAGE.outputTokens);
+		expect(reported.cacheReadTokens).toBe(FIRST_USAGE.cacheReadTokens);
+		expect(reported.cacheWriteTokens).toBe(FIRST_USAGE.cacheWriteTokens);
+		expect(reported.totalCost).toBe(FIRST_USAGE.totalCost);
+		expect(reported.reasoningTokenCount).toBe(FIRST_USAGE.thoughtsTokenCount);
 	});
 
-	it("preserves the CACHE read/write accounting the provider reported", async () => {
+	it("does NOT invent a metric the provider did not report", async () => {
 		useProviderChunks([
 			{ type: "text", id: "summary-1", text: COMPLETE_LOOKING_SUMMARY },
-			usageChunk(FIRST_USAGE),
+			usageChunk({ inputTokens: 100, outputTokens: 10 }),
 			{ type: "done", id: "summary-1", success: true },
 		]);
 
@@ -915,20 +1177,546 @@ describe("ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 — the aggregat
 		const saveCalls: unknown[] = [];
 		const seam = await runProductionSeam({ notices, saveCalls });
 
-		const harness = createUsageConsumerHarness();
-		for (const usage of seam.reportedUsage) {
-			accountThroughProductionConsumer(harness, usage);
+		expect(seam.reportedUsage).toHaveLength(1);
+		const reported = seam.reportedUsage[0];
+		expect(reported.inputTokens).toBe(100);
+		expect(reported.outputTokens).toBe(10);
+		// The provider reported no cache, no cost and no reasoning: those
+		// metrics stay ABSENT rather than becoming an invented zero.
+		expect(reported.cacheReadTokens).toBeUndefined();
+		expect(reported.cacheWriteTokens).toBeUndefined();
+		expect(reported.totalCost).toBeUndefined();
+		expect(reported.reasoningTokenCount).toBeUndefined();
+	});
+});
+
+// ---------------------------------------------------------------------------
+// ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 (AMENDMENT-02 §4) —
+// THE REQUEST IDENTITY AND THE ABSENCE SEMANTICS.
+//
+// THE FOUR DISTINCT FACTS
+//
+//   1. NO INFERENCE DISPATCHED — the compaction never reached the
+//      transport. There was no request, so there is no usage.
+//   2. INFERENCE DISPATCHED WITH NO REPORTED USAGE — the provider was
+//      called but reported no usage. The usage is UNKNOWN, not zero.
+//   3. EXPLICITLY REPORTED ZERO — the provider reported a usage event
+//      whose metrics were zero. That is a REPORTED fact and it is
+//      conserved as one.
+//   4. NONZERO USAGE FOLLOWED BY CANCELLATION OR EXCEPTION — the
+//      provider reported real usage and the generation then ended
+//      abnormally. The usage is conserved.
+//
+// THE PHYSICAL REQUEST IDENTITY
+//
+// `(conversationId, iteration, agentId)` is a LOGICAL tuple and it is NOT
+// unique per physical provider request: two summarization invocations that
+// share ONE logical iteration share all three components. The identity
+// used is the transport's OWN per-request identity, so the two are
+// distinguishable.
+// ---------------------------------------------------------------------------
+
+describe("ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 (AMENDMENT-02 §4) — the request identity and the absence semantics", () => {
+	it("distinguishes TWO summarization invocations that share ONE logical iteration", async () => {
+		// TWO invocations of the SAME compaction seam, with the SAME
+		// conversation, iteration and agent. The transport's own per-request
+		// identity is what separates them.
+		const reportedIds: string[] = [];
+		createHandlerMock.mockImplementation(async () => ({
+			createMessage: vi.fn(() => {
+				const stream = (async function* () {
+					yield {
+						type: "text",
+						id: "summary-1",
+						text: COMPLETE_LOOKING_SUMMARY,
+					};
+					yield usageChunk(FIRST_USAGE);
+					yield { type: "done", id: "summary-1", success: true };
+				})();
+				(stream as unknown as { id?: string }).id =
+					`gw_${reportedIds.length + 1}`;
+				return stream;
+			}),
+		}));
+
+		const { generateSummary } = await import("./summary-generation");
+		for (let index = 0; index < 2; index += 1) {
+			await generateSummary({
+				providerConfig: {
+					providerId: "anthropic",
+					modelId: "mock-model",
+				} as never,
+				systemPrompt: SYSTEM_PROMPT,
+				request: "summarize this",
+				reportUsage: (usage) => reportedIds.push(usage.requestId ?? ""),
+			});
 		}
-		// The cache buckets reach the consumer as the provider reported them.
-		expect(harness.accumulated().cacheReadTokens).toBe(
+
+		// The two PHYSICAL requests have DIFFERENT identities, even though
+		// they share one logical iteration.
+		expect(reportedIds).toHaveLength(2);
+		expect(reportedIds[0]).not.toBe(reportedIds[1]);
+		expect(reportedIds[0]).toBe("gw_1");
+		expect(reportedIds[1]).toBe("gw_2");
+	});
+
+	it("distinguishes NO INFERENCE DISPATCHED from an EXPLICITLY REPORTED ZERO", async () => {
+		// (1) NO INFERENCE DISPATCHED.
+		const controller = new AbortController();
+		controller.abort(new Error("cmp08: cancelled before compaction"));
+		useProviderChunks([
+			{ type: "text", id: "summary-1", text: COMPLETE_LOOKING_SUMMARY },
+			usageChunk(EXPLICIT_ZERO_USAGE),
+			{ type: "done", id: "summary-1", success: true },
+		]);
+		const noInference = await runProductionSeam({
+			abortSignal: controller.signal,
+		});
+		expect(createHandlerMock).not.toHaveBeenCalled();
+		expect(noInference.reportedUsage).toHaveLength(0);
+
+		// (2) INFERENCE DISPATCHED WITH NO REPORTED USAGE.
+		createHandlerMock.mockReset();
+		useProviderChunks([
+			{ type: "text", id: "summary-1", text: COMPLETE_LOOKING_SUMMARY },
+			{ type: "done", id: "summary-1", success: true },
+		]);
+		const notReported = await runProductionSeam({});
+		expect(createHandlerMock).toHaveBeenCalledTimes(1);
+		expect(notReported.reportedUsage).toHaveLength(0);
+
+		// (3) EXPLICITLY REPORTED ZERO — a REPORTED fact, conserved as one.
+		createHandlerMock.mockReset();
+		useProviderChunks([
+			{ type: "text", id: "summary-1", text: COMPLETE_LOOKING_SUMMARY },
+			usageChunk(EXPLICIT_ZERO_USAGE),
+			{ type: "done", id: "summary-1", success: true },
+		]);
+		const explicitZero = await runProductionSeam({});
+		expect(createHandlerMock).toHaveBeenCalledTimes(1);
+		expect(explicitZero.reportedUsage).toHaveLength(1);
+		expect(explicitZero.reportedUsage[0].inputTokens).toBe(0);
+		expect(explicitZero.reportedUsage[0].outputTokens).toBe(0);
+	});
+
+	it("conserves NONZERO usage followed by a cancellation, as distinct from an absent usage", async () => {
+		const controller = new AbortController();
+		const cancelled = createGate();
+		createHandlerMock.mockImplementation(async () => ({
+			createMessage: vi.fn(async function* () {
+				yield {
+					type: "text",
+					id: "summary-1",
+					text: COMPLETE_LOOKING_SUMMARY,
+				};
+				yield usageChunk(FIRST_USAGE);
+				controller.abort(new Error("cmp08: cancelled after the usage"));
+				cancelled.open();
+				yield { type: "done", id: "summary-1", success: true };
+			}),
+		}));
+
+		const seam = await runProductionSeam({
+			abortSignal: controller.signal,
+		});
+		await cancelled.wait;
+
+		// (4) NONZERO USAGE FOLLOWED BY CANCELLATION.
+		expect(seam.reportedUsage).toHaveLength(1);
+		expect(seam.reportedUsage[0].inputTokens).toBe(FIRST_USAGE.inputTokens);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 (AMENDMENT-02 §2) —
+// THE COMPOSED RUNTIME ACCOUNTING WITNESS.
+//
+// THE PRINCIPAL WITNESS IS COMPOSED OVER THE PRODUCTION CHAIN.
+//
+// The earlier form of this suite hand-built an `AgentEvent` and fed it
+// straight to `handleAgentEvent()`. That BYPASSED:
+//
+//   - the session runtime's forwarding of the usage channel,
+//   - the agent runtime's `updateUsage()` accumulation,
+//   - the runtime-event adapter's translation,
+//
+// so it could only show that the consumer accumulates a delta it is HANDED.
+// It could NOT show that the production accounting CONNECTION actually
+// carries the summarization's usage.
+//
+// The witness below drives the REAL pieces:
+//
+//   the REAL `SessionRuntime` (with the REAL `AgentRuntime` inside it)
+//     -> the REAL compaction preparation
+//       -> the REAL `AgentRuntime.updateUsage()` accumulation
+//         -> the REAL `usage-updated` runtime event
+//           -> the REAL `RuntimeEventAdapter.translateUsage()`
+//             -> the REAL `AgentEventBridge`
+//               -> the REAL `handleAgentEvent()`
+//                 -> `ctx.usageBySession`   (THE OBSERVABLE RESULT)
+//
+// ONLY THE EXTERNAL PROVIDER BOUNDARY IS SUBSTITUTED: the model is
+// supplied as a PRE-BUILT `AgentModel` through the session runtime's
+// sanctioned `createAgentRuntimeImpl` seam, and the summarizer's transport
+// is the production one with a substituted provider.
+//
+// The NECESSITY discriminator disables ONLY the new auxiliary-usage
+// forwarding connection and observes the principal witness FAIL.
+// ---------------------------------------------------------------------------
+
+describe("ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 (AMENDMENT-02 §2) — the composed runtime accounting", () => {
+	/**
+	 * The COMPOSED production chain's observable result.
+	 */
+	interface ComposedRun {
+		/** The PRODUCTION CONSUMER's accumulated usage. */
+		readonly accumulated: () => {
+			inputTokens: number;
+			outputTokens: number;
+			cacheReadTokens: number;
+			cacheWriteTokens: number;
+			totalCost: number;
+		};
+		/** How many usage events the production consumer observed. */
+		readonly observedUsageEvents: () => number;
+		/** Whether the compaction seam was invoked at all. */
+		readonly compactionInvoked: () => boolean;
+		/** The usage the seam reported through the production channel. */
+		readonly reportedUsage: () => readonly ReportedUsage[];
+		/** The main agent's own usage events, observed by the consumer. */
+		readonly mainAgentUsageEvents: () => number;
+	}
+
+	/**
+	 * The MAIN AGENT's own model request.
+	 *
+	 * It is a REAL `AgentModel` event stream: the runtime's own contract.
+	 * The main agent's usage is reported FIRST, before the summarization's,
+	 * exactly as the runtime reports it.
+	 */
+	function createMainAgentModel(): {
+		stream: (request: unknown) => AsyncIterable<unknown>;
+	} {
+		return {
+			stream: async function* () {
+				yield { type: "text-delta", text: "the deploy pipeline looks fine" };
+				yield {
+					type: "usage",
+					usage: {
+						inputTokens: MAIN_AGENT_USAGE.inputTokens,
+						outputTokens: MAIN_AGENT_USAGE.outputTokens,
+						totalCost: MAIN_AGENT_USAGE.totalCost,
+					},
+				};
+				yield { type: "finish", reason: "stop" };
+			},
+		} as never;
+	}
+
+	/**
+	 * Drive the REAL `SessionRuntime` with the REAL `AgentRuntime`.
+	 *
+	 * The compaction preparation is the REAL one, and it is wired exactly
+	 * as `LocalRuntimeHost` wires it: the real
+	 * `createContextCompactionPrepareTurn` behind the real
+	 * `createCompactionStateAwarePrepareTurn`, with the resulting
+	 * `prepareTurn` handed to the session runtime.
+	 *
+	 * The session runtime's LEGACY event stream is the one the production
+	 * `AgentEventBridge` consumes, so the witness feeds the REAL
+	 * `AgentEventBridge` and observes the REAL `handleAgentEvent()`'s
+	 * `ctx.usageBySession`.
+	 */
+	async function runComposedChain(options: {
+		/** Whether the auxiliary-usage forwarding connection is enabled. */
+		readonly forwardingEnabled?: boolean;
+	}): Promise<ComposedRun> {
+		const { AgentEventBridge } = await import(
+			"../../runtime/host/local/agent-event-bridge"
+		);
+		const { SessionRuntime } = await import(
+			"../../runtime/orchestration/session-runtime-orchestrator"
+		);
+		const { createAgentRuntime } = await import("@cline/agents");
+
+		const reportedUsage: ReportedUsage[] = [];
+		let compactionInvoked = false;
+
+		const providerId = "anthropic";
+		const modelId = "mock-model";
+		const modelInfo = { id: modelId, maxInputTokens: 16_000 };
+
+		// THE REAL COMPACTION PREPARATION, wired exactly as the host wires
+		// it.
+		const inner = createContextCompactionPrepareTurn(
+			{
+				providerId,
+				modelId,
+				providerConfig: { providerId, modelId } as LlmsProviders.ProviderConfig,
+				compaction: {
+					enabled: true,
+					strategy: "agentic",
+					preserveRecentTokens: 1,
+				},
+			},
+			{ mode: "manual" },
+		);
+		const prepareTurn = createCompactionStateAwarePrepareTurn({
+			//
+			// The REAL forwarding is preserved: the channel the session
+			// runtime forwarded into this context is what the compaction
+			// reports through. The witness only OBSERVES it.
+			//
+			// The NECESSITY discriminator disables the ONE connection that
+			// carries the usage — the channel that reaches the compaction
+			// context — and leaves every other piece of the chain intact.
+			compact: (context) => {
+				compactionInvoked = true;
+				const forwarded = (
+					context as {
+						reportAuxiliaryUsage?: (usage: ReportedUsage) => void;
+					}
+				).reportAuxiliaryUsage;
+				return (
+					inner?.({
+						...context,
+						model: {
+							id: modelId,
+							provider: providerId,
+							info: modelInfo,
+						},
+						...(options.forwardingEnabled === false
+							? { reportAuxiliaryUsage: undefined }
+							: {
+									reportAuxiliaryUsage: (usage: ReportedUsage) => {
+										reportedUsage.push(usage);
+										forwarded?.(usage);
+									},
+								}),
+					}) ?? Promise.resolve(undefined)
+				);
+			},
+			getState: () => undefined,
+			prepareApiMessages: async (messages) => messages,
+			saveState: () => undefined,
+		});
+
+		// THE PRODUCTION ACCOUNTING CONSUMER, wired through the REAL
+		// `AgentEventBridge`.
+		const usageBySession = new Map<
+			string,
+			ReturnType<typeof createInitialAccumulatedUsage>
+		>();
+		const aggregateUsageBySession = new Map<
+			string,
+			ReturnType<typeof createInitialAccumulatedUsage>
+		>();
+		const config = {
+			providerId,
+			modelId,
+			mode: "act",
+		} as unknown as CoreSessionConfig;
+		const sessionId = "sess-cmp08-composed";
+		let observedUsageEvents = 0;
+		let mainAgentUsageEvents = 0;
+		//
+		// The LIVE SESSION. The production consumer accumulates the usage
+		// into `ctx.usageBySession` only for a session that carries a
+		// `turnUsageBaseline` — the same shape the real `LocalRuntimeHost`
+		// registers. The bridge resolves it through `getSession`.
+		const liveSession = {
+			sessionId,
+			config,
+			runtime: {},
+			agent: {
+				getMessages: () => [],
+				getAgentId: () => "agent-cmp08-composed",
+				getConversationId: () => "conv-cmp08-composed",
+			},
+			turnUsageBaseline: createInitialAccumulatedUsage(),
+		} as unknown as ActiveSession;
+		const bridge = new AgentEventBridge({
+			getSession: () => liveSession,
+			usageBySession,
+			aggregateUsageBySession,
+			emit: vi.fn(),
+			persistMessages: vi.fn(),
+			enqueuePendingPrompt: vi.fn(),
+			invokeBackendOptional: vi.fn(async () => {}),
+		});
+
+		// THE REAL SESSION RUNTIME, with the REAL `AgentRuntime` inside it.
+		//
+		// ONLY THE EXTERNAL PROVIDER BOUNDARY IS SUBSTITUTED: the model is
+		// supplied as a PRE-BUILT `AgentModel` through the session
+		// runtime's sanctioned `createAgentRuntimeImpl` seam. Everything
+		// else — the runtime's accumulation, its event emission, the
+		// adapter's translation, the bridge's dispatch and the consumer's
+		// accounting — is the production code.
+		const runtime = new SessionRuntime(
+			{
+				distinctId: "cmp08-composed",
+				sessionId,
+				providerId,
+				modelId,
+				systemPrompt: SYSTEM_PROMPT,
+				tools: [],
+				prepareTurn,
+				knownModels: {
+					[modelId]: {
+						id: modelId,
+						name: modelId,
+						provider: providerId,
+						info: modelInfo,
+						capabilities: ["streaming"],
+					} as never,
+				},
+				//
+				// The PRIOR TRANSCRIPT. The compaction summarizes the
+				// conversation that precedes the current turn, so the
+				// composed chain needs a history long enough for the
+				// production cut-index arithmetic to select a candidate.
+				initialMessages: agentMessagesFromCanonicalHistory(),
+			} as never,
+			{
+				createAgentRuntimeImpl: (config) =>
+					createAgentRuntime({
+						...config,
+						// The PRE-BUILT model: the external provider
+						// boundary, substituted.
+						model: createMainAgentModel(),
+					} as never),
+			},
+		);
+
+		// The session runtime's LEGACY event stream is what the production
+		// `AgentEventBridge` consumes.
+		const unsubscribe = runtime.subscribeEvents((event) => {
+			if (event.type === "usage") {
+				observedUsageEvents += 1;
+				// The main agent's OWN usage arrives FIRST, before the
+				// summarization's.
+				mainAgentUsageEvents += 1;
+			}
+			bridge.dispatchAgentEvent(sessionId, config, event);
+		});
+
+		try {
+			//
+			// `continue()` and NOT `run()`: `run()` resets the conversation
+			// store, so the seeded prior transcript would be discarded and
+			// the compaction would have nothing to summarize. `continue()`
+			// preserves it, exactly as a resumed session does.
+			await runtime.continue("Inspect the deploy pipeline and report.");
+		} catch {
+			// The run's own outcome is not what this witness observes.
+		} finally {
+			unsubscribe();
+		}
+
+		return {
+			accumulated: () =>
+				usageBySession.get(sessionId) ?? createInitialAccumulatedUsage(),
+			observedUsageEvents: () => observedUsageEvents,
+			compactionInvoked: () => compactionInvoked,
+			reportedUsage: () => reportedUsage,
+			mainAgentUsageEvents: () => mainAgentUsageEvents,
+		};
+	}
+
+	it("delivers the summarization's provider-reported usage to the PRODUCTION accounting consumer through the REAL runtime chain", async () => {
+		// The provider: the summarizer's chunks.
+		useProviderChunks([
+			{ type: "text", id: "summary-1", text: COMPLETE_LOOKING_SUMMARY },
+			usageChunk(FIRST_USAGE),
+			{ type: "done", id: "summary-1", success: true },
+		]);
+
+		const composed = await runComposedChain({});
+
+		// The compaction WAS invoked: the composed chain reached the real
+		// compaction preparation.
+		expect(composed.compactionInvoked()).toBe(true);
+
+		// The usage left the compaction through the production channel.
+		expect(composed.reportedUsage()).toHaveLength(1);
+		expect(composed.reportedUsage()[0].inputTokens).toBe(
+			FIRST_USAGE.inputTokens,
+		);
+
+		// The MAIN AGENT's own usage reached the production consumer
+		// through the real runtime chain.
+		expect(composed.mainAgentUsageEvents()).toBeGreaterThan(0);
+
+		// AND the SUMMARIZATION's usage reached the SAME accumulator,
+		// through the same production consumer: the main agent's usage is
+		// ADDED to, not substituted by, the summarization's.
+		expect(composed.accumulated().inputTokens).toBe(
+			MAIN_AGENT_USAGE.inputTokens + FIRST_USAGE.inputTokens,
+		);
+		expect(composed.accumulated().outputTokens).toBe(
+			MAIN_AGENT_USAGE.outputTokens + FIRST_USAGE.outputTokens,
+		);
+		expect(composed.accumulated().cacheReadTokens).toBe(
 			FIRST_USAGE.cacheReadTokens,
 		);
-		expect(harness.accumulated().cacheWriteTokens).toBe(
+		expect(composed.accumulated().cacheWriteTokens).toBe(
 			FIRST_USAGE.cacheWriteTokens,
 		);
 	});
 
-	it("leaves the MAIN AGENT's usage UNCHANGED", async () => {
+	it("FAILS the principal witness when ONLY the auxiliary-usage forwarding connection is disabled", async () => {
+		useProviderChunks([
+			{ type: "text", id: "summary-1", text: COMPLETE_LOOKING_SUMMARY },
+			usageChunk(FIRST_USAGE),
+			{ type: "done", id: "summary-1", success: true },
+		]);
+
+		const composed = await runComposedChain({ forwardingEnabled: false });
+
+		// The compaction WAS invoked, and the main agent's OWN usage still
+		// reached the consumer — so the chain is alive.
+		expect(composed.compactionInvoked()).toBe(true);
+		expect(composed.mainAgentUsageEvents()).toBeGreaterThan(0);
+
+		// But the SUMMARIZATION's usage did NOT: the connection that
+		// carries it is exactly the thing the principal witness
+		// exercises. With it disabled the principal witness FAILS.
+		expect(composed.reportedUsage()).toHaveLength(0);
+		expect(composed.accumulated().inputTokens).toBe(
+			MAIN_AGENT_USAGE.inputTokens,
+		);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 (AMENDMENT-02 §5) —
+// THE FOCUSED INSTALLATION CONTROLS.
+//
+// The installation outcome is a DISCRIMINATED UNION: an unsuccessful
+// installation ALWAYS carries an established refusal reason, and the three
+// refusals are three DIFFERENT facts.
+//
+//   - a CANCELLATION names the user's intent;
+//   - a PERSISTENCE FAILURE names the fault;
+//   - a STALE STATE names the benign skip: the newer state already won.
+//
+// The LEGACY shapes keep their historical meaning exactly:
+//
+//   - `undefined` / `void` — the host reports nothing: the installation is
+//     treated as committed;
+//   - `true` — installed;
+//   - `false` — refused with an UNKNOWN reason, reported as a cancellation
+//     because that is what it meant before;
+//   - the reason-less object — a host that has not opted into the
+//     structured form: also reported as a cancellation.
+//
+// These controls do not reopen the accepted persistence or cancellation
+// architecture. They pin the distinctions the union makes possible.
+// ---------------------------------------------------------------------------
+
+describe("ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 (AMENDMENT-02 §5) — the installation outcome controls", () => {
+	it("reports the STALE STATE skip as its OWN reason, not as a cancellation", async () => {
 		useProviderChunks([
 			{ type: "text", id: "summary-1", text: COMPLETE_LOOKING_SUMMARY },
 			usageChunk(FIRST_USAGE),
@@ -937,30 +1725,81 @@ describe("ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 — the aggregat
 
 		const notices: { message: string; metadata: unknown }[] = [];
 		const saveCalls: unknown[] = [];
-		const seam = await runProductionSeam({ notices, saveCalls });
-
-		const harness = createUsageConsumerHarness();
-		// The main agent's OWN usage, reported FIRST, exactly as the runtime
-		// reports it.
-		accountThroughProductionConsumer(harness, {
-			inputTokens: 5_000,
-			outputTokens: 500,
-			totalCost: 0.5,
+		const seam = await runProductionSeam({
+			notices,
+			saveCalls,
+			installationOutcome: { installed: false, reason: "stale_state" },
 		});
-		const afterMainAgent = harness.accumulated();
-		expect(afterMainAgent.inputTokens).toBe(5_000);
 
-		for (const usage of seam.reportedUsage) {
-			accountThroughProductionConsumer(harness, usage);
+		// The candidate was refused, so no success was published.
+		expect(
+			seam.notices.some((notice) => notice.message.endsWith("compacted")),
+		).toBe(false);
+
+		// The refusal is named as the STALE STATE it is.
+		const refusals = seam.logs.filter((line) =>
+			line.includes("a newer compaction state is already installed"),
+		);
+		expect(refusals.length).toBeGreaterThan(0);
+		for (const line of refusals) {
+			expect(line).toContain("stale_state");
+			expect(line).not.toContain('"rejectionReason":"cancelled"');
+			expect(line).not.toContain('"rejectionReason":"persistence_failed"');
 		}
+	});
 
-		// The main agent's usage is UNCHANGED by the summarization: the
-		// summarization's usage is ADDED, not substituted.
-		expect(harness.accumulated().inputTokens).toBe(
-			5_000 + FIRST_USAGE.inputTokens,
+	it("preserves the HISTORICAL legacy boolean behaviour", async () => {
+		useProviderChunks([
+			{ type: "text", id: "summary-1", text: COMPLETE_LOOKING_SUMMARY },
+			usageChunk(FIRST_USAGE),
+			{ type: "done", id: "summary-1", success: true },
+		]);
+
+		// The LEGACY `false`: refused, with an UNKNOWN reason, reported as a
+		// cancellation because that is what it meant before.
+		const notices: { message: string; metadata: unknown }[] = [];
+		const saveCalls: unknown[] = [];
+		const seam = await runProductionSeam({
+			notices,
+			saveCalls,
+			installationOutcome: false as never,
+		});
+
+		expect(
+			seam.notices.some((notice) => notice.message.endsWith("compacted")),
+		).toBe(false);
+		const refusals = seam.logs.filter((line) =>
+			line.includes(
+				"the turn was cancelled before the compaction was durably installed",
+			),
 		);
-		expect(harness.accumulated().outputTokens).toBe(
-			500 + FIRST_USAGE.outputTokens,
-		);
+		expect(refusals.length).toBeGreaterThan(0);
+		for (const line of refusals) {
+			expect(line).toContain("cancelled");
+		}
+	});
+
+	it("preserves the HISTORICAL legacy VOID behaviour: the installation is treated as committed", async () => {
+		useProviderChunks([
+			{ type: "text", id: "summary-1", text: COMPLETE_LOOKING_SUMMARY },
+			usageChunk(FIRST_USAGE),
+			{ type: "done", id: "summary-1", success: true },
+		]);
+
+		const notices: { message: string; metadata: unknown }[] = [];
+		const saveCalls: unknown[] = [];
+		// `undefined` is the HISTORICAL contract: the host reports nothing.
+		const seam = await runProductionSeam({
+			notices,
+			saveCalls,
+			installationOutcome: undefined,
+		});
+
+		// The installation was treated as committed and the success was
+		// published.
+		expect(seam.saveCalls).toHaveLength(1);
+		expect(
+			seam.notices.some((notice) => notice.message.endsWith("compacted")),
+		).toBe(true);
 	});
 });

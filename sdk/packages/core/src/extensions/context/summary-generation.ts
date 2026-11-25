@@ -59,14 +59,35 @@ export interface SummaryUsage {
 }
 
 /**
- * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 — THE USAGE
- * COLLECTOR.
+ * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 (AMENDMENT-02 §3) —
+ * THE NORMALIZED USAGE EVENT.
+ *
+ * The shape the RESOLVED provider adapter's `usage` event carries. The
+ * adapter (`@cline/llms`'s `ai-sdk` provider) normalizes every provider's
+ * usage into exactly these counters, so the summarizer reads the SAME
+ * shape the main model's usage uses.
+ *
+ * The fields are the provider's own numbers. None of them is derived, and
+ * an absent one stays ABSENT.
+ */
+export interface NormalizedUsageEvent {
+	inputTokens?: number;
+	outputTokens?: number;
+	cacheReadTokens?: number;
+	cacheWriteTokens?: number;
+	totalCost?: number;
+	thoughtsTokenCount?: number;
+}
+
+/**
+ * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 (AMENDMENT-02 §3) —
+ * THE USAGE COLLECTOR.
  *
  * It reads the provider's `usage` chunk from the summarizer stream and
  * returns the provider's own numbers.
  *
  * WHY THE COLLECTION IS NOT OPTIONAL
- * ----------------------------------
+ * -----------------------------------
  *
  * The usage is a fact of the INFERENCE, not of its acceptance. A summary
  * that is rejected, cancelled or refused at the persistence boundary was
@@ -74,37 +95,43 @@ export interface SummaryUsage {
  * before any acceptance decision is taken, and it is independent of whether
  * the candidate is installed.
  *
- * The chunk is a per-request REPORT. A provider MAY report more than one
- * usage chunk for one request (the transport contract does not forbid it),
- * and each chunk reports the usage of the request it belongs to, so the
- * collector SUMS them. It does not take the last one: taking the last
- * would silently discard usage a provider already reported.
+ * THE NORMALIZED SEMANTICS — ONE AUTHORITATIVE FINAL REPORT
+ * ----------------------------------------------------------
+ *
+ * The RESOLVED provider adapter emits EXACTLY ONE `usage` event per
+ * physical request, and that event is the request's own CUMULATIVE
+ * SNAPSHOT: the AI SDK's `stream.usage` ("complete usage data") or the
+ * finish part's `totalUsage` ("Usage snapshot at end of stream"). It is
+ * NOT an incremental delta, and it is NOT a running total across
+ * requests.
+ *
+ * So the collector keeps the FIRST report and does NOT sum: summation is
+ * correct only for deltas, and it would DOUBLE the request's usage if a
+ * provider ever emitted more than one chunk. The collector therefore
+ * treats the first reported chunk as the request's authoritative usage and
+ * ignores any later one.
+ *
+ * This is the SAME rule the runtime's own accumulation uses: the runtime
+ * ADDS each reported usage into its cumulative state, so a second report
+ * of the same request would be counted twice.
  */
 function collectUsageChunk(
 	accumulated: SummaryUsage | undefined,
-	chunk: {
-		inputTokens?: number;
-		outputTokens?: number;
-		cacheReadTokens?: number;
-		cacheWriteTokens?: number;
-		totalCost?: number;
-		thoughtsTokenCount?: number;
-	},
+	chunk: NormalizedUsageEvent,
 ): SummaryUsage {
-	const inputTokens =
-		(chunk.inputTokens ?? 0) + (accumulated?.inputTokens ?? 0);
-	const outputTokens =
-		(chunk.outputTokens ?? 0) + (accumulated?.outputTokens ?? 0);
-	const cacheReadTokens =
-		(chunk.cacheReadTokens ?? 0) + (accumulated?.cacheReadTokens ?? 0);
-	const cacheWriteTokens =
-		(chunk.cacheWriteTokens ?? 0) + (accumulated?.cacheWriteTokens ?? 0);
-	const totalCost = (chunk.totalCost ?? 0) + (accumulated?.totalCost ?? 0);
-	const reasoningTokenCount =
-		(chunk.thoughtsTokenCount ?? 0) + (accumulated?.reasoningTokenCount ?? 0);
+	// The FIRST report is the request's authoritative usage. A later chunk
+	// for the SAME physical request would re-report the same cumulative
+	// snapshot, so it is not added.
+	if (accumulated !== undefined) {
+		return accumulated;
+	}
+	const cacheReadTokens = chunk.cacheReadTokens ?? 0;
+	const cacheWriteTokens = chunk.cacheWriteTokens ?? 0;
+	const totalCost = chunk.totalCost ?? 0;
+	const reasoningTokenCount = chunk.thoughtsTokenCount ?? 0;
 	return {
-		inputTokens,
-		outputTokens,
+		inputTokens: chunk.inputTokens ?? 0,
+		outputTokens: chunk.outputTokens ?? 0,
 		...(cacheReadTokens > 0 ? { cacheReadTokens } : {}),
 		...(cacheWriteTokens > 0 ? { cacheWriteTokens } : {}),
 		...(totalCost > 0 ? { totalCost } : {}),
@@ -125,6 +152,51 @@ export async function generateSummary(options: {
 	 * to `throw` — the pre-existing behaviour.
 	 */
 	cancellationReporting?: SummaryCancellationReporting;
+	/**
+	 * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 (AMENDMENT-02 §1)
+	 * — THE USAGE SINK.
+	 *
+	 * The channel through which the summarizer reports the
+	 * PROVIDER-REPORTED USAGE of its inference.
+	 *
+	 * WHY THE SINK LIVES HERE AND NOT AT THE CALLER
+	 * ---------------------------------------------
+	 *
+	 * The usage is observed INSIDE the provider stream. A transport that
+	 * fails after the provider already reported its usage — a thrown
+	 * transport exception, a cancellation raised by the transport's own
+	 * boundary — ends the generation by THROWING, so a caller that reports
+	 * the usage after `generateSummary()` RETURNS never sees it at all.
+	 * The usage of a PAID inference was then lost on the floor.
+	 *
+	 * The sink therefore lives at the summarizer's own boundary, and the
+	 * summarizer FINALIZES it on EVERY exit: the normal return and the
+	 * exceptional one alike. The report happens exactly once, whatever
+	 * ended the generation.
+	 *
+	 * The sink NEVER suppresses the original terminal exception: the
+	 * finalization runs in a `finally`, so the transport's own error — or
+	 * the cancellation it raised — remains the authoritative outcome.
+	 */
+	reportUsage?: (usage: {
+		/**
+		 * The PHYSICAL provider request the usage belongs to.
+		 *
+		 * It is the transport's own per-request identity (`gw_<nanoid>`),
+		 * NOT a logical identity derived from the compaction's position:
+		 * two summarization invocations of the SAME logical iteration are
+		 * TWO physical requests and are therefore distinguishable.
+		 */
+		requestId: string | undefined;
+		/** What the inference was for. */
+		kind: "summarization";
+		inputTokens: number;
+		outputTokens: number;
+		cacheReadTokens?: number;
+		cacheWriteTokens?: number;
+		totalCost?: number;
+		reasoningTokenCount?: number;
+	}) => void;
 }) {
 	// The PRE-FLIGHT check is unconditional: an already-cancelled
 	// generation never reaches the transport, so it never dispatches a
@@ -144,6 +216,7 @@ export async function generateSummary(options: {
 				completed: false,
 				finishReason: undefined,
 				cancelled: true,
+				usage: undefined,
 			};
 		}
 		options.signal.throwIfAborted();
@@ -167,6 +240,7 @@ export async function generateSummary(options: {
 				completed: false,
 				finishReason: undefined,
 				cancelled: true,
+				usage: undefined,
 			};
 		}
 		options.signal.throwIfAborted();
@@ -222,6 +296,44 @@ export async function generateSummary(options: {
 	// provider metric is unknown, and it is never turned into a
 	// zero-cost inference.
 	let usage: SummaryUsage | undefined;
+	// ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 (AMENDMENT-02 §4)
+	// — THE PHYSICAL REQUEST IDENTITY.
+	//
+	// The transport stamps a fresh per-request identity on the stream it
+	// returns (`gw_<nanoid>`), and the summarizer reads it from there. It
+	// identifies the PHYSICAL provider request, so two summarization
+	// invocations that share one logical iteration — one logical turn, two
+	// physical requests — remain distinguishable.
+	let requestId: string | undefined;
+	/**
+	 * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 (AMENDMENT-02 §1)
+	 * — THE SINGLE FINALIZATION MECHANISM.
+	 *
+	 * It reports the accumulated usage EXACTLY ONCE, on whichever exit the
+	 * generation took.
+	 *
+	 * It is idempotent by construction: the flag is set BEFORE the sink is
+	 * invoked, so a re-entrant finalization cannot report twice.
+	 *
+	 * It NEVER reports when the provider reported no usage: an absent
+	 * provider metric is unknown, and it is never turned into a zero-cost
+	 * inference.
+	 */
+	let usageReported = false;
+	const finalizeUsage = (): void => {
+		if (usageReported) {
+			return;
+		}
+		usageReported = true;
+		if (usage === undefined || options.reportUsage === undefined) {
+			return;
+		}
+		options.reportUsage({
+			requestId,
+			kind: "summarization",
+			...usage,
+		});
+	};
 	/**
 	 * The cancellation check performed at a point where the stream is
 	 * already under way.
@@ -241,40 +353,60 @@ export async function generateSummary(options: {
 		}
 		options.signal.throwIfAborted();
 	};
-	for await (const chunk of handler.createMessage(options.systemPrompt, [
-		{ role: "user", content: options.request },
-	])) {
-		observeCancellation();
-		if (chunk.type === "text") {
-			text += chunk.text;
-			if (options.maxOutputChars && text.length > options.maxOutputChars) {
-				throw new Error("Summary exceeded its output limit.");
+	try {
+		const stream = handler.createMessage(options.systemPrompt, [
+			{ role: "user", content: options.request },
+		]);
+		// ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01
+		// (AMENDMENT-02 §4): the transport's own per-request identity.
+		requestId = stream.id;
+		for await (const chunk of stream) {
+			observeCancellation();
+			if (chunk.type === "text") {
+				text += chunk.text;
+				if (options.maxOutputChars && text.length > options.maxOutputChars) {
+					throw new Error("Summary exceeded its output limit.");
+				}
+			} else if (chunk.type === "reasoning") {
+				reasoningChars += chunk.reasoning?.length ?? 0;
+			} else if (chunk.type === "done") {
+				if (!chunk.success && chunk.error) throw new Error(chunk.error);
+				incompleteReason = chunk.incompleteReason ?? incompleteReason;
+				failed ||= !chunk.success;
+				// ACT-CLINEMM-CMP04-TERMINAL-ACCEPTANCE-CONSERVATION-01: the
+				// reported terminal reason is carried through unchanged.
+				//
+				// The FIRST reported reason wins: a done chunk reports the
+				// terminal fact of the turn, and a later chunk cannot retract it.
+				finishReason ??= chunk.finishReason;
+				completed = true;
+			} else if (chunk.type === "tool_calls") {
+				usedTools = true;
+			} else if (chunk.type === "usage") {
+				// ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01: the
+				// provider's own numbers for this request.
+				//
+				// The chunk is read BEFORE any acceptance decision is taken, so
+				// the usage survives every outcome of the generation.
+				usage = collectUsageChunk(usage, chunk);
 			}
-		} else if (chunk.type === "reasoning") {
-			reasoningChars += chunk.reasoning?.length ?? 0;
-		} else if (chunk.type === "done") {
-			if (!chunk.success && chunk.error) throw new Error(chunk.error);
-			incompleteReason = chunk.incompleteReason ?? incompleteReason;
-			failed ||= !chunk.success;
-			// ACT-CLINEMM-CMP04-TERMINAL-ACCEPTANCE-CONSERVATION-01: the
-			// reported terminal reason is carried through unchanged.
-			//
-			// The FIRST reported reason wins: a done chunk reports the
-			// terminal fact of the turn, and a later chunk cannot retract it.
-			finishReason ??= chunk.finishReason;
-			completed = true;
-		} else if (chunk.type === "tool_calls") {
-			usedTools = true;
-		} else if (chunk.type === "usage") {
-			// ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01: the
-			// provider's own numbers for this request.
-			//
-			// The chunk is read BEFORE any acceptance decision is taken, so
-			// the usage survives every outcome of the generation.
-			usage = collectUsageChunk(usage, chunk);
 		}
+		observeCancellation();
+	} finally {
+		// ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01
+		// (AMENDMENT-02 §1): THE FINALIZATION.
+		//
+		// The usage leaves the summarizer on EVERY exit — the normal return
+		// AND the exceptional one. A transport exception, or a cancellation
+		// raised by the transport's own boundary, ends the generation by
+		// throwing; the usage the provider already reported is still
+		// accounted, because it was PAID FOR.
+		//
+		// The finalization does NOT suppress the original exception: it runs
+		// in a `finally` and does not throw, so the transport's own terminal
+		// exception remains the authoritative outcome of the generation.
+		finalizeUsage();
 	}
-	observeCancellation();
 	// Handlers may finish normally without emitting an optional done chunk.
 	return {
 		text,
@@ -288,6 +420,12 @@ export async function generateSummary(options: {
 		// ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01: the
 		// provider-reported usage travels with the result, whatever became
 		// of the summary.
+		//
+		// ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01
+		// (AMENDMENT-02 §1): it ALSO leaves the summarizer through the
+		// `reportUsage` sink above, on both the normal and the exceptional
+		// exit. The field remains for the callers that read it, and it is
+		// the SAME value — the sink and the field never disagree.
 		usage,
 	};
 }

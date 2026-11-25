@@ -167,9 +167,7 @@ export interface ContextPipelinePrepareTurnInput {
 	 * summarizer's usage reaches the accounting owner whatever the
 	 * compaction's outcome.
 	 */
-	reportAuxiliaryUsage?: (
-		usage: CoreCompactionSummarizationUsage & { inferenceId: string },
-	) => void;
+	reportAuxiliaryUsage?: (usage: CoreCompactionSummarizationUsage) => void;
 }
 
 export interface ContextPipelinePrepareTurnResult {

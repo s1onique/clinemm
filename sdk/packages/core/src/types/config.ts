@@ -128,9 +128,7 @@ export interface CoreCompactionContext {
 	 * compaction's outcome, and it carries nothing when no usage was
 	 * reported.
 	 */
-	reportAuxiliaryUsage?: (
-		usage: CoreCompactionSummarizationUsage & { inferenceId: string },
-	) => void;
+	reportAuxiliaryUsage?: (usage: CoreCompactionSummarizationUsage) => void;
 }
 
 // Mirrors BudgetPolicyIntent in extensions/context/budget-projection/types.ts.
@@ -159,29 +157,26 @@ export interface CoreCompactionBudgetMetadata {
 export interface CoreCompactionResult {
 	messages: MessageWithMetadata[];
 	budget?: CoreCompactionBudgetMetadata;
-	/**
-	 * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01.
-	 *
-	 * The PROVIDER-REPORTED USAGE of the summarization inference this
-	 * compaction performed.
-	 *
-	 * A rejected summary is not free inference: the provider request was
-	 * dispatched and paid for whether the candidate was installed or not.
-	 * The usage is therefore reported with the compaction's own result, and
-	 * it is ABSENT when the provider reported no usage — an absent provider
-	 * metric stays unknown and is never turned into a zero-cost inference.
-	 *
-	 * DELTA semantics: the usage of THIS request, not a running total.
-	 */
-	summarizationUsage?: CoreCompactionSummarizationUsage;
 }
 
 /**
  * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01.
  *
  * The provider-reported usage of ONE summarization inference.
+ *
+ * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 (AMENDMENT-02 §4):
+ * the `inferenceId` is the PHYSICAL provider request identity, as
+ * reported by the transport itself.
  */
 export interface CoreCompactionSummarizationUsage {
+	/**
+	 * The PHYSICAL provider request this usage belongs to.
+	 *
+	 * It is the transport's own per-request identity, so two
+	 * summarization invocations that share one logical iteration are
+	 * distinguishable.
+	 */
+	inferenceId: string;
 	/** What the inference was for. */
 	kind: "summarization";
 	inputTokens: number;

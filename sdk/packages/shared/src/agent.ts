@@ -834,44 +834,6 @@ export interface AgentRuntimePrepareTurnResult {
 	 * disabled, which is the pre-repair behavior.
 	 */
 	maxRequestTokens?: number;
-	/**
-	 * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01.
-	 *
-	 * The PROVIDER-REPORTED USAGE of an INFERENCE the host performed OUTSIDE
-	 * the main model request — today, the SUMMARIZATION inference the
-	 * compaction seam runs.
-	 *
-	 * WHY IT EXISTS
-	 * -------------
-	 *
-	 * The summarizer is a REAL provider request: it dispatches to the
-	 * provider, it is paid for, and the provider reports its usage. That
-	 * usage was DROPPED on the floor: the summarizer transport consumed the
-	 * provider stream without ever reading its `usage` chunk, and the
-	 * compaction seam had no channel to report what it cost.
-	 *
-	 * A REJECTED summary is not free inference, and a SUCCESSFUL summary
-	 * installation is not the authority for recording provider usage. The
-	 * usage is a fact of the inference, and it is reported whether the
-	 * candidate was accepted, rejected, cancelled or persisted.
-	 *
-	 * THE SEMANTICS
-	 * --------------
-	 *
-	 * The value is a DELTA for the inference(s) this field describes: the
-	 * provider-reported usage of those requests, NOT a running total. It is
-	 * the SAME delta semantics the main model's usage events use, so the
-	 * runtime's existing accumulation treats it identically.
-	 *
-	 * Each entry is attributed to the inference it belongs to, so a SECOND
-	 * summarization request is independently attributed rather than merged
-	 * into the first.
-	 *
-	 * ABSENT means the host performed no such inference, or the provider
-	 * reported no usage for it. It is NEVER synthesized as zero: an absent
-	 * provider metric stays unknown.
-	 */
-	auxiliaryUsage?: readonly AuxiliaryInferenceUsage[];
 }
 
 /**
@@ -882,14 +844,20 @@ export interface AgentRuntimePrepareTurnResult {
  *
  * The counters are the provider's own numbers for that request. They are
  * never estimated and never derived from a character count.
+ *
+ * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 (AMENDMENT-02 §4):
+ * the `inferenceId` is the PHYSICAL provider request identity, as reported
+ * by the transport itself. It distinguishes two summarization requests
+ * within the same logical turn, so the second one is independently
+ * attributed instead of being merged into the first.
  */
 export interface AuxiliaryInferenceUsage {
 	/**
-	 * A stable identity for the inference this usage belongs to.
+	 * The PHYSICAL provider request this usage belongs to.
 	 *
-	 * It distinguishes two summarization requests within the same turn, so
-	 * the second one is independently attributed instead of being merged
-	 * into the first.
+	 * It is the transport's own per-request identity, so two
+	 * summarization requests that share one logical iteration are
+	 * distinguishable.
 	 */
 	inferenceId: string;
 	/** What the inference was for. */

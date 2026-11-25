@@ -434,20 +434,25 @@ describe("ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01 — the in-flig
 		const partialDelivered = createGate();
 		/**
 		 * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01
-		 * (AMENDMENT-01 A3) — THE CANCELLATION-SIDE GATE.
+		 * (AMENDMENT-02 §5) — THERE IS NO CANCELLATION-SIDE GATE.
 		 *
-		 * The held response body waits for THIS gate as well as for the
-		 * ordinary release. The test opens it AT THE MOMENT OF THE
-		 * CANCELLATION, so the local read ends because of the cancellation
-		 * and not because the provider finished.
+		 * The held response body is unblocked by the request's OWN
+		 * `init.signal` — the ACTUAL transport AbortSignal. The test does
+		 * not release a separate gate after signalling the cancellation: the
+		 * cancellation itself is what ends the local read.
 		 */
-		const cancelUnblocks = createGate();
 		/** The abort signal the transport's own fetch boundary received. */
 		let transportSignal: AbortSignal | undefined;
 		/** Whether the transport's request was aborted at the fetch boundary. */
 		let transportAborted = false;
 		/** How many physical provider requests were dispatched. */
 		let physicalRequests = 0;
+		/**
+		 * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01
+		 * (AMENDMENT-02 §5) — whether the VALID partial SSE frame was
+		 * delivered to the transport before the cancellation.
+		 */
+		let partialFrameDelivered = false;
 		/** The external sinks, so a REJECTED seam's effects are observable. */
 		const notices: { message: string; metadata: unknown }[] = [];
 		const saveCalls: unknown[] = [];
@@ -484,15 +489,51 @@ describe("ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01 — the in-flig
 										finish_reason: null,
 									},
 								],
-							})}nn\n`,
+							})}\n\n`,
 						),
 					);
 					// The provider's partial output has been delivered and the
 					// stream is still OPEN. The test is now in control.
 					partialDelivered.open();
-					// The body waits for the CANCELLATION to arrive, not for an
-					// ordinary provider completion.
-					await Promise.race([held.wait, cancelUnblocks.wait]);
+					//
+					// ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01
+					// (AMENDMENT-02 §5) — THE VALID PARTIAL FRAME.
+					//
+					// The frame is terminated with a VALID SSE delimiter
+					// (`\n\n`). The witness asserts below that the transport
+					// actually CONSUMED it, so "the provider produced partial
+					// output" is a fact about the decoded bytes and not only
+					// about the enqueue.
+					partialFrameDelivered = true;
+					//
+					// ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01
+					// (AMENDMENT-02 §5) — THE BODY WAITS ON THE ACTUAL
+					// TRANSPORT SIGNAL.
+					//
+					// The held body is unblocked by the request's OWN `init.signal`
+					// — the signal the production transport chain carries from
+					// `ProviderConfig.abortSignal`. There is NO separate manual
+					// gate to release: the CANCELLATION ITSELF ends the local
+					// read, which is the claim under test.
+					//
+					// The ordinary release gate remains for the NON-cancellation
+					// path, where the provider really does finish.
+					const abortSignal = init?.signal;
+					if (abortSignal) {
+						await Promise.race([
+							held.wait,
+							abortSignal.aborted
+								? Promise.resolve()
+								: new Promise<void>((resolve) => {
+										const onAbort = () => resolve();
+										abortSignal.addEventListener("abort", onAbort, {
+											once: true,
+										});
+									}),
+						]);
+					} else {
+						await held.wait;
+					}
 					// The provider's NORMAL completion is reached only when the
 					// test releases it. On the cancellation path the body ends on
 					// the abort instead.
@@ -511,7 +552,7 @@ describe("ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01 — the in-flig
 											finish_reason: "stop",
 										},
 									],
-								})}nn\n`,
+								})}\n\n`,
 							),
 						);
 						controller.close();
@@ -556,6 +597,16 @@ describe("ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01 — the in-flig
 		// open. This is an OBSERVED fact, not a timing guess.
 		await partialDelivered.wait;
 
+		// ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01
+		// (AMENDMENT-02 §5) — A VALID PARTIAL RESPONSE WAS CONSUMED.
+		//
+		// The frame the provider delivered was terminated with a VALID SSE
+		// delimiter, and it reached the transport BEFORE the cancellation.
+		// So the witness is about a cancellation that interrupts a REAL,
+		// already-consumed partial response — not about a cancellation
+		// that arrives before the provider said anything at all.
+		expect(partialFrameDelivered).toBe(true);
+
 		// The cancellation authority reached the transport's own fetch
 		// boundary: the signal the transport carried IS the compaction's
 		// signal.
@@ -573,14 +624,13 @@ describe("ACT-CLINEMM-CMP07-PROVIDER-CANCELLATION-PROPAGATION-01 — the in-flig
 		controller.abort(new Error("cmp07: the user cancelled mid-summary"));
 
 		// ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01
-		// (AMENDMENT-01 A3) — THE CANCELLATION UNBLOCKS THE HELD READ.
+		// (AMENDMENT-02 §5) — THE CANCELLATION ITSELF ENDS THE READ.
 		//
-		// The held response body waits for the cancellation, so the
-		// cancellation itself ends the local read. The test does NOT release
-		// a normal provider completion to make the local consumption end:
-		// that would prove the seam ends when the provider finishes, which
-		// is a different claim.
-		cancelUnblocks.open();
+		// The held response body waits on the request's OWN `init.signal`,
+		// so the cancellation that was just signalled unblocks it. The test
+		// does NOT release a separate gate, and it does NOT release a normal
+		// provider completion: either would prove the seam ends when the
+		// test says so, which is a different claim.
 
 		// The transport's own cancellation boundary now fires: the fetch
 		// request's signal is aborted, which is what terminates the local
