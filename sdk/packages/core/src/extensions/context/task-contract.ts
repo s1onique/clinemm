@@ -41,6 +41,7 @@ import {
 	estimateProviderRequestInputTokens,
 	isCompletionToolReminderMessage,
 	type MessageWithMetadata,
+	parseBoundedObjectiveInstruction,
 	parseExecutionStagnationNoticeMessage,
 	TaskContractBudgetError,
 	toProviderVisibleMessages,
@@ -90,6 +91,27 @@ const RUNTIME_RECOVERY_HEADING =
 	"### Runtime execution-recovery instruction (runtime authority)";
 
 /**
+ * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 (R2).
+ *
+ * The section heading for the runtime's ACTIVE BOUNDED OBJECTIVE.
+ *
+ * It is DISTINCT from both the recovery-instruction heading and the
+ * completion-obligation heading, because the three runtime authorities are
+ * three different things:
+ *
+ *   - the recovery instruction is an ADVISORY ("do something smaller"),
+ *   - the bounded objective is the CURRENT EXECUTION TARGET ("do THIS"),
+ *   - the completion obligation is the parent's own duty ("and only then
+ *     you may finish").
+ *
+ * A carried contract must never blur them: an objective must never make the
+ * model believe the run may be finished, and the completion obligation must
+ * never be read as an objective.
+ */
+const RUNTIME_BOUNDED_OBJECTIVE_HEADING =
+	"### Runtime active bounded objective (runtime authority)";
+
+/**
  * The terminal completion tool names the runtime may require. The runtime
  * resolves them from the registered tools that declare
  * `lifecycle.completesRun === true`; the canonical transcript therefore only
@@ -133,6 +155,19 @@ export interface ActiveTaskContract {
 	 * contract never makes the model believe the run may be finished.
 	 */
 	runtimeRecoveryInstruction: TaskContractItem | undefined;
+	/**
+	 * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 (R2).
+	 *
+	 * The runtime's ACTIVE BOUNDED OBJECTIVE, if the canonical history
+	 * carries one.
+	 *
+	 * It is a RUNTIME authority, never a user authority: the dispatch is
+	 * runtime-synthetic and is recognised by the EXACT template shape its
+	 * producer renders. It is carried in its own section so a later
+	 * compaction never mistakes it for a new user task, and so a carried
+	 * contract never makes the model believe the parent may be finished.
+	 */
+	runtimeBoundedObjective: TaskContractItem | undefined;
 }
 
 /**
@@ -170,6 +205,7 @@ export function extractActiveTaskContract(
 	const laterUserInstructions: TaskContractItem[] = [];
 	let runtimeCompletionObligation: TaskContractItem | undefined;
 	let runtimeRecoveryInstruction: TaskContractItem | undefined;
+	let runtimeBoundedObjective: TaskContractItem | undefined;
 
 	for (let index = 0; index < canonicalMessages.length; index += 1) {
 		const message = canonicalMessages[index];
@@ -222,6 +258,24 @@ export function extractActiveTaskContract(
 				text,
 				sourceIndex: index,
 			};
+			continue;
+		}
+		// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 (R2): the
+		// runtime's ACTIVE BOUNDED OBJECTIVE dispatch.
+		//
+		// It is recognised by the EXACT template shape its producer renders
+		// (never by a broad string guess), and only in a message the existing
+		// production classifier already classifies as runtime-synthetic.
+		//
+		// The most recent carrier wins: a later objective supersedes an
+		// earlier one, exactly as a later recovery instruction supersedes an
+		// earlier one.
+		if (parseBoundedObjectiveInstruction(text) !== undefined) {
+			runtimeBoundedObjective = {
+				authority: "runtime",
+				text,
+				sourceIndex: index,
+			};
 		}
 	}
 
@@ -230,6 +284,7 @@ export function extractActiveTaskContract(
 		laterUserInstructions,
 		runtimeCompletionObligation,
 		runtimeRecoveryInstruction,
+		runtimeBoundedObjective,
 	};
 }
 
@@ -295,6 +350,19 @@ export function renderTaskContractSection(
 		lines.push(
 			escapeDelimiters(contract.runtimeRecoveryInstruction.text.trim()),
 		);
+	}
+	// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 (R2): the runtime's
+	// ACTIVE BOUNDED OBJECTIVE is carried in its OWN section, after the
+	// recovery instruction.
+	//
+	// The three runtime authorities stay distinguishable: the objective is
+	// the CURRENT EXECUTION TARGET, the recovery instruction is an
+	// advisory, and the completion obligation is the parent's own duty. The
+	// objective must never make the model believe the parent may be
+	// finished.
+	if (contract.runtimeBoundedObjective) {
+		lines.push(RUNTIME_BOUNDED_OBJECTIVE_HEADING);
+		lines.push(escapeDelimiters(contract.runtimeBoundedObjective.text.trim()));
 	}
 	if (lines.length === 0) {
 		return undefined;
@@ -522,10 +590,16 @@ async function applyTaskContractWithMeasuredBudget(input: {
 	// objective, no completion obligation) must still be applied, or the
 	// instruction would be silently dropped by the very compaction that was
 	// supposed to preserve it.
+	//
+	// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 (R2): the runtime's
+	// ACTIVE BOUNDED OBJECTIVE is authoritative for the same reason. It is
+	// the CURRENT EXECUTION TARGET: dropping it would silently resume the
+	// stalled parent with no indication that an objective had been selected.
 	if (
 		!contract.objective &&
 		!contract.runtimeCompletionObligation &&
-		!contract.runtimeRecoveryInstruction
+		!contract.runtimeRecoveryInstruction &&
+		!contract.runtimeBoundedObjective
 	) {
 		return {
 			messages: [...compactedMessages],

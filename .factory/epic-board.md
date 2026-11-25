@@ -1,4 +1,185 @@
 
+# ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — GO_R2_BOUNDED_OBJECTIVE_DOGFOOD — 2026-11-25
+
+```text
+ACT_ID: ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01
+TYPE: bounded runtime-seam prototype (R2 bounded-objective recovery)
+VERDICT: GO_R2_BOUNDED_OBJECTIVE_DOGFOOD
+SCOPE: R2 only. R3 identified as the extension point, NOT implemented.
+ENTRY_HEAD: b5bf8d34f89c23e52942cbed9ab8dc4669e0b4ec
+BRANCH: main
+EVIDENCE: docs/acts/ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01.md
+```
+
+**R2 IS THE SECOND RECOVERY STAGE.** R1 injects an ADVISORY corrective
+instruction when a trajectory stalls. The frozen session `1795612311440_l9mhl`
+received BOTH R1 instructions at the actual SDK prompts and remained stalled:
+36 model responses, 36 tool calls, ZERO native edits, ~8m 42s elapsed,
+~1.31M cumulative reported input tokens, 162,338 recorded reasoning
+characters, no net repository change. The Linux amd64 Nim compiler was
+successfully installed and no Nim lifecycle implementation was started.
+
+An advisory asks the model to behave differently. It does not change WHAT
+the model is asked to do. R2 changes what the model is asked to do.
+
+**THE PRODUCTION MECHANISM.** When the R1 corrective-instruction allowance
+is exhausted AND the trajectory is still unproductive, the runtime:
+
+  1. SELECTS one bounded, independently verifiable objective derived from
+     the parent task, through the SAME authorized provider and model, with
+     ONE inference that carries no tools and no provider-owned reasoning;
+  2. VALIDATES it against the parent's authority;
+  3. MAKES it the current execution target of the next dispatched request;
+  4. VERIFIES it from the observable tool outcomes of the objective's own
+     execution;
+  5. RETURNS execution to the parent task automatically.
+
+The parent task remains authoritative throughout. The parent's terminal
+completion tool is never invoked on the objective's behalf, and the parent's
+outstanding obligations are preserved.
+
+**THE DISPATCH CHANNEL IS WHAT MAKES R2 DIFFERENT FROM R1.** R2 projects
+the selected objective onto the DISPATCHED REQUEST'S PRIVILEGED CHANNEL
+(`request.systemPrompt`) — the same channel the host's trusted
+runtime-control continuation uses — NOT onto the advisory message channel
+R1 uses, and NOT as another message appended to the conversation. Three
+production facts constrained this and were honoured:
+
+  - `AgentMessage.role: "system"` is NOT usable in the transcript: the
+    AI SDK v7 transport rejects `role:"system"` entries in `messages[]`.
+    The established production pattern persists runtime control as
+    `role: "user"` and composes the privileged content onto the top-level
+    instructions channel at model-request build time. R2 follows it.
+  - The objective is therefore a runtime-owned REQUEST PROJECTION, not a
+    transcript mutation: the canonical conversation, the parent's messages
+    and the signed reasoning continuity are untouched.
+  - The compaction summary is a LOSSY PROJECTION of the transcript, so the
+    objective's IDENTITY is carried forward by the task-contract conservation
+    path in its OWN runtime-authority section, recognised by the EXACT
+    template shape its producer renders.
+
+**THE PRODUCTION SEAM.** The existing `AgentRuntime` iteration boundary.
+R2 rides the existing R1 `allowance_exhausted` branch of
+`evaluateExecutionStagnation()` — the branch that was previously a no-op.
+R1's thresholds and allowance are UNCHANGED. The runtime remains the SINGLE
+lifecycle authority: it owns the accounting, the selection, the dispatch,
+the verification and the automatic return. No second task lifecycle, no
+parallel supervisor, no provider switch, no recursive planner.
+
+**THE EXISTING INFRASTRUCTURE THAT WAS REUSED.** The canonical transcript,
+the model invocation seam, the usage accounting, the completion obligation,
+the run-scoped accounting and the task-contract conservation path. The
+multi-agent team tools (`team_task`, `spawn_agent`) were deliberately NOT
+reused: they are a second task lifecycle and are explicitly out of scope.
+
+**THE VALIDATOR IS THE AUTHORISATION BOUNDARY.** A candidate is REJECTED
+when it is malformed, names a DIFFERENT parent, proposes a mutation scope
+OUTSIDE the parent's authorised paths, contradicts an applicable parent
+constraint, cites evidence that was never established, or claims that an
+outstanding obligation is already satisfied. A rejection NEVER starts
+another selection attempt: the activation's inference allowance is already
+spent. The scope check is a PATH CONTAINMENT test against the paths the
+USER named — it never inspects command text and never guesses at intent.
+
+**VERIFICATION IS OBSERVABLE, NOT ASSERTED.** A model statement that the
+objective is complete is NOT sufficient. The host may supply a more precise
+judgement through the optional `verifyObjective` hook; the runtime's own
+structural check requires a SUCCESSFULLY EXECUTED COMMAND. A successful
+native edit is deliberately NOT sufficient: an edit only shows that a file
+changed, never that the change is correct.
+
+**THE ACCOUNTING IS RUN-SCOPED.** At most one selection inference per
+activation, two activations per parent run and eight rounds per objective
+— EXPERIMENTAL bounds for this implementation, not permanent production
+defaults. The activation is consumed when ATTEMPTED: a failed selection, a
+failed execution and a failed verification all consume the corresponding
+allowance. Compaction never replenishes it, and R2 never reactivates
+recursively from within its own objective. An unsuccessful recovery
+produces an EXPLICIT internal outcome suitable for a future R3 consumer;
+success is never manufactured and no new user-waiting state is introduced.
+
+**QUALIFICATION — THE PRINCIPAL DETERMINISTIC WITNESS.** Driven through the
+REAL `AgentRuntime` with a scripted model and a DISPOSABLE WORKSPACE on
+disk. Evidence class: SYNTHETIC_REAL_PRODUCTION_SEAM.
+
+  PHASE A — STAGNATION: nine unproductive inspection rounds; the R1
+  instructions ARE delivered and do NOT change the model's behaviour.
+
+  PHASE B — R2 EXECUTION: R1's allowance exhaustion activates R2
+  AUTOMATICALLY; the scripted model chooses the implementation action ONLY
+  AFTER it observes the active objective in the dispatched request; the real
+  tool path changes a disposable file ON DISK; the real executable check
+  reads the file back and reports PASS only when the repaired value is
+  really there.
+
+  PHASE C — PARENT CONTINUATION: the objective completes and the runtime
+  returns to the parent AUTOMATICALLY; a SECOND outstanding parent
+  obligation remains; the premature completion is REJECTED by the EXISTING
+  completion contract (the guard's obligation is re-injected and the run
+  continues); after the obligation is satisfied, ordinary completion
+  succeeds.
+
+  NO operator intervention occurs at any point.
+
+**THE FROZEN-SESSION DISCRIMINATOR.** Session `1795612311440_l9mhl` is
+OPERATOR-LOCAL and PRIVATE and is NEVER committed; only its aggregate,
+non-content shape is recorded as a frozen witness. The replay is processed
+PROGRAMMATICALLY using ONLY the observations available at each historical
+decision point. It establishes WHEN R2 would have become eligible (the
+first round at which the R1 allowance was exhausted AND the trajectory was
+still unproductive — not the last round of the trajectory), WHICH facts were
+available, WHICH obligations remained, THAT NO existing structured
+obligation could supply a bounded objective (the runtime's structured
+obligations name the parent's completion duty, not a bounded step toward
+it), and THAT exactly ONE bounded selection inference would have been
+required. The illustrative Basalt objective is an EXAMPLE of a well-formed
+bounded objective against the frozen evidence; it is NOT hardcoded in
+production code and is NOT a claim that the model would select it.
+
+**PRODUCTION REACHABILITY.** The REAL chain end to end: the VS Code
+`buildSessionConfig({ mode })` producer, the `LocalRuntimeHost` AgentConfig
+forwarding seam, and the REAL `AgentRuntime` with the PRODUCED policy. ACT
+mode activates the INTENDED policy; PLAN mode does NOT activate it (the
+whole block is ABSENT); the policy REACHES THE ACTUAL RUNTIME; and the R1
+allowance exhaustion activates R2 with the NEXT dispatched request carrying
+the ACTIVE bounded objective. No settings UI, no new persistence.
+
+**VERIFICATION.**
+
+  @cline/shared   typecheck clean; 36 focused tests pass (13 R2 pure
+                  contract, 6 R2 frozen-session, 17 R1).
+  @cline/agents   typecheck clean; focused suites 29/29 pass (12 R2, 11 R1,
+                  6 R1 progress controls). Full suite: 43 failed / 615
+                  passed versus a 43 failed / 603 passed baseline — ZERO new
+                  failures, +12 net passed.
+  @cline/core     typecheck delta ZERO against the baseline diagnostic set
+                  (45 observed = 45 baseline). The affected context/tools
+                  suites show 4 failed / 1836 passed; the 4 failures are the
+                  IDENTICAL pre-existing environment artifacts (skill-trigger
+                  eval ordering, bash startup env).
+  apps/vscode     typecheck clean; bridge typecheck adds ZERO new
+                  diagnostics against the frozen baseline (5 observed = 5
+                  baseline; the 5 are pre-existing from concurrent work);
+                  8 focused bridge tests pass (4 R1 + 4 R2).
+  Biome           clean on every changed file.
+
+NO paid inference. NO VSIX build. NO ordinary/full-suite reruns beyond the
+affected packages' own suites. NO Factory documentation campaign.
+
+**SCOPE.** R2 only. NOT implemented: R3 fresh execution episodes, provider
+or model escalation, multi-agent orchestration, a new persistent task
+database, a generic DAG scheduler, a semantic progress evaluator, a
+general-purpose planning framework, PCK redesign, overflow-recovery
+compaction repair, provider cancellation propagation, global token-budget
+redesign, changes to R1 thresholds, and additional static prompt tuning.
+
+**THE GO VERDICT DOES NOT CLAIM LIVE BEHAVIOURAL EFFECTIVENESS.** A
+synthetic witness does not establish that a live model WOULD select a
+useful objective for the frozen session, nor that the frozen failure
+recovers behaviourally. The offline replay establishes eligibility and
+available evidence, not behavioural recovery. The live behavioural claim
+remains open, exactly as it did for R1.
+
 # ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 — GO_AUTONOMOUS_RECOVERY_R1_DOGFOOD — 2026-11-25
 
 ```text

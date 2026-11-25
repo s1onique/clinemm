@@ -1393,6 +1393,19 @@ export class LocalRuntimeHost implements RuntimeHost {
 			// command-policy judgement — and the runtime never resolves,
 			// relaxes or invents a policy of its own.
 			executionStagnationPolicy: configWithProvider.executionStagnationPolicy,
+			// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 (R2):
+			// forward the runtime-owned bounded-objective recovery policy
+			// into the `AgentConfig` the runtime actually receives.
+			//
+			// The host (VS Code) supplies the policy on the SESSION CONFIG
+			// for ACT mode only; PLAN mode leaves it absent, so the runtime
+			// behaves exactly as before.
+			//
+			// It is forwarded VERBATIM. The host owns the policy -- including
+			// its `verifyObjective` hook, which is the host's own judgement of
+			// whether an objective's verification condition was met -- and the
+			// runtime never resolves, relaxes or invents a policy of its own.
+			boundedObjectivePolicy: configWithProvider.boundedObjectivePolicy,
 			prepareTurn,
 			tools,
 			modelTools: runtime.modelTools,

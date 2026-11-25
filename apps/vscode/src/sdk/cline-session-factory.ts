@@ -1571,6 +1571,31 @@ export async function buildSessionConfig(input: SessionConfigInput): Promise<Cor
 						enabled: true,
 						classifyToolCall: createHostExecutionProgressClassifier(),
 					},
+					// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 (R2):
+					// the runtime-owned bounded-objective recovery policy.
+					//
+					// R2 is the SECOND recovery stage. It activates only
+					// after the R1 corrective-instruction allowance has
+					// been EXHAUSTED and the trajectory is still
+					// unproductive. The runtime then selects ONE bounded,
+					// independently verifiable objective derived from the
+					// parent task and makes it the current execution target
+					// of the next dispatched model request.
+					//
+					// Like R1, it is scoped to ACT mode: in PLAN mode the
+					// agent is explicitly forbidden to edit, so an
+					// "unproductive" round is the requested behaviour, not a
+					// stall.
+					//
+					// EXPERIMENTAL: absent this policy the runtime behaves
+					// exactly as before. There is no settings UI and no new
+					// persistence.
+					boundedObjectivePolicy: {
+						enabled: true,
+						maxActivations: 2,
+						maxObjectiveRounds: 8,
+						maxSelectionInferences: 1,
+					},
 				}),
 		...reasoningConfig,
 		...(maxTokensPerTurn !== undefined ? { maxTokensPerTurn } : {}),

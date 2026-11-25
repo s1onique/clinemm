@@ -142,6 +142,11 @@ export function createAgentRuntimeConfig(
 		// runtime-owned execution-stagnation recovery policy. It is OPT-IN:
 		// absent means the runtime behaves exactly as before.
 		executionStagnationPolicy: agentConfig.executionStagnationPolicy,
+		// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 (R2): forward
+		// the runtime-owned bounded-objective recovery policy. It is OPT-IN:
+		// absent means the runtime behaves exactly as before — no selection
+		// inference, no dispatch, no accounting.
+		boundedObjectivePolicy: agentConfig.boundedObjectivePolicy,
 		maxIterations: agentConfig.maxIterations,
 		toolExecution,
 		toolPolicies: agentConfig.toolPolicies,

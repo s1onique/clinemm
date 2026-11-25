@@ -339,6 +339,31 @@ export interface CoreSessionConfig
 	 * authority is granted.
 	 */
 	executionStagnationPolicy?: AgentConfig["executionStagnationPolicy"];
+	/**
+	 * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 (R2).
+	 *
+	 * The OPT-IN, HOST-SUPPLIED bounded-objective recovery policy.
+	 *
+	 * When absent (the default), the runtime behaves EXACTLY as before: no
+	 * selection inference is made, no bounded objective is dispatched, and
+	 * no recovery accounting exists. The existing R1 behaviour is also
+	 * unchanged.
+	 *
+	 * When present AND enabled, the agent runtime — after the R1
+	 * corrective-instruction allowance has been EXHAUSTED and the
+	 * trajectory is STILL unproductive — selects ONE bounded, independently
+	 * verifiable objective derived from the parent task and makes it the
+	 * CURRENT EXECUTION TARGET of the next dispatched model request.
+	 *
+	 * The parent task remains authoritative: the objective is a child of
+	 * it, the parent's completion obligations are untouched, and the
+	 * parent's terminal completion tool is never invoked on the objective's
+	 * behalf.
+	 *
+	 * EXPERIMENTAL: the policy's limits are experimental bounds for this
+	 * implementation, not permanent production defaults.
+	 */
+	boundedObjectivePolicy?: AgentConfig["boundedObjectivePolicy"];
 	checkpoint?: CoreCheckpointConfig;
 	onTeamEvent?: (event: TeamEvent) => void;
 	onConsecutiveMistakeLimitReached?: (
