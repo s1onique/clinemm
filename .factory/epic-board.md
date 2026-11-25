@@ -1,4 +1,65 @@
-# ACT-CLINEMM-CMP04-TERMINAL-ACCEPTANCE-CONSERVATION-01 — GO_CMP04_TERMINAL_ACCEPTANCE_CONSERVED — 2026-11-25
+# ACT-CLINEMM-CMP05-TERMINAL-NEGATIVE-SIGNAL-PRECEDENCE-01 — GO_CMP05_TERMINAL_NEGATIVE_SIGNAL_PRECEDENCE — 2026-11-25
+
+```text
+ACT_ID:       ACT-CLINEMM-CMP05-TERMINAL-NEGATIVE-SIGNAL-PRECEDENCE-01
+TYPE:         bounded correction (terminal negative-signal precedence)
+VERDICT:      GO_CMP05_TERMINAL_NEGATIVE_SIGNAL_PRECEDENCE
+ENTRY_HEAD:   441b813f5
+SUBJECT_HEAD: 9408281c0
+BRANCH:       main
+EPIC:         CMP-04
+```
+
+**THE P1 IN `doneFinishReason()` AND THE SUMMARY TERMINAL ACCEPTANCE IS
+CLOSED.** The terminal fields of a done chunk can CONFLICT: the transport's
+success flag can disagree with the reported terminal reason, and the reported
+reason can disagree with an explicit incompleteness. Both places that read
+those fields consulted the **POSITIVE** signal first, so a negative signal
+could be normalized away.
+
+**THE RED REPRODUCED FOUR DEFECTS.**
+
+  1. `success=false` + `finishReason="stop"` -> the adapter reported the turn
+     as a NORMAL completion (`reason: "stop"`). A failed stream was
+     indistinguishable from a successful one.
+  2. `success=true` + `finishReason="unknown"` -> the summary was
+     **INSTALLED**. The provider never established a successful completion,
+     but the success flag alone authorized the installation -- exactly what
+     the acceptance contract exists to prevent.
+  3. `finishReason="stop"` + explicit `incompleteReason` -> the adapter
+     reported `stop` and lost the established max-token mapping.
+  4. The same for the content-filter mapping.
+
+**THE CORRECTION IS THE SMALLEST ONE THAT MAKES THE PRECEDENCE HOLD.**
+`doneFinishReason()` consults the signals in the order of authority: an
+explicit INCOMPLETENESS is authoritative; a REPORTED FAILURE is
+authoritative; only then is the reported reason consulted.
+`classifySummaryTerminalStatus()` treats a reported reason of `unknown` as a
+negative signal **in its own right**, not only when the stream also failed.
+
+**NO NEW TERMINAL-STATUS VOCABULARY.** `unestablished_completion` already
+existed; the correction only reorders which signal is consulted.
+
+**PRESERVED:** the unknown-versus-error distinction, the cancellation
+precedence, the valid max-token and content-filter mappings, a normal STOP
+completion, and a genuine legacy handler that reports no terminal reason
+(which is genuinely UNAVAILABLE status, not a reported unestablished
+completion).
+
+```text
+RED (before the correction):   4 defects FAILED (3 adapter + 1 acceptance)
+GREEN (after the correction):  87 passed (acceptance 31 | adapter 22 | transport 9
+                               | durable 2 | sibling summarizer 23)
+CORE CONTEXT+LLMS SUITE:     1 348 passed | 0 failed (95 files)
+LLMS PROVIDER SUITES:           190 passed
+TYPECHECK:                   73 errors -> 73 errors, ZERO DELTA; 0 ACT-owned
+BIOME:                       clean on all 4 changed files
+SDK BUILD:                   SUCCEEDED (bun --production -F './sdk/packages/*')
+GITLEAKS:                    no leaks found
+INFERENCE REQUESTS:           0
+```
+
+**A successor ACT is NOT started automatically.**
 
 ```text
 ACT_ID:       ACT-CLINEMM-CMP04-TERMINAL-ACCEPTANCE-CONSERVATION-01
