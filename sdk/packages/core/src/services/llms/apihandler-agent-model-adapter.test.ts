@@ -192,6 +192,45 @@ describe("createAgentModelFromApiHandler", () => {
 		});
 	});
 
+	// ACT-CLINEMM-COMPACTION-ATOMIC-SUMMARY-INSTALLATION-REPAIR-01
+	// (AMENDMENT-02 C1) — THE PRESERVED TERMINAL REASON.
+	it("preserves a reported terminal reason instead of collapsing it into stop", async () => {
+		// The compatibility adapter reports `success: false` for a stream that
+		// ended without the provider ESTABLISHING a successful completion.
+		// That covers both a FAILED stream and an UNEStablished one, and the
+		// runtime handles them differently — so the distinction must survive
+		// the adapter instead of collapsing into "error".
+		const handler = fakeHandler([
+			{
+				type: "done",
+				success: false,
+				finishReason: "unknown",
+				id: "x",
+			},
+		]);
+		const model = createAgentModelFromApiHandler(handler);
+		const events = await collect(model.stream(baseRequest));
+
+		// An unestablished completion is NOT an error: the runtime has
+		// dedicated handling for it ("Model ended without a recognized finish
+		// reason"), and that handling must not be bypassed.
+		expect(events.at(-1)).toMatchObject({
+			type: "finish",
+			reason: "unknown",
+		});
+	});
+
+	it("keeps a LEGACY done chunk without a terminal reason unchanged", async () => {
+		// A legacy registered handler (e.g. the VS Code LM handler) reports no
+		// terminal reason at all. That is NOT the same claim as a handler that
+		// REPORTED an unestablished one, so it keeps its previous mapping.
+		const handler = fakeHandler([{ type: "done", success: true, id: "x" }]);
+		const model = createAgentModelFromApiHandler(handler);
+		const events = await collect(model.stream(baseRequest));
+
+		expect(events.at(-1)).toMatchObject({ type: "finish", reason: "stop" });
+	});
+
 	it("forwards the abort signal to the handler", async () => {
 		const handler = fakeHandler([{ type: "text", text: "x", id: "x" }]);
 		const controller = new AbortController();

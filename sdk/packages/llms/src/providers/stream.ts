@@ -124,6 +124,25 @@ export interface ApiStreamDoneChunk {
 	error?: string;
 	/** Reason for incomplete response (e.g., "max_output_tokens") */
 	incompleteReason?: string;
+	/**
+	 * ACT-CLINEMM-COMPACTION-ATOMIC-SUMMARY-INSTALLATION-REPAIR-01
+	 * (AMENDMENT-02 C1) — THE TERMINAL REASON.
+	 *
+	 * The gateway's terminal reason, preserved so a consumer can tell an
+	 * ESTABLISHED completion from an UNEStablished one.
+	 *
+	 * It is the distinction `success` alone cannot carry: `success: false`
+	 * covers BOTH a failed stream and a stream that ended without the
+	 * provider reporting a terminal reason, and those two need different
+	 * handling (a failure is an error; an unestablished completion is an
+	 * incomplete turn).
+	 *
+	 * The values are the gateway's `AgentModelFinishReason` vocabulary.
+	 * ABSENT when the producing handler did not report one — a legacy
+	 * handler that finishes without a terminal reason is NOT the same claim
+	 * as a handler that reported an unestablished one.
+	 */
+	finishReason?: string;
 	/** Response ID */
 	id: string;
 }

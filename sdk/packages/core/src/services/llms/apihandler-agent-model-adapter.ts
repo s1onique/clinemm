@@ -101,6 +101,23 @@ function toAgentModelEvents(chunk: ApiStreamChunk): AgentModelEvent[] {
 }
 
 function doneFinishReason(chunk: ApiStreamDoneChunk): AgentModelFinishReason {
+	// ACT-CLINEMM-COMPACTION-ATOMIC-SUMMARY-INSTALLATION-REPAIR-01
+	// (AMENDMENT-02 C1) — THE PRESERVED TERMINAL REASON.
+	//
+	// The compatibility adapter now reports `success: false` for a stream
+	// that ended WITHOUT the provider establishing a successful completion —
+	// which covers BOTH a failed stream and an UNEStablished completion
+	// (the provider reported no terminal reason). Those two are different
+	// facts and the runtime handles them differently: a failure is an error,
+	// while an unestablished completion is an incomplete turn
+	// ("Model ended without a recognized finish reason").
+	//
+	// The adapter therefore preserves the terminal reason on the done chunk
+	// so the distinction survives, and this mapping uses it. A legacy
+	// handler that reports no reason at all keeps the previous behaviour.
+	if (chunk.finishReason !== undefined) {
+		return chunk.finishReason as AgentModelFinishReason;
+	}
 	if (chunk.success === false) {
 		return "error";
 	}
