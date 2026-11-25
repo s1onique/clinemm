@@ -956,26 +956,27 @@ export function createHostExecutionProgressClassifier(): NonNullable<
 		// A MISSING outcome is reported as `failed` too: neither a
 		// successful dispatch nor an absent result establishes that the
 		// command ran and succeeded.
-		if (result?.isError === true || observationReportsFailure(result?.output)) {
+		if (result?.isError === true) {
 			return "failed";
 		}
-		if (result === undefined || !observationEstablishesOutcome(result.output)) {
-			// The observation carries NO execution outcome: either the result
-			// is absent entirely, or it carries no output at all, or the
-			// output is EMPTY.
-			//
-			// ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01 —
-			// AMENDMENT-01: an EMPTY observation (`null`, `[]`, `{}`) is a
-			// MISSING outcome too. The previous check only rejected an
-			// ABSENT `output` property, so an empty array or an empty
-			// object fell through to the command-shape reading and was
-			// reported as a productive EXECUTION. An observation that
-			// carries no evidence at all cannot establish that the command
-			// ran and produced a deliverable.
-			//
-			// Neither a successful dispatch nor an empty observation
-			// establishes that the command ran and succeeded, so this is not
-			// positive evidence of progress.
+		// ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01 —
+		// AMENDMENT-02: the POLARITY of the observation decides the verdict.
+		//
+		// The predecessor read only TERMINALITY here: a terminal observation
+		// was reported as a productive execution, so an EXPLICIT NEGATIVE
+		// observation — a failed operation result, a failed or cancelled
+		// terminal state — became positive evidence of progress.
+		//
+		//   - `unsuccessful` — an explicit negative signal. The command ran
+		//     and did not succeed: it is `failed`.
+		//   - `absent`      — no outcome at all (absent, empty, or a
+		//     terminal state with no success signal). Nothing established
+		//     that the command ran and succeeded: it is `failed`.
+		//   - `successful`  — an explicit positive signal, or the documented
+		//     nonempty plain-text legacy shape. Only this reading may be
+		//     reported as a productive execution or inspection.
+		const polarity = readObservationPolarity(result?.output);
+		if (polarity !== "successful") {
 			return "failed";
 		}
 		return isInspectionCommandInput(input) ? "inspected" : "executed";
@@ -983,92 +984,258 @@ export function createHostExecutionProgressClassifier(): NonNullable<
 }
 
 /**
- * ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01 — AMENDMENT-01.
+ * ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01 — AMENDMENT-02.
  *
- * Whether an observation ESTABLISHES a terminal execution outcome.
+ * The production TERMINAL STATES that are NOT a successful execution.
  *
- * The real production result contract is the `command_status` snapshot
- * (`CommandStatusOutput`) and the `run_commands` array envelope
- * (`ToolOperationResult[]`):
- *
- *   - the `command_status` snapshot carries `ok` (the OBSERVATION succeeded),
- *     `state` (the command's lifecycle state) and `exitCode` (the command's
- *     terminal status);
- *   - the `run_commands` operation result carries `success`, `result` and
- *     `error`.
- *
- * `{ ok: true }` ALONE does NOT establish a terminal outcome: `ok` reports
- * that the OBSERVATION was taken, not that the COMMAND ran and succeeded. A
- * still-running job reports `ok: true` with `state: "running"` and no exit
- * code at all.
- *
- * A terminal outcome is therefore established by an explicit `exitCode`, or
- * by the production operation-result `success` flag, or by a `state` that
- * names a terminal state.
- *
- * A PLAIN-TEXT observation is the documented residual limitation: the
- * classifier cannot distinguish a completed command with no structured
- * envelope from a command whose outcome was never reported, so it treats a
- * plain-text observation as a COMPLETED observation, classified by the
- * command's shape. That limitation is unchanged by this repair.
- *
- * An EMPTY observation (`null`, `[]`, `{}`) carries no evidence at all and
- * therefore establishes no outcome.
+ * The production `CommandJobState` vocabulary is `running`, `exited`,
+ * `deadline_exceeded`, `cancelled`, `spawn_failed` and `containment_failed`.
+ * Of those, `exited` is the only one that can carry a success, and even then
+ * only when an exit code says so. The remaining terminal states are outright
+ * unsuccessful: the job was cancelled, it blew its deadline, it never
+ * spawned, or its containment could not be proven.
  */
-function observationEstablishesOutcome(output: unknown): boolean {
-	if (output === null || output === undefined) {
+const UNSUCCESSFUL_TERMINAL_STATES: ReadonlySet<string> = new Set([
+	"cancelled",
+	"canceled",
+	"deadline_exceeded",
+	"spawn_failed",
+	"containment_failed",
+	"failed",
+	"killed",
+	"aborted",
+	"terminated",
+	"timeout",
+	"timed_out",
+]);
+
+/**
+ * ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01 — AMENDMENT-02.
+ *
+ * The production TERMINAL STATES that CAN carry a successful execution.
+ *
+ * `exited` is the production state of a job whose process has exited. It
+ * says the command reached a terminal state; whether it SUCCEEDED is
+ * carried by the exit code, not by the state itself.
+ */
+const SUCCESSFUL_TERMINAL_STATES: ReadonlySet<string> = new Set([
+	"exited",
+	"completed",
+	"done",
+]);
+
+/**
+ * ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01 — AMENDMENT-02.
+ *
+ * The POLARITY of an execution observation.
+ *
+ * The predecessor conflated TERMINALITY with SUCCESS: a terminal observation
+ * was reported as a productive execution. That conflation let an explicit
+ * NEGATIVE observation — a failed operation result, a failed/cancelled
+ * terminal state — become positive evidence of progress.
+ *
+ * The three readings are now DISTINCT:
+ *
+ *   - `unsuccessful` — the observation carries an EXPLICIT negative signal
+ *     (a failed operation result, a non-zero exit code, an unsuccessful
+ *     terminal state). It is `failed`: real work that did not succeed.
+ *   - `successful`   — the observation carries an EXPLICIT positive signal
+ *     (a successful operation result, a zero exit code, a successful
+ *     terminal state with a successful exit). Only this reading may be
+ *     reported as a productive execution or inspection.
+ *   - `absent`       — the observation carries NEITHER signal. It is
+ *     `failed`: nothing established that the command ran and succeeded.
+ *
+ * No new public vocabulary and no runtime lifecycle mechanism is introduced:
+ * these are INTERNAL readings of the EXISTING production result fields.
+ */
+type ObservationPolarity = "unsuccessful" | "successful" | "absent";
+
+/**
+ * Whether an observation carries an EXPLICIT NEGATIVE signal.
+ *
+ * The negative signals are the ones the production result contract sets:
+ *
+ *   - `ToolOperationResult.success === false` — the production per-command
+ *     operation result of a command that failed, was terminated by a
+ *     signal, timed out, or failed generically. The production source
+ *     states it explicitly: "must be reported as `success: false` — never
+ *     as a silent success."
+ *   - a non-zero `exitCode` — the observed terminal status of the command.
+ *   - an unsuccessful terminal `state` — the production `CommandJobState`
+ *     vocabulary's negative states.
+ *   - `ok === false` — the OBSERVATION itself failed.
+ *
+ * The production batch contract is PER-COMMAND: `run_commands` returns one
+ * `ToolOperationResult` per command, so a batch in which one command
+ * succeeded and another failed carries the negative entry. The negative
+ * signal is therefore NOT silently discarded by a positive sibling.
+ */
+function observationCarriesNegativeSignal(output: unknown): boolean {
+	if (typeof output === "string") {
+		try {
+			return observationCarriesNegativeSignal(JSON.parse(output));
+		} catch {
+			// A plain-text observation carries no structured negative
+			// signal. No prose is parsed.
+			return false;
+		}
+	}
+	if (!output || typeof output !== "object") {
 		return false;
 	}
-	if (typeof output === "string") {
-		// The production `run_commands` RUNNING envelope is a JSON STRING.
-		// It is parsed and read structurally. A non-JSON string is the
-		// documented plain-text legacy shape.
-		try {
-			return observationEstablishesOutcome(JSON.parse(output));
-		} catch {
-			// A plain-text observation is treated as a COMPLETED
-			// observation: the documented residual limitation.
+	const record = output as Record<string, unknown>;
+	// The production per-command operation result.
+	if (record.success === false) {
+		return true;
+	}
+	// The OBSERVATION itself failed.
+	if (record.ok === false) {
+		return true;
+	}
+	// The observed terminal status of the command.
+	if (typeof record.exitCode === "number" && record.exitCode !== 0) {
+		return true;
+	}
+	// An unsuccessful terminal lifecycle state.
+	if (typeof record.state === "string") {
+		if (UNSUCCESSFUL_TERMINAL_STATES.has(record.state.toLowerCase())) {
 			return true;
 		}
 	}
-	if (typeof output !== "object") {
-		// A non-object, non-string observation (a number, a boolean) is a
-		// plain-text-equivalent observation.
+	if (Array.isArray(output)) {
+		for (const entry of output) {
+			if (observationCarriesNegativeSignal(entry)) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+/**
+ * Whether an observation carries an EXPLICIT POSITIVE signal.
+ *
+ * The positive signals are the ones the production result contract sets:
+ *
+ *   - `ToolOperationResult.success === true` — the production per-command
+ *     operation result of a command that ran and succeeded.
+ *   - `exitCode === 0` — the observed terminal status of the command.
+ *   - a successful terminal `state` (`exited`) TOGETHER WITH a successful
+ *     exit, because the state alone does not say the command SUCCEEDED.
+ *
+ * The production `ok` flag is NOT a positive signal: it reports that the
+ * OBSERVATION was taken, not that the COMMAND ran and succeeded.
+ */
+function observationCarriesPositiveSignal(output: unknown): boolean {
+	if (typeof output === "string") {
+		try {
+			return observationCarriesPositiveSignal(JSON.parse(output));
+		} catch {
+			// A plain-text observation carries no structured positive
+			// signal. The documented plain-text legacy behavior is applied
+			// by the caller.
+			return false;
+		}
+	}
+	if (!output || typeof output !== "object") {
+		return false;
+	}
+	const record = output as Record<string, unknown>;
+	// The production per-command operation result.
+	if (record.success === true) {
+		return true;
+	}
+	// The observed terminal status of the command.
+	if (typeof record.exitCode === "number" && record.exitCode === 0) {
+		return true;
+	}
+	// A successful terminal lifecycle state TOGETHER WITH a successful
+	// exit. `exited` without an exit code is TERMINAL but not SUCCESSFUL.
+	if (
+		typeof record.state === "string" &&
+		SUCCESSFUL_TERMINAL_STATES.has(record.state.toLowerCase()) &&
+		typeof record.exitCode === "number" &&
+		record.exitCode === 0
+	) {
 		return true;
 	}
 	if (Array.isArray(output)) {
-		// The production array envelope. An EMPTY array carries no
-		// evidence; a non-empty array is established when any ENTRY
-		// establishes a terminal outcome.
-		return output.some((entry) => observationEstablishesOutcome(entry));
+		// The production batch contract is per-command. A batch in which
+		// EVERY command succeeded carries the positive signal; a batch in
+		// which one command failed carries the NEGATIVE signal, which the
+		// caller reads first.
+		//
+		// An EMPTY batch carries no evidence at all: `every` over no entries
+		// is vacuously true, so the empty case is rejected explicitly.
+		return (
+			output.length > 0 &&
+			output.every((entry) => observationCarriesPositiveSignal(entry))
+		);
 	}
-	const record = output as Record<string, unknown>;
-	// The explicit terminal status of the command.
-	if (typeof record.exitCode === "number") {
-		return true;
-	}
-	// The production operation-result success flag.
-	if (typeof record.success === "boolean") {
-		return true;
-	}
-	// A terminal lifecycle state names the command's terminal outcome.
-	if (typeof record.state === "string") {
-		const state = record.state.toLowerCase();
-		if (
-			state === "exited" ||
-			state === "failed" ||
-			state === "completed" ||
-			state === "done" ||
-			state === "terminated" ||
-			state === "killed" ||
-			state === "aborted"
-		) {
-			return true;
-		}
-	}
-	// The `ok` flag alone is the OBSERVATION's success, not the command's
-	// terminal outcome, so it does not establish one.
 	return false;
+}
+
+/**
+ * ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01 — AMENDMENT-02.
+ *
+ * Whether an observation is a NONEMPTY plain-text observation.
+ *
+ * The documented plain-text legacy limitation: the classifier cannot
+ * distinguish a completed command with no structured envelope from a command
+ * whose outcome was never reported. A NONEMPTY plain-text observation is
+ * therefore treated as a COMPLETED observation, classified by the command's
+ * shape.
+ *
+ * An EMPTY plain-text observation carries no evidence at all and establishes
+ * no outcome.
+ */
+function isNonemptyPlainTextObservation(output: unknown): boolean {
+	if (typeof output !== "string") {
+		return false;
+	}
+	if (output.trim().length === 0) {
+		return false;
+	}
+	try {
+		// A JSON envelope is a STRUCTURED observation, not plain text.
+		JSON.parse(output);
+		return false;
+	} catch {
+		return true;
+	}
+}
+
+/**
+ * ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01 — AMENDMENT-02.
+ *
+ * Read the POLARITY of an execution observation.
+ *
+ * The order of the readings matters:
+ *
+ *   1. a NEGATIVE signal — an explicit failure, an unsuccessful terminal
+ *      state, a non-zero exit code. The observation is `failed`.
+ *   2. a POSITIVE signal — an explicit success. The observation may be
+ *      reported as a productive execution or inspection.
+ *   3. a NONEMPTY plain-text observation — the documented legacy shape. It
+ *      is treated as a COMPLETED observation, classified by the command's
+ *      shape.
+ *   4. otherwise — the observation carries NO outcome at all: it is
+ *      `failed`. Neither a successful dispatch nor an absent or empty
+ *      observation establishes that the command ran and succeeded.
+ */
+function readObservationPolarity(output: unknown): ObservationPolarity {
+	if (observationCarriesNegativeSignal(output)) {
+		return "unsuccessful";
+	}
+	if (observationCarriesPositiveSignal(output)) {
+		return "successful";
+	}
+	if (isNonemptyPlainTextObservation(output)) {
+		// The documented plain-text legacy limitation.
+		return "successful";
+	}
+	return "absent";
 }
 
 /**
@@ -1118,45 +1285,6 @@ function observationReportsStillRunning(output: unknown): boolean {
 	if (Array.isArray(output)) {
 		for (const entry of output) {
 			if (observationReportsStillRunning(entry)) {
-				return true;
-			}
-		}
-	}
-	return false;
-}
-
-/**
- * Whether an observation reports a FAILED command.
- *
- * The failure is read from the EXPLICIT fields the production tools set:
- * the observed `exitCode` (a non-zero code is a failure) and the `ok` flag
- * (false is a failure). No prose is parsed.
- *
- * The production `command_status` snapshot of a failed job carries
- * `{ ok: true, state: "exited", exitCode: 1 }` — the `exitCode` is the
- * authoritative failure evidence.
- */
-function observationReportsFailure(output: unknown): boolean {
-	if (typeof output === "string") {
-		try {
-			return observationReportsFailure(JSON.parse(output));
-		} catch {
-			return false;
-		}
-	}
-	if (!output || typeof output !== "object") {
-		return false;
-	}
-	const record = output as Record<string, unknown>;
-	if (record.ok === false) {
-		return true;
-	}
-	if (typeof record.exitCode === "number" && record.exitCode !== 0) {
-		return true;
-	}
-	if (Array.isArray(output)) {
-		for (const entry of output) {
-			if (observationReportsFailure(entry)) {
 				return true;
 			}
 		}

@@ -316,3 +316,213 @@ describe("ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01 (AMENDMENT-01)
 		).toBe("failed");
 	});
 });
+
+// ---------------------------------------------------------------------------
+// ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01 — AMENDMENT-02
+//
+// TERMINAL OUTCOME POLARITY ONLY.
+//
+// `observationEstablishesOutcome()` establishes TERMINALITY, not SUCCESSFUL
+// EXECUTION, but the classifier treated a terminal observation as a
+// productive execution. `observationReportsFailure()` did not consume all
+// the negative signals that the terminality function accepts.
+//
+// The production result contract, established from the actual producers:
+//
+//   - `ToolOperationResult[]` (one entry per command in the batch):
+//     `success: true` when the command ran and succeeded; `success: false`
+//     with an `error` when it failed, was terminated by a signal, timed out
+//     or failed generically. The production source states it explicitly:
+//     "must be reported as `success: false` — never as a silent success."
+//
+//   - `CommandStatusOutput` (`command_status`): `ok` (the OBSERVATION
+//     succeeded), `state` (the command's lifecycle state) and `exitCode`.
+//     The production state vocabulary is `running`, `exited`,
+//     `deadline_exceeded`, `cancelled`, `spawn_failed` and
+//     `containment_failed`.
+//
+// Terminality ALONE is not success: `exited` without an exit code does not
+// say the command succeeded, and `cancelled` / `deadline_exceeded` /
+// `spawn_failed` / `containment_failed` are outright unsuccessful.
+// ---------------------------------------------------------------------------
+
+describe("ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01 (AMENDMENT-02) / terminal outcome polarity", () => {
+	it("EXPLICIT_NEGATIVE_OUTCOME_CONSERVATION: an explicit negative operation outcome is NOT a productive execution", () => {
+		const classifyProduction = createHostExecutionProgressClassifier();
+		const negativeObservations: ReadonlyArray<readonly [string, unknown]> = [
+			// The production `run_commands` operation result of a command
+			// that failed. This is the PRODUCTION structured contract.
+			[
+				"operation result: success false",
+				[{ success: false, error: "build failed" }],
+			],
+			// The production `command_status` snapshot of a failed job.
+			["command_status: state failed", { ok: true, state: "failed" }],
+			// A MIXED batch: one command succeeded, another failed. The
+			// production batch contract is per-command, so the negative
+			// entry must not be silently discarded.
+			[
+				"mixed batch: one success, one failure",
+				[
+					{ success: true, result: "ok" },
+					{ success: false, error: "failed" },
+				],
+			],
+			// The production terminal states that are NOT a success.
+			["command_status: state cancelled", { ok: true, state: "cancelled" }],
+			[
+				"command_status: state deadline_exceeded",
+				{ ok: true, state: "deadline_exceeded" },
+			],
+			[
+				"command_status: state spawn_failed",
+				{ ok: true, state: "spawn_failed" },
+			],
+			[
+				"command_status: state containment_failed",
+				{ ok: true, state: "containment_failed" },
+			],
+			// A non-zero exit code is already covered, but the mixed
+			// ARRAY envelope with a non-zero exit is asserted too.
+			["exit code non-zero", { ok: true, exitCode: 1 }],
+		];
+		for (const [label, output] of negativeObservations) {
+			expect(
+				classifyProduction(
+					"run_commands",
+					{ commands: ["bun run build"] },
+					{ output },
+				),
+				label,
+			).not.toBe("executed");
+		}
+	});
+
+	it("TERMINALITY_NOT_SUCCESS: a terminal observation without a success signal does NOT establish successful execution", () => {
+		const classifyProduction = createHostExecutionProgressClassifier();
+		// `exited` WITHOUT an exit code: the command reached a terminal
+		// state, but the observation does not say it SUCCEEDED. Terminality
+		// is not success.
+		expect(
+			classifyProduction(
+				"run_commands",
+				{ commands: ["bun run build"] },
+				{ output: { ok: true, state: "exited" } },
+			),
+		).not.toBe("executed");
+		// The production `ok` flag alone reports that the OBSERVATION was
+		// taken, not that the COMMAND ran and succeeded.
+		expect(
+			classifyProduction(
+				"run_commands",
+				{ commands: ["bun run build"] },
+				{ output: { ok: true } },
+			),
+		).not.toBe("executed");
+	});
+
+	it("MISSING_OUTCOME_DENIAL: an empty or absent observation does NOT establish progress", () => {
+		const classifyProduction = createHostExecutionProgressClassifier();
+		for (const output of [null, [], {}, false, ""]) {
+			expect(
+				classifyProduction(
+					"run_commands",
+					{ commands: ["bun run build"] },
+					{ output },
+				),
+				`output: ${JSON.stringify(output)}`,
+			).not.toBe("executed");
+		}
+		// The result object itself is absent.
+		expect(
+			classifyProduction(
+				"run_commands",
+				{ commands: ["bun run build"] },
+				undefined,
+			),
+		).not.toBe("executed");
+	});
+
+	it("LEGITIMATE_WAIT_CONSERVATION: a still-running observation is still a DECLINE", () => {
+		const classifyProduction = createHostExecutionProgressClassifier();
+		expect(
+			classifyProduction(
+				"run_commands",
+				{ commands: ["bun run build"] },
+				{
+					output: JSON.stringify({
+						status: "running",
+						jobId: "cmd_job_0001",
+						elapsedMs: 15000,
+					}),
+				},
+			),
+		).toBeUndefined();
+		// The production `command_status` snapshot of a RUNNING job.
+		expect(
+			classifyProduction(
+				"run_commands",
+				{ commands: ["bun run build"] },
+				{
+					output: [
+						{
+							ok: true,
+							jobId: "cmd_job_0001",
+							state: "running",
+							elapsedMs: 30000,
+						},
+					],
+				},
+			),
+		).toBeUndefined();
+	});
+
+	it("SUCCESSFUL_EXECUTION_CONSERVATION: an explicit successful outcome is still a productive execution", () => {
+		const classifyProduction = createHostExecutionProgressClassifier();
+		// The production successful operation result.
+		expect(
+			classifyProduction(
+				"run_commands",
+				{ commands: ["bun run build"] },
+				{ output: [{ success: true, result: "ok" }] },
+			),
+		).toBe("executed");
+		// The production successful exit.
+		expect(
+			classifyProduction(
+				"run_commands",
+				{ commands: ["bun run build"] },
+				{ output: [{ ok: true, exitCode: 0 }] },
+			),
+		).toBe("executed");
+		// A successful INSPECTION is still an inspection.
+		expect(
+			classifyProduction(
+				"run_commands",
+				{ commands: ["grep -n foo bar"] },
+				{ output: [{ success: true, result: "ok" }] },
+			),
+		).toBe("inspected");
+	});
+
+	it("LEGACY plain-text behavior is conserved: a NONEMPTY plain-text observation is still a completed observation", () => {
+		const classifyProduction = createHostExecutionProgressClassifier();
+		// The documented plain-text legacy limitation: a nonempty
+		// plain-text observation is treated as a COMPLETED observation and
+		// classified by the command's shape.
+		expect(
+			classifyProduction(
+				"run_commands",
+				{ commands: ["bun run build"] },
+				{ output: "some plain text" },
+			),
+		).toBe("executed");
+		expect(
+			classifyProduction(
+				"run_commands",
+				{ commands: ["grep -n foo bar"] },
+				{ output: "some plain text" },
+			),
+		).toBe("inspected");
+	});
+});
