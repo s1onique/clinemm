@@ -1,0 +1,19 @@
+ ✓ src/extensions/context/evidence-continuity.reference-trust01.test.ts > ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 — the publication boundary > P1: the credential-shaped canonical id is a REAL canonical reference of the session 2ms
+ ✓ src/extensions/context/evidence-continuity.reference-trust01.test.ts > ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 — the publication boundary > P2: the sentinel reaches NEITHER the persisted summary NOR the provider-visible continuation 10ms
+ ✓ src/extensions/context/evidence-continuity.reference-trust01.test.ts > ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 — the publication boundary > P3: the legitimate observation REMAINS present and attributable 1ms
+ ✓ src/extensions/context/evidence-continuity.reference-trust01.test.ts > ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 — the publication boundary > P4: the published reference is a runtime-controlled alias, not a derivative of the canonical id 1ms
+ ✓ src/extensions/context/evidence-continuity.reference-trust01.test.ts > ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 — conservation > C1: the INTERNAL canonical identity is unchanged 0ms
+ ✓ src/extensions/context/evidence-continuity.reference-trust01.test.ts > ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 — conservation > C2: distinct canonical identities remain DISTINGUISHABLE, and the cardinality is preserved 0ms
+ ✓ src/extensions/context/evidence-continuity.reference-trust01.test.ts > ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 — conservation > C3: the SAME identity keeps the SAME alias across BOTH destinations and across re-derivation 1ms
+ ✓ src/extensions/context/evidence-continuity.reference-trust01.test.ts > ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 — conservation > C4: references with SIMILAR PREFIXES remain distinguishable 0ms
+ ✓ src/extensions/context/evidence-continuity.reference-trust01.test.ts > ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 — conservation > C5: the ASSURANCE is neither promoted nor weakened 0ms
+ ✓ src/extensions/context/evidence-continuity.reference-trust01.test.ts > ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 — conservation > C6: publication cannot MANUFACTURE a reference to an unobserved event 0ms
+ ✓ src/extensions/context/evidence-continuity.reference-trust01.test.ts > ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 — conservation > C7: the section is byte-STABLE across re-derivation (the prompt-cache invariant) 0ms
+ ✓ src/extensions/context/evidence-continuity.reference-trust01.test.ts > ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 — conservation > C8: the summary is byte-stable across a re-compaction 2ms
+ ✓ src/extensions/context/evidence-continuity.reference-trust01.test.ts > ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 — adversarial controls > A1: no adversarial identifier reaches EITHER destination 3ms
+ ✓ src/extensions/context/evidence-continuity.reference-trust01.test.ts > ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 — adversarial controls > A2: an adversarial identifier's SENTINEL never reaches either destination 0ms
+ ✓ src/extensions/context/evidence-continuity.reference-trust01.test.ts > ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 — adversarial controls > A3: an adversarial TOOL NAME cannot forge a section boundary 0ms
+ ✓ src/extensions/context/evidence-continuity.reference-trust01.test.ts > ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 — adversarial controls > A4: MIXED legitimate and malicious identifiers are handled independently 1ms
+ ✓ src/extensions/context/evidence-continuity.reference-trust01.test.ts > ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 — adversarial controls > A5: an UNRESOLVED reference is not carried at all 0ms
+ Test Files  1 passed (1)
+      Tests  17 passed (17)

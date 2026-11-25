@@ -62,22 +62,30 @@ import {
 	buildSyntheticPostBoundaryMessages,
 	computeSourcePrefixHash,
 	POST_BOUNDARY_MARKER,
+	POST_BOUNDARY_TOOL_NAME,
 	POST_BOUNDARY_TOOL_USE_ID,
 } from "./source-prefix";
 
 /**
  * Whether a carry-forward output carries the synthetic observation.
  *
- * The observation is detectable through EITHER of its two published forms:
+ * The observation is detectable through EITHER of its published forms:
  * the marker text (carried by the message content and by the payload's own
- * `result`) or the tool-call id (carried by the verified-outcome section).
- * Checking both makes the witness independent of WHICH route publishes the
- * observation.
+ * `result`) or the tool-call id / tool name (carried by the
+ * verified-outcome section). Checking all of them makes the witness
+ * independent of WHICH route publishes the observation.
+ *
+ * ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01: the
+ * verified-outcome section no longer publishes the canonical tool-call id —
+ * it publishes an OPAQUE alias — so the tool NAME is now the route by
+ * which the carried evidence identifies the observation. The tool-call id
+ * is still checked, because the canonical TAIL carries it verbatim.
  */
 export function carriesSyntheticObservation(output: string): boolean {
 	return (
 		output.includes(POST_BOUNDARY_MARKER) ||
-		output.includes(POST_BOUNDARY_TOOL_USE_ID)
+		output.includes(POST_BOUNDARY_TOOL_USE_ID) ||
+		output.includes(POST_BOUNDARY_TOOL_NAME)
 	);
 }
 

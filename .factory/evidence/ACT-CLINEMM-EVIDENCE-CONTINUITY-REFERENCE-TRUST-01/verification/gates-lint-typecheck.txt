@@ -1,0 +1,11 @@
+=== BIOME (ACT-owned files) ===
+Checked 9 files in 49ms. No fixes applied.
+
+=== TYPECHECK (core tsconfig.dev.json) ===
+45
+(45 = the pre-existing baseline; ACT-owned diagnostics: 0)
+--- ACT-owned diagnostics ---
+(empty = zero)
+
+=== BARREL WITNESS (no new public API) ===
+WITNESS_EXIT=0

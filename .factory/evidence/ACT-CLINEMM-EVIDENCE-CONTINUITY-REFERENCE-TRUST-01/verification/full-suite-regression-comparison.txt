@@ -1,0 +1,7 @@
+=== FULL CORE SUITE: failing test identity set, AFTER ===
+114
+
+=== DIFF vs BASELINE (empty both ways = NEW_REGRESSIONS=0) ===
+--- ADDED ---
+--- REMOVED ---
+(end)

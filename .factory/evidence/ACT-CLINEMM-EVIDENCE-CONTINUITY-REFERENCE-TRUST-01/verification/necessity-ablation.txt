@@ -1,0 +1,14 @@
+=== ABLATION A: alias treatment REMOVED (raw canonical id published) ===
+⎯⎯⎯⎯⎯⎯ Failed Tests 10 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  10 failed | 7 passed (17)
+
+=== ABLATION B: tool-name escaping REMOVED ===
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  1 failed | 16 passed (17)
+
+=== ABLATION C: single-line reduction REMOVED (name escaped, line break kept) ===
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  1 failed | 16 passed (17)
+
+=== RESTORED (treatment in place) ===
+      Tests  17 passed (17)

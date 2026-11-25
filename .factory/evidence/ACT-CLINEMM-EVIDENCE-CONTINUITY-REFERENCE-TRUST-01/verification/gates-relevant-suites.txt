@@ -1,0 +1,9 @@
+=== ACT-OWNED + RELEVANT SUITES (core vitest.config.ts) ===
+(Use `node --trace-warnings ...` to show where the warning was created)
+·································································································································
+
+ Test Files  38 passed (38)
+      Tests  524 passed | 1 skipped (525)
+   Start at  05:09:22
+   Duration  30.03s (transform 13.26s, setup 0ms, import 29.02s, tests 35.84s, environment 3ms)
+

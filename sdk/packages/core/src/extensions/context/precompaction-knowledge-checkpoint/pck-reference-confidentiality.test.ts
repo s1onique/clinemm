@@ -372,12 +372,17 @@ describe("ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01-CORRECTION01 — P0-2"
 		expect(persistedSection).toContain("evidence_refs=ref-0");
 	});
 
-	it("P0-2.3: the PRE-EXISTING evidence-continuity section is a SEPARATE exposure", async () => {
-		// The evidence-continuity carry-forward renders the canonical
-		// tool-call id as well. It is a PRE-EXISTING, SEPARATE mechanism
-		// that this ACT does not modify, and it is recorded here so the
-		// finding is not mistaken for something the PCK introduced or
-		// fixed.
+	it("P0-2.3: the evidence-continuity section no longer publishes the raw canonical id either", async () => {
+		// The evidence-continuity carry-forward used to render the canonical
+		// tool-call id verbatim as well. That exposure was recorded here as
+		// an OBSERVED PRE-EXISTING EXPOSURE, deliberately out of scope for
+		// the PCK correction.
+		//
+		// ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01 closed that
+		// deferred follow-up: the evidence-continuity section now publishes
+		// an OPAQUE, PUBLICATION-LOCAL alias instead of the canonical id.
+		// The assertion is INVERTED, so this test now also witnesses the
+		// A10 repair from the PCK's side.
 		process.env.CLINEMM_PCK_CLOSED_ENABLED = "1";
 		checkpointResponseText = JSON.stringify({
 			records: [
@@ -395,9 +400,11 @@ describe("ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01-CORRECTION01 — P0-2"
 		const seam = await runProductionSeam({ canonicalMessages: history });
 		const evidenceSection = extractEvidenceSection(seam.persistedText);
 		expect(evidenceSection.length).toBeGreaterThan(0);
-		// The pre-existing mechanism DOES render the raw id. This is
-		// recorded as an OBSERVED PRE-EXISTING EXPOSURE, not attributed to
-		// the PCK, and not silently claimed away.
-		expect(evidenceSection).toContain(CREDENTIAL_SHAPED_TOOL_CALL_ID);
+		// The raw identifier is NOT published by the evidence-continuity
+		// channel either.
+		expect(evidenceSection).not.toContain(CREDENTIAL_SHAPED_TOOL_CALL_ID);
+		expect(evidenceSection).not.toContain("FAKE-CREDENTIAL-DO-NOT-USE-7P4xQz");
+		// The section still carries the observation, under its opaque alias.
+		expect(evidenceSection).toContain("(ev-0)");
 	});
 });

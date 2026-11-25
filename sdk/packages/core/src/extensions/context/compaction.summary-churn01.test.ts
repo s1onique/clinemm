@@ -61,6 +61,7 @@ import {
 } from "../../session/models/session-compaction";
 import {
 	applyVerifiedEvidenceToCompactedMessages,
+	EVIDENCE_REFERENCE_ALIAS_PREFIX,
 	EVIDENCE_SECTION_HEADING,
 	extractVerifiedToolOutcomes,
 	MAX_CARRIED_OUTCOMES,
@@ -333,6 +334,31 @@ function projectedOrFail(
 // G2 — the real production pipeline reproduces the churn
 // ---------------------------------------------------------------------------
 
+/**
+ * ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01
+ *
+ * The carried outcome LINES in a published section.
+ *
+ * ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01: the section publishes
+ * one line per carried outcome, and each line carries an OPAQUE,
+ * PUBLICATION-LOCAL alias rather than the canonical tool-call id.
+ *
+ * The controls below count these lines so that they stay NON-VACUOUS: an
+ * assertion of the form "the canonical id is absent" would now pass for
+ * the WRONG reason — the id is absent from every published section,
+ * carried or not — and it would no longer distinguish "the outcome was
+ * carried" from "the outcome was dropped".
+ */
+function carriedOutcomeLines(text: string): string[] {
+	return text
+		.split("\n")
+		.filter(
+			(line) =>
+				line.startsWith("- ") &&
+				line.includes(`(${EVIDENCE_REFERENCE_ALIAS_PREFIX}-`),
+		);
+}
+
 describe("ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01 — the churn reproduces", () => {
 	/** The canonical history at the compaction boundary. */
 	const h0: MessageWithMetadata[] = [
@@ -376,8 +402,13 @@ describe("ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01 — the churn reproduces", () 
 		expect(contractSection(afterText)).toBe(contractSection(beforeText));
 		expect(proseOf(afterText)).toBe(proseOf(beforeText));
 		// The outcome verified AT the boundary is still carried.
-		expect(afterText).toContain("call_h0_a");
-		expect(afterText).toContain("call_h0_b");
+		// ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01: the carried
+		// outcome publishes an OPAQUE, PUBLICATION-LOCAL alias rather than
+		// the canonical tool-call id, so the control asserts on the
+		// carried LINES rather than on the raw id.
+		expect(carriedOutcomeLines(afterText)).toHaveLength(2);
+		expect(afterText).not.toContain("call_h0_a");
+		expect(afterText).not.toContain("call_h0_b");
 	});
 
 	it("keeps the summary byte-stable when the canonical history is UNCHANGED", async () => {
@@ -396,17 +427,25 @@ describe("ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01 — the churn reproduces", () 
 	});
 
 	it("changes the summary content while keeping the SAME byte length when the replacement is length-neutral", async () => {
-		// Two different outcomes with IDENTICAL rendered length. The section
-		// is replaced in place, so the summary's byte length is unchanged
-		// while its content — and therefore its cache identity — changes.
+		// Two different outcomes whose PUBLISHED content has IDENTICAL
+		// length. The section is replaced in place, so the summary's byte
+		// length is unchanged while its content — and therefore its cache
+		// identity — changes.
+		//
+		// ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01: the published
+		// reference is now an OPAQUE alias, so the length-neutrality must
+		// be established over the content that is ACTUALLY published. The
+		// two commands below classify to `helm template` and
+		// `kubectl apply`, which are both 13 characters, so the two
+		// published lines have identical length while differing in content.
 		const state = persistedState(h0);
 		const h1: MessageWithMetadata[] = [
 			...h0,
-			...successfulPair("call_len_x", "echo 11111"),
+			...successfulPair("call_len_x", "helm template kc ."),
 		];
 		const h2: MessageWithMetadata[] = [
 			...h0,
-			...successfulPair("call_len_y", "echo 22222"),
+			...successfulPair("call_len_y", "kubectl apply -f f"),
 		];
 
 		const projected = projectedOrFail(state, h0);
@@ -540,9 +579,13 @@ describe("ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01 — the causal ablation", () =
 		});
 		expect(withEvidence).not.toBe(withoutEvidence);
 		// The enrichment carries the boundary-verified outcome.
-		expect(withEvidence).toContain("call_ab_h0");
+		// ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01: the carried
+		// outcome publishes an OPAQUE alias, so the control counts the
+		// carried LINES.
+		expect(carriedOutcomeLines(withEvidence)).toHaveLength(1);
 		// ...and it does NOT carry the post-boundary outcome, because the
 		// section is scoped to the source boundary.
+		expect(carriedOutcomeLines(withEvidence)).not.toContain("call_ab_h1");
 		expect(withEvidence).not.toContain("call_ab_h1");
 	});
 });
@@ -568,7 +611,10 @@ describe("ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01 — conservation", () => {
 			evidence: true,
 		});
 		const text = projectedSummaryText(prepared);
-		expect(text).not.toContain("call_failed");
+		// ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01: a FAILED
+		// outcome contributes NO carried line. The line count is what makes
+		// this control non-vacuous.
+		expect(carriedOutcomeLines(text)).toHaveLength(0);
 		expect(text).not.toContain("succeeded");
 	});
 
@@ -585,6 +631,9 @@ describe("ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01 — conservation", () => {
 			evidence: true,
 		});
 		expect(projectedSummaryText(prepared)).not.toContain("call_never_ran");
+		// ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01: a call with
+		// NO result contributes NO carried line.
+		expect(carriedOutcomeLines(projectedSummaryText(prepared))).toHaveLength(0);
 	});
 
 	it("does not duplicate a carried outcome across repeated preparations", async () => {
@@ -604,8 +653,11 @@ describe("ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01 — conservation", () => {
 			evidence: true,
 		});
 		const text = projectedSummaryText(second);
-		const occurrences = text.split("call_once").length - 1;
-		expect(occurrences).toBe(1);
+		// ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01: the carried
+		// outcome is published ONCE, under its opaque alias. The count is
+		// over the carried LINES, so the control still distinguishes
+		// "carried once" from "carried twice".
+		expect(carriedOutcomeLines(text)).toHaveLength(1);
 		expect(projectedSummaryText(first)).toBe(text);
 	});
 
@@ -866,6 +918,8 @@ describe("ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01 — one-sided section movement
 		// The PROSE is unchanged.
 		expect(proseOf(afterText)).toBe(proseOf(beforeText));
 		// The boundary-verified outcome IS carried.
-		expect(afterText).toContain("call_one_sided_2");
+		// ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01: the carried
+		// outcome publishes an OPAQUE alias rather than the canonical id.
+		expect(carriedOutcomeLines(afterText)).toHaveLength(1);
 	});
 });

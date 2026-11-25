@@ -206,6 +206,22 @@ export const POST_BOUNDARY_MARKER = "SYNTHETIC-POST-BOUNDARY-OBSERVATION";
 export const POST_BOUNDARY_TOOL_USE_ID = "synthetic-post-boundary-observation";
 
 /**
+ * The TOOL NAME of the synthetic observation.
+ *
+ * ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01: the verified-outcome
+ * section publishes the tool NAME and an OPAQUE alias — it no longer
+ * publishes the canonical tool-call id. So the tool name is now the route
+ * by which the synthetic observation is detectable in the carried
+ * evidence.
+ *
+ * It is derived from the same marker for the same reason: a marker that
+ * only appeared in ONE route would make the positive control dependent on
+ * which route happens to publish it.
+ */
+export const POST_BOUNDARY_TOOL_NAME =
+	"synthetic-post-boundary-observation-tool";
+
+/**
  * Build a synthetic post-boundary assistant/tool message pair.
  *
  * The message carries the marker in BOTH a text block and a tool-result body,
@@ -224,7 +240,7 @@ export function buildSyntheticPostBoundaryMessages(): MessageWithMetadata[] {
 				{
 					type: "tool_use",
 					id: POST_BOUNDARY_TOOL_USE_ID,
-					name: "run_commands",
+					name: POST_BOUNDARY_TOOL_NAME,
 					input: { commands: ["echo synthetic-post-boundary-observation"] },
 				},
 			],
@@ -236,7 +252,7 @@ export function buildSyntheticPostBoundaryMessages(): MessageWithMetadata[] {
 				{
 					type: "tool_result",
 					tool_use_id: POST_BOUNDARY_TOOL_USE_ID,
-					name: "run_commands",
+					name: POST_BOUNDARY_TOOL_NAME,
 					content: [
 						{
 							success: true,

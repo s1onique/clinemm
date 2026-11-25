@@ -40102,12 +40102,12 @@ VERDICT=GO_PACKAGING
 ### A10 — the evidence-continuity reference confidentiality (SEPARATE)
 
 ```text
-ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01
-
-PRIORITY:         SECURITY
-EVIDENCE:         SYNTHETIC_REAL
-STATUS:           RED_REPRODUCED
-PRODUCTION_CHANGE: NONE
+ACT:                ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01
+PRIORITY:           SECURITY
+EVIDENCE:           SYNTHETIC_REAL_PRODUCTION_SEAM
+STATUS:             GREEN
+PRODUCTION_CHANGE:  APPLIED
+ENTRY_HEAD:         c92a45deb702eab5a3a84dee6e13f5b8f107b543
 ```
 
 A confidentiality defect is NOT documentary residue merely because it
@@ -40116,6 +40116,40 @@ existing verified-outcome section still publishes the synthetic
 canonical identifier. It does not block an otherwise qualified
 PCK-specific repair, but it prevents claiming confidentiality of the
 ENTIRE compacted summary.
+
+This ACT repaired that boundary. The recovered predecessor RED was
+reproduced against the REAL production seam (`renderEvidenceSection` ->
+`createSessionCompactionState()` persistence and `MessageBuilder.buildForApi()`
+provider projection), and the repair publishes a runtime-controlled,
+publication-local alias (`ev-0`, `ev-1`, ...) in place of the canonical
+tool-call id, and reduces the transcript-supplied tool name to a single
+escaped line so it can neither close the section nor forge an extra
+carried outcome.
+
+The INTERNAL canonical identity is unchanged: the call/result join, the
+outcome record and the rejection ledger still use the canonical id. Only
+the PUBLISHED representation changed.
+
+```text
+A10_PREDECESSOR_RED_RECOVERED   YES
+A10_CURRENT_RED                 YES  (11 failed | 6 passed)
+A10_GREEN                       YES  (17 passed)
+NECESSITY_ABLATION              YES  (3 specific ablations, all revert to RED)
+PERSISTED_SUMMARY_REFERENCE_CONFIDENTIALITY   CONFIRMED
+PROVIDER_CONTINUATION_REFERENCE_CONFIDENTIALITY CONFIRMED
+INTERNAL_REFERENCE_IDENTITY_CONSERVATION      CONFIRMED
+REFERENCE_CORRELATION_CONSERVATION            CONFIRMED
+REFERENCE_CARDINALITY_CONSERVATION            CONFIRMED
+ASSURANCE_CONSERVATION                        CONFIRMED
+LEGITIMATE_EVIDENCE_CONSERVATION              CONFIRMED
+ADVERSARIAL_CONTROLS                          12 families, 5 controls
+ACT_OWNED_DIAGNOSTICS                         0
+NEW_REGRESSIONS                               0
+VERDICT=GO_MODEL_COMPARISON
+```
+
+Evidence package:
+`.factory/evidence/ACT-CLINEMM-EVIDENCE-CONTINUITY-REFERENCE-TRUST-01/`.
 
 ### B06 — the completion-continuation quiescence (SEPARATE)
 
