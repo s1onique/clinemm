@@ -219,6 +219,216 @@ export function buildExecutionStagnationNoticeMessage(
 }
 
 /**
+ * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (AMENDMENT-01).
+ *
+ * The STRUCTURAL shape of the runtime execution-stagnation corrective
+ * message, parsed from the template's own fixed frames.
+ *
+ * WHY A STRUCTURAL RECOGNISER
+ * ---------------------------
+ * `isExecutionStagnationNoticeMessage()` recognises a notice by byte-exact
+ * equality against the template rendered for a KNOWN parameter triple. That
+ * is the right primitive for a caller that already knows the triple (the
+ * runtime's own accounting).
+ *
+ * The compaction task-contract conservation path does NOT know the triple: it
+ * reads the CANONICAL HISTORY, where the notice's parameters are whatever the
+ * runtime observed at the time. To carry the notice forward it must recognise
+ * the notice WITHOUT being told its parameters.
+ *
+ * This recogniser therefore parses the template's OWN fixed frames — the
+ * stable prefix, the stable suffix, and the "Observable facts" frame — and
+ * validates each parameter slot against the exact grammar the renderer
+ * produces. It is NOT a broad string guess:
+ *
+ *   - every FIXED segment of the template must be present, byte for byte;
+ *   - the round count must be a canonical non-negative integer (no leading
+ *     zeros, no sign, no whitespace);
+ *   - the tool-name slot must be either the renderer's literal empty form
+ *     ("no tools were used") or a comma-separated list of non-empty names
+ *     that is already SORTED and DUPLICATE-FREE (exactly what the renderer
+ *     emits);
+ *   - the edit-attempt slot must be either the renderer's literal empty form
+ *     or a canonical non-negative integer.
+ *
+ * A user-authored or unrelated runtime message that merely contains the words
+ * "Execution has stalled" is therefore NOT recognised.
+ */
+export interface ParsedExecutionStagnationNotice {
+	/** The consecutive unproductive round count the notice reports. */
+	readonly unproductiveRounds: number;
+	/** The host-defined tool names the notice lists, in render order. */
+	readonly toolNames: readonly string[];
+	/** The native edit attempts the notice reports. */
+	readonly editAttempts: number;
+}
+
+/**
+ * The literal the renderer emits for the tool-name slot when no tool was
+ * used.
+ */
+const EXECUTION_STAGNATION_NO_TOOLS = "no tools were used";
+
+/**
+ * The literal the renderer emits for the edit-attempt slot when no edit was
+ * attempted.
+ */
+const EXECUTION_STAGNATION_NO_EDITS = "No edit was attempted in those rounds.";
+
+/**
+ * The literal the renderer emits for the edit-attempt slot when edits were
+ * attempted. The count is a parameter, so the frame is split around it. The
+ * frame KEEPS its leading space: it is the separator between the count and
+ * the frame, and the renderer always emits exactly one.
+ */
+const EXECUTION_STAGNATION_EDITS_PREFIX =
+	" edit attempt(s) were made in those rounds.";
+
+/**
+ * A canonical non-negative integer: digits only, no leading zero (except the
+ * single digit "0"), no sign, no whitespace.
+ */
+function isCanonicalCount(value: string): boolean {
+	if (!/^\d+$/.test(value)) {
+		return false;
+	}
+	if (value.length > 1 && value.startsWith("0")) {
+		return false;
+	}
+	return true;
+}
+
+/**
+ * Whether a tool-name slot is in the exact form the renderer emits: either
+ * the literal empty form, or a comma-separated list of non-empty names that
+ * is already sorted and duplicate-free.
+ */
+function isCanonicalToolList(value: string): boolean {
+	if (value === EXECUTION_STAGNATION_NO_TOOLS) {
+		return true;
+	}
+	const names = value.split(", ");
+	if (names.length === 0) {
+		return false;
+	}
+	for (const name of names) {
+		if (name.length === 0) {
+			return false;
+		}
+	}
+	// The renderer sorts and de-duplicates. A list that is not already sorted
+	// and duplicate-free was NOT produced by the renderer.
+	for (let index = 1; index < names.length; index += 1) {
+		const previous = names[index - 1];
+		const current = names[index];
+		if (previous >= current) {
+			return false;
+		}
+	}
+	return true;
+}
+
+/**
+ * Parse a runtime execution-stagnation corrective message by its EXACT
+ * template shape.
+ *
+ * Returns `undefined` when the text is not a well-formed notice. A
+ * well-formed notice is one that this module's own renderer could have
+ * produced for the returned parameter triple.
+ */
+export function parseExecutionStagnationNoticeMessage(
+	text: string,
+): ParsedExecutionStagnationNotice | undefined {
+	if (typeof text !== "string" || text.length === 0) {
+		return undefined;
+	}
+	if (!text.startsWith(EXECUTION_STAGNATION_NOTICE_PREFIX)) {
+		return undefined;
+	}
+	let cursor = EXECUTION_STAGNATION_NOTICE_PREFIX.length;
+	const roundsEnd = text.indexOf(" ", cursor);
+	if (roundsEnd === -1) {
+		return undefined;
+	}
+	const roundsText = text.slice(cursor, roundsEnd);
+	if (!isCanonicalCount(roundsText)) {
+		return undefined;
+	}
+	const unproductiveRounds = Number.parseInt(roundsText, 10);
+	cursor = roundsEnd;
+	if (!text.startsWith(EXECUTION_STAGNATION_NOTICE_SUFFIX, cursor)) {
+		return undefined;
+	}
+	cursor += EXECUTION_STAGNATION_NOTICE_SUFFIX.length;
+	const factsPrefix = " Observable facts: the ";
+	if (!text.startsWith(factsPrefix, cursor)) {
+		return undefined;
+	}
+	cursor += factsPrefix.length;
+	const roundsMarker = " round(s) used only ";
+	const roundsMarkerAt = text.indexOf(roundsMarker, cursor);
+	if (roundsMarkerAt === -1) {
+		return undefined;
+	}
+	const factsRoundsText = text.slice(cursor, roundsMarkerAt);
+	if (factsRoundsText !== roundsText) {
+		return undefined;
+	}
+	cursor = roundsMarkerAt + roundsMarker.length;
+	const factsEnd = text.indexOf(".", cursor);
+	if (factsEnd === -1) {
+		return undefined;
+	}
+	const toolsText = text.slice(cursor, factsEnd);
+	if (!isCanonicalToolList(toolsText)) {
+		return undefined;
+	}
+	const toolNames =
+		toolsText === EXECUTION_STAGNATION_NO_TOOLS ? [] : toolsText.split(", ");
+	cursor = factsEnd;
+	// The renderer emits the tool list, its terminating period, and then the
+	// edit-attempt slot. The slot is either the literal "no edits" form or a
+	// canonical count followed by the "N edit attempt(s)" frame.
+	if (!text.startsWith(" ", cursor + 1)) {
+		return undefined;
+	}
+	cursor += 2;
+	if (text.startsWith(EXECUTION_STAGNATION_NO_EDITS, cursor)) {
+		// The renderer emits NOTHING after the "no edits" literal.
+		if (cursor + EXECUTION_STAGNATION_NO_EDITS.length !== text.length) {
+			return undefined;
+		}
+		return { unproductiveRounds, toolNames, editAttempts: 0 };
+	}
+	const editsPrefixEnd = text.indexOf(
+		EXECUTION_STAGNATION_EDITS_PREFIX,
+		cursor,
+	);
+	if (editsPrefixEnd === -1) {
+		return undefined;
+	}
+	const editsText = text.slice(cursor, editsPrefixEnd);
+	if (!isCanonicalCount(editsText)) {
+		return undefined;
+	}
+	const editAttempts = Number.parseInt(editsText, 10);
+	// The count must be IMMEDIATELY followed by the frame's single separating
+	// space: `editsPrefixEnd` is the frame's leading space, so the count ends
+	// exactly one character before it.
+	if (editsPrefixEnd !== cursor + editsText.length) {
+		return undefined;
+	}
+	// The renderer emits NOTHING after the edit-attempt frame.
+	if (
+		editsPrefixEnd + EXECUTION_STAGNATION_EDITS_PREFIX.length !==
+		text.length
+	) {
+		return undefined;
+	}
+	return { unproductiveRounds, toolNames, editAttempts };
+}
+
+/**
  * Recognise a runtime execution-stagnation corrective message by EXACT
  * template equality.
  *

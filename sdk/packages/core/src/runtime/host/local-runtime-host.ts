@@ -1378,6 +1378,21 @@ export class LocalRuntimeHost implements RuntimeHost {
 			),
 			maxIterations: configWithProvider.maxIterations,
 			execution: configWithProvider.execution,
+			// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (AMENDMENT-01):
+			// forward the runtime-owned execution-stagnation recovery
+			// policy into the `AgentConfig` the runtime actually receives.
+			//
+			// The host (VS Code) supplies the policy on the SESSION CONFIG
+			// for ACT mode only; PLAN mode leaves it absent, so the runtime
+			// behaves exactly as before. Without this forwarding the policy
+			// stopped at the session config and the runtime never observed
+			// it: the corrective instruction was never injected.
+			//
+			// It is forwarded VERBATIM. The host owns the policy — including
+			// its `classifyToolCall` hook, which is the host's own
+			// command-policy judgement — and the runtime never resolves,
+			// relaxes or invents a policy of its own.
+			executionStagnationPolicy: configWithProvider.executionStagnationPolicy,
 			prepareTurn,
 			tools,
 			modelTools: runtime.modelTools,

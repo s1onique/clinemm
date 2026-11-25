@@ -354,6 +354,15 @@
 		// aliases that resolve under `tsconfig.c2-4-c-bridge.json` only.
 		// Excluded here so `bun run check-types` does not see the
 		// base-config-incompatible import paths.
-		"src/sdk/__tests__/adjudication-vscode-activation01.runtime-chain.c24-c-bridge.test.ts"
+		"src/sdk/__tests__/adjudication-vscode-activation01.runtime-chain.c24-c-bridge.test.ts",
+		// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (AMENDMENT-01): the
+		// production REACHABILITY witness for the R1 execution-stagnation
+		// recovery. Requires the
+		// `@cline-internal/core/runtime/host/local-runtime-host` and
+		// `@cline-internal/core/session/services/file-session-service`
+		// aliases that resolve under `tsconfig.c2-4-c-bridge.json` only.
+		// Excluded here so `bun run check-types` does not see the
+		// base-config-incompatible import paths.
+		"src/sdk/__tests__/autonomous-execution-recovery.production-reachability01.c24-c-bridge.test.ts"
 	]
 }

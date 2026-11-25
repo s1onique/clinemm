@@ -41,6 +41,7 @@ import {
 	estimateProviderRequestInputTokens,
 	isCompletionToolReminderMessage,
 	type MessageWithMetadata,
+	parseExecutionStagnationNoticeMessage,
 	TaskContractBudgetError,
 	toProviderVisibleMessages,
 } from "@cline/shared";
@@ -74,6 +75,21 @@ const USER_LATER_HEADING = "### Later user instructions (user authority)";
 const RUNTIME_HEADING = "### Runtime completion obligation (runtime authority)";
 
 /**
+ * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (AMENDMENT-01).
+ *
+ * The section heading for the runtime's execution-stagnation recovery
+ * instruction.
+ *
+ * It is DISTINCT from the completion-obligation heading on purpose: the two
+ * runtime authorities are different obligations, and a carried contract must
+ * never blur them. The recovery instruction is not a completion obligation —
+ * it must never make the model believe the run may be finished — and the
+ * completion obligation is not a recovery instruction.
+ */
+const RUNTIME_RECOVERY_HEADING =
+	"### Runtime execution-recovery instruction (runtime authority)";
+
+/**
  * The terminal completion tool names the runtime may require. The runtime
  * resolves them from the registered tools that declare
  * `lifecycle.completesRun === true`; the canonical transcript therefore only
@@ -104,6 +120,19 @@ export interface ActiveTaskContract {
 	laterUserInstructions: TaskContractItem[];
 	/** The applicable runtime terminal-completion obligation, if any. */
 	runtimeCompletionObligation: TaskContractItem | undefined;
+	/**
+	 * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (AMENDMENT-01).
+	 *
+	 * The runtime's most recent execution-stagnation recovery instruction, if
+	 * the canonical history carries one.
+	 *
+	 * It is a RUNTIME authority, never a user authority: the instruction is
+	 * runtime-synthetic and is recognised by the EXACT template shape its
+	 * producer renders. It is carried in its own section so a later
+	 * compaction never mistakes it for a new user task, and so a carried
+	 * contract never makes the model believe the run may be finished.
+	 */
+	runtimeRecoveryInstruction: TaskContractItem | undefined;
 }
 
 /**
@@ -140,6 +169,7 @@ export function extractActiveTaskContract(
 	let objective: TaskContractItem | undefined;
 	const laterUserInstructions: TaskContractItem[] = [];
 	let runtimeCompletionObligation: TaskContractItem | undefined;
+	let runtimeRecoveryInstruction: TaskContractItem | undefined;
 
 	for (let index = 0; index < canonicalMessages.length; index += 1) {
 		const message = canonicalMessages[index];
@@ -166,24 +196,40 @@ export function extractActiveTaskContract(
 			continue;
 		}
 		const text = visibleText(message);
-		if (
-			!isCompletionToolReminderMessage(text, TERMINAL_COMPLETION_TOOL_NAMES)
-		) {
+		if (isCompletionToolReminderMessage(text, TERMINAL_COMPLETION_TOOL_NAMES)) {
+			// The most recent runtime carrier wins; two identical reminders
+			// therefore produce exactly ONE active obligation.
+			runtimeCompletionObligation = {
+				authority: "runtime",
+				text,
+				sourceIndex: index,
+			};
 			continue;
 		}
-		// The most recent runtime carrier wins; two identical reminders
-		// therefore produce exactly ONE active obligation.
-		runtimeCompletionObligation = {
-			authority: "runtime",
-			text,
-			sourceIndex: index,
-		};
+		// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (AMENDMENT-01): the
+		// runtime's execution-stagnation recovery instruction.
+		//
+		// It is recognised by the EXACT template shape its producer renders
+		// (never by a broad string guess), and only in a message the existing
+		// production classifier already classifies as runtime-synthetic.
+		//
+		// The most recent carrier wins: a later, fresh stall supersedes an
+		// earlier instruction, exactly as a later completion reminder
+		// supersedes an earlier one.
+		if (parseExecutionStagnationNoticeMessage(text) !== undefined) {
+			runtimeRecoveryInstruction = {
+				authority: "runtime",
+				text,
+				sourceIndex: index,
+			};
+		}
 	}
 
 	return {
 		objective,
 		laterUserInstructions,
 		runtimeCompletionObligation,
+		runtimeRecoveryInstruction,
 	};
 }
 
@@ -235,6 +281,19 @@ export function renderTaskContractSection(
 		lines.push(RUNTIME_HEADING);
 		lines.push(
 			escapeDelimiters(contract.runtimeCompletionObligation.text.trim()),
+		);
+	}
+	// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (AMENDMENT-01): the
+	// runtime's execution-recovery instruction is carried in its OWN
+	// section, after the completion obligation.
+	//
+	// The two runtime authorities stay distinguishable: the recovery
+	// instruction must never be read as "the run may be finished", and the
+	// completion obligation must never be read as "the execution stalled".
+	if (contract.runtimeRecoveryInstruction) {
+		lines.push(RUNTIME_RECOVERY_HEADING);
+		lines.push(
+			escapeDelimiters(contract.runtimeRecoveryInstruction.text.trim()),
 		);
 	}
 	if (lines.length === 0) {
@@ -457,7 +516,17 @@ async function applyTaskContractWithMeasuredBudget(input: {
 	const { compactedMessages, canonicalMessages, measure } = input;
 	const contract = extractActiveTaskContract(canonicalMessages);
 	const baselineTokens = await measure(compactedMessages);
-	if (!contract.objective && !contract.runtimeCompletionObligation) {
+	// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (AMENDMENT-01): the
+	// runtime recovery instruction is an authoritative obligation in its own
+	// right. A contract that carries ONLY the recovery instruction (no user
+	// objective, no completion obligation) must still be applied, or the
+	// instruction would be silently dropped by the very compaction that was
+	// supposed to preserve it.
+	if (
+		!contract.objective &&
+		!contract.runtimeCompletionObligation &&
+		!contract.runtimeRecoveryInstruction
+	) {
 		return {
 			messages: [...compactedMessages],
 			applied: false,

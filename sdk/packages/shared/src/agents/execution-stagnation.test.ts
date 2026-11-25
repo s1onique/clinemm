@@ -16,6 +16,7 @@ import {
 	decideExecutionStagnation,
 	foldExecutionRound,
 	isExecutionStagnationNoticeMessage,
+	parseExecutionStagnationNoticeMessage,
 } from "./execution-stagnation";
 
 const POLICY = {
@@ -181,5 +182,83 @@ describe("ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 / pure contract", () => {
 		expect(
 			DEFAULT_EXECUTION_STAGNATION_POLICY.maxRecoveryInstructions,
 		).toBeGreaterThan(0);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (AMENDMENT-01)
+// The STRUCTURAL RECOGNISER: a notice must be recognised WITHOUT being told
+// its parameter triple, because the compaction carry-forward reads the
+// canonical history where the parameters are whatever the runtime observed.
+// ---------------------------------------------------------------------------
+
+describe("ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (AMENDMENT-01) / structural recogniser", () => {
+	it("parses every renderer-produced notice back to its exact triple", () => {
+		const cases: Array<[number, string[], number]> = [
+			[5, ["read_files", "run_commands"], 0],
+			[3, ["read_files"], 2],
+			[7, [], 0],
+			[1, ["a"], 1],
+			[12, ["x", "y", "z"], 4],
+		];
+		for (const [rounds, tools, edits] of cases) {
+			const text = buildExecutionStagnationNoticeMessage(rounds, tools, edits);
+			const parsed = parseExecutionStagnationNoticeMessage(text);
+			expect(parsed, text).toBeDefined();
+			expect(parsed?.unproductiveRounds).toBe(rounds);
+			expect(parsed?.toolNames).toEqual([...tools]);
+			expect(parsed?.editAttempts).toBe(edits);
+			// The round trip is byte-exact.
+			expect(
+				buildExecutionStagnationNoticeMessage(
+					parsed!.unproductiveRounds,
+					parsed!.toolNames,
+					parsed!.editAttempts,
+				),
+			).toBe(text);
+		}
+	});
+
+	it("rejects anything the renderer could not have produced", () => {
+		const rejected: string[] = [
+			"",
+			"hello",
+			"[SYSTEM] Execution has stalled: the last 5",
+			// A non-canonical round count.
+			"[SYSTEM] Execution has stalled: the last 05 consecutive execution round(s) produced no productive step. State the single smallest useful experiment or edit that would move this task forward, then perform it now. Observable facts: the 05 round(s) used only read_files. No edit was attempted in those rounds.",
+			// A non-numeric round count.
+			"[SYSTEM] Execution has stalled: the last x consecutive execution round(s) produced no productive step. State the single smallest useful experiment or edit that would move this task forward, then perform it now. Observable facts: the x round(s) used only read_files. No edit was attempted in those rounds.",
+			// A tool list that is NOT sorted (the renderer always sorts).
+			"[SYSTEM] Execution has stalled: the last 5 consecutive execution round(s) produced no productive step. State the single smallest useful experiment or edit that would move this task forward, then perform it now. Observable facts: the 5 round(s) used only run_commands, read_files. No edit was attempted in those rounds.",
+			// Trailing content the renderer never emits.
+			"[SYSTEM] Execution has stalled: the last 5 consecutive execution round(s) produced no productive step. State the single smallest useful experiment or edit that would move this task forward, then perform it now. Observable facts: the 5 round(s) used only read_files. No edit was attempted in those rounds. EXTRA",
+			// A mismatched round count between the two frames.
+			"[SYSTEM] Execution has stalled: the last 5 consecutive execution round(s) produced no productive step. State the single smallest useful experiment or edit that would move this task forward, then perform it now. Observable facts: the 6 round(s) used only read_files. No edit was attempted in those rounds.",
+			// A doubled separator before the edit frame.
+			"[SYSTEM] Execution has stalled: the last 5 consecutive execution round(s) produced no productive step. State the single smallest useful experiment or edit that would move this task forward, then perform it now. Observable facts: the 5 round(s) used only read_files.  2 edit attempt(s) were made in those rounds.",
+		];
+		for (const text of rejected) {
+			expect(
+				parseExecutionStagnationNoticeMessage(text),
+				text.slice(0, 80),
+			).toBeUndefined();
+		}
+	});
+
+	it("agrees with the byte-exact recogniser on every renderer-produced notice", () => {
+		const cases: Array<[number, string[], number]> = [
+			[5, ["read_files", "run_commands"], 0],
+			[3, ["read_files"], 2],
+		];
+		for (const [rounds, tools, edits] of cases) {
+			const text = buildExecutionStagnationNoticeMessage(rounds, tools, edits);
+			expect(
+				isExecutionStagnationNoticeMessage(text, rounds, tools, edits),
+			).toBe(true);
+			// And a DIFFERENT triple does not recognise it.
+			expect(
+				isExecutionStagnationNoticeMessage(text, rounds + 1, tools, edits),
+			).toBe(false);
+		}
 	});
 });

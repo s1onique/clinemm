@@ -297,6 +297,125 @@ export function createHostExecutionProgressClassifier(): NonNullable<
 			// runtime's own classification decide.
 			return undefined;
 		}
+		// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (AMENDMENT-01):
+		// a FAILED observation is declined too.
+		//
+		// The production `command_status` snapshot of a job that failed
+		// carries the observed exit code and the terminal state. The host
+		// classifier must not claim an INSPECTION verdict about a command
+		// that failed: the failed command did not read anything, it ran
+		// and failed. The runtime's own structural reading governs.
+		if (observationReportsFailure(result?.output)) {
+			return undefined;
+		}
+		// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (AMENDMENT-01):
+		// a command that is STILL RUNNING is not an inspection and not an
+		// execution — it is a LEGITIMATE WAIT, and the runtime's own
+		// structural classifier owns that reading.
+		//
+		// Returning "executed" here would OVERRIDE the runtime's "awaiting"
+		// verdict and manufacture a false progress signal for a job that
+		// has not produced any evidence yet.
+		//
+		// The marker is a DATA-SHAPE fact about the observation (the
+		// explicit `status` / `state` / `commandExecutionDisposition` fields
+		// and the `isRunning` / `stillRunning` flags), never a prose read.
+		if (observationReportsStillRunning(result?.output)) {
+			return undefined;
+		}
 		return isInspectionCommandInput(input) ? "inspected" : "executed";
 	};
+}
+
+/**
+ * Whether an observation carries the explicit "still running" marker.
+ *
+ * The marker is read from the EXPLICIT fields only — the same fields the
+ * runtime's own structural classifier reads — and through BOTH the single
+ * operation-result shape and the production array envelope
+ * (`ToolOperationResult[]`), because the production tools return their
+ * result as an array and the marker lives on the ENTRY.
+ *
+ * No prose is parsed: a command whose output merely mentions "running" is
+ * not treated as still running by this function.
+ */
+function observationReportsStillRunning(output: unknown): boolean {
+	if (typeof output === "string") {
+		// The production `run_commands` RUNNING envelope is a JSON STRING.
+		// It is parsed as JSON and read structurally; a non-JSON string is
+		// not a still-running observation.
+		try {
+			return observationReportsStillRunning(JSON.parse(output));
+		} catch {
+			return false;
+		}
+	}
+	if (!output || typeof output !== "object") {
+		return false;
+	}
+	const record = output as Record<string, unknown>;
+	for (const key of ["status", "state", "commandExecutionDisposition"]) {
+		const marker = record[key];
+		if (typeof marker === "string") {
+			const normalized = marker.toLowerCase();
+			if (
+				normalized === "running" ||
+				normalized === "backgrounded" ||
+				normalized === "still_running" ||
+				normalized === "in_progress"
+			) {
+				return true;
+			}
+		}
+	}
+	if (record.isRunning === true || record.stillRunning === true) {
+		return true;
+	}
+	if (Array.isArray(output)) {
+		for (const entry of output) {
+			if (observationReportsStillRunning(entry)) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+/**
+ * Whether an observation reports a FAILED command.
+ *
+ * The failure is read from the EXPLICIT fields the production tools set:
+ * the observed `exitCode` (a non-zero code is a failure) and the `ok` flag
+ * (false is a failure). No prose is parsed.
+ *
+ * The production `command_status` snapshot of a failed job carries
+ * `{ ok: true, state: "exited", exitCode: 1 }` — the `exitCode` is the
+ * authoritative failure evidence.
+ */
+function observationReportsFailure(output: unknown): boolean {
+	if (typeof output === "string") {
+		try {
+			return observationReportsFailure(JSON.parse(output));
+		} catch {
+			return false;
+		}
+	}
+	if (!output || typeof output !== "object") {
+		return false;
+	}
+	const record = output as Record<string, unknown>;
+	if (record.ok === false) {
+		return true;
+	}
+	if (typeof record.exitCode === "number" && record.exitCode !== 0) {
+		return true;
+	}
+	if (Array.isArray(output)) {
+		for (const entry of output) {
+			if (observationReportsFailure(entry)) {
+				return true;
+			}
+		}
+	}
+	return false;
 }

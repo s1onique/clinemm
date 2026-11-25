@@ -469,12 +469,36 @@ describe("ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 / C6", () => {
 				n.includes("execution stagnation detected"),
 			);
 			expect(injectedNotices).toHaveLength(2);
-			// The first two injections are DIFFERENT instructions: the second
-			// one describes a different streak length, so the model is never
-			// handed a verbatim repeat.
-			expect(injectedNotices[0]).not.toBe(injectedNotices[1]);
+			// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (AMENDMENT-01)
+			// CORRECTION: the ATTEMPT COUNTER lives in the status notice,
+			// which the MODEL NEVER SEES.
+			//
+			// The predecessor control claimed "the first two injections are
+			// DIFFERENT instructions" on the strength of the two STATUS
+			// NOTICES. That was the wrong evidence: the notices differ
+			// ("attempt 1/2" vs "attempt 2/2"), but the MODEL-VISIBLE
+			// INSTRUCTION BODIES are what the model actually receives.
+			//
+			// The corrected control below inspects the dispatched bodies.
+			// The truthful finding is that, with an unchanging streak
+			// length and an unchanging tool set, the two bodies are
+			// BYTE-IDENTICAL: the message template describes OBSERVABLE
+			// FACTS ONLY, and those facts were the same both times.
 			expect(injectedNotices[0]).toContain("attempt 1/2");
 			expect(injectedNotices[1]).toContain("attempt 2/2");
+
+			// The MODEL-VISIBLE bodies: exactly TWO distinct bodies were
+			// dispatched, and they are byte-identical because the observed
+			// facts were identical.
+			const dispatchedBodies = model.requests
+				.map((request) => recoveryInstructionIn(request))
+				.filter((body): body is string => body !== undefined);
+			const distinctBodies = [...new Set(dispatchedBodies)];
+			expect(distinctBodies).toHaveLength(1);
+			expect(distinctBodies[0]).toContain(
+				"the last 2 consecutive execution round(s)",
+			);
+			expect(distinctBodies[0]).toContain("read_files");
 		});
 
 		it("C7: with the allowance exhausted the run continues on its own terms and the stall surfaces through the normal outcome", async () => {

@@ -1906,6 +1906,22 @@ export class AgentRuntime {
 				} else if (result?.isError !== true) {
 					this.executionRoundFacts.executedCommands += 1;
 				}
+				return;
+			}
+			// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (AMENDMENT-01):
+			// a NON-command tool call can still be a LEGITIMATE WAIT.
+			//
+			// Production waits by POLLING one identified running job with
+			// `command_status`, whose input is `{ jobId }` — not a command
+			// list — and whose observation carries the `state: "running"`
+			// marker. The `awaiting` flag is therefore honoured for EVERY
+			// tool call, not only for command-shaped ones.
+			//
+			// Without this, a legitimate poll was counted as an
+			// unproductive inspection round and the runtime declared a
+			// FALSE STALL while the agent was waiting on real work.
+			if (classified.awaiting) {
+				this.executionRoundFacts.awaitingBackgroundWork = true;
 			}
 		} catch {
 			// Observation isolation: instrumentation NEVER affects a tool call.
@@ -2165,10 +2181,27 @@ export class AgentRuntime {
 				awaiting: this.resultReportsStillRunning(result?.output),
 			};
 		}
+		// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (AMENDMENT-01):
+		// a tool call that is NOT command-shaped can still be a LEGITIMATE
+		// WAIT.
+		//
+		// Production does not wait by relaunching a build: it launches ONE
+		// job and then POLLS that ONE IDENTIFIED job with `command_status`,
+		// whose input is `{ jobId }` — no `commands` array — and whose result
+		// carries the `state: "running"` marker.
+		//
+		// Reading the marker only for command-shaped inputs therefore
+		// classified a legitimate poll as an unproductive inspection round:
+		// a FALSE STALL declared while the agent was waiting on real work.
+		//
+		// The marker is a DATA-SHAPE fact about the OBSERVATION, so it is
+		// read for every tool call. A tool that returns no marker keeps the
+		// previous classification exactly.
+		const awaiting = this.resultReportsStillRunning(result?.output);
 		// `toolName` participates only as a LAST-RESORT disambiguator for
 		// hosts that express a patch body as a dedicated tool input.
 		void toolName;
-		return { kind: "inspection", awaiting: false };
+		return { kind: "inspection", awaiting };
 	}
 
 	/**
@@ -2182,6 +2215,20 @@ export class AgentRuntime {
 	 */
 	private resultReportsStillRunning(output: unknown): boolean {
 		if (typeof output === "string") {
+			// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (AMENDMENT-01):
+			// the PRODUCTION `run_commands` RUNNING envelope is a JSON
+			// STRING (`JSON.stringify(runningPayload)`), so the marker is
+			// read STRUCTURALLY through the parsed envelope.
+			//
+			// The prose fallback below remains for hosts that report the
+			// state in plain text.
+			try {
+				if (this.outputReportsStillRunningShape(JSON.parse(output))) {
+					return true;
+				}
+			} catch {
+				// Not JSON: fall through to the prose reading.
+			}
 			return /\b(still running|running in the background|backgrounded)\b/i.test(
 				output,
 			);
@@ -2189,11 +2236,41 @@ export class AgentRuntime {
 		if (!output || typeof output !== "object") {
 			return false;
 		}
-		const record = output as Record<string, unknown>;
+		// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (AMENDMENT-01):
+		// the PRODUCTION TOOL-RESULT ENVELOPE.
+		//
+		// The production tools return their result as an ARRAY of operation
+		// results (`ToolOperationResult[]`), and the "still running" marker
+		// lives on the OPERATION RESULT — not on the envelope. The
+		// production `command_status` tool, for example, returns
+		//
+		//   [{ ok: true, jobId, state: "running", elapsedMs, ... }]
+		//
+		// so a top-level read of `state` sees `undefined` and a legitimate
+		// wait on a running job was misclassified as an unproductive
+		// inspection round — a FALSE STALL.
+		//
+		// The marker is therefore read through BOTH shapes: the single
+		// operation-result object, and the production array envelope. This
+		// is a DATA-SHAPE read, never a prose read: only the explicit
+		// marker fields are consulted.
+		return this.outputReportsStillRunningShape(output);
+	}
+
+	/**
+	 * Whether ONE observation carries the explicit "still running" marker.
+	 *
+	 * The marker is read from the explicit fields only. No prose is parsed.
+	 */
+	private outputReportsStillRunningShape(value: unknown): boolean {
+		if (!value || typeof value !== "object") {
+			return false;
+		}
+		const record = value as Record<string, unknown>;
 		for (const key of ["status", "state", "commandExecutionDisposition"]) {
-			const value = record[key];
-			if (typeof value === "string") {
-				const normalized = value.toLowerCase();
+			const marker = record[key];
+			if (typeof marker === "string") {
+				const normalized = marker.toLowerCase();
 				if (
 					normalized === "running" ||
 					normalized === "backgrounded" ||
@@ -2204,7 +2281,21 @@ export class AgentRuntime {
 				}
 			}
 		}
-		return record.isRunning === true || record.stillRunning === true;
+		if (record.isRunning === true || record.stillRunning === true) {
+			return true;
+		}
+		// The production array envelope: the marker lives on an operation
+		// result inside the array. A single-element array is the production
+		// shape of a one-command observation; a multi-element array is
+		// inspected entry by entry.
+		if (Array.isArray(value)) {
+			for (const entry of value) {
+				if (this.outputReportsStillRunningShape(entry)) {
+					return true;
+				}
+			}
+		}
+		return false;
 	}
 
 	private async execute(input?: AgentRunInput): Promise<AgentRunResult> {

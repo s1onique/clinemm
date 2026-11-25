@@ -13,6 +13,7 @@ export type {
 	ExecutionStagnationAccounting,
 	ExecutionStagnationDecision,
 	ExecutionStagnationPolicy,
+	ParsedExecutionStagnationNotice,
 } from "./execution-stagnation";
 // ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01: the exact runtime
 // execution-stagnation recovery contract, shared by its producer (the agent
@@ -27,6 +28,7 @@ export {
 	decideExecutionStagnation,
 	foldExecutionRound,
 	isExecutionStagnationNoticeMessage,
+	parseExecutionStagnationNoticeMessage,
 } from "./execution-stagnation";
 // ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01: the FROZEN FAILURE
 // WITNESS for the stall session. It records only aggregate, non-content
