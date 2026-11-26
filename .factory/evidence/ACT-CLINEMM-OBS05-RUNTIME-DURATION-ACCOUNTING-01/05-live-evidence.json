@@ -1,0 +1,24 @@
+{
+  "act_id": "ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01",
+  "status": "NOT_EXECUTED",
+  "reason": "Installed-runtime qualification requires a built and installed artifact. The operator directed that the VSIX not be built, so no live L1..L8 observation was taken.",
+  "L1_automatic_execution": "NOT_EXECUTED",
+  "L2_human_waiting": "NOT_EXECUTED",
+  "L3_webview_recreation": "NOT_EXECUTED",
+  "L4_resume_and_completion": "NOT_EXECUTED",
+  "L5_terminal_stability": "NOT_EXECUTED",
+  "L6_task_restoration": "NOT_EXECUTED",
+  "L7_extension_host_recovery": "NOT_EXECUTED",
+  "L8_conservation": "NOT_EXECUTED",
+  "synthetic_equivalent": {
+    "note": "The deterministic production-seam witnesses cover the same invariants against the real lifecycle owner. They are NOT a substitute for native installed-extension qualification and are recorded only as the structural counterpart.",
+    "source": "apps/vscode/src/sdk/task-duration-accounting.obs05.test.ts",
+    "conservation": "elapsedMs === activeMs + waitingMs + unknownMs asserted after EVERY observation in the matrix (37 witnesses)",
+    "human_wait_split": "T02 — 10s execute + 30s human gate + 15s execute => active 25000 / waiting 30000 / elapsed 55000",
+    "terminal_freeze": "T17 — totals do not advance over an independent 60s observation interval",
+    "dormant_exclusion": "T18 — a 1h dormant gap between a terminal write and a continuation is excluded",
+    "task_switching": "T13 — no cross-task contamination",
+    "recovery": "T14 + OBS05-PERSIST-2 — known durations preserved, restore idempotent",
+    "unobservable_gap": "T15 + OBS05-PERSIST-4 — UNKNOWN / partial coverage, no duration invented"
+  }
+}

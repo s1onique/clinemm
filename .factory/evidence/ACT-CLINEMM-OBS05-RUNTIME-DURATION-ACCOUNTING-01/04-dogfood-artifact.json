@@ -1,0 +1,18 @@
+{
+  "act_id": "ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01",
+  "status": "NOT_BUILT",
+  "reason": "The operator directed that the VSIX NOT be built and that the run stop after the code and executable-evidence work. No artifact was produced, so no artifact identity can be claimed.",
+  "source_head": "899b612b1",
+  "implementation_head": "994b8bc05",
+  "implementation_commit": "313709caa",
+  "canonical_packaging_mechanism": "scripts/build-dogfood-vsix.py (scripts/build_dogfood_vsix_lib.py)",
+  "artifact_path": null,
+  "artifact_size_bytes": null,
+  "artifact_sha256": null,
+  "extension_version": null,
+  "build_result": "NOT_EXECUTED",
+  "installed_profile": null,
+  "installed_version": null,
+  "installed_bundle_identity": null,
+  "consequence": "The ACT's exit verdict is PASS_STRUCTURAL_ONLY. OBS-05 remains pending live qualification."
+}

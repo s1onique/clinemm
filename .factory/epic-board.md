@@ -1,3 +1,91 @@
+# ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 — PASS_STRUCTURAL_ONLY — 2026-11-27
+
+```text
+ACT_ID:       ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01
+TYPE:         bounded implementation
+VERDICT:      PASS_STRUCTURAL_ONLY
+EPIC:         OBS-05
+WORK_ITEM:    OBS-05 — Active execution and waiting-time accounting
+ENTRY_HEAD:   3701158a1ceadf7705b84df5455ae57d9e443f7f
+FINAL_HEAD:   899b612b1
+BRANCH:       main
+```
+
+**OBS-05 — Active execution and waiting-time accounting. STATUS: PENDING LIVE
+QUALIFICATION (implementation complete, executable gates GREEN, installed-runtime
+qualification not executed).**
+
+The task header's elapsed number was WALL-CLOCK ONLY, so a task that spent most of
+five hours blocked on a human question was indistinguishable from a task that executed
+for five hours. The elapsed duration therefore could not be used to compare model
+execution performance. This ACT adds the missing distinction from the SAME authoritative
+runtime evidence the extension already owns.
+
+**THE AUTHORITY.** `TurnStateTracker` is the single runtime-lifecycle owner; it
+publishes every committed phase transition synchronously and already drives the
+host-side `TaskTelemetryTracker` (`SdkController.ts` L4730-4732). The accounting
+EXTENDS that existing tracker rather than introducing a second lifecycle state
+machine. The phase union (`streaming` / `compacting` / `awaiting_approval` /
+`awaiting_followup` / `resumable` / `error` / `completed`) already names every runtime
+condition the semantic contract needs.
+
+**THE MECHANISM.** `apps/vscode/src/sdk/task-duration-accounting.ts` is a pure,
+interval-based accumulator on an INJECTABLE MONOTONIC clock. Each authoritative
+transition closes the open interval and opens the next one in the classified category,
+so the ACTIVE / WAITING / UNKNOWN split falls out of the runtime's own phase timeline.
+Concurrent operations contribute the UNION of active intervals, never their sum. The
+dormant gap between a terminal write and a later continuation belongs to NO interval
+and is excluded from the totals. A monotonic regression downgrades coverage to
+"partial" instead of inventing a duration.
+
+**THE PUBLICATION.** A bounded optional `duration` field on the EXISTING
+`TaskHeaderTelemetryStrip` snapshot. No new RPC, no new event stream, no new public SDK
+contract. The webview renders the host's numbers verbatim and never owns accumulated
+duration; a legacy task renders "unavailable" rather than a fabricated zero.
+
+**THE PERSISTENCE.** The accounting is written into the task's EXISTING `HistoryItem`
+slot, beside the wall-clock epoch that slot already carries, at the same authoritative
+turn boundary as the existing usage persistence. Only the accumulated totals and the
+phase are persisted — process-local monotonic timestamps are not transferable across
+processes and would fabricate continuity across a restart. The restore is idempotent and
+re-opens an interval in the recorded category from the CURRENT clock, so the interval
+spanning a restart is never claimed.
+
+**THE EVIDENCE.** 37 production-seam witnesses (T01..T22, the observational-gap witness,
+and the persistence witnesses) plus 8 webview rendering witnesses. The conservation
+identity `elapsedMs === activeMs + waitingMs + unknownMs` is asserted after EVERY
+observation. Ablating the transition accounting turns 29 of 37 RED; ablating the
+webview projection turns 5 of 8 RED. Both ablations were reversed and the suites
+re-verified GREEN. The per-test host-suite regression diff against the entry HEAD is
+EMPTY in both directions (246 failing tests before, 246 after).
+
+**THE CORRECTION THE WITNESSES FORCED.** The first implementation classified the
+`error` phase as FROZEN, so the interval the task spends parked awaiting a human Retry
+was dropped from EVERY bucket and elapsed time vanished — the conservation identity
+held only because the vanished time was not counted at all. The corrected mapping
+classifies `error` as WAITING (`RECOVERY_INTERVENTION`) and `completed` as the only
+FROZEN state. A second correction made the restore fail-safe: `initTask` called a NEW
+controller method unconditionally, which broke a partial-controller harness; the
+observation-side restore now degrades to "no accounting restored" instead of aborting
+the task start.
+
+**CONSUMERS.** Task header — IMPLEMENTED by this ACT. Session performance analysis,
+model comparison — successor consumers. Incident exports, automated supervision —
+potential successor consumers. No successor consumer is implemented speculatively.
+
+**LIVE QUALIFICATION: NOT EXECUTED.** The operator directed that the VSIX not be
+built, so the exact-head artifact identity and the installed-runtime L1..L8
+observations were not taken. The verdict is PASS_STRUCTURAL_ONLY and OBS-05 remains
+pending live qualification. Reopen condition and residual risk are recorded in
+`.factory/evidence/ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01/10-exit-report.md`.
+
+**RELATED PRIOR WORK.** `EPIC-CLINEMM-TASKHEADER-OWNER-AWARE-TIMING01` was
+`CLOSED_NOT_REPRODUCED` with the re-open trigger "new live evidence that distinguishes
+agent-active elapsed from wall-clock elapsed"; this ACT supplies that distinction and
+is the successor of that row.
+
+---
+
 # ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 (AMENDMENT-01) — READY_FOR_EXPERIMENTAL_LIVE_QUALIFICATION_PENDING_SOURCE_ACCEPTANCE — 2026-11-26
 
 ```text
