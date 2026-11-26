@@ -1,0 +1,74 @@
+{
+  "actId": "ACT-CLINEMM-CACHE-PRESERVING-AUXILIARY-INFERENCE-RECON-01",
+  "c3": "C3 actual prefix equivalence over the production request seams",
+  "evidenceClass": "SYNTHETIC_REAL_PRODUCTION_SEAM",
+  "route": {
+    "providerId": "openai-compatible",
+    "modelId": "qwen3.8-flash-next-q2_0"
+  },
+  "serializer": "REAL — createHandlerAsync -> AI SDK -> openai-compatible wire body",
+  "renderer": "NOT_EXERCISED — no chat-template renderer is reachable offline",
+  "tokenizer": "UNKNOWN — no tokenizer is available offline; token counts are NOT estimated",
+  "parentSerializedChars": 989,
+  "parentReturn": {
+    "note": "the parent request is re-dispatched after the auxiliary branch",
+    "parentBeforeEqualsParentAfter": true,
+    "candidateBWithoutSuffixEqualsParent": true
+  },
+  "wireShape": {
+    "note": "on the openai-compatible route the system prompt is rendered as messages[0] with role 'system', so ANY system-prompt modification diverges at the FIRST message and invalidates the whole conversation prefix",
+    "parentTopLevelKeys": [
+      "model",
+      "max_tokens",
+      "messages",
+      "tools",
+      "tool_choice",
+      "stream",
+      "stream_options"
+    ],
+    "parentMessageCount": 5,
+    "parentFirstMessageRole": "system",
+    "parentCarriesToolChoice": true
+  },
+  "candidates": [
+    {
+      "id": "A",
+      "name": "existing architecture (independent auxiliary request)",
+      "systemEqualToParent": true,
+      "toolsEqualToParent": false,
+      "auxiliaryCarriesTools": false,
+      "identicalLeadingMessageCount": 0,
+      "firstDivergentMessageIndex": 0,
+      "serializedCommonPrefixChars": 97,
+      "eligiblePrefixReuseRatio": 0
+    },
+    {
+      "id": "B",
+      "name": "full auxiliary contract as a suffix",
+      "systemEqualToParent": true,
+      "toolsEqualToParent": true,
+      "identicalLeadingMessageCount": 5,
+      "firstDivergentMessageIndex": 5,
+      "serializedCommonPrefixChars": 711,
+      "eligiblePrefixReuseRatio": 0.7189079878665319
+    },
+    {
+      "id": "C",
+      "name": "persistent protocol plus activation suffix",
+      "systemEqualToParent": true,
+      "toolsEqualToParent": true,
+      "identicalLeadingMessageCount": 5,
+      "firstDivergentMessageIndex": 5,
+      "serializedCommonPrefixChars": 871,
+      "eligiblePrefixReuseRatio": 0.7580504786771105,
+      "note": "the C parent is measured against the C parent, because a C session's ordinary request ALREADY carries the protocol"
+    }
+  ],
+  "tokenLevel": {
+    "PARENT_RENDERED_TOKENS": "UNKNOWN",
+    "AUXILIARY_RENDERED_TOKENS": "UNKNOWN",
+    "LONGEST_COMMON_PREFIX_TOKENS": "UNKNOWN",
+    "FIRST_DIVERGENT_TOKEN": "UNKNOWN",
+    "NEW_SUFFIX_TOKENS": "UNKNOWN"
+  }
+}

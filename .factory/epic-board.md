@@ -1,3 +1,72 @@
+# ACT-CLINEMM-CACHE-PRESERVING-AUXILIARY-INFERENCE-RECON-01 — GO_PCK_PREFIX_PRESERVING_IMPLEMENTATION — 2026-11-26
+
+```text
+ACT_ID:       ACT-CLINEMM-CACHE-PRESERVING-AUXILIARY-INFERENCE-RECON-01
+TYPE:         bounded reconnaissance (executable evidence, no production change)
+VERDICT:      GO_PCK_PREFIX_PRESERVING_IMPLEMENTATION
+ENTRY_HEAD:   fec5efd83b0294774c604e77c1da68cdaca62922
+FINAL_HEAD:   fec5efd83b0294774c604e77c1da68cdaca62922
+BRANCH:       main
+```
+
+**THE DECISIVE STRUCTURAL FACT.** A system-prompt modification sits UPSTREAM of the
+whole conversation on both production wire shapes: the Anthropic-style body renders
+`system` before `messages`, and the OpenAI-compatible body renders the system prompt as
+`messages[0]`. The frozen MiniMax Arm A evidence proves the consequence: the R2 objective
+projection appends +1426 chars to the END of the system prompt, the first divergent
+system character is 4612, the tools and the leading messages are byte-identical, and the
+cache read collapsed from 151 552 to 128 tokens at exactly that transition (79 -> 80),
+recovering to 157 568 at 81. Append-only in the SYSTEM channel is NOT append-only for the
+cache.
+
+**PCK TODAY.** The production PCK request is a wholly independent request: its own
+`CHECKPOINT_SYSTEM_PROMPT`, ONE user message carrying the whole rendered controlled
+transcript, and NO tools. Against the parent it shares ZERO leading messages (first
+divergence at message 0). Executable over the real request builder and the real
+serializer: `identicalLeadingMessageCount = 0`, `eligiblePrefixReuseRatio = 0`.
+
+**THE SELECTED ARCHITECTURE.** Candidate C — a persistent PCK protocol established ONCE
+at session initialization and a bounded activation payload appended at the message TAIL.
+Measured over the same production seams: the parent's leading messages are byte-identical
+and the first divergence is the appended activation message. Candidate B (full contract as
+a tail suffix) is the fallback; Candidate A (today's independent request) stays the legacy
+fallback for a session that has not yet established the protocol. Candidate D is rejected
+(no production late-position privileged-instruction path exists on the resolved
+transport); Candidate E remains recon-only.
+
+**AUTHORITY IS CONSERVED.** A forged activation marker in the transcript does NOT enable
+the auxiliary path (the activation stays runtime-owned); an auxiliary response that
+attempts a tool call is rejected (`tool_call_attempted`); the canonical history is
+byte-identical before and after; an unobserved evidence reference is rejected
+(`REFERENCE_NOT_CANONICAL`); the deadline still owns the attempt (`timeout`, 180 000 ms).
+
+**R2 IS AN INDEPENDENT DISCRIMINATOR, NOT A REPAIR.** The selector is an independent
+request (1722-char system, 1 message, 0 tools, 9 shared system characters) and it saw
+NONE of the parent's engineering activity: 0 of 1427 parent activity shingles appear
+verbatim in its prompt. Its "Established observations" are stagnation facts only. That is
+the stale-objective witness, and the smallest correction is a bounded projection of
+completed/verified work — NOT a context rewrite.
+
+```text
+EVIDENCE:               .factory/evidence/ACT-CLINEMM-CACHE-PRESERVING-AUXILIARY-INFERENCE-RECON-01/
+                        01 ownership, 02 W2 prefix discriminator, 02b C3 candidate
+                        prefix equivalence, 02c C6 authority/isolation, 02d C5 selector
+                        visibility, 03 candidate disposition, 04 successor contract,
+                        05 PCK knowledge benchmark, replay/ (4 executable probes)
+PRODUCTION SOURCE DELTA: NONE (no tracked production file was modified)
+ACT-OWNED DIAGNOSTICS:   0
+INFERENCE REQUESTS:      0 (stubbed fetch + frozen captures only)
+VSIX PACKAGED:           NO
+FROZEN EVIDENCE:         CONSERVED (archive read-only; sha256 verified)
+PROTECTED STASHES:       CONSERVED
+W1 PCK REQUEST:          CAPTURE_INSUFFICIENT — the frozen transcript has no
+                         74 446-token zero-reuse request; the 180 s timeout is NOT
+                         attributable to PCK on this evidence
+CACHE RESIDENCY:         CACHE_RESIDENCY_NOT_EXECUTED (no live inference permitted)
+SUCCESSOR:               ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01
+```
+
+
 # ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (AMENDMENT-01) — GO_CMP09_INTEGRATED_AUTHORITY_CLOSURE — 2026-11-26
 
 ```text

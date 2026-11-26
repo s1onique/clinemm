@@ -1,0 +1,178 @@
+{
+  "actId": "ACT-CLINEMM-CACHE-PRESERVING-AUXILIARY-INFERENCE-RECON-01",
+  "c1": "C1.1 MiniMax R2 historical prefix divergence",
+  "evidenceClass": "REAL_PRODUCTION_SEAM",
+  "captureArchive": {
+    "name": "arm-a-r2-cache-discriminator.tar.gz",
+    "sha256": "28d38cbe24d94bddbc02787304f55a735374e4771c266d5600fa1842cb363914",
+    "members": 12
+  },
+  "pairs": [
+    {
+      "from": 78,
+      "to": 79,
+      "systemEqual": true,
+      "systemChars": {
+        "from": 4612,
+        "to": 4612,
+        "delta": 0
+      },
+      "systemSha256": {
+        "from": "b7d9f397b55319f38f14a5fd36da1d7605a9531580d79328cdf228d61d500926",
+        "to": "b7d9f397b55319f38f14a5fd36da1d7605a9531580d79328cdf228d61d500926"
+      },
+      "firstDivergentSystemChar": -1,
+      "longestCommonSystemPrefixChars": 4612,
+      "divergentSystemContext": null,
+      "toolsEqual": true,
+      "toolCount": {
+        "from": 9,
+        "to": 9
+      },
+      "toolsSha256": {
+        "from": "e6f365bc768a522eefab6434e082be212ca5f5cb033fda2a9f96a9d26e6a5292",
+        "to": "e6f365bc768a522eefab6434e082be212ca5f5cb033fda2a9f96a9d26e6a5292"
+      },
+      "messagesEqual": false,
+      "messageCount": {
+        "from": 155,
+        "to": 157
+      },
+      "longestIdenticalLeadingMessageCount": 155,
+      "reasoningConfigEqual": true,
+      "generationLimit": {
+        "from": 8192,
+        "to": 8192
+      },
+      "model": {
+        "from": "MiniMax-M3.1-Flash",
+        "to": "MiniMax-M3.1-Flash"
+      },
+      "endpoint": {
+        "from": "https://api.minimax.io/anthropic/v1/messages",
+        "to": "https://api.minimax.io/anthropic/v1/messages"
+      }
+    },
+    {
+      "from": 79,
+      "to": 80,
+      "systemEqual": false,
+      "systemChars": {
+        "from": 4612,
+        "to": 6038,
+        "delta": 1426
+      },
+      "systemSha256": {
+        "from": "b7d9f397b55319f38f14a5fd36da1d7605a9531580d79328cdf228d61d500926",
+        "to": "f0f5d0662db59a2aa4fb634eb0e4a7058acd7994f621134baae899489de86fe7"
+      },
+      "firstDivergentSystemChar": 4612,
+      "longestCommonSystemPrefixChars": 4612,
+      "divergentSystemContext": " <mode_notice> block inside a message marks exactly when such a switch happened.",
+      "toolsEqual": true,
+      "toolCount": {
+        "from": 9,
+        "to": 9
+      },
+      "toolsSha256": {
+        "from": "e6f365bc768a522eefab6434e082be212ca5f5cb033fda2a9f96a9d26e6a5292",
+        "to": "e6f365bc768a522eefab6434e082be212ca5f5cb033fda2a9f96a9d26e6a5292"
+      },
+      "messagesEqual": false,
+      "messageCount": {
+        "from": 157,
+        "to": 159
+      },
+      "longestIdenticalLeadingMessageCount": 157,
+      "reasoningConfigEqual": true,
+      "generationLimit": {
+        "from": 8192,
+        "to": 8192
+      },
+      "model": {
+        "from": "MiniMax-M3.1-Flash",
+        "to": "MiniMax-M3.1-Flash"
+      },
+      "endpoint": {
+        "from": "https://api.minimax.io/anthropic/v1/messages",
+        "to": "https://api.minimax.io/anthropic/v1/messages"
+      }
+    },
+    {
+      "from": 80,
+      "to": 81,
+      "systemEqual": true,
+      "systemChars": {
+        "from": 6038,
+        "to": 6038,
+        "delta": 0
+      },
+      "systemSha256": {
+        "from": "f0f5d0662db59a2aa4fb634eb0e4a7058acd7994f621134baae899489de86fe7",
+        "to": "f0f5d0662db59a2aa4fb634eb0e4a7058acd7994f621134baae899489de86fe7"
+      },
+      "firstDivergentSystemChar": -1,
+      "longestCommonSystemPrefixChars": 6038,
+      "divergentSystemContext": null,
+      "toolsEqual": true,
+      "toolCount": {
+        "from": 9,
+        "to": 9
+      },
+      "toolsSha256": {
+        "from": "e6f365bc768a522eefab6434e082be212ca5f5cb033fda2a9f96a9d26e6a5292",
+        "to": "e6f365bc768a522eefab6434e082be212ca5f5cb033fda2a9f96a9d26e6a5292"
+      },
+      "messagesEqual": false,
+      "messageCount": {
+        "from": 159,
+        "to": 161
+      },
+      "longestIdenticalLeadingMessageCount": 159,
+      "reasoningConfigEqual": true,
+      "generationLimit": {
+        "from": 8192,
+        "to": 8192
+      },
+      "model": {
+        "from": "MiniMax-M3.1-Flash",
+        "to": "MiniMax-M3.1-Flash"
+      },
+      "endpoint": {
+        "from": "https://api.minimax.io/anthropic/v1/messages",
+        "to": "https://api.minimax.io/anthropic/v1/messages"
+      }
+    }
+  ],
+  "selector": {
+    "systemChars": 1727,
+    "messageCount": 1,
+    "toolCount": 0,
+    "model": "MiniMax-M3.1-Flash",
+    "endpoint": "https://api.minimax.io/anthropic/v1/messages",
+    "systemCommonPrefixCharsWithParent80": 9,
+    "systemCommonPrefixCharsWithParent78": 9
+  },
+  "claims": {
+    "CLIENT_SIDE_PREFIX_DIVERGENCE": [
+      {
+        "from": 78,
+        "to": 79,
+        "firstDivergentSystemChar": -1
+      },
+      {
+        "from": 79,
+        "to": 80,
+        "firstDivergentSystemChar": 4612
+      },
+      {
+        "from": 80,
+        "to": 81,
+        "firstDivergentSystemChar": -1
+      }
+    ],
+    "DOCUMENTED_CACHE_COMPATIBILITY": "DOCUMENTED — from the frozen usage records in the archive; not re-derived here",
+    "OBSERVED_CACHE_DISCONTINUITY": "DOCUMENTED — the frozen captures record cache-read discontinuity at 79 -> 80; not re-derived here",
+    "SERVER_SIDE_CACHE_CAUSALITY": "LIVE_UNOBSERVABLE"
+  }
+}
