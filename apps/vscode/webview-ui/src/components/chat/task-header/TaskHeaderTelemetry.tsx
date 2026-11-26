@@ -91,6 +91,7 @@ import { ClockIcon, Edit3Icon, EyeIcon, PlugIcon, SearchIcon, WrenchIcon } from 
 import React, { useEffect, useState } from "react"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import {
+	durationDisplayProjection,
 	formatElapsed,
 	isUsableMechanismProjection,
 	isUsableOutcomeProjection,
@@ -127,6 +128,31 @@ interface TaskHeaderTelemetryProps {
 }
 
 const LIVE_TICK_MS = 1_000
+
+/**
+ * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 — the semantic
+ * disclosures for the duration split.
+ *
+ * These are the ACT's required tooltips, verbatim in substance. They
+ * describe the SEMANTICS of each bucket so a user reading the header
+ * knows exactly what the numbers mean — in particular that "elapsed"
+ * alone cannot be used to compare execution performance.
+ */
+const ACTIVE_TOOLTIP =
+	"Active: Time spent executing automatically, including inference, tools, retries and required dependencies."
+
+const WAITING_TOOLTIP = "Waiting: Time during which automatic progression requires human input."
+
+const UNKNOWN_TOOLTIP = "Unaccounted: Time that cannot be classified from authoritative runtime evidence."
+
+const PARTIAL_TOOLTIP =
+	"Partial coverage: some intervals could not be classified from authoritative runtime evidence. The known totals are reported; no duration was invented for the gap."
+
+const UNAVAILABLE_TOOLTIP =
+	"Task duration accounting unavailable: this task was recorded without authoritative active / waiting accounting."
+
+const EPOCH_TOOLTIP =
+	"Terminal tasks freeze these totals. A later continuation of the same task opens a new interval; time spent paused between a terminal state and that continuation is excluded from active and waiting totals."
 
 /**
  * ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-IMPLEMENTATION01 (TES-IMPL-01):
@@ -369,6 +395,16 @@ const TaskHeaderTelemetry: React.FC<TaskHeaderTelemetryProps> = ({
 
 	const elapsedMs = resolveElapsedDisplayMs(telemetry.startedAt, telemetry.endedAt, now)
 	const elapsedText = formatElapsed(elapsedMs)
+	// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01: the HOST's
+	// authoritative duration snapshot, projected for display. The webview
+	// owns no accumulated duration — it renders the host's numbers and
+	// never adds to them.
+	const durationProjection = durationDisplayProjection(telemetry.duration)
+	const durationTooltip = durationProjection
+		? `${EPOCH_TOOLTIP}\n\n${ACTIVE_TOOLTIP}\n${WAITING_TOOLTIP}${
+				durationProjection.unknownText ? `\n${UNKNOWN_TOOLTIP}` : ""
+			}`
+		: UNAVAILABLE_TOOLTIP
 	const showRecovery = telemetry.recoveryBudgetFailures > 0
 	// ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-IMPLEMENTATION01:
 	// Per-mechanism cumulative counts from the host-supplied
@@ -441,6 +477,82 @@ const TaskHeaderTelemetry: React.FC<TaskHeaderTelemetryProps> = ({
 				<ClockIcon aria-hidden className="h-3 w-3" />
 				<span className="font-mono">{elapsedText}</span>
 			</span>
+			{/*
+			  ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01: the
+			  authoritative ACTIVE / WAITING / UNKNOWN split.
+
+			  The webview owns NO accumulated duration: it renders the
+			  HOST's snapshot verbatim (the `duration` field on the
+			  existing `taskTelemetry` wire strip). It never infers a
+			  human wait from UI state, never persists a duration, and
+			  never accumulates an interval.
+
+			  When the host projects NO accounting (a legacy task, or a
+			  host that has not implemented it) the strip renders
+			  "—" with an explicit "unavailable" accessible name —
+			  NEVER a fabricated zero.
+			*/}
+			{durationProjection ? (
+				<span
+					aria-label={`Task duration: ${durationProjection.elapsedText} elapsed, ${durationProjection.activeText} active, ${durationProjection.waitingText} waiting${durationProjection.unknownText ? `, ${durationProjection.unknownText} unaccounted` : ""}`}
+					className="inline-flex items-center gap-1"
+					data-testid="task-header-duration"
+					title={durationTooltip}>
+					<span aria-hidden className="font-mono">
+						{durationProjection.elapsedText}
+					</span>
+					<span
+						aria-label={`Active: ${durationProjection.activeText}`}
+						className="font-mono text-[0.7rem]"
+						data-testid="task-header-duration-active"
+						title={ACTIVE_TOOLTIP}>
+						⚡{durationProjection.activeText}
+					</span>
+					<span
+						aria-label={`Waiting: ${durationProjection.waitingText}`}
+						className="font-mono text-[0.7rem]"
+						data-testid="task-header-duration-waiting"
+						title={WAITING_TOOLTIP}>
+						⏸{durationProjection.waitingText}
+					</span>
+					{durationProjection.unknownText ? (
+						<span
+							aria-label={`Unaccounted: ${durationProjection.unknownText}`}
+							className="font-mono text-[0.7rem]"
+							data-testid="task-header-duration-unknown"
+							title={UNKNOWN_TOOLTIP}>
+							?{durationProjection.unknownText}
+						</span>
+					) : null}
+					{durationProjection.waitingReasonText ? (
+						<span
+							aria-label={`Waiting reason: ${durationProjection.waitingReasonText}`}
+							className="text-[0.7rem] opacity-80"
+							data-testid="task-header-duration-waiting-reason">
+							{durationProjection.waitingReasonText}
+						</span>
+					) : null}
+					{durationProjection.coverage === "partial" ? (
+						<span
+							aria-label="Duration coverage is partial: some intervals could not be classified"
+							className="text-[0.7rem] opacity-80"
+							data-testid="task-header-duration-partial"
+							title={PARTIAL_TOOLTIP}>
+							partial
+						</span>
+					) : null}
+				</span>
+			) : (
+				<span
+					aria-label="Task duration accounting unavailable"
+					className="inline-flex items-center gap-1"
+					data-testid="task-header-duration-unavailable"
+					title={UNAVAILABLE_TOOLTIP}>
+					<span aria-hidden className="font-mono">
+						—
+					</span>
+				</span>
+			)}
 			<span
 				aria-label={`Task state: ${state.label}`}
 				className="inline-flex items-center gap-1"

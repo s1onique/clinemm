@@ -1072,6 +1072,79 @@ export interface TaskHeaderTelemetryStrip {
 	 * values, raw error messages, provider payloads.
 	 */
 	myc?: MycTelemetrySummary
+	/**
+	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01: the
+	 * authoritative ACTIVE / WAITING / UNKNOWN duration split for the
+	 * visible task.
+	 *
+	 * OPTIONAL on the wire. Its ABSENCE is meaningful: it means "no
+	 * authoritative accounting is available for this task" (a legacy
+	 * task recorded before the accounting existed, or a host that has
+	 * not projected it). The webview renders "unavailable" in that
+	 * case and NEVER renders a fabricated zero.
+	 *
+	 * This is NOT a new public SDK contract — it is a bounded optional
+	 * field on the EXISTING `TaskHeaderTelemetryStrip` snapshot, which
+	 * is already the canonical runtime-to-webview projection.
+	 */
+	duration?: TaskDurationSnapshot
+}
+
+/**
+ * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01: the reason a task
+ * is currently waiting on a human.
+ *
+ * `RECOVERY_INTERVENTION` and `OTHER_HUMAN_GATE` are reserved for
+ * future runtime conditions; the current phase set does not produce
+ * them, and the ACT does not speculatively implement them.
+ */
+export type TaskDurationWaitingReason =
+	| "USER_INPUT"
+	| "TOOL_APPROVAL"
+	| "USER_PAUSE"
+	| "RECOVERY_INTERVENTION"
+	| "OTHER_HUMAN_GATE"
+
+/**
+ * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01: the coherent
+ * task-duration snapshot published by the host.
+ *
+ * The snapshot is a pure projection of the host's authoritative
+ * interval accumulation. It is published through the EXISTING state
+ * mechanism (`ExtensionState.taskTelemetry.duration`), NOT through a
+ * new event stream or RPC method.
+ *
+ * Conservation invariant (exact):
+ *
+ *   elapsedMs === activeMs + waitingMs + unknownMs
+ *
+ * Every component is a finite, non-negative integer of milliseconds.
+ *
+ * `coverage`:
+ *   "complete" — every observed interval was measured and classified.
+ *   "partial"  — at least one interval could NOT be measured
+ *                 reliably (e.g. a discontinuous clock). The known
+ *                 totals are still reported; the gap is NOT invented.
+ */
+export interface TaskDurationSnapshot {
+	/** The task identity the accounting record is bound to. */
+	taskId: string
+	/** Total accounted elapsed time (ms) = activeMs + waitingMs + unknownMs. */
+	elapsedMs: number
+	/** Time during which the agent was progressing automatically (ms). */
+	activeMs: number
+	/** Time during which automatic progression required human input (ms). */
+	waitingMs: number
+	/** Time that could not be classified from authoritative evidence (ms). */
+	unknownMs: number
+	/** The CURRENT category of the task. */
+	phase: "active" | "waiting" | "unknown" | "terminal"
+	/** Why the task is currently waiting, when it is waiting. */
+	waitingReason?: TaskDurationWaitingReason
+	/**
+	 * Whether the accounting covers every observed interval.
+	 */
+	coverage: "complete" | "partial"
 }
 
 /**

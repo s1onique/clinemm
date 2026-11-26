@@ -57,6 +57,8 @@
  * No React. No DOM. No chat-derived inference.
  */
 import type {
+	TaskDurationSnapshot,
+	TaskDurationWaitingReason,
 	TaskHeaderPresentationProjection,
 	ToolMechanismSummary,
 	ToolOutcomeSummary,
@@ -335,4 +337,127 @@ export function isUsableOutcomeProjection(outcome: ToolOutcomeSummary | undefine
 		return false
 	}
 	return true
+}
+
+/**
+ * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 — duration display
+ * helpers.
+ *
+ * These are PURE presentation helpers. They NEVER accumulate duration,
+ * never infer a human wait from UI state, and never persist anything.
+ * The webview owns no accumulated duration: it renders the HOST's
+ * authoritative snapshot and may only project that snapshot FORWARD for
+ * display (a presentation tick), bounded by the host's terminal
+ * authority.
+ *
+ * The wire shape `TaskDurationSnapshot` is the canonical one in
+ * `apps/vscode/src/shared/ExtensionMessage.ts` — host and webview share
+ * the same type.
+ */
+
+/**
+ * Format a duration for the Task Header.
+ *
+ * The format is the compact, human-readable form the ACT specifies:
+ *
+ *   < 1 minute  -> "45s"
+ *   < 1 hour    -> "12m 30s"
+ *   >= 1 hour   -> "5h 21m"
+ *   >= 1 day    -> "2d 3h"
+ *
+ * Negative or non-finite inputs fall back to "0s" rather than NaN.
+ */
+export function formatDuration(ms: number): string {
+	if (!Number.isFinite(ms) || ms <= 0) {
+		return "0s"
+	}
+	const totalSeconds = Math.floor(ms / MS_PER_SECOND)
+	const days = Math.floor(totalSeconds / (24 * 60 * 60))
+	const hours = Math.floor((totalSeconds - days * 24 * 60 * 60) / (60 * 60))
+	const minutes = Math.floor((totalSeconds - days * 24 * 60 * 60 - hours * 60 * 60) / 60)
+	const seconds = totalSeconds - days * 24 * 60 * 60 - hours * 60 * 60 - minutes * 60
+	if (days > 0) {
+		return `${days}d ${hours}h`
+	}
+	if (hours > 0) {
+		return `${hours}h ${minutes}m`
+	}
+	if (minutes > 0) {
+		return `${minutes}m ${seconds}s`
+	}
+	return `${seconds}s`
+}
+
+/**
+ * A human-readable label for a waiting reason.
+ */
+export function waitingReasonLabel(reason: TaskDurationWaitingReason | undefined): string | undefined {
+	switch (reason) {
+		case "USER_INPUT":
+			return "waiting for your reply"
+		case "TOOL_APPROVAL":
+			return "waiting for tool approval"
+		case "USER_PAUSE":
+			return "paused"
+		case "RECOVERY_INTERVENTION":
+			return "waiting for recovery intervention"
+		case "OTHER_HUMAN_GATE":
+			return "waiting on a human decision"
+		default:
+			return undefined
+	}
+}
+
+/**
+ * The presentation projection of a duration snapshot.
+ *
+ * `available` is false when the host projected NO duration accounting —
+ * a legacy task, or a host that has not implemented it. In that case
+ * the webview renders "unavailable" and NEVER fabricates a zero.
+ */
+export interface DurationDisplayProjection {
+	available: boolean
+	elapsedText: string
+	activeText: string
+	waitingText: string
+	unknownText: string | undefined
+	phase: "active" | "waiting" | "unknown" | "terminal"
+	waitingReason: TaskDurationWaitingReason | undefined
+	waitingReasonText: string | undefined
+	coverage: "complete" | "partial"
+	/** The proportional split of the elapsed time, for the compact bar. */
+	activeRatio: number
+	waitingRatio: number
+	unknownRatio: number
+}
+
+/**
+ * Project the host's authoritative duration snapshot for display.
+ *
+ * The webview NEVER owns accumulated duration: this function is a pure
+ * mapping of the host's snapshot. It does not add anything.
+ */
+export function durationDisplayProjection(duration: TaskDurationSnapshot | undefined): DurationDisplayProjection | undefined {
+	if (!duration) {
+		return undefined
+	}
+	const elapsed = Math.max(0, duration.elapsedMs)
+	const active = Math.max(0, duration.activeMs)
+	const waiting = Math.max(0, duration.waitingMs)
+	const unknown = Math.max(0, duration.unknownMs)
+	const denominator = elapsed > 0 ? elapsed : 1
+	return {
+		available: true,
+		elapsedText: formatDuration(elapsed),
+		activeText: formatDuration(active),
+		waitingText: formatDuration(waiting),
+		unknownText: unknown > 0 ? formatDuration(unknown) : undefined,
+		phase: duration.phase,
+		waitingReason: duration.waitingReason,
+		waitingReasonText: waitingReasonLabel(duration.waitingReason),
+		coverage: duration.coverage,
+		activeRatio: active / denominator,
+		waitingRatio: waiting / denominator,
+		unknownRatio: unknown / denominator,
+	}
 }

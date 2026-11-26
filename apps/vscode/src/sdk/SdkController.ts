@@ -47,7 +47,7 @@ import type {
 	RuntimeErrorIncident,
 	TurnPhase,
 } from "@shared/ExtensionMessage"
-import type { HistoryItem } from "@shared/HistoryItem"
+import type { HistoryItem, TaskDurationPersistence } from "@shared/HistoryItem"
 import {
 	disablePostTerminalAuthorityDiagnostic,
 	enablePostTerminalAuthorityDiagnostic,
@@ -2888,6 +2888,12 @@ export class Controller {
 			stateManager: this.stateManager,
 			getTask: () => this.task,
 			postStateToWebview: () => this.postStateToWebview(),
+			// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01: the
+			// host-owned duration accounting persistence seam. The
+			// coordinator READS the tracker's persistence projection
+			// only — the accounting authority is the `TurnStateTracker`
+			// phase stream, and the coordinator never mutates it.
+			persistDurationAccounting: (taskId, record) => this.persistDurationAccounting(taskId, record),
 			// ACT-CLINEMM-AUTOMATIC-INCIDENT-CAPTURE-AND-EXPORT01 (AICE01):
 			// make the captured incident DURABLE at the authoritative
 			// boundary that produced it — not only at a task switch or a
@@ -3227,6 +3233,12 @@ export class Controller {
 			// wire field renders the user-visible `⚠ N` glyph.
 			taskTelemetry: {
 				recordRuntimeError: (incident) => this.handleTaskRuntimeError(incident),
+				// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01: the
+				// READ-ONLY persistence projection of the host-owned
+				// duration accounting. The tracker is read through the
+				// controller's own field, so the coordinator never
+				// mutates the accounting.
+				durationPersistence: this.taskTelemetry.durationPersistence,
 			},
 		})
 		// ACT-CLINEMM-COMPLETION-AUTHORITY-POST-RUN-REEVALUATION01:
@@ -4685,6 +4697,13 @@ export class Controller {
 				sessionId,
 				typeof persistedTs === "number" && Number.isFinite(persistedTs) ? persistedTs : undefined,
 			)
+			// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01: restore the
+			// persisted ACTIVE / WAITING / UNKNOWN accounting for this task
+			// identity, from the SAME `HistoryItem` slot that carries the
+			// wall-clock epoch. A legacy task with no record leaves the
+			// accounting absent (the UI renders "unavailable", never a
+			// fabricated zero).
+			this.restoreDurationAccounting(sessionId, historyItem)
 			this.attachRecoveryTelemetrySubscription(sessionId)
 			// ACT-CLINEMM-ELM-ARCHITECTURE01-E2F-CANONICAL-RUNTIME-EVENT-SEAM01-F1:
 			// also attach the canonical runtime-event seam so the shadow
@@ -4897,6 +4916,14 @@ export class Controller {
 				sessionId,
 				typeof persistedTs === "number" && Number.isFinite(persistedTs) ? persistedTs : undefined,
 			)
+			// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01: restore the
+			// persisted accounting on the RESUME seam too. A supported
+			// nonterminal recovery therefore preserves the known
+			// accumulated durations, and the interval spanning the
+			// restart is NOT claimed — the restored accounting re-opens
+			// an interval in the recorded category from the CURRENT
+			// monotonic clock.
+			this.restoreDurationAccounting(sessionId, historyItem)
 			// ACT-CLINEMM-RESUME-SUBSCRIPTION-PARITY01: attach the
 			// canonical runtime-event subscription and the recovery
 			// telemetry subscription on the resume seam so a resumed
@@ -6535,6 +6562,65 @@ export class Controller {
 		const tasksDeleted = await this.taskHistory.deleteAllTaskHistory()
 		await this.postStateToWebview()
 		return DeleteAllTaskHistoryCount.create({ tasksDeleted })
+	}
+
+	/**
+	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01: persist the
+	 * duration accounting into the task's EXISTING `HistoryItem` slot.
+	 *
+	 * The task's durable record already carries the wall-clock epoch
+	 * (`ts`), so the accounting record lives beside it — no separate
+	 * database, heartbeat journal or timing service is introduced.
+	 *
+	 * The persisted form carries the accumulated TOTALS and the phase.
+	 * Process-local MONOTONIC timestamps are deliberately NOT persisted:
+	 * they are not transferable across processes and would fabricate
+	 * continuity across a restart.
+	 *
+	 * The write is idempotent: the record REPLACES the stored totals
+	 * rather than adding to them, so a repeated persist at the same
+	 * boundary cannot double-count.
+	 */
+	private async persistDurationAccounting(
+		taskId: string | undefined,
+		record: TaskDurationPersistence | undefined,
+	): Promise<void> {
+		if (!taskId || !record) {
+			return
+		}
+		try {
+			const historyItem = await this.taskHistory.findHistoryItem(taskId)
+			if (!historyItem) {
+				return
+			}
+			historyItem.duration = record
+			await this.taskHistory.updateTaskHistoryItem(historyItem)
+		} catch (error) {
+			// A persistence failure MUST NOT break task execution. The
+			// accounting simply remains unpersisted for this task.
+			Logger.warn(
+				`[OBS05] could not persist the task duration accounting: ${error instanceof Error ? error.message : String(error)}`,
+			)
+		}
+	}
+
+	/**
+	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01: restore the
+	 * persisted duration accounting for a task identity.
+	 *
+	 * Called when an existing task is re-activated. The restore is
+	 * idempotent (the record REPLACES the totals), so a repeated
+	 * activation cannot double-count.
+	 */
+	private restoreDurationAccounting(taskId: string, historyItem: HistoryItem | undefined): void {
+		const record = historyItem?.duration
+		if (!record) {
+			// A legacy task with no accounting record: the accounting
+			// stays absent, and the UI renders "unavailable" — never a
+			// fabricated zero.
+			return
+		}
+		this.taskTelemetry.restoreDurationAccounting(taskId, record)
 	}
 
 	async updateTaskHistory(item: HistoryItem): Promise<HistoryItem[]> {

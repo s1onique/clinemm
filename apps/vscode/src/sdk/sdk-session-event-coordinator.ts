@@ -16,6 +16,7 @@ import {
 	recordCompletionIncident,
 	setCompletionIncidentCoordinatorInstanceId,
 } from "@shared/completion-incident-flight-recorder"
+import type { TaskDurationPersistence } from "@shared/HistoryItem"
 import type { TurnStateWriterId } from "@shared/turn-state-writer-provenance"
 import { refreshClineRecommendedModels } from "@/core/controller/models/refreshClineRecommendedModels"
 import type { StateManager } from "@/core/storage/StateManager"
@@ -161,6 +162,23 @@ export interface SdkSessionEventCoordinatorOptions {
 	messages: SdkMessageCoordinator
 	taskHistory: SdkTaskHistory
 	getTask: () => TaskProxy | undefined
+	/**
+	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01: the host-owned
+	 * duration accounting persistence seam.
+	 *
+	 * It is called at the authoritative turn boundary with the CURRENT
+	 * task identity, so the accumulated ACTIVE / WAITING / UNKNOWN
+	 * totals are written into the task's existing `HistoryItem` slot —
+	 * the same durable record that already carries the task's
+	 * wall-clock epoch. No separate database, heartbeat journal or
+	 * timing service is introduced.
+	 *
+	 * The persisted form carries the accumulated TOTALS and the phase,
+	 * never a process-local monotonic timestamp: monotonic values are
+	 * not transferable across processes and would fabricate continuity
+	 * across a restart.
+	 */
+	persistDurationAccounting?: (taskId: string | undefined, record: TaskDurationPersistence) => Promise<void> | void
 	postStateToWebview: () => Promise<void>
 	stateManager?: StateManager
 	/**
@@ -746,6 +764,14 @@ export interface SdkSessionEventCoordinatorOptions {
 	 */
 	taskTelemetry?: {
 		readonly recordRuntimeError: (incident: RuntimeErrorIncident) => void
+		/**
+		 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01: the
+		 * persistence projection of the host-owned duration accounting.
+		 *
+		 * READ ONLY: the coordinator never mutates the accounting. The
+		 * accounting authority is the `TurnStateTracker` phase stream.
+		 */
+		readonly durationPersistence?: TaskDurationPersistence | undefined
 	}
 	/**
 	 * ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION01-REAL-ELM-PROVIDER:
@@ -5891,6 +5917,20 @@ export class SdkSessionEventCoordinator {
 					).catch((error) => {
 						Logger.error("[SdkController] Failed to persist task usage:", error)
 					})
+				}
+
+				// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01: persist the
+				// duration accounting at the SAME authoritative turn boundary.
+				// The record is the accumulated totals + the phase — never a
+				// process-local monotonic timestamp.
+				if (this.options.persistDurationAccounting) {
+					const durationTaskId = this.options.getTask()?.taskId ?? this.options.sessions.getActiveSession()?.sessionId
+					const durationRecord = this.options.taskTelemetry?.durationPersistence
+					if (durationTaskId && durationRecord) {
+						Promise.resolve(this.options.persistDurationAccounting(durationTaskId, durationRecord)).catch((error) => {
+							Logger.error("[SdkController] Failed to persist task duration accounting:", error)
+						})
+					}
 				}
 			}
 

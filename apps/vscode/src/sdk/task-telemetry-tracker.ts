@@ -110,9 +110,12 @@ import type {
 	TaskHeaderTelemetryStrip,
 	ToolMechanismSummary,
 	ToolOutcomeSummary,
+	TurnPhase,
 } from "@shared/ExtensionMessage"
+import type { TaskDurationPersistence } from "@shared/HistoryItem"
 import { Logger } from "@/shared/services/Logger"
 import type { MycPrimeStatus } from "./myc-prime-automation"
+import { type MonotonicClock, TaskDurationAccountant } from "./task-duration-accounting"
 import { recordMechanism as accumulateMechanism, emptyMechanismSummary } from "./tool-mechanism-classifier"
 
 /**
@@ -131,6 +134,36 @@ const TERMINAL_PHASES = new Set(["error", "resumable", "completed"])
  * cumulative counters.
  */
 const CONTINUATION_PHASES = new Set(["streaming", "awaiting_approval"])
+
+/**
+ * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01: the closed set of
+ * authoritative runtime phases. `observeTurnPhase` receives the phase
+ * as a plain `string` (the pre-existing signature is kept for wire
+ * compatibility with every existing caller and test), so the tracker
+ * narrows it to the canonical `TurnPhase` union before handing it to
+ * the duration accumulator.
+ *
+ * An unknown phase string is NOT classified — it is simply ignored by
+ * the accumulator, so a future phase added upstream can never silently
+ * become ACTIVE or WAITING.
+ */
+const TURN_PHASES: ReadonlySet<string> = new Set<TurnPhase>([
+	"idle",
+	"streaming",
+	"awaiting_approval",
+	"awaiting_followup",
+	"compacting",
+	"completed",
+	"error",
+	"resumable",
+])
+
+/**
+ * Narrow an arbitrary phase string to the canonical `TurnPhase` union.
+ */
+export function isTurnPhase(phase: string): phase is TurnPhase {
+	return TURN_PHASES.has(phase)
+}
 
 /**
  * ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A-CORRECTION01:
@@ -226,6 +259,13 @@ export class TaskTelemetryTracker {
 	private currentTaskId: string | undefined
 	private startedAt: number | undefined
 	private endedAt: number | undefined
+	// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01: the authoritative
+	// ACTIVE / WAITING / UNKNOWN duration accumulator. It is driven by
+	// the SAME authoritative `TurnPhase` transition stream the tracker
+	// already observes (`observeTurnPhase`), so no second lifecycle
+	// state machine is introduced. The clock is injectable so the
+	// deterministic tests can drive an exact synthetic chronology.
+	private readonly durationAccountant: TaskDurationAccountant
 	private toolCalls = 0
 	private recoveryBudgetFailures = 0
 	private prevEpisodeFailures = 0
@@ -291,6 +331,70 @@ export class TaskTelemetryTracker {
 	private mycLast: MycLastCall | undefined
 
 	/**
+	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01:
+	 *
+	 * The optional `clock` is the MONOTONIC clock source used for the
+	 * ACTIVE / WAITING / UNKNOWN interval arithmetic. It is injectable
+	 * so the deterministic production-seam tests can drive an exact
+	 * synthetic chronology without sleeping.
+	 *
+	 * Production passes nothing — the accumulator then uses the host's
+	 * monotonic time source (`performance.now()`), which is immune to
+	 * wall-clock adjustments.
+	 */
+	constructor(clock?: MonotonicClock) {
+		this.durationAccountant = new TaskDurationAccountant(clock)
+	}
+
+	/**
+	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01: restore a
+	 * persisted duration accounting record for the CURRENT task
+	 * identity.
+	 *
+	 * The record is the accumulated totals plus the phase the task was
+	 * in — NOT a process-local monotonic timestamp, which is not
+	 * transferable across processes. The interval spanning the restart
+	 * is therefore NOT claimed: the restored accounting re-opens an
+	 * interval in the recorded category from the CURRENT monotonic
+	 * clock, so an unobservable gap is never silently classified.
+	 *
+	 * Restoring is idempotent: restoring the same record twice yields
+	 * the same totals (the record REPLACES the totals, it does not
+	 * add to them), so a duplicate recovery cannot double-count.
+	 *
+	 * A task identity that does not match the current one is ignored —
+	 * the accounting is bound to the task identity.
+	 */
+	restoreDurationAccounting(taskId: string, record: TaskDurationPersistence | undefined): TaskHeaderTelemetryStrip | undefined {
+		if (this.currentTaskId !== taskId) {
+			Logger.debug(`[TaskTelemetryTracker] restoreDurationAccounting for a different task id; ignored (taskId=${taskId})`)
+			return this.get()
+		}
+		if (!record) {
+			// A legacy task with no persisted accounting record: the
+			// accounting stays absent. The UI renders "unavailable" —
+			// never a fabricated zero.
+			Logger.debug(`[TaskTelemetryTracker] restoreDurationAccounting with no persisted record; ignored (taskId=${taskId})`)
+			return this.get()
+		}
+		this.durationAccountant.restore(record)
+		return this.get()
+	}
+
+	/**
+	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01: the persistence
+	 * projection of the current duration accounting.
+	 *
+	 * Returns `undefined` when no task is active (nothing to persist).
+	 */
+	get durationPersistence(): TaskDurationPersistence | undefined {
+		if (this.currentTaskId === undefined) {
+			return undefined
+		}
+		return this.durationAccountant.persistenceProjection()
+	}
+
+	/**
 	 * Start (or re-start) a task's telemetry window.
 	 *
 	 * - First call ever: stamp `startedAt = Date.now()` for the new task.
@@ -310,6 +414,10 @@ export class TaskTelemetryTracker {
 		this.currentTaskId = taskId
 		this.startedAt = now
 		this.endedAt = undefined
+		// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01: a NEW task
+		// identity resets the duration accounting too — a task never
+		// inherits another task's active / waiting totals.
+		this.durationAccountant.reset()
 		this.toolCalls = 0
 		this.recoveryBudgetFailures = 0
 		this.prevEpisodeFailures = 0
@@ -407,6 +515,15 @@ export class TaskTelemetryTracker {
 		if (this.currentTaskId === undefined) {
 			return this.get()
 		}
+		// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01: the SAME
+		// authoritative transition that drives the wall-clock freeze also
+		// drives the ACTIVE / WAITING / UNKNOWN classification. The
+		// accumulator is phase-driven, so it introduces no second
+		// lifecycle state machine and never infers a human wait from UI
+		// state.
+		if (isTurnPhase(phase)) {
+			this.durationAccountant.observePhase(phase)
+		}
 		if (TERMINAL_PHASES.has(phase)) {
 			if (this.endedAt === undefined) {
 				this.endedAt = anchorTs ?? Date.now()
@@ -426,6 +543,9 @@ export class TaskTelemetryTracker {
 		this.currentTaskId = undefined
 		this.startedAt = undefined
 		this.endedAt = undefined
+		// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01: clearing the
+		// telemetry window clears the duration accounting with it.
+		this.durationAccountant.reset()
 		this.toolCalls = 0
 		this.recoveryBudgetFailures = 0
 		this.prevEpisodeFailures = 0
@@ -984,6 +1104,13 @@ export class TaskTelemetryTracker {
 		if (this.currentTaskId === undefined || this.startedAt === undefined) {
 			return undefined
 		}
+		// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01: the
+		// authoritative ACTIVE / WAITING / UNKNOWN duration split.
+		// Optional on the wire: absent means "no authoritative
+		// accounting available for this task" (legacy task, or a host
+		// that has not projected it). The webview renders "unavailable"
+		// for absence — never a fabricated zero.
+		const duration = this.durationAccountant.snapshot(this.currentTaskId)
 		return {
 			startedAt: this.startedAt,
 			...(this.endedAt !== undefined ? { endedAt: this.endedAt } : {}),
@@ -1002,6 +1129,7 @@ export class TaskTelemetryTracker {
 			// projected the field simply omit it and the webview renders
 			// the existing V1 mechanism display unchanged.
 			outcome: this.buildOutcomeSummary(),
+			...(duration !== undefined ? { duration } : {}),
 			// ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01: cumulative
 			// structured runtime error incidents. Emitted only when > 0
 			// so the wire strip stays minimal in the common (zero-error)
