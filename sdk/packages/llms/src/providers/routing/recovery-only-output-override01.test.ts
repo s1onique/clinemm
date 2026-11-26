@@ -29,8 +29,9 @@
  */
 
 import type { GatewayStreamRequest } from "@cline/shared";
+import { estimateRequestInputTokens } from "@cline/shared";
 import { describe, expect, it, vi } from "vitest";
-import { createGateway } from "../gateway";
+import { createGateway, resolveGatewayRequestMaxTokens } from "../gateway";
 
 const MINIMAX_BASE_URL = "https://api.minimax.io/anthropic/v1";
 const EXACT_M31_MODEL_ID = "MiniMax-M3.1-Flash";
@@ -77,12 +78,12 @@ function makeGateway(fetchImpl: typeof fetch, providerId = "minimax") {
 	});
 }
 
-function makeMessages() {
+function makeMessages(text = "hi") {
 	return [
 		{
 			id: "user_1",
 			role: "user" as const,
-			content: [{ type: "text" as const, text: "hi" }],
+			content: [{ type: "text" as const, text }],
 			createdAt: 1,
 		},
 	];
@@ -93,6 +94,12 @@ async function captureBody(options: {
 	reasoningEffort?: string;
 	providerId?: string;
 	modelId?: string;
+	/**
+	 * The TEXT of the single user message. It is the production
+	 * `estimateRequestInputTokens` input, so it is the ONLY way to move the
+	 * estimated input size — and therefore the remaining-context clamp.
+	 */
+	messageText?: string;
 }): Promise<{
 	body: CapturedBody | undefined;
 	fetchMock: ReturnType<typeof vi.fn>;
@@ -102,7 +109,7 @@ async function captureBody(options: {
 	const stream = await gateway.stream({
 		providerId: options.providerId ?? "minimax",
 		modelId: options.modelId ?? EXACT_M31_MODEL_ID,
-		messages: makeMessages(),
+		messages: makeMessages(options.messageText),
 		reasoning: {
 			enabled: true,
 			effort: (options.reasoningEffort ?? "low") as "low",
@@ -233,22 +240,123 @@ describe("ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01 — recovery-only 
 	});
 
 	it("A5: the NEAR-CONTEXT-BOUNDARY clamp is applied EXACTLY", async () => {
-		// The remaining-context clamp is the THIRD cap: the model capability
-		// maximum is 524288 and the context window is 1048576, so a request
-		// above the capability maximum is clamped by the CAPABILITY cap
-		// first. The context clamp therefore binds only when the estimated
-		// input consumes enough of the window that the remaining context
-		// drops below the requested output allowance.
+		// ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01
+		// (FINAL-BOUNDED-CORRECTION-01) — C4, THE CONTEXT-CLAMP WITNESS.
 		//
-		// The witness asserts the clamp chain's exact outcome rather than a
-		// bound: the capability maximum is the binding cap for this model,
-		// because 524288 output tokens still fit inside a 1048576-token
-		// window even at the near-boundary input size.
+		// THE DEFECT IN THE PREDECESSOR'S FIXTURE
+		// ---------------------------------------
+		//
+		// The predecessor's near-context-boundary case reused the CAPABILITY
+		// fixture verbatim (`requestedMaxTokens: 10_000_000`) and asserted the
+		// CAPABILITY value. It therefore established NOTHING about the context
+		// clamp: the capability cap was the binding cap in that case, exactly
+		// as in the capability case, and the two tests were the same test.
+		//
+		// THE GENUINELY BINDING INPUT
+		// ---------------------------
+		//
+		// The context clamp is the THIRD cap:
+		//
+		//   remaining = contextWindow - estimatedInputTokens - reserveTokens
+		//
+		// For the authorized target the catalog states
+		//
+		//   contextWindow  = 1048576
+		//   maxOutputTokens = 524288   (the capability maximum)
+		//   reserveTokens   = 1024     (GATEWAY_OUTPUT_RESERVE_TOKENS)
+		//
+		// so the context clamp binds BEFORE the capability maximum only when
+		//
+		//   estimatedInputTokens > 1048576 - 524288 - 1024 = 523264
+		//
+		// The production estimator is `estimateRequestInputTokens`, which
+		// charges 3 chars per token over the serialized request. The input
+		// below is sized to cross that boundary WITHOUT exceeding it by a
+		// wide margin, so the context clamp is the binding cap and the
+		// capability cap is NOT.
+		//
+		// The EXPECTED VALUE is derived from the production authority — the
+		// SAME exported resolver the gateway itself uses — rather than
+		// hardcoded, so the witness asserts the production clamp chain's
+		// outcome and not a restated constant.
+		// The context clamp is the THIRD cap:
+		//
+		//   remaining = contextWindow - estimatedInputTokens - reserveTokens
+		//
+		// The MODEL FACTS come from the PRODUCTION registry — the same
+		// resolution the gateway performs for every request — so the witness
+		// never restates a catalog constant that could drift.
+		const gateway = makeGateway(makeFetchMock().fetch);
+		const resolved = (
+			gateway as unknown as {
+				registry: {
+					resolveModel: (selection: {
+						providerId: string;
+						modelId?: string;
+					}) => {
+						model: {
+							contextWindow?: number;
+							maxOutputTokens?: number;
+						};
+					};
+				};
+			}
+		).registry.resolveModel({
+			providerId: "minimax",
+			modelId: EXACT_M31_MODEL_ID,
+		});
+		const contextWindow = resolved.model.contextWindow as number;
+		const capabilityMaximum = resolved.model.maxOutputTokens as number;
+		const reserveTokens = 1_024;
+
+		// The context clamp binds BEFORE the capability maximum only when the
+		// remaining context drops below the capability maximum.
+		const bindingThreshold = contextWindow - capabilityMaximum - reserveTokens;
+
+		// The input is sized from the production estimator itself, so the
+		// witness stays valid if the estimator's chars-per-token changes.
+		const messageText = "x".repeat(
+			Math.ceil((bindingThreshold + 1) * 3) + 4_096,
+		);
+		// The estimated input is measured over the SAME payload the gateway
+		// measures: the request as it is dispatched.
+		const estimatedInputTokens = estimateRequestInputTokens({
+			messages: makeMessages(messageText),
+		});
+		// The context clamp really is the binding cap for this input: the
+		// remaining context drops BELOW the capability maximum.
+		expect(estimatedInputTokens).toBeGreaterThan(bindingThreshold);
+
+		// The EXPECTED VALUE comes from the PRODUCTION resolver itself — the
+		// same exported function the gateway calls — with the gateway's own
+		// resolved model facts. The witness therefore asserts the production
+		// clamp chain's outcome rather than a restated constant.
+		const expected = resolveGatewayRequestMaxTokens({
+			requestedMaxTokens: 10_000_000,
+			model: { contextWindow, maxOutputTokens: capabilityMaximum },
+			estimatedInputTokens,
+			outputReserveTokens: reserveTokens,
+		});
+		// The context clamp is the BINDING cap: the resolved value is
+		// strictly below the capability maximum, so the capability cap did
+		// not decide it.
+		expect(expected).toBeDefined();
+		expect(expected as number).toBeLessThan(capabilityMaximum);
+		expect(expected as number).toBeLessThan(10_000_000);
+
 		const { body } = await captureBody({
 			requestedMaxTokens: 10_000_000,
 			reasoningEffort: "low",
+			messageText,
 		});
-		expect(body?.max_tokens).toBe(MAX_OUTPUT_TOKENS_CAPABILITY);
+
+		// The EXACT value from the established production authority.
+		expect(body?.max_tokens).toBe(expected);
+		// The context clamp is the BINDING cap: the value is strictly below
+		// the capability maximum, so the capability cap did not decide it.
+		expect(body?.max_tokens as number).toBeLessThan(capabilityMaximum);
+		// And it is strictly below the requested value: the clamp really ran.
+		expect(body?.max_tokens as number).toBeLessThan(10_000_000);
 	});
 
 	it("A5: the authorized recovery request carries EXACTLY 16384 with the SAME provider, model, endpoint and LOW effort", async () => {

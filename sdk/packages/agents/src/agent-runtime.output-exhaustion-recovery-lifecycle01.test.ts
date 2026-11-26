@@ -895,8 +895,17 @@ describe("ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01 (AMENDMENT-01) —
 		expect(observed.status).toBe("failed");
 		// The EXACT reachable lifecycle: three ordinary reminders, eleven
 		// escalations to the R1 exhausted branch, and the R2 objective's
-		// own seven rounds. The selection inference is NOT a continuation.
-		expect(observed.authorizedContinuations).toBe(21);
+		// own EIGHT rounds. The selection inference is NOT a continuation.
+		//
+		// ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01
+		// (FINAL-BOUNDED-CORRECTION-01): the predecessor asserted SEVEN
+		// objective rounds. That was the DEFECTIVE cardinality: the
+		// activation-triggering parent response was charged to the newly
+		// activated objective as one of its own execution rounds, so the
+		// objective started with ONE consumed round and only SEVEN of its
+		// EIGHT authorised rounds were executable. The objective's budget is
+		// now honoured in full.
+		expect(observed.authorizedContinuations).toBe(22);
 	});
 
 	it("A1-4: with R1 ABSENT the run terminates after the ordinary allowance, with NO escalation", async () => {

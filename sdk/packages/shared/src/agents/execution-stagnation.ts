@@ -298,6 +298,13 @@ export interface RecoveryOutputOverridePolicy {
 	 *
 	 * The runtime owns the exhaustion accounting; the host may additionally
 	 * narrow the eligibility with its own authority.
+	 *
+	 * ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01
+	 * (FINAL-BOUNDED-CORRECTION-01): the predicate may NARROW the
+	 * eligibility, NEVER WIDEN it. The runtime's own minimum
+	 * repeated-exhaustion requirement remains AUTHORITATIVE, so a predicate
+	 * that returns `true` with an insufficient exhaustion streak grants NO
+	 * override.
 	 */
 	readonly isExhaustionEstablished?: (context: {
 		readonly exhaustionStreak: number;

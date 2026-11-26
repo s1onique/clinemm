@@ -1577,6 +1577,34 @@ export class AgentRuntime {
 		executedCommands: 0,
 	};
 	/**
+	 * ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01
+	 * (FINAL-BOUNDED-CORRECTION-01).
+	 *
+	 * The bounded objective that GOVERNED the model request currently in
+	 * flight, or `undefined` when the request in flight was a PARENT request
+	 * (no objective was active when it was dispatched).
+	 *
+	 * THE ATTRIBUTION AUTHORITY
+	 * ------------------------
+	 *
+	 * A finalized execution round may only be charged to the objective that
+	 * actually governed the request it completed. The predecessor charged
+	 * EVERY completed round to whatever objective happened to be active at the
+	 * round's accounting boundary — and the R1 `allowance_exhausted` branch
+	 * can activate a NEW objective on that very boundary. The activation's
+	 * TRIGGERING parent response had therefore been dispatched BEFORE the
+	 * objective existed, yet it was charged to the new objective as if it had
+	 * been an objective execution round. The new objective started with ONE
+	 * consumed round instead of zero and its whole authorised budget was short
+	 * by one.
+	 *
+	 * This field is the EXISTING lifecycle boundary's own record of which
+	 * objective governed the dispatched request. It is a runtime-owned
+	 * pointer, not a registry, a supervisor or a new accounting subsystem:
+	 * it holds ONE objective — the one in flight.
+	 */
+	private inFlightBoundedObjective: BoundedObjective | undefined;
+	/**
 	 * The explicit internal recovery outcome of the LAST R2 activation.
 	 *
 	 * It is produced when an R2 recovery does NOT succeed, so a future R3
@@ -3926,7 +3954,32 @@ export class AgentRuntime {
 		if (!objective) {
 			return;
 		}
-		this.accumulateBoundedObjectiveFacts();
+		// ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01
+		// (FINAL-BOUNDED-CORRECTION-01).
+		//
+		// THE ATTRIBUTION RULE.
+		//
+		// A finalized execution round is charged to an objective ONLY when
+		// that objective actually GOVERNED the request the round completed.
+		//
+		// The R1 `allowance_exhausted` branch can activate a NEW objective on
+		// this very boundary. The parent response that triggered that
+		// activation was dispatched BEFORE the objective existed, so it was
+		// never an objective execution round. The predecessor charged it
+		// anyway, so a freshly activated objective started with ONE consumed
+		// round and its whole authorised budget was short by one.
+		//
+		// The in-flight anchor records which objective governed the dispatched
+		// request. When it does not match the active objective, the completed
+		// round is a PARENT round: it is NOT charged, and the objective's
+		// accounting stays at zero.
+		//
+		// The objective's VERIFICATION and CLOSURE still run: an objective
+		// that verifies on the activation boundary closes immediately, and an
+		// objective whose budget is exhausted fails truthfully.
+		if (this.inFlightBoundedObjective === objective) {
+			this.accumulateBoundedObjectiveFacts();
+		}
 		const policy = this.getBoundedObjectivePolicy();
 		const maxRounds = Math.max(
 			0,
@@ -4019,7 +4072,16 @@ export class AgentRuntime {
 		if (!objective) {
 			return;
 		}
-		this.accumulateBoundedObjectiveFacts();
+		// ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01
+		// (FINAL-BOUNDED-CORRECTION-01).
+		//
+		// The SAME attribution rule as the in-loop evaluation: the terminal
+		// round is charged to an objective ONLY when that objective actually
+		// governed the request it completed. A parent round that triggered an
+		// activation on this very boundary is not the new objective's round.
+		if (this.inFlightBoundedObjective === objective) {
+			this.accumulateBoundedObjectiveFacts();
+		}
 		const verified = this.isBoundedObjectiveVerified();
 		this.activeBoundedObjective = undefined;
 		if (verified) {
@@ -4473,6 +4535,12 @@ export class AgentRuntime {
 		this.boundedObjectiveActivations = 0;
 		this.boundedObjectiveSelectionInferences = 0;
 		this.activeBoundedObjective = undefined;
+		// ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01
+		// (FINAL-BOUNDED-CORRECTION-01): the in-flight attribution anchor is
+		// RUN-SCOPED, exactly like the objective it attributes to. A fresh run
+		// has no request in flight, so a stale objective can never inherit a
+		// round from a prior run.
+		this.inFlightBoundedObjective = undefined;
 		this.boundedObjectiveFacts = {
 			rounds: 0,
 			toolNames: [],
@@ -5042,7 +5110,8 @@ export class AgentRuntime {
 	}
 
 	/**
-	 * ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01.
+	 * ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01
+	 * (FINAL-BOUNDED-CORRECTION-01) — C3.
 	 *
 	 * The effective recovery-only generation override policy, or `undefined`
 	 * when the experiment is DISABLED.
@@ -5050,6 +5119,18 @@ export class AgentRuntime {
 	 * The experiment is DEFAULT_OFF: absent the policy, or with
 	 * `enabled: false`, every recovery code path and every request is
 	 * byte-identical to the predecessor.
+	 *
+	 * C3 — THE EXPLICIT ENABLE AUTHORITY
+	 * ---------------------------------
+	 *
+	 * `enabled` must be EXPLICITLY TRUE. The predecessor treated a policy
+	 * with `enabled` ABSENT as enabled, because it only rejected the
+	 * explicit `false`. A policy that a host assembled without deciding to
+	 * enable the experiment therefore armed the override anyway.
+	 *
+	 * The opt-in is now a POSITIVE act: `enabled === true`. The production
+	 * host opt-in (`CLINEMM_RECOVERY_OUTPUT_OVERRIDE=1`) sets it explicitly,
+	 * so the production behaviour is unchanged.
 	 */
 	private getRecoveryOutputOverridePolicy():
 		| RecoveryOutputOverridePolicy
@@ -5061,7 +5142,9 @@ export class AgentRuntime {
 				? DEFAULT_RECOVERY_OUTPUT_OVERRIDE_POLICY
 				: undefined;
 		}
-		if (policy.enabled === false) {
+		// C3: the enable must be EXPLICIT. `enabled: false` and an ABSENT
+		// `enabled` are both DISABLED.
+		if (policy.enabled !== true) {
 			return undefined;
 		}
 		return policy;
@@ -5156,12 +5239,39 @@ export class AgentRuntime {
 		// Repeated output exhaustion must be ESTABLISHED. The default
 		// threshold is the CONSECUTIVE exhaustion streak limit: a SINGLE
 		// cut-off is not "repeated" exhaustion.
-		const exhaustionEstablished =
-			policy.isExhaustionEstablished?.({
-				exhaustionStreak: this.maxTokensExhaustionStreak,
-			}) ??
+		//
+		// ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01
+		// (FINAL-BOUNDED-CORRECTION-01) — C3, THE PREDICATE NARROWS.
+		//
+		// THE RUNTIME'S MINIMUM REQUIREMENT IS AUTHORITATIVE.
+		//
+		// The predecessor REPLACED the runtime's own requirement with the
+		// host's predicate: `predicate?.(...) ?? streak >= LIMIT`. A host
+		// predicate that returned TRUE with an INSUFFICIENT streak therefore
+		// WIDENED the eligibility and armed the override on a single
+		// cut-off.
+		//
+		// The host predicate may NARROW the eligibility, never widen it:
+		//
+		//   - the runtime's own minimum requirement MUST hold, and
+		//   - the host's predicate, when supplied, MUST ALSO hold.
+		//
+		// Both conditions are required: the conjunction is the NARROWEST
+		// eligibility both authorities accept.
+		const runtimeExhaustionEstablished =
 			this.maxTokensExhaustionStreak >= MAX_TOKENS_EXHAUSTION_STREAK_LIMIT;
-		if (!exhaustionEstablished) {
+		if (!runtimeExhaustionEstablished) {
+			return;
+		}
+		if (
+			policy.isExhaustionEstablished !== undefined &&
+			!policy.isExhaustionEstablished({
+				exhaustionStreak: this.maxTokensExhaustionStreak,
+			})
+		) {
+			// The host's own authority NARROWS the eligibility: the runtime's
+			// requirement is met, but the host does not establish the
+			// exhaustion. No override.
 			return;
 		}
 		// The exact authorized model and effective reasoning effort must be
@@ -5176,9 +5286,22 @@ export class AgentRuntime {
 		const modelId = this.telemetryModelId;
 		const reasoningEffort = this.effectiveReasoningEffort();
 		const providerId = this.telemetryProviderId;
+		//
+		// ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01
+		// (FINAL-BOUNDED-CORRECTION-01) — C3, THE UNKNOWN TARGET.
+		//
+		// The host's target predicate must AFFIRMATIVELY establish the
+		// authorized target. The predecessor rejected only an explicit
+		// `false`, so an UNKNOWN verdict — a predicate that could not
+		// establish the target — passed through and granted the override.
+		//
+		// An UNKNOWN or UNAUTHORIZED target fact grants NO override under
+		// the production host policy: the host owns that judgement, and a
+		// host that cannot establish the target has not authorized it.
 		if (
-			policy.isAuthorizedTarget?.({ modelId, reasoningEffort, providerId }) ===
-			false
+			policy.isAuthorizedTarget !== undefined &&
+			policy.isAuthorizedTarget({ modelId, reasoningEffort, providerId }) !==
+				true
 		) {
 			return;
 		}
@@ -5464,7 +5587,59 @@ export class AgentRuntime {
 		}
 		// (3b) No objective is active: R2 may still activate, but only when
 		// the run is live and EVERY allowance remains.
+		//
+		// ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01
+		// (FINAL-BOUNDED-CORRECTION-01) — C2, INTERVENTION REACHABILITY
+		// CONSERVATION.
+		//
+		// THE SEAM
+		// -------
+		//
+		// R2's ONLY activation seam is R1's `allowance_exhausted` branch.
+		// That branch requires:
+		//
+		//   (i)   the R1 policy is present AND enabled,
+		//   (ii)  the unproductive-round streak has reached the threshold,
+		//   (iii) the run-scoped corrective-instruction allowance is spent.
+		//
+		// The predecessor consulted ONLY R2's own allowances here. When R1
+		// was absent or explicitly DISABLED, the R2 activation could NEVER
+		// happen — yet the helper reported it REACHABLE and the exhaustion
+		// recovery therefore kept driving parent model requests for the
+		// whole defensive ceiling. Those requests were authorized by an
+		// intervention that could not exist.
+		//
+		// THE CONSERVATION
+		// ----------------
+		//
+		// R2 may be reached ONLY through the live R1 seam. When the seam is
+		// unreachable, this branch authorizes NOTHING.
+		//
+		// The production R2 ACTIVATION CONTRACT is unchanged: R2 still
+		// activates only at R1's `allowance_exhausted` branch. This is not a
+		// change to that contract — it is the reachability helper refusing to
+		// claim an authority that the contract does not grant.
 		if (this.state.status !== "running") {
+			return false;
+		}
+		// (i) The R1 policy must be present AND enabled for the seam to
+		// exist at all.
+		const r1Policy = this.config.executionStagnationPolicy;
+		if (!r1Policy || r1Policy.enabled === false) {
+			return false;
+		}
+		// (ii) The corrective-instruction allowance must be SPENT. While it
+		// remains, R1 is still the live authority and the R1 branch above
+		// has already decided whether a further parent request is
+		// authorized.
+		//
+		// Once the allowance is spent, the NEXT unproductive round reaches
+		// the threshold and the seam fires. The streak itself needs no
+		// condition here: it is a CONSECUTIVE counter that a further
+		// unproductive round raises to the threshold, so the seam is always
+		// reachable once the allowance is spent.
+		const r1MaxInstructions = Math.max(0, r1Policy.maxRecoveryInstructions);
+		if (this.executionStagnation.instructionsInjected < r1MaxInstructions) {
 			return false;
 		}
 		const maxActivations = Math.max(
@@ -6028,8 +6203,10 @@ export class AgentRuntime {
 			signal: this.abortController?.signal,
 			options: mergeModelOptions(this.config.modelOptions, {
 				metadata: modelRequestMetadata,
-				// ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01:
-				// the ONE-SHOT recovery-only generation override.
+				// ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01
+				// (FINAL-BOUNDED-CORRECTION-01).
+				//
+				// The ONE-SHOT recovery-only generation override.
 				//
 				// It is attached HERE — the ONE place where a model request is
 				// created — so it applies to exactly ONE logical agent
@@ -6045,6 +6222,22 @@ export class AgentRuntime {
 					: {}),
 			}),
 		};
+
+		// ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01
+		// (FINAL-BOUNDED-CORRECTION-01).
+		//
+		// THE ATTRIBUTION ANCHOR.
+		//
+		// The request that is about to be dispatched is governed by the
+		// objective that is active NOW — or by NO objective when the request is
+		// a parent request. This is recorded HERE, at the ONE place where a
+		// model request is created, so the round's later accounting can bind
+		// the completed round to the objective that actually governed it.
+		//
+		// Without this anchor, an objective activated on the SAME accounting
+		// boundary would inherit the triggering parent response as one of its
+		// own execution rounds.
+		this.inFlightBoundedObjective = this.activeBoundedObjective;
 
 		const startedAt = Date.now();
 
