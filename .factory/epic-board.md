@@ -1,3 +1,136 @@
+# ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 — GO_CMP09_INTEGRATED_AUTHORITY_CLOSURE — 2026-11-26
+
+```text
+ACT_ID:       ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01
+TYPE:         bounded integration and authority closure (one cycle)
+VERDICT:      GO_CMP09_INTEGRATED_AUTHORITY_CLOSURE
+EPIC:         CMP-09
+DESTINATION_ENTRY_HEAD: da022fe447b9210ff23d39e5b4d1a61d117e3583
+SOURCE_HEAD:  e8584398f3f3386332beb3d31cc083f0a77bda1a
+MERGE_BASE:   02274b4cd363fea42579fcb8fa304c2535084e85
+MERGED_SOURCE_HEAD: e8584398f3f3386332beb3d31cc083f0a77bda1a
+INTEGRATED_HEAD: df131c70dac90a75a809b714524bff3c9be43ad8
+FINAL_HEAD:   6c712f818cf11c2a6050c820411b9165e764c13f
+BRANCH:       main
+```
+
+**THE INTEGRATION PRESERVED BOTH ANCESTRIES.** The destination's
+replay-eligibility authority (`da022fe44`) and the source's
+usage-normalization plus retry-expenditure workstream (`97471773c`,
+`e8584398f`) were merged with `--no-ff`. Two conflicts were resolved
+individually — never with a blanket ours/theirs: the shared
+`request-budget.ts` kept the DESTINATION's single shared
+replay-eligibility authority (the SOURCE's local copy would have
+reintroduced a second implementation), and the epic board kept BOTH
+workstreams' load-bearing findings.
+
+**A1 — THE EFFECTIVE TRANSPORT AUTHORITY (REPAIRED).** The predecessor
+returned the provider client and the model's per-model protocol as two
+SEPARATE facts and let the consumer decide; the consumer consulted the
+provider client FIRST and returned, so the per-model protocol was
+UNREACHABLE. The reproduction showed `opencode-go` + a model declaring
+`apiProtocol: "anthropic"` classified as `false` while the REAL dispatch
+(`resolveModelProviderKind`) ran the ANTHROPIC serializer — a budget
+under-count. The resolver now establishes the EFFECTIVE TRANSPORT by
+consuming the SAME routing facts and the SAME selection rule the dispatch
+uses (`routing.modelApiProtocol` plus the protocol vocabulary). All nine
+qualified routes now MATCH the real dispatch.
+
+**A2 — ONE EFFECTIVE DESTINATION AUTHORITY (REPAIRED).** The three
+consumers resolved the destination separately and NONE passed the API
+LINE, so a route selected by API line (MiniMax's `china` and
+`international` endpoints are different HOSTS, and therefore different
+trust domains) resolved to the WRONG destination. One resolver now
+produces the destination authority from the route facts, and the
+`AgentRuntime` resolves it at the REQUEST boundary rather than at
+CONSTRUCTION time.
+
+**A3 — INDEPENDENT WIRE/BUDGET QUALIFICATION (REPAIRED).** The wire
+branch of the witness was pre-filtered by the very exclusion it claimed to
+prove necessary. The wire now receives the RAW projection, so only the
+wire's own gate can remove a block; the necessity controls were added and
+the budget-exclusion control now produces the EXPECTED DIVERGENCE. The
+wire gate DELEGATES to the shared replay-eligibility authority instead of
+carrying a local copy of the policy — the shared module's own docstring
+had claimed that delegation, and the code did not implement it.
+
+**A4 — PROVIDER USAGE NORMALIZATION (REPAIRED).** An attempt's absent
+output breakdown means its reasoning is UNKNOWN, not zero. The predecessor
+summed it as zero and reported a fabricated AND internally inconsistent
+partition (`text=300`, `reasoning=1500`, where 300+1500 != 2700). The
+aggregate breakdown is now ALL-OR-NOTHING: it is emitted only when every
+attempt reports one, and the total is conserved exactly.
+
+**A5 — PHYSICAL-REQUEST OCCUPANCY (HARDENED).** A CONTRADICTORY record
+(`single` with `attemptCount = 3`) was normalized and accepted, and the
+runtime reads the `single` state as "the aggregate IS this request's
+occupancy" — the aggregate fallback the three-state architecture forbids.
+The reader now denies invalid records EXPLICITLY (present-but-invalid is
+an `unknown` denial, never an absence), and the runtime applies the same
+contract.
+
+**A6 — USAGE OBSERVABILITY SCOPE (REPAIRED).** The capture recorded the
+usage without a scope, so a TURN AGGREGATE could be read as one physical
+request's usage. The scope is now stated, derived from the OBSERVED
+attempt count. DEFAULT-OFF, exact opt-in, numeric allowlist, failure
+isolation and the sensitive-payload exclusion are all conserved.
+
+**A7 — THE REASONING-EFFORT CONTRACT (REPAIRED).** The 15 inherited
+`ai-sdk-reasoning.test.ts` failures were NOT a cross-workstream conflict:
+`portable-reasoning.ts` and the test file are BYTE-IDENTICAL on both
+branches. They were TWO defects: (a) a null-unsafe optional chain in the
+MiniMax native-option guard (`context?.provider.metadata` throws when the
+context carries no provider manifest), and (b) ONE obsolete expectation
+that encoded upstream `c3a405727`'s "portable reasoning off for all
+providers" contract after the fork had deliberately retained its provider
+gate — the accepted successor `b7e9bafdc` had already recorded that the
+assertion "was already stale against the fork's provider gate". Both are
+now corrected, and the MiniMax LOW effort with the 8192 generation limit
+is conserved.
+
+**THE SAP PROCESS-HYGIENE ROWS ARE AN ENVIRONMENT FAILURE, NOT A
+REGRESSION.** The merge changed ZERO files under
+`sdk/packages/llms/src/providers/vendors/`, and both rows PASS under
+Node. They fail under Bun because `AsyncLocalStorage.getStore()` does not
+propagate into the `newListener` callback during module evaluation under
+Bun — the exact limitation the production code already documents at
+`providers/vendors/community.ts` ("Where async context does not reach
+module evaluation (Bun), nothing is attributed and the handlers stay").
+
+**THE HISTORICAL ATTRIBUTION IS UNCHANGED.** The iteration-23 compaction
+remains `overflow_recovery_compaction`; the historical retry cardinality,
+the usage scope of the recorded `inputTokens` and the raw provider usage
+remain UNESTABLISHED; the historical retry causality remains
+HYPOTHESIS_ONLY. The accepted evidence establishes that retry expenditure
+COULD contaminate context calibration, that the contamination was
+reproduced, and that the corrected path separates the quantities. It does
+NOT establish the historical provider's actual prompt occupancy.
+
+**THE REMAINING OPERATIONAL SUCCESSOR.** The 43 failing `agents` tests and
+the 139 failing `core` tests are IDENTICAL, BY TEST IDENTITY, to the
+merge baseline — they are environment-bound (git, sandbox, port and
+filesystem fixtures) and are NOT owned by this ACT. The next bounded ACT
+owns the output-exhaustion recovery lifecycle; this ACT authorizes it and
+does not start it.
+
+```text
+INTEGRATION:             1 merge commit, 2 conflicts resolved individually
+ACT-OWNED CORRECTIONS:   1 commit (A1-A7), 15 files
+FOCUSED TESTS:           llms 1285 passed | shared 717 passed
+                          CMP-09 wire 11 | retry/occupancy 12
+                          CMP-07 8 | CMP-08 24 | R1/R2 22 | compat 32
+                          R2 observer 34 | usage observability 7
+                          reasoning-effort 33 (was 15 failing)
+BASELINE FAILURES:       SAP 2 rows (ENVIRONMENT_FAILURE, GREEN under Node)
+                          agents 43 (identical identities) | core 139 (identical identities)
+TYPECHECK:               shared/llms/agents CLEAN; core 45 -> 45, ZERO DELTA
+                          vscode check-types PASS
+SDK BUILD:               PASS
+BIOME:                   clean on every changed file
+INFERENCE REQUESTS:      0
+VSIX PACKAGED:           no
+```
+
 # ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (AMENDMENT-01) — GO_CMP09_REPLAY_ELIGIBILITY_AUTHORITY — 2026-11-26
 
 ```text
