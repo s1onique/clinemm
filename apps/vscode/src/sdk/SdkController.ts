@@ -4703,7 +4703,7 @@ export class Controller {
 			// wall-clock epoch. A legacy task with no record leaves the
 			// accounting absent (the UI renders "unavailable", never a
 			// fabricated zero).
-			this.restoreDurationAccounting(sessionId, historyItem)
+			this.restoreDurationAccountingSafely?.(sessionId, historyItem)
 			this.attachRecoveryTelemetrySubscription(sessionId)
 			// ACT-CLINEMM-ELM-ARCHITECTURE01-E2F-CANONICAL-RUNTIME-EVENT-SEAM01-F1:
 			// also attach the canonical runtime-event seam so the shadow
@@ -4923,7 +4923,7 @@ export class Controller {
 			// restart is NOT claimed — the restored accounting re-opens
 			// an interval in the recorded category from the CURRENT
 			// monotonic clock.
-			this.restoreDurationAccounting(sessionId, historyItem)
+			this.restoreDurationAccountingSafely?.(sessionId, historyItem)
 			// ACT-CLINEMM-RESUME-SUBSCRIPTION-PARITY01: attach the
 			// canonical runtime-event subscription and the recovery
 			// telemetry subscription on the resume seam so a resumed
@@ -6612,6 +6612,26 @@ export class Controller {
 	 * idempotent (the record REPLACES the totals), so a repeated
 	 * activation cannot double-count.
 	 */
+	/**
+	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01: the guarded
+	 * restore entry point.
+	 *
+	 * The restore is an OBSERVATION-side effect: it must never be able
+	 * to break task startup. The wrapper therefore swallows a missing
+	 * method (a partial controller harness) and any failure, so a
+	 * restore problem degrades to "no accounting restored" instead of
+	 * aborting the task.
+	 */
+	private restoreDurationAccountingSafely = (taskId: string, historyItem: HistoryItem | undefined): void => {
+		try {
+			this.restoreDurationAccounting(taskId, historyItem)
+		} catch (error) {
+			Logger.warn(
+				`[OBS05] could not restore the task duration accounting: ${error instanceof Error ? error.message : String(error)}`,
+			)
+		}
+	}
+
 	private restoreDurationAccounting(taskId: string, historyItem: HistoryItem | undefined): void {
 		const record = historyItem?.duration
 		if (!record) {
