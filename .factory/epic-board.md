@@ -103,6 +103,502 @@ CMP01_THROUGH_CMP08_CONSERVATION:   CONSERVED
 
 **A SUCCESSOR ACT IS NOT STARTED AUTOMATICALLY.**
 
+
+# ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 (AMENDMENT-02) — GO_R2_ISOLATED_BEHAVIORAL_DOGFOOD — 2026-11-25
+
+```text
+ACT_ID: ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-02
+TYPE: bounded runtime-seam correction (R2 false verification authority removed)
+VERDICT: GO_R2_ISOLATED_BEHAVIORAL_DOGFOOD
+SCOPE: R2 only. R3 identified as the extension point, NOT implemented.
+PREDECESSOR: 2c43074fb7d618eab8318e127ffd2bd8f1f528bb
+BRANCH: main
+EVIDENCE: docs/acts/ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01.md
+```
+
+**THE HALT WAS A FALSE VERIFICATION AUTHORITY.** The reviewer independently
+executed the PRODUCTION verification helper and reproduced it: with a gate of
+`{ toolName: "run_commands", commandSubstring: "check-value" }`, a
+successful receipt for `echo check-value` returned TRUE, and so did one for
+`CHECK-VALUE`. AMENDMENT-01's substring correlation was not executable
+verification — a command that merely MENTIONS the gate's name authorised
+objective completion.
+
+FALSE_VERIFICATION_DENIAL=PASS
+  The substring gate is DELETED, not weakened. `BoundedObjectiveVerificationGate`
+  and `isBoundedObjectiveGateSatisfied()` are removed from `@cline/shared`, and
+  the runtime has NO structural fallback. The AMENDMENT-01 helper was
+  re-executed against the production seam and reproduced the defect; the
+  replacement helper was executed against the same seam and resolves a mention
+  of the gate's name, an unrelated successful command, a failed gate and a
+  case-folded mention to `unverified`.
+
+TRUSTED_VERIFICATION_AUTHORITY=PASS
+  The HOST's `verifyObjective` verdict, and the host's alone. Absent, declining
+  (`undefined`) and throwing all resolve to `unverified`. The production host
+  was NOT required to invent a task-specific verification callback to make the
+  verdict green, and it supplies none today.
+
+UNVERIFIED_PROGRESS_DISPOSITION=PASS
+  Useful unverified progress is a legitimate recovery outcome and is reported
+  truthfully as a failed recovery outcome, never as verified completion. The
+  terminal-tool boundary now closes an active objective out too, so a run that
+  ends through the parent's completion tool no longer DISCARDS the objective's
+  disposition — a gap that silently consumed an activation allowance and
+  produced no machine-readable fact.
+
+ACTUAL_EXECUTABLE_EVIDENCE=PASS
+  The principal witness's test-local PASS string is replaced by a REAL
+  regression SCRIPT ON DISK that READS the disposable file and exits non-zero
+  when the value is wrong, run as a REAL SUBPROCESS. The exit status is the
+  verdict. The unrelated-command discriminator is in the principal witness:
+  a successful command that CARRIES the required executable's name does NOT
+  establish verified success.
+
+AUTOMATIC_PARENT_CONTINUATION=PASS
+  Verified and unverified objectives both return control to the parent
+  automatically, without operator intervention.
+
+PARENT_AUTHORITY_CONSERVATION=PASS
+  The parent's obligations, the completion contract, the tool policy, the
+  sandbox and the approval layer are unchanged. The objective remains a
+  runtime-owned request projection; model-produced fields grant no
+  permissions and the canonical transcript is not mutated.
+
+OBJECTIVE_SCOPE_ENFORCEMENT_LIMITS=STATED
+  `canonicalizeScopePath` is LEXICAL NORMALIZATION and is no longer described
+  as filesystem canonicalization: a SYMBOLIC LINK inside the authorised root
+  may resolve OUTSIDE it, and a non-existent path cannot be resolved against
+  the filesystem at all. The English prohibition/escalation vocabulary was NOT
+  extended. Unresolved scope is not represented as mechanically authorised.
+  Experimental qualification is restricted to a disposable, isolated workspace
+  with the existing tool restrictions.
+
+DOGFOOD_DEFAULT_OFF=PASS
+  The whole `boundedObjectivePolicy` key is absent unless the dogfood opt-in is
+  explicitly selected. The production-reachability bridge witness asserts that
+  an ordinary ACT session does NOT activate the R2 policy.
+
+SELECTION_ALLOWANCE_SEMANTICS=CORRECTED
+  The counter is RUN-SCOPED. The policy documentation, the runtime
+  documentation and the selection prompt now state that the WHOLE run makes
+  ONE selection inference with the experimental bound of 1 — not one per
+  activation, which the runtime never implemented.
+
+FOCUSED_GATE=PASS
+  Focused false-verification RED 3/10 against the AMENDMENT-01 substring gate
+  (`V1b`/`V1c`/`V4b`), GREEN 10/10. Principal executable recovery witness
+  GREEN 29/29 across 5 R2 files. R1 conservation controls GREEN 22/22.
+  Production-reachability bridge GREEN 5/5. `@cline/shared` package GREEN
+  682/682. `@cline/agents` full package 43 failed / 675 total against a
+  PRE-EXISTING baseline of 44 failed / 670 total — no regression, one
+  pre-existing failure fixed. `apps/vscode` C2.4-C bridge suite 20 failed /
+  333 total — IDENTICAL to the pre-existing baseline.
+
+ACT_OWNED_DIAGNOSTICS=NONE
+  Typechecks: `@cline/shared` and `@cline/agents` exit 0. Biome: no findings
+  on any of the 8 changed files. No paid inference. No full-suite reruns. No
+  new Factory documents. No R3 implementation.
+```
+
+**THE NEXT MEANINGFUL LEARNING EVENT IS ACTUAL BEHAVIOURAL RECOVERY.** R2
+AMENDMENT-01 alone introduced four test files totalling 1,508 lines of
+substantially duplicated scripted-model infrastructure. This amendment adds
+NO new test suite: it corrects the existing principal witness, adds ONE
+discriminator case to it, and removes the false authority. The qualification
+target is narrowed to isolated behavioural dogfood rather than unrestricted
+production readiness — deliberately, because the open question is whether
+bounded objective selection materially improves MiniMax's execution, and that
+is not answered by more synthetic qualification.
+
+
+```text
+ACT_ID: ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-01
+TYPE: bounded runtime-seam repair (R2 bounded-objective authorisation and verification)
+VERDICT: GO_R2_BOUNDED_OBJECTIVE_DOGFOOD
+SCOPE: R2 only. R3 identified as the extension point, NOT implemented.
+PREDECESSOR: 4c7d54c2230b8edf17cd098d4319fb7d86046bce
+BRANCH: main
+EVIDENCE: docs/acts/ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01.md
+```
+
+**THE HALT WAS AUTHORITY NOT CONSERVED.** The predecessor's architecture was
+accepted. The reviewer independently executed the PRODUCTION validator and
+reproduced SEVEN invalid acceptances. A model-selected objective was being
+treated as an AUTHORIZATION GRANT rather than as an UNTRUSTED PROPOSAL.
+
+**P0-1 — THE AUTHORISATION BOUNDARY IS NOW A CANONICAL AUTHORITY.**
+
+  - The scope check is no longer a LEXICAL PREFIX test. It is a CANONICAL
+    CONTAINMENT test: `.` and `..` segments are resolved, duplicate
+    separators collapse, and the canonical result must be the authorised
+    root itself or live inside it. `<root>/src/../tests/a.ts` therefore
+    canonicalises OUTSIDE the root and is rejected.
+  - A RELATIVE scope is rejected: it has no canonical meaning, and the
+    runtime never invents a base directory for it.
+  - An UNRESOLVED scope is rejected: a prose scope ("the entire
+    repository") never becomes an IMPLICITLY UNRESTRICTED scope.
+  - EVERY path the candidate names — in its mutation scope AND in its other
+    free-text fields — must be inside the authorised root. A candidate
+    cannot smuggle an out-of-scope path into its first step.
+  - Model-generated PROSE cannot expand parent authorisation. A candidate
+    that ASSERTS the negation of a parent constraint is rejected, including
+    through a shared artefact-class vocabulary ("rewrite the test suite"
+    against "Do not modify tests."), and a candidate that ISSUES an
+    instruction overriding the parent's authority ("ignore all parent
+    constraints") is refused outright.
+  - A READ-ONLY objective may not authorize a mutation.
+  - A MULTILINE field is rejected: the rendered dispatch is a line-oriented
+    template and a newline would break the render/parse round trip that
+    carries the objective's identity across compaction.
+  - Model-generated objective fields are NEVER promoted into independently
+    authoritative system instructions: the objective remains a runtime-owned
+    REQUEST PROJECTION on the privileged channel, and the canonical
+    transcript is not mutated.
+
+**P0-2 — THE VERIFICATION BOUNDARY NO LONGER ACCEPTS AN UNRELATED COMMAND.**
+
+  - The predecessor's fallback — "at least one command executed
+    successfully" — is REMOVED. It accepted an UNRELATED successful
+    command as proof that the objective's own condition had been met.
+  - The runtime now records STRUCTURED EXECUTION RECEIPTS (tool name,
+    command identity, outcome) and the verification requires a receipt
+    whose command CORRELATES with the HOST-DECLARED verification gate AND
+    whose outcome was SUCCESS. A successful edit is not sufficient; a
+    successful unrelated command is not sufficient; a correlated gate that
+    FAILED is a definitive negative.
+  - When the host declares NO gate and its `verifyObjective` callback
+    declines or THROWS, the objective is reported UNVERIFIED. The runtime
+    never manufactures a success.
+  - An active objective is now closed out at the run's TERMINAL boundary
+    with a truthful verdict, so a recovery that ends with the run produces
+    a machine-readable fact instead of disappearing.
+  - A completed objective does NOT automatically satisfy the parent's
+    obligations.
+
+**EXECUTION AUTHORISATION IS CONSERVED AT THE TOOL BOUNDARY.** While an
+objective is active, a tool call that would mutate a path OUTSIDE the
+objective's authorised scope is REFUSED before it reaches the approval
+chain and before the executor runs. The gate is deliberately narrow and
+honest: it applies to tool calls carrying an EXPLICIT path, the runtime
+never parses command text (the command-policy layer and the sandbox remain
+the authority for command contents), and an objective whose scope did NOT
+resolve has NO narrower scope to enforce — the parent's own authorisation
+remains the only authority in that case.
+
+**THE COMPACTION CONSERVATION IS EXERCISED THROUGH THE ACTUAL RUNTIME.** No
+canonical transcript objective carrier was manufactured. The objective
+survives the request-preparation/compaction transition because it is
+RUNTIME-OWNED STATE re-projected on every request, while the compaction
+replaces the request's MESSAGES. The same active objective remains
+effective after compaction; the recovery allowance is NOT replenished; the
+parent's authorisation remains intact; after the objective completes,
+subsequent requests no longer carry it as active authority; and a LATER
+compaction cannot resurrect a completed objective. No second persistent
+task lifecycle was introduced.
+
+**R2 REMAINS EXPLICITLY EXPERIMENTAL.** The predecessor enabled R2 for
+every ordinary ACT-mode production session. The whole
+`boundedObjectivePolicy` key is now ABSENT unless an EXPLICIT dogfood
+opt-in is selected (`CLINE_BOUNDED_OBJECTIVE_DOGFOOD=1`). With the key
+absent the runtime behaves EXACTLY as it did before R2 existed: no
+selection inference, no dispatch, no recovery, no accounting. The opt-in is
+an environment choice rather than a persisted setting, so it cannot be
+enabled by accident by a workspace or a project file.
+
+**THE RED/GREEN IS MEASURED AGAINST THE PRODUCTION IMPLEMENTATION.**
+
+  @cline/shared   RED: 7 of the reproduced invalid acceptances fail against
+                  the predecessor's validator. GREEN: 23/23 focused
+                  pure-contract tests pass (13 pre-existing + 10
+                  amendment regressions).
+  @cline/agents   RED: 5 of 6 objective-verification regressions fail
+                  against the predecessor's runtime; the adversarial
+                  witness fails (the unauthorised mutation was EXECUTED).
+                  GREEN: 24/24 focused R2 tests pass across 5 files (12
+                  pre-existing + 12 amendment witnesses: verification,
+                  adversarial, compaction, accounting).
+  @cline/core     typecheck delta ZERO against the baseline diagnostic set
+                  (45 observed = 45 baseline, deduped). The affected
+                  context/tools suites pass (44/44).
+  apps/vscode     the R2 production-reachability bridge witness passes
+                  (5/5) with the dogfood gate asserted in both
+                  directions: an ordinary ACT session does NOT activate
+                  R2, the explicit opt-in DOES.
+  Biome           clean on every changed file.
+
+NO paid inference. NO VSIX build. NO ordinary/full-suite reruns beyond the
+affected packages' own focused suites. NO Factory documentation campaign.
+NO new workflow framework. NO R3.
+
+**THE GO VERDICT DOES NOT CLAIM LIVE BEHAVIOURAL EFFECTIVENESS.** A
+synthetic witness does not establish that a live model WOULD select a
+useful objective, nor that a live failure recovers behaviourally. The
+verdict is a bounded dogfood authorisation for a mechanism whose two P0
+authority boundaries are now closed and mechanically witnessed.
+
+# ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — GO_R2_BOUNDED_OBJECTIVE_DOGFOOD — 2026-11-25
+
+```text
+ACT_ID: ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01
+TYPE: bounded runtime-seam prototype (R2 bounded-objective recovery)
+VERDICT: GO_R2_BOUNDED_OBJECTIVE_DOGFOOD
+SCOPE: R2 only. R3 identified as the extension point, NOT implemented.
+ENTRY_HEAD: b5bf8d34f89c23e52942cbed9ab8dc4669e0b4ec
+BRANCH: main
+EVIDENCE: docs/acts/ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01.md
+```
+
+**R2 IS THE SECOND RECOVERY STAGE.** R1 injects an ADVISORY corrective
+instruction when a trajectory stalls. The frozen session `1795612311440_l9mhl`
+received BOTH R1 instructions at the actual SDK prompts and remained stalled:
+36 model responses, 36 tool calls, ZERO native edits, ~8m 42s elapsed,
+~1.31M cumulative reported input tokens, 162,338 recorded reasoning
+characters, no net repository change. The Linux amd64 Nim compiler was
+successfully installed and no Nim lifecycle implementation was started.
+
+An advisory asks the model to behave differently. It does not change WHAT
+the model is asked to do. R2 changes what the model is asked to do.
+
+**THE PRODUCTION MECHANISM.** When the R1 corrective-instruction allowance
+is exhausted AND the trajectory is still unproductive, the runtime:
+
+  1. SELECTS one bounded, independently verifiable objective derived from
+     the parent task, through the SAME authorized provider and model, with
+     ONE inference that carries no tools and no provider-owned reasoning;
+  2. VALIDATES it against the parent's authority;
+  3. MAKES it the current execution target of the next dispatched request;
+  4. VERIFIES it from the observable tool outcomes of the objective's own
+     execution;
+  5. RETURNS execution to the parent task automatically.
+
+The parent task remains authoritative throughout. The parent's terminal
+completion tool is never invoked on the objective's behalf, and the parent's
+outstanding obligations are preserved.
+
+**THE DISPATCH CHANNEL IS WHAT MAKES R2 DIFFERENT FROM R1.** R2 projects
+the selected objective onto the DISPATCHED REQUEST'S PRIVILEGED CHANNEL
+(`request.systemPrompt`) — the same channel the host's trusted
+runtime-control continuation uses — NOT onto the advisory message channel
+R1 uses, and NOT as another message appended to the conversation. Three
+production facts constrained this and were honoured:
+
+  - `AgentMessage.role: "system"` is NOT usable in the transcript: the
+    AI SDK v7 transport rejects `role:"system"` entries in `messages[]`.
+    The established production pattern persists runtime control as
+    `role: "user"` and composes the privileged content onto the top-level
+    instructions channel at model-request build time. R2 follows it.
+  - The objective is therefore a runtime-owned REQUEST PROJECTION, not a
+    transcript mutation: the canonical conversation, the parent's messages
+    and the signed reasoning continuity are untouched.
+  - The compaction summary is a LOSSY PROJECTION of the transcript, so the
+    objective's IDENTITY is carried forward by the task-contract conservation
+    path in its OWN runtime-authority section, recognised by the EXACT
+    template shape its producer renders.
+
+**THE PRODUCTION SEAM.** The existing `AgentRuntime` iteration boundary.
+R2 rides the existing R1 `allowance_exhausted` branch of
+`evaluateExecutionStagnation()` — the branch that was previously a no-op.
+R1's thresholds and allowance are UNCHANGED. The runtime remains the SINGLE
+lifecycle authority: it owns the accounting, the selection, the dispatch,
+the verification and the automatic return. No second task lifecycle, no
+parallel supervisor, no provider switch, no recursive planner.
+
+**THE EXISTING INFRASTRUCTURE THAT WAS REUSED.** The canonical transcript,
+the model invocation seam, the usage accounting, the completion obligation,
+the run-scoped accounting and the task-contract conservation path. The
+multi-agent team tools (`team_task`, `spawn_agent`) were deliberately NOT
+reused: they are a second task lifecycle and are explicitly out of scope.
+
+**THE VALIDATOR IS THE AUTHORISATION BOUNDARY.** A candidate is REJECTED
+when it is malformed, names a DIFFERENT parent, proposes a mutation scope
+OUTSIDE the parent's authorised paths, contradicts an applicable parent
+constraint, cites evidence that was never established, or claims that an
+outstanding obligation is already satisfied. A rejection NEVER starts
+another selection attempt: the activation's inference allowance is already
+spent. The scope check is a PATH CONTAINMENT test against the paths the
+USER named — it never inspects command text and never guesses at intent.
+
+**VERIFICATION IS OBSERVABLE, NOT ASSERTED.** A model statement that the
+objective is complete is NOT sufficient. The host may supply a more precise
+judgement through the optional `verifyObjective` hook; the runtime's own
+structural check requires a SUCCESSFULLY EXECUTED COMMAND. A successful
+native edit is deliberately NOT sufficient: an edit only shows that a file
+changed, never that the change is correct.
+
+**THE ACCOUNTING IS RUN-SCOPED.** At most one selection inference per
+activation, two activations per parent run and eight rounds per objective
+— EXPERIMENTAL bounds for this implementation, not permanent production
+defaults. The activation is consumed when ATTEMPTED: a failed selection, a
+failed execution and a failed verification all consume the corresponding
+allowance. Compaction never replenishes it, and R2 never reactivates
+recursively from within its own objective. An unsuccessful recovery
+produces an EXPLICIT internal outcome suitable for a future R3 consumer;
+success is never manufactured and no new user-waiting state is introduced.
+
+**QUALIFICATION — THE PRINCIPAL DETERMINISTIC WITNESS.** Driven through the
+REAL `AgentRuntime` with a scripted model and a DISPOSABLE WORKSPACE on
+disk. Evidence class: SYNTHETIC_REAL_PRODUCTION_SEAM.
+
+  PHASE A — STAGNATION: nine unproductive inspection rounds; the R1
+  instructions ARE delivered and do NOT change the model's behaviour.
+
+  PHASE B — R2 EXECUTION: R1's allowance exhaustion activates R2
+  AUTOMATICALLY; the scripted model chooses the implementation action ONLY
+  AFTER it observes the active objective in the dispatched request; the real
+  tool path changes a disposable file ON DISK; the real executable check
+  reads the file back and reports PASS only when the repaired value is
+  really there.
+
+  PHASE C — PARENT CONTINUATION: the objective completes and the runtime
+  returns to the parent AUTOMATICALLY; a SECOND outstanding parent
+  obligation remains; the premature completion is REJECTED by the EXISTING
+  completion contract (the guard's obligation is re-injected and the run
+  continues); after the obligation is satisfied, ordinary completion
+  succeeds.
+
+  NO operator intervention occurs at any point.
+
+**THE FROZEN-SESSION DISCRIMINATOR.** Session `1795612311440_l9mhl` is
+OPERATOR-LOCAL and PRIVATE and is NEVER committed; only its aggregate,
+non-content shape is recorded as a frozen witness. The replay is processed
+PROGRAMMATICALLY using ONLY the observations available at each historical
+decision point. It establishes WHEN R2 would have become eligible (the
+first round at which the R1 allowance was exhausted AND the trajectory was
+still unproductive — not the last round of the trajectory), WHICH facts were
+available, WHICH obligations remained, THAT NO existing structured
+obligation could supply a bounded objective (the runtime's structured
+obligations name the parent's completion duty, not a bounded step toward
+it), and THAT exactly ONE bounded selection inference would have been
+required. The illustrative Basalt objective is an EXAMPLE of a well-formed
+bounded objective against the frozen evidence; it is NOT hardcoded in
+production code and is NOT a claim that the model would select it.
+
+**PRODUCTION REACHABILITY.** The REAL chain end to end: the VS Code
+`buildSessionConfig({ mode })` producer, the `LocalRuntimeHost` AgentConfig
+forwarding seam, and the REAL `AgentRuntime` with the PRODUCED policy. ACT
+mode activates the INTENDED policy; PLAN mode does NOT activate it (the
+whole block is ABSENT); the policy REACHES THE ACTUAL RUNTIME; and the R1
+allowance exhaustion activates R2 with the NEXT dispatched request carrying
+the ACTIVE bounded objective. No settings UI, no new persistence.
+
+**VERIFICATION.**
+
+  @cline/shared   typecheck clean; 36 focused tests pass (13 R2 pure
+                  contract, 6 R2 frozen-session, 17 R1).
+  @cline/agents   typecheck clean; focused suites 29/29 pass (12 R2, 11 R1,
+                  6 R1 progress controls). Full suite: 43 failed / 615
+                  passed versus a 43 failed / 603 passed baseline — ZERO new
+                  failures, +12 net passed.
+  @cline/core     typecheck delta ZERO against the baseline diagnostic set
+                  (45 observed = 45 baseline). The affected context/tools
+                  suites show 4 failed / 1836 passed; the 4 failures are the
+                  IDENTICAL pre-existing environment artifacts (skill-trigger
+                  eval ordering, bash startup env).
+  apps/vscode     typecheck clean; bridge typecheck adds ZERO new
+                  diagnostics against the frozen baseline (5 observed = 5
+                  baseline; the 5 are pre-existing from concurrent work);
+                  8 focused bridge tests pass (4 R1 + 4 R2).
+  Biome           clean on every changed file.
+
+NO paid inference. NO VSIX build. NO ordinary/full-suite reruns beyond the
+affected packages' own suites. NO Factory documentation campaign.
+
+**SCOPE.** R2 only. NOT implemented: R3 fresh execution episodes, provider
+or model escalation, multi-agent orchestration, a new persistent task
+database, a generic DAG scheduler, a semantic progress evaluator, a
+general-purpose planning framework, PCK redesign, overflow-recovery
+compaction repair, provider cancellation propagation, global token-budget
+redesign, changes to R1 thresholds, and additional static prompt tuning.
+
+**THE GO VERDICT DOES NOT CLAIM LIVE BEHAVIOURAL EFFECTIVENESS.** A
+synthetic witness does not establish that a live model WOULD select a
+useful objective for the frozen session, nor that the frozen failure
+recovers behaviourally. The offline replay establishes eligibility and
+available evidence, not behavioural recovery. The live behavioural claim
+remains open, exactly as it did for R1.
+
+# ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 — GO_AUTONOMOUS_RECOVERY_R1_DOGFOOD — 2026-11-25
+
+```text
+ACT_ID: ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01
+TYPE: bounded runtime-seam prototype (R1 autonomous execution recovery)
+VERDICT: GO_AUTONOMOUS_RECOVERY_R1_DOGFOOD
+SCOPE: R1 only. R2 and R3 identified as extension points, NOT implemented.
+ENTRY_HEAD: 5c0ffe2ef3d5ea72bff8bce6cbd9747b65e1c614
+BRANCH: main
+EVIDENCE: docs/acts/ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01.md
+```
+
+**The production intervention boundary is the `AgentRuntime` iteration
+boundary** (`sdk/packages/agents/src/agent-runtime.ts`). It is the only
+place that owns the iteration boundary, the tool results, the runtime-owned
+corrective messages, the completion obligation, and the run-scoped
+accounting simultaneously, so the runtime remains the SINGLE lifecycle
+authority. No parallel supervisor, no provider switching, no generic
+workflow engine.
+
+**The frozen failure witness — session `1795606095016_glc2s`, processed
+programmatically.** The stall phase contains 34 model responses and 36 tool
+calls with ZERO native editor calls. The decisive Gemini terminal-status
+probe ran at round 26; the trajectory then returned to reconnaissance.
+
+**The earliest defensible recovery trigger is round 5** — the first round at
+which five consecutive unproductive rounds have been observed. The decision
+uses only information available at that point; a future observation can
+never reclassify an earlier round. The trigger fires 21 rounds BEFORE the
+decisive probe, so it does not depend on the probe having happened.
+
+**The mechanism.** A configurable streak of unproductive execution rounds
+triggers ONE runtime-owned corrective instruction, injected through the
+EXISTING `addUserReminderMessage()` seam before the next model request.
+The instruction states observable execution facts only (round count, tool
+names, edit attempts) and ASKS for the next smallest useful experiment or
+edit. It fabricates no tool result, impersonates no user, and touches no
+provider-owned reasoning block. Execution continues AUTOMATICALLY — no user
+confirmation.
+
+**The host supplies the tool classification.** The runtime cannot tell a
+read-only shell inspection from a real execution without reading command
+text, and command-text string matching is what this repository forbids, so
+the host (which owns the command-policy layer) supplies that judgement
+through `ExecutionStagnationPolicy.classifyToolCall`. The runtime never
+guesses.
+
+**Conservation.** The parent task and completion obligations, the canonical
+history, signed reasoning continuity, the sandbox and tool authority, the
+provider and model configuration, and the consumed run-scoped accounting are
+all conserved. Recovery never manufactures task completion and never grants
+additional permissions. Compaction does not reset the recovery accounting:
+the accounting lives on the runtime instance and compaction replaces the
+PROVIDER REQUEST messages, never the runtime's canonical transcript or its
+counters.
+
+**Qualification.** Nine required controls, witnessed through the REAL
+`AgentRuntime` with a synthetic deterministic model — no wall-clock time, no
+sleep, no network, no paid inference. A surgical RED (disabling the single
+runtime intervention call) fails exactly the 5 recovery-specific witnesses
+while the 6 conservation witnesses still pass, so the tests genuinely detect
+the mechanism. The OFFLINE REPLAY of the frozen session reports that the
+detector WOULD have intervened at round 5; an offline replay does NOT prove
+behavioral recovery, and the ACT does not claim it does.
+
+**Suite results.** `@cline/shared` 649 passed / 6 skipped / 0 failed
+(+15 new). `@cline/agents` 43 failed / 597 passed versus a 48 failed / 592
+passed baseline — the pre-existing failure population SHRANK by 5 and no
+suite gained a failure. `@cline/core` 113 failed / 6241 passed versus a
+113 failed / 6230 passed baseline — +11 new passed, 0 new failures.
+`apps/vscode` typecheck clean. Biome clean on every changed file (the two
+remaining `types.ts` findings are the pre-existing baseline findings).
+
+**R2 / R3 extension points, NOT implemented.** R2 rides the same runtime
+method with a wider host-supplied progress hook. R3 rides the existing
+`"allowance_exhausted"` branch with one more optional host-supplied
+callback. Neither needs a new lifecycle authority.
+# ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01-CORRECTION02 — PASS_SECURITY_BOUNDARY_STRUCTURAL — 2026-11-23
+
+<!-- ===== SOURCE-WORKSTREAM SIDE (preserved verbatim) ===== -->
+
 # ACT-CLINEMM-CMP05-TERMINAL-NEGATIVE-SIGNAL-PRECEDENCE-01 — GO_CMP05_TERMINAL_NEGATIVE_SIGNAL_PRECEDENCE — 2026-11-25
 
 ```text
@@ -18184,8 +18680,7 @@ Reviewer caught that the ROUND 3b artifact's hand-authored header claimed `EXIT:
 ROUND 3c fix (runner-level only, NOT a test-logic or authority change): re-ran the same 13-file `vmThreads` gate through a shell wrapper that writes the vitest stdout AND the actual process status (`GATE-exit=0`) AND the error-scan result (`ERROR_SCAN_RC=1`, `ERROR_SCAN_MATCHES=0`) into the SAME raw artifact as captured lines. The artifact body of `06-bnca-and-conservation-clean-vmthreads.txt` lines 32-41 now contains the CAPTURED-RUNNER-STATUS block:
 
 ```
-================================================================================
-CAPTURED-RUNNER-STATUS (durably bound to this raw artifact)
+
 ================================================================================
 GATE-exit=0
 EXIT_TS=2026-09-25T23:26:55Z
@@ -42118,6 +42613,375 @@ histories or model responses (everything under the gitignored `tmp/` tree) |
 VSIX packaging NOT EXECUTED | installed-live NOT EXECUTED | the whole SDK
 regression suite NOT RUN (no production dependency changed, as the ACT
 requires) | git diff --check CLEAN
+
+# ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION02-AMENDMENT02 — GO_PROVIDER_REASONING_REPAIR_INTEGRATION — 2026-11-25
+
+```text
+ACT_ID: ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION02-AMENDMENT02
+TYPE: bounded authority-construction correction (one P0 fail-open + one P0 credential-exposure)
+VERDICT: GO_PROVIDER_REASONING_REPAIR_INTEGRATION
+ENTRY_HEAD: c5ed60513ce8d0b2a38ec9b4372e5f70c2668576
+BRANCH: act/provider-reasoning-continuity-p0-01
+EVIDENCE: .factory/evidence/ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01/
+  04-exit-report.md
+  06-correction02-origin-authority.md
+  07-correction02-amendment-02-authority.md
+```
+
+**THE TWO AMENDMENT DEFECTS, REPRODUCED ON THE PREDECESSOR, THEN CLOSED.**
+
+```text
+UNRESOLVED_ROUTE_AUTHORITY=NONE
+  The predecessor returned the NONEMPTY SENTINEL "<providerId>\u0000" for an
+  unresolved route, so two DIFFERENT unresolved routes compared EQUAL and the
+  replay predicate granted authority across a boundary that was never
+  established. Absence is now EXPLICIT (the authority is `string | undefined`),
+  so two unresolved routes have NOTHING to compare.
+  RED: expected 'unresolved-route\u0000' to be undefined
+       expected 'unresolved-a\u0000' to be undefined
+
+MALFORMED_ROUTE_AUTHORITY=NONE
+  An invalid endpoint is an unresolved route, not a route.
+  RED: expected 'anthropic\u0000not a url' to be undefined
+
+PERSISTED_AUTHORITY_CREDENTIAL_EXCLUSION=PASS
+  The predecessor persisted the COMPLETE configured base URL, so a
+  credential-bearing URL reached the PERSISTED production content block:
+    "originAuthority": "anthropic\u0000https://user:supersecret@example.com/v1"
+  The base URL is now parsed and INSPECTED; user information, a query string
+  and a fragment each produce NO authority, so no credential-bearing URL is
+  persisted. The PATH is retained in full (it is route identity under this
+  repository's configuration contract), which is what keeps a same-host /
+  different-path pair two DISTINCT routes.
+  RED: expected '[{"id":"msg__z_Uph4i",…' not to contain
+       'SYNTHETIC-CREDENTIAL-a1b2c3'
+
+SAME_HOST_DIFFERENT_PATH_ISOLATION=PASS
+  O2b asserts the ACTUAL requested path ("/tenant-b/v1/messages") and the
+  forbidden-payload exclusion on EVERY destination attempt.
+
+ORIGIN_BOOKKEEPING_WIRE_EXCLUSION=PASS
+  The obsolete "__clineReasoningOrigin" assertion was replaced with an
+  assertion against the ACTUAL "originAuthority" field.
+
+SWITCH_BACK_NONVACUOUS=PASS
+  The compatible switch-back request collection is asserted non-empty before
+  it is looped over.
+
+COMPATIBLE_ROUTE_REPLAY=PASS
+  Ordinary credential-free MiniMax and Anthropic replay is byte-for-byte
+  unchanged; the normal default-provider resolution is not regressed.
+
+FOCUSED_GATE=PASS
+  agents 15/15, core 47/47, llms 499/514 (the 15 failures are the IDENTICAL
+  pre-existing resolvePortableReasoning baseline, verified by re-running on
+  the predecessor).
+
+ACT_OWNED_DIAGNOSTICS=NONE
+  The core ordinary gate's one added identity is a LOAD-SENSITIVE
+  plugin-worker TIMEOUT test; it fails IDENTICALLY on the predecessor when
+  run in isolation. Typechecks: llms/shared/agents exit 0; core has ZERO new
+  diagnostics (byte-identical sorted diagnostic set). Biome: no findings.
+
+SECRET_SCANNING=NOT_EXECUTED
+  The gitleaks binary is not installed in this environment. The explicit
+  NOT_EXECUTED disposition is retained for the integration environment.
+```
+
+**SCOPE.** The production correction is two files:
+`sdk/packages/llms/src/providers/ai-sdk.ts` (the authority construction and
+the destination-authority value type) and
+`sdk/packages/shared/src/llms/messages.ts` (a documentation comment).
+`agent-message-codec.ts` and `agent-runtime.ts` are UNCHANGED by this
+amendment. AgentRuntime block accumulation, reasoning effort, the model
+catalog, compaction and PCK, the provider registry architecture and
+redacted-thinking ingestion are all UNTOUCHED. The redacted-thinking
+successor remains open. The authority establishes ROUTE identity only; it
+does not claim universal account, model or conversation compatibility.
+
+# ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01 — GO_EXECUTION_PROGRESS_CLASSIFIER_DOGFOOD — 2026-11-25
+
+```text
+ACT_ID: ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01
+TYPE: bounded implementation (execution-progress classifier correction)
+VERDICT: GO_EXECUTION_PROGRESS_CLASSIFIER_DOGFOOD
+ENTRY_HEAD: 788e221979e96463275386c8f102e516f61d7966
+BRANCH: main
+PREDECESSOR_EVIDENCE: ACT-CLINEMM-AUTONOMOUS-RECOVERY-TRIGGER-FORENSICS-01
+EVIDENCE: .factory/evidence/ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01/
+  CAUSAL-SUMMARY.md
+  counterfactual-ledger.1795612311440_l9mhl.json
+  counterfactual-ledger.1795619309746_8h3tn.json
+  round-ledger.json
+  replay/replay.ts
+SCOPE: classifier + execution-outcome authority only. R2 NOT redesigned.
+  R3 NOT implemented. Compaction UNCHANGED. PLAN UNCHANGED.
+  R2 default OFF UNCHANGED. Command authorization / sandbox UNCHANGED.
+```
+
+**THE REPRODUCED DEFECT WAS THE CLASSIFIER'S OPTIMISTIC DEFAULT, NOT SSH.**
+The predecessor's decision shape was
+`isInspectionCommandInput(input) ? "inspected" : "executed"` — anything the
+classifier failed to recognise as an inspection became EXECUTION. The
+independent review reproduced SEVEN counterexamples against the production
+classifier; SSH was only ONE manifestation of that general optimism.
+
+```text
+SSH_INSPECTION_CLASSIFICATION=REPAIRED
+  ssh host 'grep -n foo bar' : executed -> inspected
+  The REMOTE PAYLOAD is classified, not the local first token. OpenSSH
+  separates the destination from the command sent for remote execution, so
+  ssh is a TRANSPORT WRAPPER. Options are recognised (an option's VALUE is
+  never mistaken for the destination), the destination is the first
+  non-option argument, and the payload is the remainder. A dynamically
+  constructed payload (here document, command substitution, backtick) yields
+  an HONEST UNCERTAINTY disposition.
+
+SHELL_ASSIGNMENT_CONSERVATION=REPAIRED
+  L=/tmp; grep -n foo bar : executed -> inspected
+  L=/tmp grep -n foo bar  : executed -> inspected
+  export X=1; ls          : executed -> inspected
+  SETUP is not work. A bare assignment, an export, an unset and a `cd` are
+  setup segments; an assignment PREFIX does not change the command's
+  classification.
+
+MUTATION_CLASSIFICATION=REPAIRED
+  git tag new-tag  : inspected -> executed  (the CREATING form mutates)
+  git status > file: inspected -> executed  (a redirect to a real file
+                                            writes; the command guard is
+                                            the authority)
+  A recognised inspection subcommand carrying a mutating construct is an
+  EXECUTION. `sed -i`, `find -delete` and remote mutation stay execution.
+
+EXECUTION_FAILURE_AUTHORITY=REPAIRED
+  { output: [{ exitCode: 1, ok: true }], isError: false }
+    host verdict    : undefined -> "failed"
+    runtime verdict : executed  -> "failed"
+  The host used to DECLINE a failed observation, and the runtime's fallback
+  then re-classified the SAME call as an execution because it checked only
+  the dispatch `isError` flag. The host's authoritative negative observation
+  DISAPPEARED at that boundary. The failure is now reported EXPLICITLY.
+
+MISSING_RESULT_DISPOSITION=REPAIRED
+  An observation with NO output is "failed", never a successful execution.
+  DOCUMENTED RESIDUAL LIMITATION: a plain-text observation (e.g.
+  { output: "ok" }) carries no explicit execution outcome and cannot be
+  distinguished from a completed command whose outcome was never reported;
+  it is therefore treated as a COMPLETED observation, classified by the
+  command's shape. Stated as a limitation, not as a claim of complete
+  outcome detection.
+
+UNKNOWN_COMMAND_DISPOSITION=DOCUMENTED
+  An unrecognised program is still reported as an execution, because the
+  runtime must not declare a stall on the basis of a command whose semantics
+  were never established. What changed is that the three-way classification
+  keeps `unknown` DISTINCT from a recognised execution internally; the
+  conservative reporting is now a documented policy rather than an artefact
+  of the two-way shape. No shell interpreter was introduced.
+
+LEGITIMATE_PROGRESS_CONSERVATION=PASS
+  220 of Session B's 232 rounds are classified IDENTICALLY by the predecessor
+  and the repaired classifier; Session A conserves 34 of 34. The principal
+  production runtime witness's CONSERVATION control: a genuine remote build
+  resets the streak, so a build+inspection trajectory injects NO corrective
+  instruction. A failed executable experiment is recorded as evidence, is
+  NOT a stall, and does NOT reset the streak.
+
+BACKGROUND_WAIT_CONSERVATION=PASS
+  A STILL RUNNING observation is still a DECLINE, so the runtime's `awaiting`
+  reading governs. The existing R1 conservation suite (11/11) and the R2
+  bounded-objective suites (35/35) are GREEN.
+
+HISTORICAL_REPLAY_FIDELITY=REPAIRED
+  The predecessor replay's result-collection loop broke out as soon as it
+  found ANY later tool-calling assistant message ANYWHERE in the run,
+  including messages BEHIND the scan cursor, truncating the collection after
+  the first following user message. The SUCCESSOR artifact scans to the
+  ACTUAL next round boundary and collects BY TOOL-CALL IDENTITY; a missing
+  result is recorded as UNAVAILABLE_FROM_TRACE, never assumed successful.
+  Session A: 34 rounds, 0 missing. Session B: 232 rounds, 0 missing.
+  The predecessor's OBSERVED R1 injection identities are reproduced EXACTLY
+  (run 2 rounds 8 and 22; message indices 26 and 55; streak 5), matching
+  the transcript's own runtime notices at message indices 28 and 57.
+
+SESSION_A_COUNTERFACTUAL_ELIGIBILITY=HYPOTHESIS_ONLY
+  Repaired injections: run-2 round 8 (msg 26) and run-2 round 22 (msg 55).
+  allowance_exhausted NOT reached. The reviewer's reference discriminator
+  (rounds 8 / 13 / 18) was produced by hand-CHANGING nine rounds; the full
+  correction changes only what the production classifier now recognises.
+  The reference is a discriminator, not a mandatory result.
+
+SESSION_B_COUNTERFACTUAL_ELIGIBILITY=HYPOTHESIS_ONLY
+  12 rounds change executed -> inspected: message indices 36, 46, 60, 62,
+  64, 66, 68, 70, 76, 82, 162, 176. These are the `L=/nix/store/...` Nim
+  library reconnaissance rounds — the six consecutive rounds immediately
+  before the first successful edit (messages 60-70) are exactly the
+  sequence the review reported. Session B's R1 eligibility moves from NONE
+  to run-2 round 25 (msg 68). A second R1 eligibility and
+  allowance_exhausted are NOT reached.
+
+REVIEWER_CAUSAL_CORRECTION=CONFIRMED
+  The predecessor report's one-sentence summary reversed the session
+  difference. The corrected replay shows Session A's remote inspections are
+  already counted as inspections (its injections are UNCHANGED by the
+  repair), while Session B's six reconnaissance rounds before the first
+  edit WERE false productivity. Session B's initial reconnaissance was
+  underdetected exactly as the reviewer reported.
+
+R2_ENTRY_REACHABILITY=ESTABLISHED
+  The principal production runtime witness drives the REAL AgentRuntime with
+  the REAL production host classifier over a deterministic trajectory of
+  recognised remote source inspections: the predecessor misclassifies them,
+  the corrected classifier increments the streak, the EXISTING R1 allowance
+  is consumed (attempt 1/2 and attempt 2/2), and the EXISTING R2 entry
+  condition — the R1 `allowance_exhausted` branch — becomes REACHABLE. No
+  new recovery mechanism; the R1 threshold (5), the R1 allowance (2), the
+  R2 activation limits and the R2 selection limits are UNCHANGED.
+
+ACT_OWNED_DIAGNOSTICS=NONE
+  core typecheck: 45 diagnostics before AND after, byte-identical sorted
+  sets. shared and agents typecheck: 0. agents full suite: the identical
+  9 files / 43 tests failing before and after (pre-existing: abort-cause
+  retention, recovery qualification). core
+  bash.supervised.bash-startup-env.test.ts: 4 failures, reproduced on the
+  predecessor. Biome: no findings in the changed files. `bun run build:sdk`
+  succeeded.
+
+FINAL_HEAD: (this commit)
+TRACKED_DIRT: (none beyond this ACT's own files)
+```
+
+**THE PRODUCTION CORRECTION IS THREE FILES.**
+`sdk/packages/core/src/extensions/tools/execution-progress-classifier.ts`
+(three-way classification, setup/transport recognition, mutation detection,
+explicit `failed` verdict),
+`sdk/packages/shared/src/agents/execution-stagnation.ts` (the new `failed`
+round-productivity verdict) and
+`sdk/packages/agents/src/agent-runtime.ts` (the fallback no longer launders
+a failed or missing outcome into a productive execution).
+
+**THE GO VERDICT DOES NOT ESTABLISH LIVE BEHAVIORAL EFFECTIVENESS.** It
+authorises the next isolated R2 dogfood build. The R2 entry condition is
+reachable under the corrected classifier, but NEITHER replayed session
+reaches it, and no model behaviour was observed.
+
+
+# ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01 — AMENDMENT-01 — GO_EXECUTION_PROGRESS_CLASSIFIER_DOGFOOD — 2026-11-25
+
+```text
+ACT_ID: ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01
+TYPE: bounded implementation (AMENDMENT-01)
+VERDICT: GO_EXECUTION_PROGRESS_CLASSIFIER_DOGFOOD
+ENTRY_HEAD: 1708f1e8f34ec71b24a5b625b64a51a2a40c92f8
+PREDECESSOR: 1708f1e8f34ec71b24a5b625b64a51a2a40c92f8
+PREDECESSOR_EVIDENCE: ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01
+EVIDENCE: .factory/evidence/ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01/
+  CAUSAL-SUMMARY.amendment01.md
+  counterfactual-ledger.amendment01.json
+  round-ledger.amendment01.json
+  replay/replay-amendment01.ts
+  replay/final/**
+  replay/defective/**
+SCOPE: classifier only. R2 NOT redesigned. R3 NOT implemented.
+  Compaction UNCHANGED. PLAN UNCHANGED. R2 default OFF UNCHANGED.
+  Command authorization / sandbox UNCHANGED. Shared / agents / runtime
+  source UNCHANGED.
+```
+
+**THE SURVIVING DEFECT WAS THE DESCRIPTOR DUPLICATION, NOT SSH.** The
+reviewer reconstructed the exact corrected production classifier (Git blob
+`b8029cada039e371cdf2d0a2dc2b987dfc1926c4` — byte-identical to the
+predecessor HEAD's file) and executed the original Session A command inputs.
+All nine reconnaissance commands at transcript indices 29-45 remained
+classified as executed; removing the trailing `2>&1 | tail -N` suffix changed
+EIGHT of the nine to inspected.
+
+```text
+DESCRIPTOR_DUPLICATION=REPAIRED
+  grep foo bar 2>&1 | tail -10                       : executed -> inspected
+  grep foo bar >&2                                   : executed -> inspected
+  SSH_AUTH_SOCK=... ssh -o BatchMode=yes host '...' 2>&1 | tail -10
+                                                      : executed -> inspected
+  The `&` of a DESCRIPTOR DUPLICATION is a REDIRECTION, not a command
+  separator. The four `&` shapes are discriminated: `&&` (logical AND),
+  `&` (background), `&>` (output redirection) and `N>&M` / `>&M`
+  (duplication). Only the duplication stays inside the segment.
+  Actual output redirection to a workspace file, actual background
+  execution, `&&`/`||`/`;`/pipeline boundaries, quoted and escaped
+  separators, and remote build/installation/mutation classification are all
+  CONSERVED. The repair does not remove all ampersands, does not globally
+  strip redirections and does not introduce a shell interpreter.
+  The NINTH historical command (transcript index 37) carries a COMMAND
+  SUBSTITUTION and keeps the conservative UNKNOWN disposition.
+
+BOUNDED_MUTATION=REPAIRED
+  git tag -a new-tag -m msg : inspected -> executed
+  git tag -d new-tag        : inspected -> executed
+  mount /dev/sda /mnt       : inspected -> executed
+  cd /tmp > file            : inspected -> executed
+  export X=1 > file         : inspected -> executed
+  `git tag` is a LISTING only when it carries a listing flag; `mount` is a
+  listing only with no arguments; a SETUP form carrying an output
+  redirection is a MUTATION. The EXISTING command guard remains the
+  authority for "writes a file". Ordinary `git tag` listing and ordinary
+  environment setup are CONSERVED.
+
+MISSING_EXECUTION_OUTCOME=REPAIRED
+  output: null : executed -> failed
+  output: []   : executed -> failed
+  output: {}   : executed -> failed
+  The real production result contract was inspected: `CommandStatusOutput`
+  (`ok`, `state`, `exitCode`) and `ToolOperationResult[]` (`success`,
+  `result`, `error`). `{ ok: true }` ALONE does NOT establish a terminal
+  outcome — `ok` reports that the OBSERVATION was taken, not that the
+  COMMAND ran and succeeded. A terminal outcome is established by an explicit
+  `exitCode`, by the production `success` flag, or by a terminal `state`.
+  A legitimate background wait, explicit negative observations and the
+  documented plain-text legacy limitation are CONSERVED.
+```
+
+**THE ACTUAL R2 ENTRY WITNESS IS NOW ESTABLISHED.** The predecessor witness
+configured R1 ONLY and never observed R2's activation. The strengthened
+witness drives a SHORT trajectory of the HISTORICAL remote inspection shape
+— WITH the descriptor duplication — through the REAL `AgentRuntime` with R2
+CONFIGURED, reusing the EXISTING R2 scripted-model fixture, policy and
+selection-rejection control. It establishes: (1) the R1 allowance is
+consumed (exactly TWO corrective instructions); (2) the subsequent qualifying
+round reaches the EXISTING R2 entry branch (the R1 `allowance_exhausted`
+branch, the ONLY R2 entry point); (3) EXACTLY ONE selection inference
+executes; (4) NO additional selection allowance is manufactured. The RED
+drives the ACTUAL defective predecessor production classifier, frozen
+VERBATIM under
+`sdk/packages/core/src/extensions/tools/__fixtures__/defective-execution-progress-classifier.ts`
+— NO test-local predecessor whitelist was created. With the defective
+predecessor the witness FAILS; with the repaired classifier it PASSES.
+
+**THE HISTORICAL REPLAY WAS RUN ONCE, AGAINST THE FINAL CLASSIFIER.**
+Session A: 10 rounds changed (transcript message indices 29, 31, 33, 35, 39,
+41, 43, 45, 64, 66), all reconnaissance. First R1 eligibility at run 2,
+round 8, message index 26 (streak 5); second at run 2, round 22, message
+index 55 (streak 5); `allowance_exhausted` NOT reached; 34 of 34 rounds
+conserved. Session B: 2 rounds changed relative to the previous repaired
+classifier (message indices 11, 38 — the `2>/dev/null | head` form), 14
+cumulatively relative to the original predecessor classifier; first R1
+eligibility at run 2, round 25, message index 68 (streak 5); second NOT
+reached; `allowance_exhausted` NOT reached; 220 of 232 rounds conserved.
+Session B's 53 successful-edit rounds are classified IDENTICALLY by all three
+classifiers, and ZERO of the changed rounds carried a successful edit: the
+genuine compiler installation, builds, tests and edits are CONSERVED.
+The historical replay does NOT reach R2 — reported as observed, not forced.
+Counterfactual behaviour remains HYPOTHESIS_ONLY.
+
+**THE GO VERDICT DOES NOT ESTABLISH LIVE BEHAVIORAL EFFECTIVENESS.** It
+authorises immediate isolated dogfood. The historical replay does not reach
+R2; the R2 entry witness is a deterministic trajectory that reports WHEN the
+detector WOULD intervene.
+
+FINAL_HEAD: (this commit)
+TRACKED_DIRT: (none beyond this ACT's own files)
+```
+
+<!-- ===== SOURCE-WORKSTREAM SIDE (preserved verbatim) ===== -->
 
 ---
 

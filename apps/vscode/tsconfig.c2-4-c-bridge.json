@@ -224,7 +224,14 @@
 		// adjudication continuity classes with the REAL VS Code host
 		// adapters. The bridge aliases resolve the production SDK classes
 		// for typecheck.
-		"src/sdk/__tests__/adjudication-vscode-activation01.runtime-chain.c24-c-bridge.test.ts"
+		"src/sdk/__tests__/adjudication-vscode-activation01.runtime-chain.c24-c-bridge.test.ts",
+		// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01: the production
+		// REACHABILITY witness for the R2 bounded-objective recovery.
+		// Drives the REAL `buildSessionConfig()` producer, the REAL
+		// `LocalRuntimeHost` AgentConfig forwarding seam, and the REAL
+		// `AgentRuntime` with the PRODUCED policy. The bridge aliases
+		// resolve the production SDK classes for typecheck.
+		"src/sdk/__tests__/autonomous-execution-recovery-r2.production-reachability02.c24-c-bridge.test.ts"
 	],
 	"exclude": [
 		"node_modules",

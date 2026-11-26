@@ -513,6 +513,22 @@ export default defineConfig({
 			// queue lifecycle (C4 -> C5 -> C6 -> C7 -> C8) and
 			// observing the Elm `pending_prompt` hold transition.
 			"src/sdk/__tests__/pending-prompt-lifecycle-discriminator01.ocrrd01.c24-c-bridge.test.ts",
+			// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (AMENDMENT-01):
+			// production REACHABILITY of the R1 execution-stagnation recovery.
+			// Drives the REAL `buildSessionConfig()` producer (ACT vs PLAN),
+			// the REAL `LocalRuntimeHost` AgentConfig forwarding seam, and the
+			// REAL `AgentRuntime` with the PRODUCED policy. Needs the
+			// `@cline-internal/core/...` aliases declared only here.
+			"src/sdk/__tests__/autonomous-execution-recovery.production-reachability01.c24-c-bridge.test.ts",
+			// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01: production
+			// REACHABILITY of the R2 bounded-objective recovery. Drives the
+			// REAL `buildSessionConfig()` producer (ACT vs PLAN), the REAL
+			// `LocalRuntimeHost` AgentConfig forwarding seam, and the REAL
+			// `AgentRuntime` with the PRODUCED policy, asserting that the
+			// NEXT dispatched request carries the ACTIVE bounded objective.
+			// Needs the `@cline-internal/core/...` aliases declared only
+			// here.
+			"src/sdk/__tests__/autonomous-execution-recovery-r2.production-reachability02.c24-c-bridge.test.ts",
 		],
 		testTimeout: 30_000,
 	},

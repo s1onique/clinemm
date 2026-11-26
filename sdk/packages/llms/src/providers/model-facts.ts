@@ -478,10 +478,61 @@ export function isMiniMaxM3Model(
 	);
 }
 
+/**
+ * ACT-CLINEMM-MINIMAX-LOW-OUTPUT-DEFAULT-01.
+ *
+ * The MiniMax provider family. Every one of these provider ids serves the
+ * SAME MiniMax model catalog, so a model-level fact about MiniMax applies
+ * to all of them.
+ */
+const MINIMAX_PROVIDER_IDS = new Set([
+	"minimax",
+	"minimax-cn",
+	"minimax-cn-coding-plan",
+	"minimax-coding-plan",
+]);
+
+/**
+ * ACT-CLINEMM-MINIMAX-LOW-OUTPUT-DEFAULT-01.
+ *
+ * The EXACT MiniMax-M3.1-Flash model, as MiniMax's own API names it.
+ *
+ * The official identifier is the CAPITALIZED `MiniMax-M3.1-Flash`; the
+ * normalized (lower-case) form is `minimax-m3.1-flash`. The M3.1
+ * generation's routed aliases (`minimax/minimax-m3.1-flash`) belong to OTHER
+ * providers (OpenRouter and friends) and are deliberately NOT matched here:
+ * they are different routes to different endpoints, and the default is a
+ * property of the MiniMax endpoint.
+ */
+const MINIMAX_M31_FLASH_MODEL_IDS = new Set(["minimax-m3.1-flash"]);
+
+/**
+ * ACT-CLINEMM-MINIMAX-LOW-OUTPUT-DEFAULT-01.
+ *
+ * Whether the request targets the EXACT MiniMax-M3.1-Flash model served by
+ * a MiniMax provider.
+ *
+ * Both facts are required:
+ *   - the PROVIDER is a MiniMax provider (the model catalog is shared by
+ *     the whole MiniMax family, and other providers route the model
+ *     through their own endpoints), and
+ *   - the MODEL is the M3.1 Flash generation (the sibling `MiniMax-M3`
+ *     generation exposes a thinking toggle instead of an effort ladder and
+ *     is a different model).
+ */
+export function isMiniMaxM31FlashModel(
+	request: Pick<GatewayStreamRequest, "modelId" | "providerId">,
+	context: Pick<GatewayProviderContext, "provider" | "model">,
+): boolean {
+	if (!MINIMAX_PROVIDER_IDS.has(context.provider.id)) {
+		return false;
+	}
+	return MINIMAX_M31_FLASH_MODEL_IDS.has(normalizedModelId(request));
+}
+
 export function isKimiK26Family(context: GatewayProviderContext): boolean {
 	return normalizedFamily(context) === "kimi-k2.6";
 }
-
 export function isMoonshotKimiModelIdFallback(
 	request: Pick<GatewayStreamRequest, "modelId">,
 ): boolean {

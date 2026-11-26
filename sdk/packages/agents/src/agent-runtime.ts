@@ -32,6 +32,9 @@ import type {
 	CaptureTaskLifecycleEventInput,
 	CommandExecutionPlan,
 	ControlPlaneOutcome,
+	ExecutionRoundObservation,
+	ExecutionRoundProductivity,
+	ExecutionStagnationAccounting,
 	LiveAgentRuntimeEvent,
 	LiveAgentRuntimeStateSnapshot,
 	ModelBehaviorTraceEditApprovalOutcome,
@@ -43,18 +46,37 @@ import type {
 	ToolRuntimeOutcome,
 } from "@cline/shared";
 import {
+	applyExecutionStagnationDecision,
 	assertProviderRequestWithinBudget,
+	type BoundedObjective,
+	type BoundedObjectiveExecutionReceipt,
+	type BoundedObjectiveObservationFacts,
+	type BoundedObjectivePolicy,
+	type BoundedObjectiveSelectionObservation,
 	buildCompletionToolReminderMessage,
+	// ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01: the runtime-owned
+	// parent-obligation reference vocabulary.
+	buildParentObligationReferences,
+	canonicalizeScopePath,
 	captureAgentUnexpectedReasoningTokens,
 	captureSdkError,
 	captureTaskLifecycleEvent,
 	computeFinalProjectionFingerprint,
+	createExecutionStagnationAccounting,
+	DEFAULT_BOUNDED_OBJECTIVE_POLICY,
+	decideExecutionStagnation,
+	// ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01: the rejection
+	// diagnosis that names the failing field or reference.
+	describeBoundedObjectiveRejection,
 	describeEditRequest,
 	EDIT_OBSERVATION_APPROVAL_METADATA_KEY,
 	EDIT_OBSERVATION_IDENTITY_METADATA_KEY,
 	EDIT_OBSERVATION_SINK_METADATA_KEY,
 	estimateRequestInputTokens,
 	estimateTokens,
+	extractScopePaths,
+	foldExecutionRound,
+	isPathWithinCanonicalRoot,
 	isProviderDispatchRecordRequired,
 	MODEL_BEHAVIOR_TRACE_UNAVAILABLE,
 	MODEL_BEHAVIOR_WIRE_REASONING_REQUEST_ID_METADATA_KEY,
@@ -63,6 +85,11 @@ import {
 	omitUnauthorizedReasoningBlocks,
 	omitUndefinedValues,
 	requiresSignedReasoningCapability,
+	// ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01: the runtime-owned
+	// parent-obligation reference vocabulary.
+	type ParentObligationReference,
+	renderBoundedObjectiveInstruction,
+	resolveBoundedObjectiveVerification,
 	sanitizeTraceErrorMessage,
 	TASK_CANCELLED_EVENT,
 	TASK_FIRST_CHUNK_RECEIVED_EVENT,
@@ -73,6 +100,7 @@ import {
 	TOOL_REJECTION_SUFFIX,
 	toProviderVisibleMessages,
 	trimNonEmpty,
+	validateBoundedObjective,
 } from "@cline/shared";
 import { nanoid } from "nanoid";
 import {
@@ -495,6 +523,233 @@ class ControlledStopError extends Error {
 	}
 }
 
+/**
+ * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 (R2).
+ *
+ * The system prompt of the ONE bounded selection inference.
+ *
+ * It asks for ONE bounded objective and nothing else. It explicitly
+ * forbids the model from inventing evidence, from claiming an outstanding
+ * obligation is satisfied, and from expanding the parent's authority.
+ */
+const BOUNDED_OBJECTIVE_SELECTION_SYSTEM_PROMPT = [
+	"You select ONE bounded, independently verifiable objective for an autonomous recovery.",
+	"Reply with ONE JSON object and nothing else. No prose, no markdown fence, no explanation.",
+	"The JSON object MUST have exactly these keys:",
+	'  "objective": one concrete bounded objective (a single action, not a programme of work)',
+	'  "firstStep": the one actionable first step',
+	'  "mutationScope": the scope the objective is permitted to touch',
+	'  "verificationCondition": an OBSERVABLE condition checkable from tool outcomes',
+	'  "obligationReferences": a non-empty array of the parent obligation reference ids, copied EXACTLY',
+	'  "evidenceReferences": a non-empty array of the established observation references, copied verbatim',
+	'  "successCondition": the condition under which the objective succeeds',
+	'  "failureCondition": the condition under which the objective fails',
+	"Rules:",
+	"- Cite established observations VERBATIM from the supplied list. Never invent an observation.",
+	"- Cite only parent obligation reference ids that are listed, copied EXACTLY. Never invent a reference id.",
+	"- A parent obligation reference names a requirement in the parent task; it does NOT mean that requirement is already satisfied.",
+	"- Never claim an outstanding obligation is already satisfied.",
+	"- A success condition states what WILL make the objective succeed. Never state that anything is already satisfied.",
+	"- Never widen the parent's mutation scope.",
+	"- The verification condition must be checkable from a command that exits successfully, a file that changes, or an artefact that exists.",
+	"- Do not analyse or request the assistant's private reasoning. Do not include reasoning signatures.",
+	"- Do not use tools. Do not modify anything. You are naming an objective, not executing it.",
+].join("\n");
+
+/**
+ * Build the selection inference's prompt from the MINIMUM SUFFICIENT
+ * context.
+ *
+ * The prompt carries only what the selection needs:
+ *
+ *   - the original user-authorized objective,
+ *   - the applicable parent constraints,
+ *   - the outstanding acceptance obligations,
+ *   - the established observations with their evidence references,
+ *   - the recent failed execution strategy,
+ *   - the actual available tools,
+ *   - the remaining recovery allowance.
+ *
+ * It NEVER carries provider-owned thinking text and NEVER carries an
+ * opaque reasoning signature.
+ */
+function buildBoundedObjectiveSelectionPrompt(context: {
+	parentTaskId: string;
+	parentObjective: string;
+	parentConstraints: string[];
+	parentMutationScope: string;
+	parentMutationScopePaths: string[];
+	parentObligationReferences: ParentObligationReference[];
+	outstandingObligations: string[];
+	establishedObservations: string[];
+	recentFailedStrategy: string;
+	availableTools: string[];
+	remainingAllowance: {
+		activations: number;
+		selectionInferences: number;
+		objectiveRounds: number;
+	};
+}): string {
+	const lines = [
+		`Parent task id: ${context.parentTaskId}`,
+		`Parent task (user-authorized objective): ${context.parentObjective}`,
+	];
+	if (context.parentMutationScopePaths.length > 0) {
+		lines.push(
+			`Authorised mutation paths (the objective may not name a path outside these): ${context.parentMutationScopePaths.join(", ")}`,
+		);
+	}
+	if (context.parentConstraints.length > 0) {
+		lines.push("Applicable parent constraints (user authority):");
+		for (const constraint of context.parentConstraints) {
+			lines.push(`- ${constraint}`);
+		}
+	}
+	// ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01.
+	//
+	// The PARENT-OBLIGATION REFERENCE VOCABULARY is projected here.
+	//
+	// Each entry is a reference the selection MAY cite, identified by a
+	// STABLE id. The id is what the validator resolves; the label is the
+	// parent's own heading text, reproduced verbatim, so the selection can
+	// see WHICH requirement it is advancing without having to reproduce a
+	// long sentence verbatim.
+	//
+	// The vocabulary never asserts that a requirement is satisfied or
+	// outstanding: it only names the parent's own requirements.
+	lines.push(
+		"Parent obligation references (cite these ids EXACTLY in obligationReferences):",
+	);
+	for (const reference of context.parentObligationReferences) {
+		lines.push(`- ${reference.id} — ${reference.label}`);
+	}
+	lines.push("Outstanding parent acceptance obligations:");
+	for (const obligation of context.outstandingObligations) {
+		lines.push(`- ${obligation}`);
+	}
+	lines.push("Established observations (cite these verbatim):");
+	for (const observation of context.establishedObservations) {
+		lines.push(`- ${observation}`);
+	}
+	lines.push(
+		`Recent failed execution strategy: ${context.recentFailedStrategy}`,
+	);
+	lines.push(
+		`Available tools: ${context.availableTools.length > 0 ? context.availableTools.join(", ") : "none"}`,
+	);
+	lines.push(
+		`Remaining recovery allowance: ${context.remainingAllowance.activations} activation(s), ${context.remainingAllowance.selectionInferences} selection inference(s), ${context.remainingAllowance.objectiveRounds} objective round(s)`,
+	);
+	lines.push(
+		"Select ONE bounded objective that advances an outstanding parent obligation and can be verified from observable tool outcomes.",
+	);
+	return lines.join("\n");
+}
+
+/**
+ * Parse the candidate objective out of the selection inference's reply.
+ *
+ * The reply is ONE JSON object. The parser tolerates a markdown fence and
+ * surrounding whitespace, because a model that answers in the requested
+ * shape may still wrap it. Anything that is not a JSON object yields
+ * `undefined`, which the runtime treats as a failed selection.
+ */
+function parseBoundedObjectiveCandidate(text: string): unknown | undefined {
+	if (typeof text !== "string") {
+		return undefined;
+	}
+	const trimmed = text.trim();
+	if (trimmed.length === 0) {
+		return undefined;
+	}
+	const candidates: string[] = [trimmed];
+	const fenceMatch = /```(?:json)?\s*([\s\S]*?)```/.exec(trimmed);
+	if (fenceMatch?.[1]) {
+		candidates.push(fenceMatch[1].trim());
+	}
+	const firstBrace = trimmed.indexOf("{");
+	const lastBrace = trimmed.lastIndexOf("}");
+	if (firstBrace !== -1 && lastBrace > firstBrace) {
+		candidates.push(trimmed.slice(firstBrace, lastBrace + 1));
+	}
+	for (const candidate of candidates) {
+		try {
+			const parsed = JSON.parse(candidate);
+			if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+				return parsed;
+			}
+		} catch {
+			// Try the next candidate form.
+		}
+	}
+	return undefined;
+}
+
+/**
+ * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-01.
+ *
+ * Extract the COMMAND IDENTITY of ONE tool call.
+ *
+ * The identity is the command TEXT the call carried — never the tool's
+ * OUTPUT. It is what makes a required verification gate correlatable with
+ * the execution that was supposed to run it.
+ *
+ * The shapes are the ones the runtime's own command classification already
+ * recognises: a `commands` ARRAY of strings, a single `command` string, or
+ * a `cmd` string. A call that carries no command yields `undefined`.
+ */
+function extractToolCallCommandIdentity(input: unknown): string | undefined {
+	if (typeof input === "string") {
+		return input.length > 0 ? input : undefined;
+	}
+	if (typeof input !== "object" || input === null) {
+		return undefined;
+	}
+	const record = input as Record<string, unknown>;
+	const commands = record.commands;
+	if (Array.isArray(commands)) {
+		const parts = commands
+			.filter((entry): entry is string => typeof entry === "string")
+			.map((entry) => entry.trim())
+			.filter((entry) => entry.length > 0);
+		return parts.length > 0 ? parts.join(" && ") : undefined;
+	}
+	if (typeof record.command === "string" && record.command.trim().length > 0) {
+		return record.command.trim();
+	}
+	if (typeof record.cmd === "string" && record.cmd.trim().length > 0) {
+		return record.cmd.trim();
+	}
+	return undefined;
+}
+
+/**
+ * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-01.
+ *
+ * Extract the TARGET PATH of ONE mutating tool call.
+ *
+ * The shapes are the ones the runtime's own edit classification already
+ * recognises: a `path` string, or a `file_path` string. A call that
+ * carries no explicit path yields `undefined`.
+ *
+ * The runtime never derives a target path from command TEXT: the
+ * command-policy layer and the sandbox remain the authority for command
+ * contents, and guessing would be provider-specific string matching.
+ */
+function extractToolCallTargetPath(input: unknown): string | undefined {
+	if (typeof input !== "object" || input === null) {
+		return undefined;
+	}
+	const record = input as Record<string, unknown>;
+	for (const key of ["path", "file_path"]) {
+		const value = record[key];
+		if (typeof value === "string" && value.trim().length > 0) {
+			return value.trim();
+		}
+	}
+	return undefined;
+}
+
 export class AgentRuntimeAbortError extends Error {
 	readonly reason?: unknown;
 
@@ -816,6 +1071,38 @@ function normalizeInput(input: AgentRunInput): AgentMessage[] {
 	return cloneMessages([input as AgentMessage]);
 }
 
+/**
+ * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 (R2).
+ *
+ * Whether a message is RUNTIME-SYNTHETIC rather than user-authored.
+ *
+ * The runtime injects its own reminders into the canonical transcript as
+ * `user`-ROLE messages, because that is the role the provider transport
+ * accepts. Their ROLE therefore does not distinguish them from a user's
+ * own turn.
+ *
+ * The runtime's own PROVENANCE stamp does: every runtime-synthetic
+ * message carries `userRunSpan: 0` (the "no user run span" marker the
+ * compaction contract-conservation path already uses) together with a
+ * `displayRole`. A user-authored turn carries neither.
+ *
+ * The check reads the runtime's own metadata — never the message TEXT — so
+ * it can never be fooled by a message that merely looks like a reminder.
+ */
+function isRuntimeSyntheticMessage(message: AgentMessage): boolean {
+	const metadata = message.metadata;
+	if (!metadata) {
+		return false;
+	}
+	if (metadata.userRunSpan !== 0) {
+		return false;
+	}
+	return (
+		typeof metadata.displayRole === "string" ||
+		typeof metadata.runtimeAuthority === "string"
+	);
+}
+
 export class AgentRuntime {
 	private config: Required<Pick<BaseAgentRuntimeConfig, "toolExecution">> &
 		BaseAgentRuntimeConfig;
@@ -968,6 +1255,112 @@ export class AgentRuntime {
 	private activeDispatchRecord: Record<string, unknown> | undefined;
 	/** One automatic overflow-recovery attempt per run. */
 	private overflowRecoveryAttempted = false;
+	/**
+	 * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (R1).
+	 *
+	 * RUN-SCOPED execution-stagnation accounting. It lives on the runtime
+	 * instance (never module-global, never UI-owned), so it is reset only by
+	 * a NEW RUN and is unaffected by compaction — compaction replaces the
+	 * PROVIDER REQUEST messages, never the runtime's counters.
+	 *
+	 * The pure decision function lives in `@cline/shared`
+	 * (`agents/execution-stagnation`); this field only holds its state.
+	 */
+	private executionStagnation: ExecutionStagnationAccounting =
+		createExecutionStagnationAccounting();
+	/**
+	 * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (R1).
+	 *
+	 * The facts observed for the CURRENT execution round (one model request
+	 * plus the tool calls it produced). Reset at the start of every round.
+	 */
+	private executionRoundFacts: {
+		toolNames: string[];
+		editAttempts: number;
+		successfulEdits: number;
+		executedCommands: number;
+		/**
+		 * ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01.
+		 *
+		 * How many command calls in this round produced an OUTCOME that was
+		 * NOT a successful execution: the command FAILED, or the execution
+		 * outcome was MISSING.
+		 *
+		 * A failed executable experiment is real engineering evidence, but it
+		 * is NOT positive evidence of PROGRESS, so it does not reset the
+		 * stagnation streak. It is counted separately so that a generic
+		 * command failure can never be laundered into a productive
+		 * execution by the runtime's fallback.
+		 */
+		failedExecutions: number;
+		awaitingBackgroundWork: boolean;
+		/**
+		 * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-01.
+		 *
+		 * The STRUCTURED EXECUTION RECEIPTS of this round. Each receipt
+		 * carries the tool name, the command identity (when the call was
+		 * command-shaped) and the outcome — the CORRELATION EVIDENCE the
+		 * R2 verification gate uses.
+		 */
+		receipts: BoundedObjectiveExecutionReceipt[];
+	} = {
+		toolNames: [],
+		editAttempts: 0,
+		successfulEdits: 0,
+		executedCommands: 0,
+		failedExecutions: 0,
+		awaitingBackgroundWork: false,
+		receipts: [],
+	};
+	/**
+	 * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 (R2).
+	 *
+	 * The RUN-SCOPED bounded-objective recovery accounting. It lives on the
+	 * runtime instance (never module-global, never UI-owned), so it is reset
+	 * only by a NEW RUN and is unaffected by compaction — compaction replaces
+	 * the PROVIDER REQUEST messages, never the runtime's counters.
+	 *
+	 * The pure contract lives in `@cline/shared`
+	 * (`agents/bounded-objective`); these fields only hold its state.
+	 */
+	private boundedObjectiveActivations = 0;
+	/** How many selection inferences this run consumed. */
+	private boundedObjectiveSelectionInferences = 0;
+	/**
+	 * The ACTIVE bounded objective, when one is executing.
+	 *
+	 * While it is set, the runtime projects it onto the DISPATCHED model
+	 * request's privileged channel, so the next request reflects the
+	 * objective as the current execution target. It is a runtime-owned
+	 * projection, NOT a transcript mutation: the canonical conversation
+	 * history is untouched.
+	 */
+	private activeBoundedObjective: BoundedObjective | undefined;
+	/**
+	 * The observable facts accumulated while the ACTIVE bounded objective
+	 * executes. They are what the verification step inspects.
+	 */
+	private boundedObjectiveFacts: BoundedObjectiveObservationFacts = {
+		rounds: 0,
+		toolNames: [],
+		editAttempts: 0,
+		successfulEdits: 0,
+		executedCommands: 0,
+	};
+	/**
+	 * The explicit internal recovery outcome of the LAST R2 activation.
+	 *
+	 * It is produced when an R2 recovery does NOT succeed, so a future R3
+	 * consumer has a truthful, machine-readable fact to act on. The runtime
+	 * never manufactures success.
+	 */
+	private lastBoundedObjectiveOutcome:
+		| {
+				readonly kind: "completed" | "failed";
+				readonly reason?: string;
+				readonly objective?: BoundedObjective;
+		  }
+		| undefined;
 	/** Consecutive output-limit cut-offs recovered this run; see MAX_TOKENS_RECOVERY_LIMIT. */
 	private maxTokensRecoveryCount = 0;
 	/** One automatic recovery attempt per run for max-tokens-truncated turns. */
@@ -1821,6 +2214,1606 @@ export class AgentRuntime {
 		].filter((message): message is string => Boolean(message));
 	}
 
+	/**
+	 * Record the observable facts of ONE tool call into the current
+	 * execution round.
+	 *
+	 * This is a pure OBSERVATION: it never influences the tool call, never
+	 * changes a result, and never throws.
+	 */
+	private observeExecutionRoundToolCall(
+		toolName: string,
+		input: unknown,
+		result: { output: unknown; isError?: boolean } | undefined,
+	): void {
+		try {
+			this.executionRoundFacts.toolNames.push(toolName);
+			// The HOST may classify its own tools more precisely than the
+			// runtime can (for example: was this shell command a read-only
+			// inspection or a real test run?). The runtime NEVER guesses
+			// from command text — that would be provider-specific string
+			// matching. A host callback that throws is treated as "no
+			// opinion" and the runtime's own structural classification is
+			// used instead.
+			const hostVerdict = this.askHostForToolCallProductivity(
+				toolName,
+				input,
+				result,
+			);
+			if (hostVerdict !== undefined) {
+				this.applyHostProductivityVerdict(hostVerdict, result);
+				this.recordBoundedObjectiveReceipt(
+					toolName,
+					input,
+					result,
+					hostVerdict === "edited",
+				);
+				return;
+			}
+			const classified = this.classifyToolCallProductivity(
+				toolName,
+				input,
+				result,
+			);
+			// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-01:
+			// the STRUCTURED RECEIPT is recorded for EVERY tool call, so the
+			// R2 verification gate can correlate the required executable
+			// with its actual outcome.
+			this.recordBoundedObjectiveReceipt(
+				toolName,
+				input,
+				result,
+				classified.kind === "edit",
+			);
+			if (classified.kind === "edit") {
+				this.executionRoundFacts.editAttempts += 1;
+				if (result?.isError !== true) {
+					this.executionRoundFacts.successfulEdits += 1;
+				}
+				return;
+			}
+			if (classified.kind === "command") {
+				if (classified.awaiting) {
+					this.executionRoundFacts.awaitingBackgroundWork = true;
+				} else if (result?.isError !== true) {
+					// ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01:
+					// the dispatch `isError` flag ALONE does not establish a
+					// SUCCESSFUL execution. A command whose structured
+					// result reports a failure — or whose outcome is MISSING
+					// — is a FAILED execution, not a productive one.
+					//
+					// The host's authoritative negative observation must not
+					// disappear at this fallback: the host already declines
+					// a failed observation (it has no authority to claim
+					// success about a command that failed), and this
+					// fallback used to OVERRIDE that decline by counting
+					// the very same call as an execution.
+					if (this.executionOutcomeIsUnsuccessful(result)) {
+						this.executionRoundFacts.failedExecutions += 1;
+					} else {
+						this.executionRoundFacts.executedCommands += 1;
+					}
+				}
+				return;
+			}
+			// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (AMENDMENT-01):
+			// a NON-command tool call can still be a LEGITIMATE WAIT.
+			//
+			// Production waits by POLLING one identified running job with
+			// `command_status`, whose input is `{ jobId }` — not a command
+			// list — and whose observation carries the `state: "running"`
+			// marker. The `awaiting` flag is therefore honoured for EVERY
+			// tool call, not only for command-shaped ones.
+			//
+			// Without this, a legitimate poll was counted as an
+			// unproductive inspection round and the runtime declared a
+			// FALSE STALL while the agent was waiting on real work.
+			if (classified.awaiting) {
+				this.executionRoundFacts.awaitingBackgroundWork = true;
+			}
+		} catch {
+			// Observation isolation: instrumentation NEVER affects a tool call.
+		}
+	}
+
+	/**
+	 * Record ONE STRUCTURED EXECUTION RECEIPT for the current round.
+	 *
+	 * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-01.
+	 *
+	 * The receipt is the CORRELATION EVIDENCE the R2 verification gate
+	 * uses. It records:
+	 *
+	 *   - the host-defined tool name,
+	 *   - the COMMAND IDENTITY of the call, when the call was
+	 *     command-shaped (the commands are joined into one identity
+	 *     string — the receipt never carries the tool's OUTPUT),
+	 *   - the OUTCOME (success or failure),
+	 *   - and whether the call was an EDIT.
+	 *
+	 * A failed command is a receipt too. It is the receipt that proves the
+	 * required gate did NOT pass.
+	 */
+	private recordBoundedObjectiveReceipt(
+		toolName: string,
+		input: unknown,
+		result: { output: unknown; isError?: boolean } | undefined,
+		wasEdit: boolean,
+	): void {
+		const command = extractToolCallCommandIdentity(input);
+		this.executionRoundFacts.receipts.push({
+			toolName,
+			...(command === undefined ? {} : { command }),
+			succeeded: result?.isError !== true,
+			wasEdit,
+		});
+	}
+
+	/**
+	 * Ask the host to classify ONE tool call.
+	 *
+	 * Returns `undefined` when there is no host classifier, when the
+	 * classifier throws, or when it declines to classify the call.
+	 */
+	private askHostForToolCallProductivity(
+		toolName: string,
+		input: unknown,
+		result: { output: unknown; isError?: boolean } | undefined,
+	): ExecutionRoundProductivity | undefined {
+		const classifier = this.config.executionStagnationPolicy?.classifyToolCall;
+		if (!classifier) {
+			return undefined;
+		}
+		try {
+			return classifier(toolName, input, result);
+		} catch {
+			return undefined;
+		}
+	}
+
+	/**
+	 * Fold a host verdict into the current round's facts.
+	 */
+	private applyHostProductivityVerdict(
+		verdict: ExecutionRoundProductivity,
+		result: { output: unknown; isError?: boolean } | undefined,
+	): void {
+		switch (verdict) {
+			case "edited":
+				this.executionRoundFacts.editAttempts += 1;
+				if (result?.isError !== true) {
+					this.executionRoundFacts.successfulEdits += 1;
+				}
+				return;
+			case "executed":
+				if (result?.isError !== true) {
+					this.executionRoundFacts.executedCommands += 1;
+				}
+				return;
+			case "failed":
+				// ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01:
+				// the host's authoritative FAILED observation is recorded as
+				// a failed execution, never as a productive one.
+				this.executionRoundFacts.failedExecutions += 1;
+				return;
+			case "awaiting":
+				this.executionRoundFacts.awaitingBackgroundWork = true;
+				return;
+			case "inspected":
+			case "idle":
+				return;
+			default:
+				return;
+		}
+	}
+
+	/**
+	 * ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01.
+	 *
+	 * Whether an execution's OUTCOME was NOT a successful execution.
+	 *
+	 * Three observations are distinguished:
+	 *
+	 *   - a FAILED outcome — the structured result reports a non-zero exit
+	 *     code or an explicit `ok: false`;
+	 *   - a MISSING outcome — the result carries no execution outcome at
+	 *     all, so nothing established that the command ran successfully;
+	 *   - a SUCCESSFUL outcome — the structured result reports a successful
+	 *     execution.
+	 *
+	 * A MISSING outcome is NOT treated as a successful execution: the
+	 * dispatch `isError` flag alone does not establish that a command ran
+	 * and succeeded. It is also NOT treated as a failure of the agent's
+	 * work — it is simply not positive evidence of progress.
+	 *
+	 * The check is DATA-SHAPE driven: it reads the explicit `exitCode` and
+	 * `ok` fields the production tools set, never prose.
+	 */
+	private executionOutcomeIsUnsuccessful(
+		result: { output: unknown; isError?: boolean } | undefined,
+	): boolean {
+		if (result === undefined) {
+			// No result at all: the execution outcome is MISSING.
+			return true;
+		}
+		if (result.isError === true) {
+			return true;
+		}
+		return this.outputReportsFailureShape(result.output);
+	}
+
+	/**
+	 * Whether a structured result reports a FAILED execution.
+	 *
+	 * The failure is read from the EXPLICIT fields the production tools
+	 * set: the observed `exitCode` (a non-zero code is a failure) and the
+	 * `ok` flag (false is a failure). The production tools return their
+	 * result as an ARRAY of operation results, so the array envelope is
+	 * walked as well. No prose is parsed.
+	 *
+	 * A result that carries NO execution outcome at all (neither `exitCode`
+	 * nor `ok`) is a MISSING outcome, not a failure, so it returns false
+	 * here; the MISSING case is handled by the caller.
+	 */
+	private outputReportsFailureShape(output: unknown): boolean {
+		if (typeof output === "string") {
+			try {
+				return this.outputReportsFailureShape(JSON.parse(output));
+			} catch {
+				// Not JSON: a plain-text output carries no explicit failure
+				// marker, so the outcome is not established as a failure.
+				return false;
+			}
+		}
+		if (!output || typeof output !== "object") {
+			return false;
+		}
+		const record = output as Record<string, unknown>;
+		if (record.ok === false) {
+			return true;
+		}
+		if (typeof record.exitCode === "number" && record.exitCode !== 0) {
+			return true;
+		}
+		if (Array.isArray(output)) {
+			for (const entry of output) {
+				if (this.outputReportsFailureShape(entry)) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Classify the CURRENT execution round into a productivity signal.
+	 *
+	 * The classification is structural:
+	 *
+	 *   - `edited`   — the round contains a SUCCESSFUL native edit.
+	 *   - `executed` — the round executed at least one command successfully
+	 *                  (a test, a build, a probe). Executing is progress
+	 *                  even when the command's output is a failure report,
+	 *                  because the agent OBTAINED executable evidence.
+	 *   - `awaiting` — the round started work that is STILL RUNNING. A
+	 *                  legitimate wait is not a stall.
+	 *   - `inspected`— the round only inspected (read/search/list).
+	 *   - `idle`     — the round made no tool call at all.
+	 *
+	 * ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01: a `failed`
+	 * round — a command whose outcome was a FAILURE or was MISSING — is
+	 * reported as `failed`, NOT as `executed`. A failed command is real
+	 * evidence, but it is not a SUCCESSFUL execution, and reporting it as
+	 * one would let a generic command failure become positive evidence of
+	 * progress.
+	 */
+	private classifyExecutionRound(): ExecutionRoundProductivity {
+		const facts = this.executionRoundFacts;
+		if (facts.successfulEdits > 0) {
+			return "edited";
+		}
+		if (facts.awaitingBackgroundWork) {
+			return "awaiting";
+		}
+		if (facts.executedCommands > 0) {
+			return "executed";
+		}
+		if (facts.failedExecutions > 0) {
+			return "failed";
+		}
+		if (facts.toolNames.length === 0) {
+			return "idle";
+		}
+		return "inspected";
+	}
+
+	/**
+	 * The observation handed to the pure decision function.
+	 */
+	private buildExecutionRoundObservation(): ExecutionRoundObservation {
+		return {
+			productivity: this.classifyExecutionRound(),
+			toolNames: [...this.executionRoundFacts.toolNames],
+			editAttempts: this.executionRoundFacts.editAttempts,
+			successfulEdits: this.executionRoundFacts.successfulEdits,
+		};
+	}
+
+	/**
+	 * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (R1).
+	 *
+	 * The RUNTIME INTERVENTION BOUNDARY.
+	 *
+	 * Called at the iteration boundary — after the round's tool calls have
+	 * been executed and their results delivered, and BEFORE the next model
+	 * request is issued. It:
+	 *
+	 *   1. folds the just-completed round into the run-scoped accounting,
+	 *   2. asks the pure decision function whether a corrective instruction
+	 *      is due,
+	 *   3. when it is, injects EXACTLY ONE runtime-owned corrective message
+	 *      through the existing `addUserReminderMessage` seam,
+	 *   4. returns WITHOUT interrupting the run — execution continues
+	 *      automatically; no user confirmation is required.
+	 *
+	 * The decision uses ONLY facts observed so far. It never consults a
+	 * future observation and never classifies an earlier round using later
+	 * information.
+	 */
+	private async evaluateExecutionStagnation(): Promise<void> {
+		const policy = this.config.executionStagnationPolicy;
+		if (!policy || policy.enabled === false) {
+			return;
+		}
+		const observation = this.buildExecutionRoundObservation();
+		this.executionStagnation = foldExecutionRound(
+			this.executionStagnation,
+			observation,
+		);
+		const decision = decideExecutionStagnation(
+			this.executionStagnation,
+			policy,
+		);
+		if (decision.kind === "allowance_exhausted") {
+			// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 (R2): the
+			// R2 ENTRY POINT.
+			//
+			// The R1 corrective-instruction allowance is spent and the
+			// trajectory is STILL unproductive. R2 may now select ONE
+			// bounded objective and make it the current execution target.
+			//
+			// R1's thresholds and allowance are UNCHANGED: this branch was
+			// previously a no-op that let the run continue on its own
+			// terms. R2 is a separate, opt-in stage layered on top of it.
+			await this.activateBoundedObjectiveRecovery({
+				unproductiveRounds: decision.unproductiveRounds,
+			});
+			return;
+		}
+		if (decision.kind !== "inject") {
+			return;
+		}
+		this.executionStagnation = applyExecutionStagnationDecision(
+			this.executionStagnation,
+			decision,
+		);
+		await this.emit({
+			type: "status-notice",
+			snapshot: this.snapshot(),
+			message: `execution stagnation detected after ${decision.unproductiveRounds} unproductive round(s) — injecting a recovery instruction (attempt ${this.executionStagnation.instructionsInjected}/${policy.maxRecoveryInstructions})`,
+			metadata: {
+				kind: "execution_stagnation_recovery",
+				reason: "execution_stagnation_recovery",
+				phase: "started",
+				iteration: this.state.iteration,
+				unproductiveRounds: decision.unproductiveRounds,
+				attempt: this.executionStagnation.instructionsInjected,
+				maxRecoveryInstructions: policy.maxRecoveryInstructions,
+			},
+		});
+		// The corrective instruction is a RUNTIME-OWNED message. It is
+		// appended to the canonical transcript exactly like the runtime's
+		// existing completion reminder, so the next model request carries
+		// it and the run continues automatically.
+		await this.addUserReminderMessage(decision.message, {
+			displayRole: "system",
+			runtimeAuthority: "execution_stagnation_recovery",
+		});
+	}
+
+	// -------------------------------------------------------------------------
+	// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 (R2)
+	//
+	// Runtime-owned bounded-objective recovery.
+	//
+	// R2 is the SECOND recovery stage. It activates ONLY at the R1
+	// `allowance_exhausted` branch — that is, after the runtime has already
+	// spent its whole run-scoped corrective-instruction allowance on a
+	// trajectory that produced no productive step, and the trajectory is
+	// STILL unproductive.
+	//
+	// R2 materially CHANGES the active execution objective. It does NOT
+	// append another advisory nudge to the conversation: it selects ONE
+	// bounded, independently verifiable objective derived from the parent
+	// task and projects that objective onto the DISPATCHED model request's
+	// privileged channel, so the next request the provider sees is a
+	// request for the objective rather than for the stalled parent.
+	//
+	// The runtime remains the SINGLE lifecycle authority:
+	//
+	//   - the runtime owns the accounting (activations, selection
+	//     inferences, objective rounds),
+	//   - the runtime owns the selection (through the SAME authorized model
+	//     and provider, never a supervisor process and never a provider
+	//     switch),
+	//   - the runtime owns the verification and the automatic return.
+	//
+	// The parent task stays authoritative throughout. The objective never
+	// satisfies an outstanding parent obligation, the parent's terminal
+	// completion tool is never invoked on the objective's behalf, and
+	// parent completion therefore remains governed by the existing
+	// completion contract.
+	// -------------------------------------------------------------------------
+
+	/**
+	 * The effective bounded-objective policy, or `undefined` when R2 is
+	 * disabled or absent.
+	 *
+	 * R2 is OPT-IN. When the policy is absent, or explicitly disabled, this
+	 * returns `undefined` and every R2 code path is unreachable — ordinary
+	 * execution and the existing R1 behaviour remain byte-identical.
+	 */
+	private getBoundedObjectivePolicy(): BoundedObjectivePolicy | undefined {
+		const policy = this.config.boundedObjectivePolicy;
+		if (!policy || policy.enabled === false) {
+			return undefined;
+		}
+		return policy;
+	}
+
+	/**
+	 * The R2 ENTRY POINT.
+	 *
+	 * Called at the R1 `allowance_exhausted` branch. It decides whether R2
+	 * may activate and, if so, selects ONE bounded objective and makes it
+	 * the active execution target.
+	 *
+	 * Every precondition is checked here, in the runtime that owns them:
+	 *
+	 *   - R2 is enabled (opt-in),
+	 *   - the run is ACTIVE (not aborted, not finished),
+	 *   - the parent task is AUTHORIZED (a parent objective exists),
+	 *   - NO bounded objective is already active,
+	 *   - the ACTIVATION allowance remains,
+	 *   - the SELECTION-INFERENCE allowance remains.
+	 *
+	 * A failed selection consumes the corresponding allowance and MUST NOT
+	 * start another selection attempt: the function returns after ONE
+	 * inference, whatever its outcome.
+	 */
+	private async activateBoundedObjectiveRecovery(trigger: {
+		readonly unproductiveRounds: number;
+	}): Promise<void> {
+		const policy = this.getBoundedObjectivePolicy();
+		if (!policy) {
+			return;
+		}
+		// A bounded objective is already the current execution target: R2
+		// must NOT reactivate recursively from within its own objective.
+		if (this.activeBoundedObjective !== undefined) {
+			return;
+		}
+		// The run must be ACTIVE. A cancelled or terminal run never
+		// dispatches a recovery.
+		if (this.state.status !== "running") {
+			return;
+		}
+		this.throwIfAborted();
+		const maxActivations = Math.max(
+			0,
+			policy.maxActivations ?? DEFAULT_BOUNDED_OBJECTIVE_POLICY.maxActivations,
+		);
+		if (this.boundedObjectiveActivations >= maxActivations) {
+			return;
+		}
+		const maxSelectionInferences = Math.max(
+			0,
+			policy.maxSelectionInferences ??
+				DEFAULT_BOUNDED_OBJECTIVE_POLICY.maxSelectionInferences,
+		);
+		if (this.boundedObjectiveSelectionInferences >= maxSelectionInferences) {
+			return;
+		}
+		const selectionContext = this.buildBoundedObjectiveSelectionContext();
+		if (!selectionContext) {
+			// Without an authorized parent objective there is nothing to
+			// derive a bounded objective FROM. R2 does not activate.
+			return;
+		}
+		// The ACTIVATION is consumed at the point it is ATTEMPTED, not when
+		// it succeeds: a failed selection, a failed execution and a failed
+		// verification all consume the corresponding attempted recovery
+		// allowance.
+		this.boundedObjectiveActivations += 1;
+		this.boundedObjectiveSelectionInferences += 1;
+		await this.emit({
+			type: "status-notice",
+			snapshot: this.snapshot(),
+			message: `R1 recovery allowance exhausted after ${trigger.unproductiveRounds} unproductive round(s) — selecting a bounded objective (activation ${this.boundedObjectiveActivations}/${maxActivations})`,
+			metadata: {
+				kind: "bounded_objective_recovery",
+				reason: "execution_stagnation_recovery_allowance_exhausted",
+				phase: "selection_started",
+				iteration: this.state.iteration,
+				unproductiveRounds: trigger.unproductiveRounds,
+				activation: this.boundedObjectiveActivations,
+				maxActivations,
+			},
+		});
+		const selection =
+			await this.runBoundedObjectiveSelectionInference(selectionContext);
+		if (selection === undefined) {
+			this.lastBoundedObjectiveOutcome = {
+				kind: "failed",
+				reason: "selection_inference_failed",
+			};
+			await this.emitBoundedObjectiveOutcome("selection_inference_failed");
+			return;
+		}
+		const candidate = selection.candidate;
+		if (candidate === undefined) {
+			// ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01: the model
+			// replied, but the reply yielded no parsable proposal. The
+			// observation records the GENERATED text and the unparsable
+			// disposition, because that is exactly the case the existing
+			// provider-request capture cannot see.
+			this.observeBoundedObjectiveSelection({
+				...(this.state.runId ? { runId: this.state.runId } : {}),
+				...(this.state.agentId ? { agentId: this.state.agentId } : {}),
+				parentTaskId: selectionContext.parentTaskId,
+				selectionOrdinal: this.boundedObjectiveSelectionInferences,
+				selectorRequestId: selection.selectorRequestId,
+				generatedText: selection.generatedText,
+				disposition: "unparsable",
+			});
+			this.lastBoundedObjectiveOutcome = {
+				kind: "failed",
+				reason: "selection_inference_failed",
+			};
+			await this.emitBoundedObjectiveOutcome("selection_inference_failed");
+			return;
+		}
+		const validation = validateBoundedObjective(candidate, {
+			parentTaskId: selectionContext.parentTaskId,
+			parentMutationScope: selectionContext.parentMutationScope,
+			parentMutationScopePaths: selectionContext.parentMutationScopePaths,
+			parentConstraints: selectionContext.parentConstraints,
+			parentObligationReferences: selectionContext.parentObligationReferences,
+			outstandingObligations: selectionContext.outstandingObligations,
+			establishedObservations: selectionContext.establishedObservations,
+		});
+		// ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01: the observation
+		// records the EXACT validation disposition and, for a rejection, the
+		// failing field or reference.
+		if (!validation.valid) {
+			const rejection = describeBoundedObjectiveRejection(
+				candidate,
+				validation.reason,
+				{
+					parentObligationReferences:
+						selectionContext.parentObligationReferences,
+					outstandingObligations: selectionContext.outstandingObligations,
+				},
+			);
+			this.observeBoundedObjectiveSelection({
+				...(this.state.runId ? { runId: this.state.runId } : {}),
+				...(this.state.agentId ? { agentId: this.state.agentId } : {}),
+				parentTaskId: selectionContext.parentTaskId,
+				selectionOrdinal: this.boundedObjectiveSelectionInferences,
+				// The EXACT selector-request identity the captured REQUEST
+				// file is named after.
+				selectorRequestId: selection.selectorRequestId,
+				generatedText: selection.generatedText,
+				parsedProposal: candidate,
+				disposition: validation.reason,
+				...(rejection.failingField !== undefined
+					? { failingField: rejection.failingField }
+					: {}),
+				...(rejection.failingReference !== undefined
+					? { failingReference: rejection.failingReference }
+					: {}),
+			});
+		} else {
+			this.observeBoundedObjectiveSelection({
+				...(this.state.runId ? { runId: this.state.runId } : {}),
+				...(this.state.agentId ? { agentId: this.state.agentId } : {}),
+				parentTaskId: selectionContext.parentTaskId,
+				selectionOrdinal: this.boundedObjectiveSelectionInferences,
+				selectorRequestId: selection.selectorRequestId,
+				generatedText: selection.generatedText,
+				parsedProposal: candidate,
+				disposition: "valid",
+			});
+		}
+		if (!validation.valid) {
+			// An INVALID selection is rejected and NEVER retried: the
+			// activation's selection-inference allowance is already spent.
+			this.lastBoundedObjectiveOutcome = {
+				kind: "failed",
+				reason: `selection_rejected:${validation.reason}`,
+			};
+			await this.emit({
+				type: "status-notice",
+				snapshot: this.snapshot(),
+				message: `bounded objective selection rejected (${validation.reason}) — the activation's allowance is consumed and no further selection is attempted`,
+				metadata: {
+					kind: "bounded_objective_recovery",
+					reason: "selection_rejected",
+					phase: "selection_rejected",
+					iteration: this.state.iteration,
+					rejectionReason: validation.reason,
+					activation: this.boundedObjectiveActivations,
+				},
+			});
+			await this.emitBoundedObjectiveOutcome(
+				`selection_rejected:${validation.reason}`,
+			);
+			return;
+		}
+		this.activeBoundedObjective = validation.objective;
+		this.boundedObjectiveFacts = {
+			rounds: 0,
+			toolNames: [],
+			editAttempts: 0,
+			successfulEdits: 0,
+			executedCommands: 0,
+			receipts: [],
+		};
+		await this.emit({
+			type: "status-notice",
+			snapshot: this.snapshot(),
+			message: `bounded objective activated: ${validation.objective.objective}`,
+			metadata: {
+				kind: "bounded_objective_recovery",
+				reason: "bounded_objective_activated",
+				phase: "objective_activated",
+				iteration: this.state.iteration,
+				activation: this.boundedObjectiveActivations,
+				parentTaskId: validation.objective.parentTaskId,
+				objective: validation.objective.objective,
+				firstStep: validation.objective.firstStep,
+				verificationCondition: validation.objective.verificationCondition,
+			},
+		});
+	}
+
+	/**
+	 * Build the MINIMUM SUFFICIENT information the selection inference
+	 * receives.
+	 *
+	 * It contains:
+	 *
+	 *   - the original user-authorized objective,
+	 *   - the applicable parent constraints,
+	 *   - the outstanding acceptance obligations,
+	 *   - the established observations with their evidence references,
+	 *   - the recent failed execution strategy,
+	 *   - the actual available tools,
+	 *   - the remaining recovery allowance.
+	 *
+	 * It NEVER contains provider-owned thinking text, and it NEVER exposes
+	 * opaque reasoning signatures: the selection context is built from the
+	 * runtime's own observable state and the canonical transcript's TEXT
+	 * messages only.
+	 */
+	private buildBoundedObjectiveSelectionContext():
+		| {
+				parentTaskId: string;
+				parentObjective: string;
+				parentConstraints: string[];
+				parentMutationScope: string;
+				parentMutationScopePaths: string[];
+				parentObligationReferences: ParentObligationReference[];
+				outstandingObligations: string[];
+				establishedObservations: string[];
+				recentFailedStrategy: string;
+				availableTools: string[];
+				remainingAllowance: {
+					activations: number;
+					selectionInferences: number;
+					objectiveRounds: number;
+				};
+		  }
+		| undefined {
+		const parentObjective = this.findParentUserObjective();
+		if (!parentObjective) {
+			return undefined;
+		}
+		const policy = this.getBoundedObjectivePolicy();
+		if (!policy) {
+			return undefined;
+		}
+		const maxActivations = Math.max(
+			0,
+			policy.maxActivations ?? DEFAULT_BOUNDED_OBJECTIVE_POLICY.maxActivations,
+		);
+		const maxSelectionInferences = Math.max(
+			0,
+			policy.maxSelectionInferences ??
+				DEFAULT_BOUNDED_OBJECTIVE_POLICY.maxSelectionInferences,
+		);
+		const maxObjectiveRounds = Math.max(
+			0,
+			policy.maxObjectiveRounds ??
+				DEFAULT_BOUNDED_OBJECTIVE_POLICY.maxObjectiveRounds,
+		);
+		const toolNames = [...this.tools.values()].map((tool) => tool.name).sort();
+		return {
+			parentTaskId: this.state.runId ?? this.state.agentId,
+			parentObjective: parentObjective.text,
+			parentConstraints: parentObjective.constraints,
+			parentMutationScope: parentObjective.mutationScope,
+			parentMutationScopePaths: parentObjective.mutationScopePaths,
+			parentObligationReferences: parentObjective.obligationReferences,
+			outstandingObligations: parentObjective.outstandingObligations,
+			establishedObservations: parentObjective.establishedObservations,
+			recentFailedStrategy: parentObjective.recentFailedStrategy,
+			availableTools: toolNames,
+			remainingAllowance: {
+				activations: Math.max(
+					0,
+					maxActivations - this.boundedObjectiveActivations,
+				),
+				selectionInferences: Math.max(
+					0,
+					maxSelectionInferences - this.boundedObjectiveSelectionInferences,
+				),
+				objectiveRounds: maxObjectiveRounds,
+			},
+		};
+	}
+
+	/**
+	 * Find the parent task's user-authorized objective and the facts the
+	 * selection needs, from the CANONICAL TRANSCRIPT.
+	 *
+	 * The transcript is the only authority for the user objective, the user
+	 * constraints and the outstanding obligations. The runtime's own
+	 * observed round facts supply the established observations.
+	 *
+	 * Only TEXT is read. Reasoning parts are never inspected, so the
+	 * selection context can never carry provider-owned thinking text or an
+	 * opaque reasoning signature.
+	 */
+	private findParentUserObjective():
+		| {
+				text: string;
+				constraints: string[];
+				mutationScope: string;
+				mutationScopePaths: string[];
+				obligationReferences: ParentObligationReference[];
+				outstandingObligations: string[];
+				establishedObservations: string[];
+				recentFailedStrategy: string;
+		  }
+		| undefined {
+		const userTexts: string[] = [];
+		for (const message of this.state.messages) {
+			if (message.role !== "user") {
+				continue;
+			}
+			// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 (R2).
+			//
+			// Only USER-AUTHORED messages may supply the parent objective
+			// and the parent constraints.
+			//
+			// The runtime's own reminders are `user`-ROLE messages for
+			// transport reasons, but they are RUNTIME authority, not user
+			// authority: the R1 corrective instruction and the completion
+			// reminder are both stamped `userRunSpan: 0` and carry a
+			// `displayRole`. Reading them as user constraints would make
+			// the runtime treat its OWN advisory as a constraint the
+			// selection must respect — and would let a runtime reminder
+			// masquerade as a user instruction.
+			//
+			// The discriminator is the runtime's own provenance stamp, not a
+			// text guess.
+			if (isRuntimeSyntheticMessage(message)) {
+				continue;
+			}
+			const text = message.content
+				.filter(
+					(part): part is { type: "text"; text: string } =>
+						part.type === "text" && typeof part.text === "string",
+				)
+				.map((part) => part.text)
+				.join("\n")
+				.trim();
+			if (text.length > 0) {
+				userTexts.push(text);
+			}
+		}
+		if (userTexts.length === 0) {
+			return undefined;
+		}
+		const objective = userTexts[0] as string;
+		const laterInstructions = userTexts.slice(1);
+		// The parent constraints are the LATER user instructions: the user
+		// is the authority on what the parent task may and may not do.
+		const constraints = laterInstructions.slice(0, 8);
+		// The parent's mutation scope is the scope the user authorised. The
+		// objective may only narrow it.
+		//
+		// The PROSE scope is the parent objective itself: the user
+		// authorised that work and nothing else. The STRUCTURAL ceiling is
+		// the set of PATHS the parent named — the user is the only
+		// authority on which paths the task may touch, and a path the user
+		// never named is a path the objective may not claim.
+		const mutationScope = objective;
+		const mutationScopePaths = this.extractAuthorisedScopePaths([
+			objective,
+			...laterInstructions,
+		]);
+		// The outstanding acceptance obligations are the parent task's own
+		// completion obligations that are NOT yet discharged. The runtime
+		// owns the completion contract, so it can name them.
+		const outstandingObligations = this.findOutstandingObligations();
+		if (outstandingObligations.length === 0) {
+			return undefined;
+		}
+		// ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01.
+		//
+		// The PARENT-OBLIGATION REFERENCE VOCABULARY.
+		//
+		// The outstanding-obligation list names the parent's TERMINAL
+		// COMPLETION mechanics — it is the runtime's own completion
+		// contract, not the parent's engineering work. The frozen live
+		// witness (`cap_run_kR2y9UwW_ca62cf1370aaed21.ai_sdk_prompt.1.provider-request.json`)
+		// shows a parent task carrying requirements A1, A2 and A3 with a
+		// selection context whose ONLY outstanding obligation was the
+		// terminal completion sentence. The selection therefore had no
+		// authorised reference to any concrete requirement.
+		//
+		// The vocabulary is derived from the parent's OWN user-authored text
+		// by a STRUCTURAL scan of its own headings. It adds NO inference and
+		// NO decomposition: it is a projection of the parent's own words, so
+		// it can neither invent a sub-obligation nor mark one as satisfied.
+		//
+		// When the parent names no labelled requirement the vocabulary
+		// contains exactly ONE entry — an explicit reference to the original
+		// authorized parent task. That is the honest representation of "the
+		// parent's concrete obligations are not individually enumerable from
+		// its text"; it is never represented as an absence of obligations.
+		const obligationReferences = buildParentObligationReferences(objective);
+		// The established observations are the runtime's OWN observable
+		// facts about the trajectory: the tools used, the rounds, the
+		// absence of edits, and the fact that the R1 allowance was spent.
+		const establishedObservations = this.buildEstablishedObservations();
+		const recentFailedStrategy = this.buildRecentFailedStrategy();
+		return {
+			text: objective,
+			constraints,
+			mutationScope,
+			mutationScopePaths,
+			obligationReferences,
+			outstandingObligations,
+			establishedObservations,
+			recentFailedStrategy,
+		};
+	}
+
+	/**
+	 * Extract the PATHS the USER authorised, from the parent's own text.
+	 *
+	 * A path is a token that starts with `/`, `./` or `~/` and contains no
+	 * whitespace. The extraction is structural: it never interprets command
+	 * text and never evaluates anything.
+	 *
+	 * When the user named no path, the list is empty and the structural
+	 * scope ceiling is simply not enforceable — the runtime does not guess
+	 * at a scope the user never expressed.
+	 */
+	private extractAuthorisedScopePaths(texts: readonly string[]): string[] {
+		const paths: string[] = [];
+		for (const text of texts) {
+			for (const token of text.split(/[\s,;()]+/)) {
+				const trimmed = token.replace(/[).,;:]+$/, "");
+				if (
+					trimmed.length === 0 ||
+					trimmed.includes("*") ||
+					trimmed.includes("(")
+				) {
+					continue;
+				}
+				if (
+					trimmed.startsWith("/") ||
+					trimmed.startsWith("./") ||
+					trimmed.startsWith("~/")
+				) {
+					if (!paths.includes(trimmed)) {
+						paths.push(trimmed);
+					}
+				}
+			}
+		}
+		return paths;
+	}
+
+	/**
+	 * The parent task's OUTSTANDING acceptance obligations.
+	 *
+	 * The runtime already owns the terminal-completion obligation: the
+	 * completion tool reminder states which terminal tool must be called.
+	 * When the completion guard is enabled, the guard's own message is the
+	 * outstanding obligation. Both are RUNTIME-owned, so they are
+	 * authoritative facts about what is still owed.
+	 */
+	private findOutstandingObligations(): string[] {
+		const obligations: string[] = [];
+		const terminalToolNames = this.getRequiredCompletionToolNames();
+		if (terminalToolNames.length > 0) {
+			obligations.push(
+				`Call the terminal completion tool ${terminalToolNames.join(" or ")} only after every parent obligation is satisfied`,
+			);
+		}
+		const guard = this.config.completionPolicy?.completionGuard?.();
+		if (guard && guard.trim().length > 0) {
+			obligations.push(guard.trim());
+		}
+		if (obligations.length === 0) {
+			// The parent task itself is the outstanding obligation: it has
+			// not completed, because the run is still executing.
+			obligations.push("Complete the parent task as authorized by the user");
+		}
+		return obligations;
+	}
+
+	/**
+	 * The ESTABLISHED observations the selection may cite.
+	 *
+	 * Each entry is a short, factual, OBSERVABLE statement. Nothing here is
+	 * inferred from provider-owned thinking text, and nothing here claims a
+	 * finding the runtime did not observe.
+	 */
+	private buildEstablishedObservations(): string[] {
+		const observations: string[] = [];
+		const streak = this.executionStagnation;
+		observations.push(
+			`The last ${streak.unproductiveRounds} consecutive execution round(s) produced no productive step`,
+		);
+		const toolNames = [
+			...new Set(streak.toolNames.filter((name) => name.length > 0)),
+		].sort();
+		observations.push(
+			toolNames.length > 0
+				? `The unproductive round(s) used only these tools: ${toolNames.join(", ")}`
+				: "The unproductive round(s) used no tools",
+		);
+		observations.push(
+			streak.editAttempts > 0
+				? `${streak.editAttempts} edit attempt(s) were made in the unproductive round(s)`
+				: "No edit was attempted in the unproductive round(s)",
+		);
+		observations.push(
+			`The runtime's corrective-instruction allowance is exhausted (${streak.instructionsInjected} instruction(s) were already delivered and produced no productive step)`,
+		);
+		observations.push(
+			`The working directory is available and the editor is enabled`,
+		);
+		return observations;
+	}
+
+	/**
+	 * A short, factual description of the RECENT FAILED STRATEGY, derived
+	 * only from the runtime's own observations.
+	 */
+	private buildRecentFailedStrategy(): string {
+		const toolNames = [
+			...new Set(
+				this.executionStagnation.toolNames.filter((name) => name.length > 0),
+			),
+		].sort();
+		if (toolNames.length === 0) {
+			return "The recent strategy performed no tool calls and made no progress";
+		}
+		return `The recent strategy inspected repeatedly using these tools (${toolNames.join(", ")}) and never produced a productive step`;
+	}
+
+	/**
+	 * Run the ONE bounded selection inference.
+	 *
+	 * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-02.
+	 *
+	 * The selection-inference allowance is RUN-SCOPED: the counter lives
+	 * on the runtime instance, so with the experimental bound of 1 the
+	 * WHOLE run may make ONE selection inference — not one per activation.
+	 * A second activation in the same run makes no further selection
+	 * inference at all.
+	 *
+	 * The inference uses the SAME authorized model and provider as the
+	 * parent run — never a supervisor process, never a provider switch, and
+	 * never a recursive planner. The request carries NO tools, so the
+	 * selection cannot mutate anything and cannot execute anything.
+	 *
+	 * The inference's usage is counted in the ORDINARY usage accounting:
+	 * the provider's own `usage` events are folded into the run's usage
+	 * exactly like any other request.
+	 *
+	 * Returns the parsed candidate, or `undefined` when the inference
+	 * produced no parsable candidate.
+	 */
+	private async runBoundedObjectiveSelectionInference(context: {
+		parentTaskId: string;
+		parentObjective: string;
+		parentConstraints: string[];
+		parentMutationScope: string;
+		parentMutationScopePaths: string[];
+		parentObligationReferences: ParentObligationReference[];
+		outstandingObligations: string[];
+		establishedObservations: string[];
+		recentFailedStrategy: string;
+		availableTools: string[];
+		remainingAllowance: {
+			activations: number;
+			selectionInferences: number;
+			objectiveRounds: number;
+		};
+	}): Promise<
+		| {
+				readonly generatedText: string;
+				readonly candidate: unknown;
+				readonly selectorRequestId: string;
+		  }
+		| undefined
+	> {
+		this.throwIfAborted();
+		const prompt = buildBoundedObjectiveSelectionPrompt(context);
+		// ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01 (AMENDMENT-01):
+		// the EXACT identity of the SELECTOR REQUEST.
+		//
+		// The id is minted ONCE per selection inference and is put into the
+		// selection request's transport metadata under the EXISTING
+		// `captureId` key. The EXISTING provider-request capture already
+		// honours an explicit `correlation.captureId`, so the CAPTURED
+		// REQUEST FILE is named `<selectorRequestId>...`, and the captured
+		// RESPONSE carries the SAME id. The response therefore joins to its
+		// request by EXACT IDENTITY.
+		//
+		// It is minted for EVERY selection inference — including the ones
+		// whose response is never observed — because the captured REQUEST
+		// must always be nameable. The id is inert: it is transport
+		// correlation metadata, never a prompt field.
+		const selectorRequestId = createUID("sel");
+		let stream: AsyncIterable<AgentModelEvent>;
+		try {
+			stream = await this.config.model.stream({
+				systemPrompt: BOUNDED_OBJECTIVE_SELECTION_SYSTEM_PROMPT,
+				messages: [
+					createMessage("user", [{ type: "text", text: prompt }], {
+						userRunSpan: 0,
+						runtimeAuthority: "bounded_objective_selection",
+					}),
+				],
+				// The selection performs NO tools and NO mutations. It is a
+				// pure inference that names one bounded objective.
+				tools: [],
+				signal: this.abortController?.signal,
+				options: mergeModelOptions(this.config.modelOptions, {
+					metadata: {
+						kind: "bounded_objective_selection",
+						runId: this.state.runId,
+						agentId: this.state.agentId,
+						// The EXISTING capture-id correlation key.
+						captureId: selectorRequestId,
+					},
+				}),
+			});
+		} catch {
+			return undefined;
+		}
+		let text = "";
+		try {
+			for await (const event of stream) {
+				if (event.type === "text-delta") {
+					text += event.text;
+				} else if (event.type === "usage") {
+					// The selection inference counts in the ORDINARY usage
+					// accounting.
+					await this.updateUsage(event.usage);
+				}
+			}
+		} catch {
+			return undefined;
+		}
+		this.throwIfAborted();
+		// ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01: the GENERATED
+		// text is returned alongside the parsed candidate so the
+		// observation sink can record what the model actually said. It is
+		// the model's own reply — never provider-owned reasoning.
+		//
+		// (AMENDMENT-01): the SELECTOR REQUEST IDENTITY is returned too, so
+		// the captured RESPONSE joins to the captured REQUEST by exact id.
+		return {
+			generatedText: text,
+			candidate: parseBoundedObjectiveCandidate(text),
+			selectorRequestId,
+		};
+	}
+
+	/**
+	 * Report ONE observed fact about the R2 selection boundary to the
+	 * OPT-IN, host-supplied observation sink.
+	 *
+	 * ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01.
+	 *
+	 * DEFAULT OFF: the sink is absent unless a host supplies one, and this
+	 * method pays a single null check.
+	 *
+	 * The report is READ-ONLY and MUST NOT affect the selection, the
+	 * validation, the dispatch, or the completion authority.
+	 *
+	 * ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01 (AMENDMENT-01):
+	 * FAILURE ISOLATION covers BOTH a synchronous throw AND an
+	 * ASYNCHRONOUS rejection.
+	 *
+	 * The sink's contract is `void | Promise<void>`. `try { void
+	 * sink.onSelectionObservation(...) } catch {}` only isolates the
+	 * SYNCHRONOUS throw: a returned Promise that rejects LATER escapes
+	 * the try block entirely and becomes an UNHANDLED REJECTION, which
+	 * terminates the process under `--unhandled-rejections=strict` (and
+	 * is an unhandled rejection in every other profile too).
+	 *
+	 * The returned thenable is therefore ATTACHED: a rejection is
+	 * swallowed by the runtime's OWN rejection handler, so the observer
+	 * can never take the process down. The observation itself is
+	 * fire-and-forget — the runtime NEVER awaits the sink, so a slow or
+	 * hanging sink cannot delay the selection, the validation or the
+	 * parent continuation.
+	 *
+	 * DEFAULT OFF additionally performs NO capture-specific diagnosis or
+	 * serialization: the absent-sink path is a single null check and
+	 * returns before any observation is built.
+	 */
+	private observeBoundedObjectiveSelection(
+		observation: BoundedObjectiveSelectionObservation,
+	): void {
+		const sink = this.config.boundedObjectiveSelectionTraceSink;
+		const report = sink?.onSelectionObservation;
+		if (!report) {
+			return;
+		}
+		try {
+			// ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01 (AMENDMENT-01):
+			// DETACH the observation before it reaches the observer.
+			//
+			// The observation carries the runtime-owned PARSED PROPOSAL, and
+			// the validator RETAINS that proposal's `obligationReferences` and
+			// `evidenceReferences` arrays — the very arrays it validated. A
+			// structural clone breaks the aliasing, so an observer that
+			// mutates those arrays cannot alter the already-validated
+			// objective, its revalidation, or the rendered privileged
+			// instruction.
+			//
+			// The clone is DEEP, so nested structures are detached too. The
+			// observation's own contract is a plain JSON-shaped record, so
+			// `structuredClone` covers it.
+			const result = report.call(sink, structuredClone(observation));
+			// The sink MAY return a Promise. A rejection must never escape
+			// as an unhandled rejection, so the runtime attaches its own
+			// rejection handler. The runtime does NOT await it: the
+			// observation is fire-and-forget by contract.
+			if (
+				result !== null &&
+				typeof result === "object" &&
+				typeof (result as Promise<void>).then === "function"
+			) {
+				(result as Promise<void>).then(undefined, () => {
+					// The observation sink must never affect model
+					// execution. A rejected observation is swallowed.
+				});
+			}
+		} catch {
+			// A SYNCHRONOUS throw is swallowed too.
+			// The observation sink must never affect model execution.
+		}
+	}
+
+	/**
+	 * The R2 DISPATCH PROJECTION.
+	 *
+	 * While a bounded objective is active, the runtime projects it onto the
+	 * DISPATCHED model request's privileged channel (the system prompt),
+	 * which is the same channel the host's trusted runtime-control
+	 * continuation uses.
+	 *
+	 * This is what makes R2 materially different from R1:
+	 *
+	 *   - R1 appends an ADVISORY message to the conversation; the model may
+	 *     ignore it, and the conversation's own objective is unchanged.
+	 *   - R2 changes the CURRENT EXECUTION TARGET of the request the
+	 *     provider is about to see.
+	 *
+	 * The canonical conversation history is NOT mutated: the objective is a
+	 * runtime-owned projection, so the signed reasoning continuity and the
+	 * parent's conversation are preserved byte-for-byte.
+	 */
+	private projectActiveBoundedObjective(
+		systemPrompt: string | undefined,
+	): string | undefined {
+		const objective = this.activeBoundedObjective;
+		if (!objective) {
+			return systemPrompt;
+		}
+		const instruction = renderBoundedObjectiveInstruction(objective);
+		if (!systemPrompt || systemPrompt.trim().length === 0) {
+			return instruction;
+		}
+		return `${systemPrompt}\n\n${instruction}`;
+	}
+
+	/**
+	 * Fold one execution round into the ACTIVE bounded objective's facts.
+	 *
+	 * The facts are the SAME structural observations the stagnation
+	 * accounting already collects. They are the input to the verification
+	 * step.
+	 *
+	 * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-01:
+	 * the round's STRUCTURED EXECUTION RECEIPTS are folded in as well.
+	 * The receipts are what makes the required gate correlatable with its
+	 * actual outcome.
+	 */
+	private accumulateBoundedObjectiveFacts(): void {
+		const objective = this.activeBoundedObjective;
+		if (!objective) {
+			return;
+		}
+		const facts = this.executionRoundFacts;
+		this.boundedObjectiveFacts = {
+			rounds: this.boundedObjectiveFacts.rounds + 1,
+			toolNames: [...this.boundedObjectiveFacts.toolNames, ...facts.toolNames],
+			editAttempts:
+				this.boundedObjectiveFacts.editAttempts + facts.editAttempts,
+			successfulEdits:
+				this.boundedObjectiveFacts.successfulEdits + facts.successfulEdits,
+			executedCommands:
+				this.boundedObjectiveFacts.executedCommands + facts.executedCommands,
+			receipts: [
+				...(this.boundedObjectiveFacts.receipts ?? []),
+				...facts.receipts,
+			],
+		};
+	}
+
+	/**
+	 * Whether the ACTIVE bounded objective has been VERIFIED.
+	 *
+	 * A model statement that the objective is complete is NOT sufficient:
+	 * the verification consults the OBSERVABLE tool outcomes of the
+	 * objective's own execution.
+	 *
+	 * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-02.
+	 *
+	 * The AMENDMENT-01 structural gate check is REMOVED. It accepted any
+	 * successful command whose text CONTAINED a host-declared substring,
+	 * so a trivial `echo check-value` satisfied a `check-value` gate and
+	 * the runtime reported the objective as VERIFIED. That is not
+	 * executable verification, and no shell-command parser can repair it:
+	 * a command that merely MENTIONS the gate can succeed while the
+	 * executable the objective names never ran.
+	 *
+	 * The verification now has exactly ONE authority:
+	 *
+	 *   The HOST's `verifyObjective` callback. It owns the workspace, the
+	 *   command-policy layer and the sandbox, so it is the only layer that
+	 *   can know whether the objective's verification condition was met.
+	 *   Returning `undefined` means "no opinion", and a THROWING callback
+	 *   is treated as "no opinion" too.
+	 *
+	 * When the host supplies NO verdict, the objective is UNVERIFIED. The
+	 * runtime reports that honestly instead of manufacturing a success:
+	 * useful unverified progress is a legitimate recovery outcome.
+	 */
+	private isBoundedObjectiveVerified(): boolean {
+		const objective = this.activeBoundedObjective;
+		if (!objective) {
+			return false;
+		}
+		const policy = this.getBoundedObjectivePolicy();
+		const authority = resolveBoundedObjectiveVerification(
+			objective,
+			this.boundedObjectiveFacts,
+			policy?.verifyObjective,
+		);
+		return authority.kind === "host_verdict" && authority.verified;
+	}
+
+	/**
+	 * Evaluate the ACTIVE bounded objective after a round, and — when it is
+	 * verified — RETURN execution to the parent task automatically.
+	 *
+	 * The return is automatic: no operator confirmation, no new user-waiting
+	 * state, and no new lifecycle authority. The parent's completion
+	 * obligations are preserved: completing the objective does NOT authorize
+	 * the parent's completion.
+	 */
+	private async evaluateActiveBoundedObjective(): Promise<void> {
+		const objective = this.activeBoundedObjective;
+		if (!objective) {
+			return;
+		}
+		this.accumulateBoundedObjectiveFacts();
+		const policy = this.getBoundedObjectivePolicy();
+		const maxRounds = Math.max(
+			0,
+			policy?.maxObjectiveRounds ??
+				DEFAULT_BOUNDED_OBJECTIVE_POLICY.maxObjectiveRounds,
+		);
+		const verified = this.isBoundedObjectiveVerified();
+		const roundsExhausted = this.boundedObjectiveFacts.rounds >= maxRounds;
+		if (!verified && !roundsExhausted) {
+			// The objective is still executing: the dispatch projection
+			// stays active, so the NEXT request still reflects it.
+			return;
+		}
+		if (verified) {
+			this.activeBoundedObjective = undefined;
+			this.lastBoundedObjectiveOutcome = {
+				kind: "completed",
+				objective,
+			};
+			await this.emit({
+				type: "status-notice",
+				snapshot: this.snapshot(),
+				message: `bounded objective verified: ${objective.objective} — returning execution to the parent task`,
+				metadata: {
+					kind: "bounded_objective_recovery",
+					reason: "bounded_objective_verified",
+					phase: "objective_verified",
+					iteration: this.state.iteration,
+					objective: objective.objective,
+					rounds: this.boundedObjectiveFacts.rounds,
+					executedCommands: this.boundedObjectiveFacts.executedCommands,
+					successfulEdits: this.boundedObjectiveFacts.successfulEdits,
+				},
+			});
+			await this.emitBoundedObjectiveOutcome(undefined);
+			return;
+		}
+		// The objective's round budget is exhausted WITHOUT a verification.
+		// The recovery FAILED: it must not manufacture success, and it must
+		// not silently replenish the allowance.
+		this.activeBoundedObjective = undefined;
+		this.lastBoundedObjectiveOutcome = {
+			kind: "failed",
+			reason: "objective_rounds_exhausted_without_verification",
+			objective,
+		};
+		await this.emit({
+			type: "status-notice",
+			snapshot: this.snapshot(),
+			message: `bounded objective did not verify within ${maxRounds} round(s) — returning execution to the parent task without claiming success`,
+			metadata: {
+				kind: "bounded_objective_recovery",
+				reason: "bounded_objective_unverified",
+				phase: "objective_failed",
+				iteration: this.state.iteration,
+				objective: objective.objective,
+				rounds: this.boundedObjectiveFacts.rounds,
+				maxRounds,
+			},
+		});
+		await this.emitBoundedObjectiveOutcome(
+			"objective_rounds_exhausted_without_verification",
+		);
+	}
+
+	/**
+	 * CLOSE OUT an ACTIVE bounded objective at the run's TERMINAL
+	 * boundary.
+	 *
+	 * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-01.
+	 *
+	 * The in-loop evaluation only runs when the run CONTINUES. When the
+	 * run ends with an objective still active, the objective would
+	 * otherwise disappear without a verdict — the runtime would have
+	 * consumed its activation allowance and produced no machine-readable
+	 * fact at all.
+	 *
+	 * This method produces that fact TRUTHFULLY:
+	 *
+	 *   - if the objective's required verification gate HAS passed by the
+	 *     time the run ends, the objective is reported COMPLETED,
+	 *   - otherwise it is reported FAILED, with the reason
+	 *     `objective_run_ended_without_verification`.
+	 *
+	 * It NEVER manufactures success, and it NEVER completes the parent
+	 * task: the parent's completion contract is unchanged.
+	 */
+	private async finalizeActiveBoundedObjective(): Promise<void> {
+		const objective = this.activeBoundedObjective;
+		if (!objective) {
+			return;
+		}
+		this.accumulateBoundedObjectiveFacts();
+		const verified = this.isBoundedObjectiveVerified();
+		this.activeBoundedObjective = undefined;
+		if (verified) {
+			this.lastBoundedObjectiveOutcome = {
+				kind: "completed",
+				objective,
+			};
+			await this.emit({
+				type: "status-notice",
+				snapshot: this.snapshot(),
+				message: `bounded objective verified: ${objective.objective} — returning execution to the parent task`,
+				metadata: {
+					kind: "bounded_objective_recovery",
+					reason: "bounded_objective_verified",
+					phase: "objective_verified",
+					iteration: this.state.iteration,
+					objective: objective.objective,
+					rounds: this.boundedObjectiveFacts.rounds,
+					executedCommands: this.boundedObjectiveFacts.executedCommands,
+					successfulEdits: this.boundedObjectiveFacts.successfulEdits,
+				},
+			});
+			await this.emitBoundedObjectiveOutcome(undefined);
+			return;
+		}
+		this.lastBoundedObjectiveOutcome = {
+			kind: "failed",
+			reason: "objective_run_ended_without_verification",
+			objective,
+		};
+		await this.emit({
+			type: "status-notice",
+			snapshot: this.snapshot(),
+			message: `bounded objective did not verify before the run ended — returning execution to the parent task without claiming success`,
+			metadata: {
+				kind: "bounded_objective_recovery",
+				reason: "bounded_objective_unverified",
+				phase: "objective_failed",
+				iteration: this.state.iteration,
+				objective: objective.objective,
+				rounds: this.boundedObjectiveFacts.rounds,
+			},
+		});
+		await this.emitBoundedObjectiveOutcome(
+			"objective_run_ended_without_verification",
+		);
+	}
+
+	/**
+	 * THE OBJECTIVE SCOPE GATE — the refusal decision.
+	 *
+	 * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-01.
+	 *
+	 * Returns a refusal reason when the tool call would MUTATE a path
+	 * outside the ACTIVE objective's authorised scope, and `undefined`
+	 * otherwise.
+	 *
+	 * WHAT IT ENFORCES
+	 * -----------------
+	 * The active objective may only NARROW the parent's authority, and the
+	 * narrowing is enforced HERE — at the tool-execution boundary — not
+	 * merely asserted in the dispatch text the model reads.
+	 *
+	 * WHAT IT DOES NOT CLAIM
+	 * ----------------------
+	 * The gate is honest about its own limits:
+	 *
+	 *   - It applies to tool calls whose input carries an EXPLICIT path.
+	 *     A command tool whose command text names a path is NOT inspected:
+	 *     the runtime never parses command text, because that would be
+	 *     provider-specific string matching. The COMMAND-POLICY layer and
+	 *     the SANDBOX remain the authority for command contents.
+	 *   - It applies only while an objective is active.
+	 *   - It applies only when the objective's scope resolved to a
+	 *     canonical root. An objective whose scope did NOT resolve has no
+	 *     narrower scope to enforce; the parent's own authorisation remains
+	 *     the only authority in that case, and the runtime says so rather
+	 *     than pretending a narrower scope exists.
+	 */
+	private refuseToolCallOutsideActiveObjectiveScope(
+		toolName: string,
+		input: unknown,
+	): string | undefined {
+		const objective = this.activeBoundedObjective;
+		if (!objective) {
+			return undefined;
+		}
+		// The gate applies to MUTATIONS only. A read-only tool call cannot
+		// widen the parent's authority.
+		const classified = this.classifyToolCallProductivity(
+			toolName,
+			input,
+			undefined,
+		);
+		if (classified.kind !== "edit") {
+			return undefined;
+		}
+		const targetPath = extractToolCallTargetPath(input);
+		if (targetPath === undefined) {
+			return undefined;
+		}
+		const scopeRoots = this.resolveActiveObjectiveScopeRoots(objective);
+		if (scopeRoots.length === 0) {
+			// The objective's scope did NOT resolve to a canonical root.
+			// There is no narrower scope to enforce. The parent's own
+			// authorisation — enforced by the existing workspace, sandbox
+			// and command-policy layers — remains the only authority.
+			return undefined;
+		}
+		const resolvedTarget = canonicalizeScopePath(targetPath);
+		const targetCanonical = resolvedTarget.canonical;
+		if (!resolvedTarget.resolvable || targetCanonical === undefined) {
+			// A path that cannot be canonicalised cannot be shown to be
+			// inside the scope, so the mutation is refused.
+			return `Tool "${toolName}" was refused by the active bounded objective: the target path could not be resolved against the objective's authorised mutation scope`;
+		}
+		const inside = scopeRoots.some((root) =>
+			isPathWithinCanonicalRoot(targetCanonical, root),
+		);
+		if (inside) {
+			return undefined;
+		}
+		return `Tool "${toolName}" was refused by the active bounded objective: the target path is outside the objective's authorised mutation scope`;
+	}
+
+	/**
+	 * The CANONICAL ROOTS of the ACTIVE objective's authorised mutation
+	 * scope.
+	 *
+	 * Returns an EMPTY list when the objective's scope could not be
+	 * resolved — the honest representation of "there is no narrower scope
+	 * to enforce".
+	 */
+	private resolveActiveObjectiveScopeRoots(
+		objective: BoundedObjective,
+	): string[] {
+		const roots: string[] = [];
+		for (const candidate of extractScopePaths(objective.mutationScope)) {
+			const resolved = canonicalizeScopePath(candidate);
+			if (resolved.resolvable && resolved.canonical !== undefined) {
+				roots.push(resolved.canonical);
+			}
+		}
+		return roots;
+	}
+
+	/**
+	 * Emit the explicit internal recovery outcome.
+	 *
+	 * It is the machine-readable fact a future R3 consumer acts on. It
+	 * carries NO user-facing waiting state and never manufactures success.
+	 */
+	private async emitBoundedObjectiveOutcome(
+		failureReason: string | undefined,
+	): Promise<void> {
+		const outcome = this.lastBoundedObjectiveOutcome;
+		if (!outcome) {
+			return;
+		}
+		await this.emit({
+			type: "status-notice",
+			snapshot: this.snapshot(),
+			message: failureReason
+				? `bounded objective recovery outcome: failed (${failureReason})`
+				: "bounded objective recovery outcome: completed",
+			metadata: {
+				kind: "bounded_objective_recovery",
+				reason: "bounded_objective_outcome",
+				phase: "outcome",
+				iteration: this.state.iteration,
+				outcome: outcome.kind,
+				failureReason,
+				activations: this.boundedObjectiveActivations,
+				selectionInferences: this.boundedObjectiveSelectionInferences,
+			},
+		});
+	}
+
 	private async addUserReminderMessage(
 		text: string,
 		metadata: AgentMessage["metadata"] = {},
@@ -1836,6 +3829,199 @@ export class AgentRuntime {
 			message: reminderMessage,
 		});
 		return reminderMessage;
+	}
+
+	// -------------------------------------------------------------------------
+	// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (R1)
+	//
+	// Runtime-owned execution-stagnation recovery.
+	//
+	// The runtime is the ONLY lifecycle authority here: it observes its own
+	// execution rounds, owns the accounting, and injects its own corrective
+	// message through the EXISTING `addUserReminderMessage` seam. No parallel
+	// supervisor, no provider switching, no workflow engine.
+	//
+	// The pure decision function lives in `@cline/shared`
+	// (`agents/execution-stagnation`) so the compaction contract-conservation
+	// path can recognise the injected message by template equality.
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Clear the facts observed for the current execution round.
+	 */
+	private resetExecutionRoundFacts(): void {
+		this.executionRoundFacts = {
+			toolNames: [],
+			editAttempts: 0,
+			successfulEdits: 0,
+			executedCommands: 0,
+			failedExecutions: 0,
+			awaitingBackgroundWork: false,
+			receipts: [],
+		};
+	}
+
+	/**
+	 * Classify ONE tool call's observable shape into a productivity signal.
+	 *
+	 * The classification is driven by the tool INPUT SHAPE and the tool
+	 * RESULT OUTCOME, never by a host/provider-specific tool-name string
+	 * comparison:
+	 *
+	 *   - an input carrying an edit operation (`path` + `old_text` /
+	 *     `new_text` / `insert_line`, or an `apply_patch` body) is an EDIT
+	 *     attempt;
+	 *   - an input carrying a command list is a COMMAND EXECUTION;
+	 *   - everything else is INSPECTION.
+	 *
+	 * A command whose result reports that it is STILL RUNNING is
+	 * "awaiting background work" — the round must NOT count toward the
+	 * stagnation streak, because a legitimate wait is not a stall.
+	 */
+	private classifyToolCallProductivity(
+		toolName: string,
+		input: unknown,
+		result: { output: unknown; isError?: boolean } | undefined,
+	): {
+		kind: "edit" | "command" | "inspection";
+		awaiting: boolean;
+	} {
+		const record = (input ?? {}) as Record<string, unknown>;
+		const hasEditShape =
+			typeof record.path === "string" &&
+			(typeof record.old_text === "string" ||
+				typeof record.new_text === "string" ||
+				typeof record.insert_line === "string" ||
+				typeof record.content === "string" ||
+				typeof record.diff === "string" ||
+				typeof record.patch === "string");
+		const hasPatchBody =
+			typeof input === "string" && input.includes("*** Begin Patch");
+		if (hasEditShape || hasPatchBody) {
+			return { kind: "edit", awaiting: false };
+		}
+		const commands = record.commands;
+		if (Array.isArray(commands)) {
+			return {
+				kind: "command",
+				awaiting: this.resultReportsStillRunning(result?.output),
+			};
+		}
+		// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (AMENDMENT-01):
+		// a tool call that is NOT command-shaped can still be a LEGITIMATE
+		// WAIT.
+		//
+		// Production does not wait by relaunching a build: it launches ONE
+		// job and then POLLS that ONE IDENTIFIED job with `command_status`,
+		// whose input is `{ jobId }` — no `commands` array — and whose result
+		// carries the `state: "running"` marker.
+		//
+		// Reading the marker only for command-shaped inputs therefore
+		// classified a legitimate poll as an unproductive inspection round:
+		// a FALSE STALL declared while the agent was waiting on real work.
+		//
+		// The marker is a DATA-SHAPE fact about the OBSERVATION, so it is
+		// read for every tool call. A tool that returns no marker keeps the
+		// previous classification exactly.
+		const awaiting = this.resultReportsStillRunning(result?.output);
+		// `toolName` participates only as a LAST-RESORT disambiguator for
+		// hosts that express a patch body as a dedicated tool input.
+		void toolName;
+		return { kind: "inspection", awaiting };
+	}
+
+	/**
+	 * Whether a command result reports that the command is STILL RUNNING.
+	 *
+	 * The check is DATA-SHAPE driven: it looks for an explicit
+	 * "still running" marker in the structured result, never for prose.
+	 * A host that reports background work through a different channel simply
+	 * does not set the marker, and the round is then classified by the same
+	 * rules as any other command round.
+	 */
+	private resultReportsStillRunning(output: unknown): boolean {
+		if (typeof output === "string") {
+			// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (AMENDMENT-01):
+			// the PRODUCTION `run_commands` RUNNING envelope is a JSON
+			// STRING (`JSON.stringify(runningPayload)`), so the marker is
+			// read STRUCTURALLY through the parsed envelope.
+			//
+			// The prose fallback below remains for hosts that report the
+			// state in plain text.
+			try {
+				if (this.outputReportsStillRunningShape(JSON.parse(output))) {
+					return true;
+				}
+			} catch {
+				// Not JSON: fall through to the prose reading.
+			}
+			return /\b(still running|running in the background|backgrounded)\b/i.test(
+				output,
+			);
+		}
+		if (!output || typeof output !== "object") {
+			return false;
+		}
+		// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (AMENDMENT-01):
+		// the PRODUCTION TOOL-RESULT ENVELOPE.
+		//
+		// The production tools return their result as an ARRAY of operation
+		// results (`ToolOperationResult[]`), and the "still running" marker
+		// lives on the OPERATION RESULT — not on the envelope. The
+		// production `command_status` tool, for example, returns
+		//
+		//   [{ ok: true, jobId, state: "running", elapsedMs, ... }]
+		//
+		// so a top-level read of `state` sees `undefined` and a legitimate
+		// wait on a running job was misclassified as an unproductive
+		// inspection round — a FALSE STALL.
+		//
+		// The marker is therefore read through BOTH shapes: the single
+		// operation-result object, and the production array envelope. This
+		// is a DATA-SHAPE read, never a prose read: only the explicit
+		// marker fields are consulted.
+		return this.outputReportsStillRunningShape(output);
+	}
+
+	/**
+	 * Whether ONE observation carries the explicit "still running" marker.
+	 *
+	 * The marker is read from the explicit fields only. No prose is parsed.
+	 */
+	private outputReportsStillRunningShape(value: unknown): boolean {
+		if (!value || typeof value !== "object") {
+			return false;
+		}
+		const record = value as Record<string, unknown>;
+		for (const key of ["status", "state", "commandExecutionDisposition"]) {
+			const marker = record[key];
+			if (typeof marker === "string") {
+				const normalized = marker.toLowerCase();
+				if (
+					normalized === "running" ||
+					normalized === "backgrounded" ||
+					normalized === "still_running" ||
+					normalized === "in_progress"
+				) {
+					return true;
+				}
+			}
+		}
+		if (record.isRunning === true || record.stillRunning === true) {
+			return true;
+		}
+		// The production array envelope: the marker lives on an operation
+		// result inside the array. A single-element array is the production
+		// shape of a one-command observation; a multi-element array is
+		// inspected entry by entry.
+		if (Array.isArray(value)) {
+			for (const entry of value) {
+				if (this.outputReportsStillRunningShape(entry)) {
+					return true;
+				}
+			}
+		}
+		return false;
 	}
 
 	private async execute(input?: AgentRunInput): Promise<AgentRunResult> {
@@ -1874,6 +4060,30 @@ export class AgentRuntime {
 		this.pendingHookContexts = [];
 		this.maxTokensRecoveryCount = 0;
 		this.maxTokensRecoveryAttempted = false;
+		// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (R1): the
+		// execution-stagnation accounting is RUN-SCOPED. A fresh run starts
+		// from a clean streak AND a clean instruction allowance, so a prior
+		// run's stall cannot consume the next run's recovery budget.
+		this.executionStagnation = createExecutionStagnationAccounting();
+		this.resetExecutionRoundFacts();
+		// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 (R2): the
+		// bounded-objective accounting is RUN-SCOPED, exactly like the R1
+		// accounting. A fresh run starts with a clean activation allowance,
+		// a clean selection-inference allowance, and NO active objective, so
+		// a prior run's recovery cannot consume the next run's budget and a
+		// stale objective can never be dispatched.
+		this.boundedObjectiveActivations = 0;
+		this.boundedObjectiveSelectionInferences = 0;
+		this.activeBoundedObjective = undefined;
+		this.boundedObjectiveFacts = {
+			rounds: 0,
+			toolNames: [],
+			editAttempts: 0,
+			successfulEdits: 0,
+			executedCommands: 0,
+			receipts: [],
+		};
+		this.lastBoundedObjectiveOutcome = undefined;
 
 		// C1.4: reset recovery bookkeeping that is scoped to a
 		// single run. The same logic applies here as in
@@ -1924,6 +4134,10 @@ export class AgentRuntime {
 				this.throwIfAborted();
 
 				this.state.iteration += 1;
+				// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (R1): the
+				// execution round's observable facts are reset at the START of
+				// the round, so they describe exactly the work this round does.
+				this.resetExecutionRoundFacts();
 				await this.emit({
 					type: "turn-started",
 					snapshot: this.snapshot(),
@@ -2045,6 +4259,12 @@ export class AgentRuntime {
 						}
 						continue;
 					}
+					// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01
+					// (AMENDMENT-01): close out an ACTIVE bounded
+					// objective at the run's TERMINAL boundary, so the
+					// recovery produces a truthful machine-readable
+					// verdict instead of disappearing with the run.
+					await this.finalizeActiveBoundedObjective();
 					const result = this.finishRun("completed", finalAssistantMessage);
 					await this.callAfterRunHooks(result);
 					await this.emit({
@@ -2092,6 +4312,33 @@ export class AgentRuntime {
 				}
 
 				await this.flushPendingHookContexts();
+				// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (R1): the
+				// RUNTIME INTERVENTION BOUNDARY. This runs AFTER the round's
+				// tool calls have been executed and their results delivered,
+				// and BEFORE the next model request. When it injects a
+				// corrective instruction, execution continues AUTOMATICALLY —
+				// the loop proceeds to the next iteration without any user
+				// confirmation and without terminating the run.
+				await this.evaluateExecutionStagnation();
+				// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 (R2): the
+				// BOUNDED-OBJECTIVE EVALUATION BOUNDARY.
+				//
+				// It runs at the SAME boundary as the R1 intervention, AFTER
+				// the round's tool calls have been executed and their results
+				// delivered, and BEFORE the next model request.
+				//
+				// It has two jobs:
+				//
+				//   1. when an objective is ACTIVE, it folds the round's
+				//      observable facts into the objective's verification
+				//      evidence, and — when the objective VERIFIES — it
+				//      returns execution to the parent task AUTOMATICALLY;
+				//
+				//   2. when NO objective is active, it is a no-op.
+				//
+				// It NEVER completes the parent task and NEVER invokes the
+				// parent's terminal completion tool.
+				await this.evaluateActiveBoundedObjective();
 				await this.emit({
 					type: "turn-finished",
 					snapshot: this.snapshot(),
@@ -2103,6 +4350,18 @@ export class AgentRuntime {
 					toolMessages,
 				);
 				if (terminalToolMessage) {
+					// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01
+					// (AMENDMENT-02): close out an ACTIVE bounded objective
+					// at the TERMINAL-TOOL boundary too.
+					//
+					// A run that ends through the parent's terminal
+					// completion tool would otherwise drop the objective
+					// without a verdict: the runtime would have consumed
+					// its activation allowance and produced no
+					// machine-readable fact at all. The objective's
+					// UNVERIFIED disposition is a legitimate outcome and
+					// must be reported truthfully, not discarded.
+					await this.finalizeActiveBoundedObjective();
 					const result = this.finishRun(
 						"completed",
 						finalAssistantMessage,
@@ -2814,7 +5073,21 @@ export class AgentRuntime {
 			[MODEL_BEHAVIOR_WIRE_REASONING_REQUEST_ID_METADATA_KEY]: modelRequestId,
 		});
 		let request: AgentModelRequest = {
-			systemPrompt: this.config.systemPrompt,
+			// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 (R2): the
+			// R2 DISPATCH PROJECTION.
+			//
+			// While a bounded objective is ACTIVE, it is projected onto the
+			// request's privileged channel. This is what makes the objective
+			// the CURRENT EXECUTION TARGET of the request the provider is
+			// about to see — materially different from R1's advisory nudge,
+			// which merely appends a suggestion to the conversation.
+			//
+			// The projection is a runtime-owned REQUEST property: the
+			// canonical conversation history is NOT mutated, so the parent's
+			// conversation and the signed reasoning continuity are preserved.
+			systemPrompt: this.projectActiveBoundedObjective(
+				this.config.systemPrompt,
+			),
 			messages: cloneMessages(this.state.messages),
 			tools: [...this.tools.values()].map<AgentToolDefinition>((tool) => ({
 				name: tool.name,
@@ -3105,6 +5378,15 @@ export class AgentRuntime {
 		let requestId: string | undefined;
 		let accumulatedText = "";
 		let accumulatedReasoning = "";
+		// ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION01.
+		//
+		// The provider's CURRENT reasoning block identity.
+		//
+		// It is tracked OUTSIDE the reasoning part's metadata on purpose: the
+		// metadata bag is PROVIDER-OWNED (it carries the provider's opaque
+		// signature and redacted payload) and must not receive a
+		// ClineMM-internal field.
+		let activeReasoningBlockId: string | undefined;
 
 		// RSMT01: raise modelStreaming BEFORE the for-await
 		// loop so observers that subscribe to snapshot()
@@ -3171,7 +5453,29 @@ export class AgentRuntime {
 					case "reasoning-delta": {
 						accumulatedReasoning += event.text;
 						const last = sequence.at(-1);
-						if (last?.type === "part" && last.part.type === "reasoning") {
+						// ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION01.
+						//
+						// A provider response may contain SEVERAL independently
+						// signed reasoning blocks (the Anthropic Messages contract
+						// allows multiple `thinking` blocks in one assistant turn).
+						// Merging them into ONE part loses a signature: a merged
+						// block can carry only ONE signature, so every block but the
+						// last would be silently dropped on the wire.
+						//
+						// The provider's block identity (`event.blockId`, the AI
+						// SDK's reasoning part id) therefore STARTS A NEW reasoning
+						// part when it changes. When the identity is absent the
+						// previous merge behaviour is kept, so a provider that does
+						// not expose block identity is unaffected.
+						const sameBlock =
+							event.blockId === undefined ||
+							(event.blockId !== undefined &&
+								event.blockId === activeReasoningBlockId);
+						if (
+							last?.type === "part" &&
+							last.part.type === "reasoning" &&
+							sameBlock
+						) {
 							last.part.text += event.text;
 							last.part.redacted = event.redacted ?? last.part.redacted;
 							last.part.metadata = event.metadata ?? last.part.metadata;
@@ -3185,6 +5489,9 @@ export class AgentRuntime {
 									metadata: event.metadata,
 								},
 							});
+						}
+						if (event.blockId !== undefined) {
+							activeReasoningBlockId = event.blockId;
 						}
 						await this.emit({
 							type: "assistant-reasoning-delta",
@@ -5346,6 +7653,43 @@ export class AgentRuntime {
 			}
 		}
 
+		// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-01:
+		// THE OBJECTIVE SCOPE GATE.
+		//
+		// While a bounded objective is ACTIVE, the runtime enforces the
+		// objective's MUTATION SCOPE at the tool-execution boundary: a
+		// tool call that would mutate a path OUTSIDE the objective's
+		// authorised scope is refused BEFORE it reaches the approval chain
+		// and BEFORE the executor runs.
+		//
+		// This is the CONSERVATION of the parent's authorisation: the
+		// objective may only narrow the parent's authority, and the
+		// narrowing is enforced, not merely stated in the dispatch text.
+		//
+		// The gate is deliberately narrow and honest about its limits:
+		//
+		//   - it applies to tool calls whose input carries an EXPLICIT
+		//     path — the shape the runtime's own edit classification
+		//     already recognises,
+		//   - it applies only while an objective is active,
+		//   - and it applies only when the objective's scope RESOLVED to a
+		//     canonical root. When the objective's scope could not be
+		//     resolved to a canonical path, there is NO narrower scope to
+		//     enforce, and the runtime does NOT pretend otherwise: the
+		//     parent's own authorisation remains the only authority, and
+		//     the objective is reported as carrying an UNENFORCEABLE
+		//     scope.
+		if (tool && !skipReason) {
+			const scopeRefusal = this.refuseToolCallOutsideActiveObjectiveScope(
+				toolCall.toolName,
+				input,
+			);
+			if (scopeRefusal) {
+				skipReason = scopeRefusal;
+				approvalOutcome = "skipped";
+			}
+		}
+
 		let policyOverride: ToolPolicy | undefined;
 		if (tool && !skipReason) {
 			for (const hook of this.hooks.beforeTool) {
@@ -5893,6 +8237,17 @@ export class AgentRuntime {
 				),
 			);
 		}
+
+		// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (R1): record the
+		// OBSERVABLE facts of this tool call for the current execution
+		// round. The observation is read-only and NEVER influences the tool
+		// call itself: it is taken AFTER the result is produced, and a
+		// classification failure cannot affect the outcome.
+		this.observeExecutionRoundToolCall(
+			prepared.toolCall.toolName,
+			prepared.input,
+			result,
+		);
 
 		const message = createMessage("tool", [
 			{

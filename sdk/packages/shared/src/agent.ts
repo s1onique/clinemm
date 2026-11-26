@@ -5,6 +5,8 @@
  *
  */
 
+import type { BoundedObjectivePolicy } from "./agents/bounded-objective";
+import type { ExecutionStagnationPolicy } from "./agents/execution-stagnation";
 import type {
 	AgentRuntimeRecoverySnapshot,
 	ToolRuntimeOutcome,
@@ -917,6 +919,27 @@ export type AgentModelEvent =
 			text: string;
 			redacted?: boolean;
 			metadata?: unknown;
+			/**
+			 * ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION01.
+			 *
+			 * The identity of the PROVIDER'S reasoning block this delta
+			 * belongs to.
+			 *
+			 * A provider response may contain SEVERAL independently signed
+			 * reasoning blocks (the Anthropic Messages contract allows
+			 * multiple `thinking` blocks in one assistant turn). Each block
+			 * has its own text and its own opaque signature, and they must
+			 * NOT be merged: a merged block cannot carry two signatures, so
+			 * one of them would be silently lost.
+			 *
+			 * The value is the provider's own content-block identifier (the
+			 * AI SDK's reasoning part id, which is the Anthropic content
+			 * block index). It is a TRANSIENT stream-event field: it is not
+			 * persisted and it is not part of the message schema. When it is
+			 * absent the runtime keeps its previous behaviour and merges
+			 * adjacent reasoning deltas into one part.
+			 */
+			blockId?: string;
 	  }
 	| {
 			type: "tool-call-delta";
@@ -1229,6 +1252,20 @@ export interface AgentRuntimeConfig {
 	 */
 	modelBehaviorTraceSink?: import("./runtime/model-behavior-trace").ModelBehaviorTraceSink;
 	/**
+	 * ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01: optional read-only
+	 * observation sink for the R2 bounded-objective SELECTION boundary.
+	 *
+	 * The runtime REPORTS the generated objective text, the parsed
+	 * proposal and the exact validation disposition. The runtime never
+	 * reads a decision back, so the sink can never influence the selection,
+	 * the validation, or the completion authority.
+	 *
+	 * DEFAULT OFF: when absent, the runtime pays a single null check at
+	 * the boundary and behaves bit-identically to a build without this
+	 * feature.
+	 */
+	boundedObjectiveSelectionTraceSink?: import("./agents/bounded-objective").BoundedObjectiveSelectionTraceSink;
+	/**
 	 * Extra properties for the `agent.run-finished` / `agent.run-failed`
 	 * telemetry mirror, read once when the run ends. Lets the host attach
 	 * diagnostics it derives from runtime events without the loop owning them.
@@ -1240,6 +1277,51 @@ export interface AgentRuntimeConfig {
 		requireCompletionTool?: boolean;
 		completionGuard?: () => string | undefined;
 	};
+	/**
+	 * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (R1).
+	 *
+	 * The runtime-owned execution-stagnation recovery policy.
+	 *
+	 * When enabled, the agent runtime observes each execution round and, if
+	 * a configurable streak of consecutive rounds produced no productive
+	 * step, injects ONE runtime-owned corrective instruction before the next
+	 * model request. The instruction describes observable execution facts and
+	 * asks for the next smallest useful experiment or edit; execution then
+	 * continues AUTOMATICALLY without user confirmation.
+	 *
+	 * The policy is OPT-IN: when it is absent the runtime behaves exactly as
+	 * before (no observation cost, no injected message, no accounting).
+	 *
+	 * The accounting is RUN-SCOPED and lives on the runtime instance, so it
+	 * survives compaction (compaction replaces the PROVIDER REQUEST messages,
+	 * never the runtime's canonical transcript or its counters).
+	 */
+	executionStagnationPolicy?: ExecutionStagnationPolicy;
+	/**
+	 * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 (R2).
+	 *
+	 * The runtime-owned bounded-objective recovery policy.
+	 *
+	 * R2 is the SECOND recovery stage. It activates ONLY after the R1
+	 * corrective-instruction allowance has been exhausted and the trajectory
+	 * is STILL unproductive. When it activates, the runtime SELECTS one
+	 * bounded, independently verifiable objective derived from the parent
+	 * task and makes it the CURRENT EXECUTION TARGET of the next dispatched
+	 * model request.
+	 *
+	 * The parent task remains authoritative throughout: the objective is a
+	 * child of it, the parent's completion obligations are untouched, and
+	 * the parent's terminal completion tool is never invoked on the
+	 * objective's behalf.
+	 *
+	 * The policy is OPT-IN: when it is absent the runtime behaves exactly as
+	 * before (no selection inference, no dispatch, no accounting).
+	 *
+	 * The accounting is RUN-SCOPED and lives on the runtime instance, so it
+	 * survives compaction (compaction replaces the PROVIDER REQUEST messages,
+	 * never the runtime's canonical transcript or its counters).
+	 */
+	boundedObjectivePolicy?: BoundedObjectivePolicy;
 	toolExecution?: "sequential" | "parallel";
 	toolPolicies?: Record<string, ToolPolicy>;
 	toolContextMetadata?: Record<string, unknown>;

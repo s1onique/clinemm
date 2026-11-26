@@ -1423,6 +1423,50 @@ export class LocalRuntimeHost implements RuntimeHost {
 			),
 			maxIterations: configWithProvider.maxIterations,
 			execution: configWithProvider.execution,
+			// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (AMENDMENT-01):
+			// forward the runtime-owned execution-stagnation recovery
+			// policy into the `AgentConfig` the runtime actually receives.
+			//
+			// The host (VS Code) supplies the policy on the SESSION CONFIG
+			// for ACT mode only; PLAN mode leaves it absent, so the runtime
+			// behaves exactly as before. Without this forwarding the policy
+			// stopped at the session config and the runtime never observed
+			// it: the corrective instruction was never injected.
+			//
+			// It is forwarded VERBATIM. The host owns the policy — including
+			// its `classifyToolCall` hook, which is the host's own
+			// command-policy judgement — and the runtime never resolves,
+			// relaxes or invents a policy of its own.
+			executionStagnationPolicy: configWithProvider.executionStagnationPolicy,
+			// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 (R2):
+			// forward the runtime-owned bounded-objective recovery policy
+			// into the `AgentConfig` the runtime actually receives.
+			//
+			// The host (VS Code) supplies the policy on the SESSION CONFIG
+			// for ACT mode only; PLAN mode leaves it absent, so the runtime
+			// behaves exactly as before.
+			//
+			// It is forwarded VERBATIM. The host owns the policy -- including
+			// its `verifyObjective` hook, which is the host's own judgement of
+			// whether an objective's verification condition was met -- and the
+			// runtime never resolves, relaxes or invents a policy of its own.
+			boundedObjectivePolicy: configWithProvider.boundedObjectivePolicy,
+			// ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01 (AMENDMENT-01):
+			// forward the OPT-IN, host-supplied R2 selection OBSERVATION sink
+			// into the `AgentConfig` the runtime actually receives.
+			//
+			// Without this forwarding the sink stopped at the session config
+			// and the runtime never observed it: the selector's RESPONSE was
+			// never captured, so the historical rejection cause could not be
+			// recovered from a live run.
+			//
+			// It is forwarded VERBATIM and it is READ-ONLY: the runtime
+			// REPORTS facts through it and never reads a decision back, so
+			// it cannot influence the selection, the validation, or the
+			// completion authority. When absent (the default) the runtime
+			// pays a single null check and behaves exactly as before.
+			boundedObjectiveSelectionTraceSink:
+				configWithProvider.boundedObjectiveSelectionTraceSink,
 			prepareTurn,
 			tools,
 			modelTools: runtime.modelTools,

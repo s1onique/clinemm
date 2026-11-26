@@ -372,6 +372,63 @@ export interface CoreSessionConfig
 	 * never promoted above its canonical evidence.
 	 */
 	adjudication?: CoreAdjudicationConfig;
+	/**
+	 * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (R1).
+	 *
+	 * The OPT-IN, HOST-SUPPLIED execution-stagnation recovery policy.
+	 *
+	 * When absent (the default), the runtime behaves EXACTLY as before: no
+	 * execution round is classified, no corrective instruction is injected,
+	 * and no recovery accounting exists.
+	 *
+	 * When present AND enabled, the agent runtime observes each execution
+	 * round and, after a configurable streak of consecutive rounds that
+	 * produced no productive step, injects ONE runtime-owned corrective
+	 * instruction before the next model request. Execution continues
+	 * AUTOMATICALLY — no user confirmation is required and no additional
+	 * authority is granted.
+	 */
+	executionStagnationPolicy?: AgentConfig["executionStagnationPolicy"];
+	/**
+	 * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 (R2).
+	 *
+	 * The OPT-IN, HOST-SUPPLIED bounded-objective recovery policy.
+	 *
+	 * When absent (the default), the runtime behaves EXACTLY as before: no
+	 * selection inference is made, no bounded objective is dispatched, and
+	 * no recovery accounting exists. The existing R1 behaviour is also
+	 * unchanged.
+	 *
+	 * When present AND enabled, the agent runtime — after the R1
+	 * corrective-instruction allowance has been EXHAUSTED and the
+	 * trajectory is STILL unproductive — selects ONE bounded, independently
+	 * verifiable objective derived from the parent task and makes it the
+	 * CURRENT EXECUTION TARGET of the next dispatched model request.
+	 *
+	 * The parent task remains authoritative: the objective is a child of
+	 * it, the parent's completion obligations are untouched, and the
+	 * parent's terminal completion tool is never invoked on the objective's
+	 * behalf.
+	 *
+	 * EXPERIMENTAL: the policy's limits are experimental bounds for this
+	 * implementation, not permanent production defaults.
+	 */
+	boundedObjectivePolicy?: AgentConfig["boundedObjectivePolicy"];
+	/**
+	 * ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01 (AMENDMENT-01):
+	 * optional read-only observation sink for the R2 bounded-objective
+	 * SELECTION boundary.
+	 *
+	 * The runtime REPORTS the generated objective text, the parsed
+	 * proposal, the exact validation disposition and the failing field or
+	 * reference. The runtime never reads a decision back, so the sink can
+	 * never influence the selection, the validation, or the completion
+	 * authority.
+	 *
+	 * DEFAULT OFF: when absent (the default), the runtime pays a single
+	 * null check at the boundary and behaves exactly as before.
+	 */
+	boundedObjectiveSelectionTraceSink?: AgentConfig["boundedObjectiveSelectionTraceSink"];
 	checkpoint?: CoreCheckpointConfig;
 	onTeamEvent?: (event: TeamEvent) => void;
 	onConsecutiveMistakeLimitReached?: (

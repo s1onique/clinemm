@@ -237,6 +237,27 @@ function agentPartToContentBlock(
 			}
 			const signature = extractThoughtSignature(part.metadata);
 			const details = extractReasoningDetails(part.metadata);
+			// ACT-CLINEMM-REASONING-PROJECTION-CONTINUITY-P0-01.
+			//
+			// The ORIGIN AUTHORITY of the route that issued the opaque
+			// signature travels WITH the payload, exactly as the CORE
+			// persistence codec already does
+			// (`sdk/packages/core/src/runtime/config/agent-message-codec.ts`,
+			// `contentBlockToAgentPart`).
+			//
+			// It is an INTERNAL authority: it names the route that issued the
+			// signature so the OUTBOUND projection can enforce the route
+			// boundary before replaying an opaque payload. It is never sent to
+			// a provider — the outbound conversion consumes it and does not
+			// forward it.
+			//
+			// Without it, the projection SILENTLY DESTROYS the authority, the
+			// outbound conversion fails closed (an absent origin grants no
+			// replay authority), and the provider-required signature is
+			// withheld — so the reasoning block is dropped from the request
+			// entirely. The authority is optional and backward-compatible: a
+			// record written before this field existed simply has none.
+			const originAuthority = extractReasoningOriginAuthority(part.metadata);
 			if (requiresSignedReasoning && signature === undefined) {
 				// ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01.
 				//
@@ -261,6 +282,7 @@ function agentPartToContentBlock(
 				type: "thinking",
 				thinking: part.text,
 				...(signature === undefined ? {} : { signature }),
+				...(originAuthority === undefined ? {} : { originAuthority }),
 				...(details === undefined ? {} : { details }),
 			};
 		}
@@ -383,6 +405,35 @@ export function omitUnauthorizedReasoningBlocks(
 		out.push({ ...message, content });
 	}
 	return out;
+}
+
+/**
+ * ACT-CLINEMM-REASONING-PROJECTION-CONTINUITY-P0-01.
+ *
+ * The ORIGIN AUTHORITY carried by a reasoning part.
+ *
+ * It is read ONLY from the part's own metadata bag, under the SAME key the
+ * production persistence codec writes (`originAuthority`, see
+ * `agent-message-codec.ts`) and the SAME key the outbound conversion reads
+ * (`REASONING_METADATA_ORIGIN_KEY` in `@cline/llms`). No new metadata field
+ * is introduced and no route-authorization policy is changed: this only
+ * carries the authority across an internal projection that used to drop it.
+ *
+ * A non-string value yields NO authority, exactly as the outbound conversion
+ * treats a malformed origin: an absent authority grants no replay authority,
+ * which is the fail-closed behaviour.
+ */
+function extractReasoningOriginAuthority(
+	metadata: unknown,
+): string | undefined {
+	if (!metadata || typeof metadata !== "object") {
+		return undefined;
+	}
+	const record = metadata as { originAuthority?: unknown };
+	return typeof record.originAuthority === "string"
+		? record.originAuthority
+		: undefined;
+}
 }
 
 /**

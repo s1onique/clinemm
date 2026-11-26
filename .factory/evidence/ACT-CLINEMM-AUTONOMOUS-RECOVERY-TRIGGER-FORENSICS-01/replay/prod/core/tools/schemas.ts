@@ -1,0 +1,402 @@
+/**
+ * Zod Schemas for Default Tool Inputs
+ *
+ * These schemas define the input structure for each default tool
+ * and are used for both validation and JSON Schema generation.
+ */
+
+import { z } from "zod";
+
+export const INPUT_ARG_CHAR_LIMIT = 6000;
+
+/**
+ * Schema for read tool input
+ */
+const AbsolutePath = z
+	.string()
+	.describe("The absolute path of a text file to read content from");
+
+export const ReadFileLineRangeSchema = z
+	.object({
+		// Models sometimes emit line numbers as strings; coerce so a `"3"` does not
+		// reject the whole tool call. The advertised JSON Schema is unaffected.
+		start_line: z.coerce
+			.number()
+			.int()
+			.positive()
+			.nullable()
+			.optional()
+			.describe(
+				"Optional one-based starting line number to read from; use null or omit for the start of the file",
+			),
+		end_line: z.coerce
+			.number()
+			.int()
+			.positive()
+			.nullable()
+			.optional()
+			.describe(
+				"Optional one-based ending line number to read through; use null or omit to read to the end of the file or the read cap, whichever comes first",
+			),
+	})
+	.describe("Optional inclusive one-based file line range");
+
+export const ReadFileRequestSchema = z
+	.object({
+		path: AbsolutePath,
+		start_line: ReadFileLineRangeSchema.shape.start_line,
+		end_line: ReadFileLineRangeSchema.shape.end_line,
+	})
+	.describe(
+		"A file read request with optional inclusive one-based line bounds. Always include path; start_line/end_line must be on the same object as the path they apply to, never in a separate array element",
+	);
+
+/**
+ * Schema for read_files tool input
+ */
+export const ReadFilesInputSchema = z.object({
+	files: z
+		.array(ReadFileRequestSchema)
+		.describe(
+			"Array of file read requests; each element is one file and must include path. Omit start_line/end_line or set them to null to read from the start; provide integers on the same object as the path to return only that inclusive one-based line range — never emit a range as its own array element. Reads are capped, so page through long files with start_line/end_line. Prefer this tool over running terminal command to get file content for better performance and reliability.",
+		),
+});
+
+const ReadFileRangeAliasFields = {
+	start_line: ReadFileLineRangeSchema.shape.start_line,
+	end_line: ReadFileLineRangeSchema.shape.end_line,
+};
+
+/**
+ * Tolerant per-entry schema for read requests. Some models emit the path
+ * under `file_path`/`filePath` instead of `path`; normalize those aliases to
+ * the canonical shape so downstream code only ever sees `path`.
+ */
+const LooseReadFileRequestSchema = z.union([
+	ReadFileRequestSchema,
+	z
+		.object({ file_path: AbsolutePath, ...ReadFileRangeAliasFields })
+		.transform(({ file_path, ...rest }) => ({ path: file_path, ...rest })),
+	z
+		.object({ filePath: AbsolutePath, ...ReadFileRangeAliasFields })
+		.transform(({ filePath, ...rest }) => ({ path: filePath, ...rest })),
+]);
+
+/**
+ * Union schema for read_files tool input, allowing either a single string, an array of strings, or the full object schema
+ */
+export const ReadFilesInputUnionSchema = z.union([
+	ReadFilesInputSchema,
+	LooseReadFileRequestSchema,
+	z.array(LooseReadFileRequestSchema),
+	z.array(z.string()),
+	z.string(),
+	z.object({
+		files: z.array(z.union([AbsolutePath, LooseReadFileRequestSchema])),
+	}),
+	z.object({ files: LooseReadFileRequestSchema }),
+	z.object({ files: AbsolutePath }),
+	z.object({ file_paths: z.array(AbsolutePath) }),
+	z.object({ file_paths: z.string() }),
+	z.object({
+		paths: z.array(z.union([AbsolutePath, LooseReadFileRequestSchema])),
+	}),
+	z.object({ paths: LooseReadFileRequestSchema }),
+	z.object({ paths: z.string() }),
+]);
+
+/**
+ * Schema for search_codebase tool input
+ */
+export const SearchCodebaseInputSchema = z.object({
+	queries: z
+		.array(z.string())
+		.describe("Array of regex search queries to execute"),
+});
+
+/**
+ * Union schema for search_codebase tool input, allowing either a single string, an array of strings, or the full object schema
+ */
+export const SearchCodebaseUnionInputSchema = z.union([
+	SearchCodebaseInputSchema,
+	z.array(z.string()),
+	z.string(),
+	z.object({ queries: z.string() }),
+]);
+
+const CommandInputSchema = z
+	.string()
+	.describe(
+		`The non-interactive shell command to execute - MUST keep input short and concise (within ${INPUT_ARG_CHAR_LIMIT * 2} characters) to avoid timeouts.`,
+	);
+
+export const StructuredCommandInputSchema = z.object({
+	command: z
+		.string()
+		.min(1)
+		.describe("The executable to run directly without shell parsing."),
+	args: z
+		.array(z.string())
+		.optional()
+		.describe("Optional argv list passed directly to the executable."),
+});
+
+export const StructuredCommandEntrySchema = z.union([
+	CommandInputSchema,
+	StructuredCommandInputSchema,
+]);
+
+// ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01:
+// notifyOnCompletion is an opt-in flag the model sets when it
+// wants the runtime to queue a bounded continuation prompt after
+// the background run_commands job reaches a terminal state.
+// Default false; strict mode (additionalProperties:false)
+// requires the field to be declared here so unknown values are
+// rejected. The wake transport, lifetime, and marker authority
+// are documented in
+// ACT-CLINEMM-BACKGROUND-COMMAND-WAIT-SEMANTICS01 (frozen
+// contract) and the bounded runtime wiring lives in
+// apps/vscode/src/sdk/vscode-run-commands-tool.ts +
+// apps/vscode/src/sdk/background-notify-coordinator.ts.
+export const RunCommandsInputSchema = z
+	.object({
+		commands: z
+			.array(CommandInputSchema)
+			// R3 (upstream `e9dafbb764`): advertised to the model as
+			// minItems: 1. An EMPTY command list is a real error, never a
+			// silent success. The lenient union below still accepts an empty
+			// list so the normalizer can reject it with one clear message
+			// instead of a union error.
+			.min(1)
+			.describe("Array of complete shell command strings to execute."),
+		notifyOnCompletion: z
+			.boolean()
+			.optional()
+			.describe(
+				"Set true to ask the runtime to queue exactly one bounded continuation prompt after this background command reaches a terminal state. Default false. Asynchronous notification only; the current turn may end before completion.",
+			),
+	})
+	// ACT-CLINEMM-INVALID-TOOL-INPUT-PREAPPROVAL01: reject unknown
+	// fields (e.g. `timeout`) so the schema is strict at runtime —
+	// matches the `additionalProperties: false` already emitted to
+	// the JSON schema sent to the model.
+	.strict();
+const StructuredCommandsInputSchema = z.object({
+	commands: z.array(StructuredCommandEntrySchema),
+	notifyOnCompletion: z.boolean().optional(),
+});
+
+/**
+ * Union schema for run_commands tool input. More flexible.
+ *
+ * ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01:
+ * notifyOnCompletion is mirrored onto every {commands:...} arm
+ * and onto the bare {command}/{cmd} arms so the model-facing
+ * JSON schema advertises the flag on every accepted shape.
+ * Bare string / bare array arms cannot carry flags and keep
+ * the previous behaviour (notifyOnCompletion defaults to false).
+ */
+export const RunCommandsInputUnionSchema = z.union([
+	RunCommandsInputSchema,
+	StructuredCommandsInputSchema,
+	z.object({
+		commands: StructuredCommandEntrySchema,
+		notifyOnCompletion: z.boolean().optional(),
+	}),
+	z.array(StructuredCommandInputSchema),
+	StructuredCommandInputSchema,
+	z.object({
+		command: CommandInputSchema,
+		notifyOnCompletion: z.boolean().optional(),
+	}),
+	z.object({
+		cmd: CommandInputSchema,
+		notifyOnCompletion: z.boolean().optional(),
+	}),
+	z.array(z.string()),
+	z.string(),
+]);
+
+/**
+ * Schema for a single web fetch request
+ */
+export const WebFetchRequestSchema = z.object({
+	url: z.string().describe("The URL to fetch"),
+	prompt: z.string().min(2).describe("Analysis prompt for the fetched content"),
+});
+
+/**
+ * Schema for fetch_web_content tool input
+ */
+export const FetchWebContentInputSchema = z.object({
+	requests: z
+		.array(WebFetchRequestSchema)
+		.describe("Array of the URLs for the web fetch requests"),
+});
+
+/**
+ * Schema for editor tool input
+ */
+export const EditFileInputSchema = z
+	.object({
+		path: z
+			.string()
+			.min(1)
+			.describe("The absolute path for the action to be performed on"),
+		// Advertise old_text as a plain string: when the schema allows null, some
+		// models send null instead of the real text for replacement edits. Other
+		// models send null for optionals they aren't using, so null is still
+		// accepted at runtime and treated as omitted.
+		old_text: z
+			.preprocess(
+				(value) => (value === null ? undefined : value),
+				z.string().optional(),
+			)
+			.describe(
+				`Exact text to replace (must match exactly once). Omit this when creating a missing file or inserting via insert_line. Keep this at or below ${INPUT_ARG_CHAR_LIMIT} characters when possible; larger payloads should be split across multiple tool calls to avoid timeouts.`,
+			),
+		new_text: z
+			.string()
+			.describe(
+				`The new content to write when creating a missing file, the replacement text for edits, or the inserted text when insert_line is provided. Keep this at or below ${INPUT_ARG_CHAR_LIMIT} characters when possible; for large edits, use multiple calls with small chunks of old_text and new_text to iteratively edit the file.`,
+			),
+		// See start_line above: coerced so a stringified line number still applies.
+		insert_line: z.coerce
+			.number()
+			.int()
+			.nullable()
+			.optional()
+			.describe(
+				"Optional positive one-based boundary line. When provided, the tool inserts new_text before that line instead of performing a replacement edit; use line_count + 1 to append at EOF.",
+			),
+	})
+	.describe(
+		"Edit a text file by replacing old_text with new_text, create the file with new_text if it does not exist, or insert new_text at insert_line when insert_line is provided. Prefer using this tool for file edits over shell commands. IMPORTANT: large edits can time out, so use small chunks and multiple calls when possible.",
+	);
+
+/**
+ * Schema for apply_patch tool input
+ */
+export const ApplyPatchInputSchema = z
+	.object({
+		input: z
+			.string()
+			.min(1)
+			.describe(
+				"The freeform apply_patch payload in the canonical patch grammar (e.g *** Begin Patch, *** Update File:, @@, and *** End Patch).",
+			),
+	})
+	.describe(
+		"Modify or create a text file by applying patches using the canonical apply_patch diff grammar. Prefer sending the patch body directly rather than wrapping it in shell syntax. IMPORTANT: large patches can time out, so use small chunks and multiple calls when possible.",
+	);
+export const ApplyPatchInputUnionSchema = z.union([
+	ApplyPatchInputSchema,
+	z.string(),
+]);
+
+/**
+ * Schema for skills tool input
+ */
+export const SkillsInputSchema = z.object({
+	skill: z.string().min(1).describe("Name of the skill to execute."),
+	args: z
+		.string()
+		.nullable()
+		.optional()
+		.describe("Arguments for the skill; use null when omitted"),
+});
+
+/**
+ * Schema for ask_followup_question tool input
+ */
+export const AskQuestionInputSchema = z.object({
+	question: z
+		.string()
+		.min(1)
+		.describe(
+			'The single question to ask the user. E.g. "How can I help you?"',
+		),
+	options: z
+		.array(z.string().min(1))
+		.min(2)
+		.max(5)
+		.describe(
+			"Array of 2-5 user-selectable answer options for the single question",
+		),
+});
+
+export const SubmitInputSchema = z.object({
+	summary: z
+		.string()
+		.min(10)
+		.describe(
+			"Summarization of the investigation, steps taken, and resolution status to submit at the end of the session. Before submitting, re-read the task requirements together with any provided tests or assertions, and confirm from your own tool output — not from assumption — that your solution produces the expected results at the expected file locations.",
+		),
+	verified: z
+		.boolean()
+		.describe(
+			`Have you verified that the issue is resolved to the best of your knowledge, including updating and creating all the requested files and items? 'True' if you have completed the investigation and gathered concrete evidence that every requirement is met.\n'False' if you have done all you can but cannot resolve the issue or if you are stuck and cannot proceed further.\nIMPORTANT: verify by EXECUTION, not by assumption. Before setting 'true' you must have observed evidence in this session that your solution works:\n- If the task provides or references specific tests, run those exact test(s) and include the passing output in your reasoning. If they still fail, revise and re-run.\n- If no tests are provided, construct your own check: actually run the program, script, or command you produced; confirm every required output file exists at the exact path requested; and confirm its contents match the required format, data types, and values. Read the output back as evidence.\nPhrases like "assume it works", "should be correct", or "probably fine" are NOT verification. Do NOT set 'true' unless your tool output shows the requirements are met; if you cannot obtain such evidence, set 'false'.`,
+		),
+});
+
+// =============================================================================
+// Type Definitions (derived from Zod schemas)
+// =============================================================================
+
+/**
+ * Input for a single file read request
+ */
+export type ReadFileRequest = z.infer<typeof ReadFileRequestSchema>;
+
+/**
+ * Input for the read_files tool
+ */
+export type ReadFilesInput = z.infer<typeof ReadFilesInputSchema>;
+
+/**
+ * Input for the search_codebase tool
+ */
+export type SearchCodebaseInput = z.infer<typeof SearchCodebaseInputSchema>;
+
+/**
+ * Input for the run_commands tool
+ */
+export type RunCommandsInput = z.infer<typeof RunCommandsInputSchema>;
+export type StructuredCommandInput = z.infer<
+	typeof StructuredCommandInputSchema
+>;
+
+/**
+ * Web fetch request parameters
+ */
+export type WebFetchRequest = z.infer<typeof WebFetchRequestSchema>;
+
+/**
+ * Input for the fetch_web_content tool
+ */
+export type FetchWebContentInput = z.infer<typeof FetchWebContentInputSchema>;
+
+/**
+ * Input for the editor tool
+ */
+export type EditFileInput = z.infer<typeof EditFileInputSchema>;
+
+/**
+ * Input for the apply_patch tool
+ */
+export type ApplyPatchInput = z.infer<typeof ApplyPatchInputSchema>;
+
+/**
+ * Input for the skills tool
+ */
+export type SkillsInput = z.infer<typeof SkillsInputSchema>;
+
+/**
+ * Input for the ask_followup_question tool
+ */
+export type AskQuestionInput = z.infer<typeof AskQuestionInputSchema>;
+
+/**
+ * Input for the submit and exit tool
+ */
+export type SubmitInput = z.infer<typeof SubmitInputSchema>;

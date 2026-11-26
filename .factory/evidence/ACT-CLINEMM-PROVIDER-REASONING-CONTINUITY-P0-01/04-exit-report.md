@@ -1,0 +1,311 @@
+# 04 — Exit report
+
+**ACT:** `ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01`
+**Executor:** `codium-clinemm2`
+**Verdict:** `GO_PROVIDER_REASONING_REPAIR_INTEGRATION`
+
+---
+
+## 1. Dispositions
+
+```
+EXECUTION_ISOLATION                 VERIFIED
+ENTRY_SOURCE_IDENTITY               VERIFIED
+INSTALLED_BUILD_CORRELATION         UNKNOWN
+LIVE_WARNING_CORRELATION            LIVE_UNOBSERVABLE
+WARNING_EMITTER_IDENTIFIED          VERIFIED
+
+MINIMAX_PROVIDER_CONTRACT           VERIFIED
+NATIVE_ANTHROPIC_CONTRACT           VERIFIED
+UPSTREAM_PR_APPLICABILITY           PARTIALLY_PRESENT
+
+MINIMAX_RED                         REPRODUCED
+ANTHROPIC_RED                       REPRODUCED
+LOSS_BOUNDARY                       IDENTIFIED
+CAUSAL_NECESSITY                    PROVEN
+
+OUTBOUND_REASONING_REPLAY           VERIFIED
+REASONING_BLOCK_ASSOCIATION         VERIFIED
+SIGNATURE_CONSERVATION              VERIFIED
+UNSIGNED_REASONING_HANDLING          VERIFIED
+SESSION_ROUNDTRIP                   VERIFIED
+MULTI_TOOL_ROUND_CONSERVATION       VERIFIED
+PROVIDER_ORIGIN_CONSERVATION        VERIFIED
+
+MINIMAX_LOW_WIRE_EFFORT             CORRECT
+REDACTED_REASONING_DISPOSITION       DISTINCT_PRE_EXISTING_DEFECT (successor ACT recommended)
+COMPACTION_DISPOSITION              CONSERVED
+
+--- CORRECTION01 (ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION01) ---
+
+REAL_RUNTIME_SEAM                    VERIFIED
+REAL_TOOL_CONTINUATION              VERIFIED
+REAL_RUNTIME_RED                    REPRODUCED (on the pristine production)
+REAL_RUNTIME_GREEN                  PASS
+
+MULTI_BLOCK_PRODUCTION_DEFECT       REPRODUCED (and repaired)
+BLOCK_IDENTITY_LOSS_BOUNDARY        IDENTIFIED (the translator's reasoning branch)
+BLOCK_IDENTITY_NECESSITY            PROVEN (ablation D)
+BLOCK_IDENTITY_GREEN                PASS
+EXACT_ORDERED_WIRE_CONSERVATION     PASS
+
+SAME_ADAPTER_ORIGIN_CONSERVATION    PASS (a newly reachable origin violation was
+                                     REPRODUCED and repaired; ablation E)
+PRODUCTION_CODEC_ROUNDTRIP          PASS
+SESSION_RESTORE                     PASS
+PRODUCTION_COMPACTION               NOT_EXECUTED
+RETAINED_PART_SERIALIZATION         PASS
+
+REASONING_BLOCK_IDENTITY_PROPAGATION VERIFIED (the AI SDK's existing reasoning-part
+                                     id is propagated; no new event protocol)
+TOOL_CALL_METADATA_SCOPE            CONSERVED (A2: the Anthropic extraction is
+                                     confined to the reasoning path)
+RECOVERABLE_TOOL_ERROR_METADATA_SCOPE CONSERVED (A2)
+EMPTY_SIGNED_REASONING_CONSERVATION PASS (A3)
+
+MINIMAX_SIGNED_CONTRACT             VERIFIED
+MINIMAX_UNSIGNED_CONTRACT           UNESTABLISHED
+MINIMAX_LOW_BASELINE_WIRE_EFFORT    CORRECT
+MINIMAX_LOW_EFFORT_REPAIR_REQUIRED  NO
+MINIMAX_LOW_EFFORT_PRODUCTION_DELTA NONE
+MINIMAX_LOW_RUNTIME_WIRE_CONSERVATION PASS
+HISTORICAL_INSTALLED_UI_TO_WIRE_CORRELATION UNKNOWN
+
+--- CORRECTION02 (ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION02) ---
+
+UNKNOWN_ORIGIN_REPLAY_AUTHORITY    NONE (fail closed; O1 is GREEN)
+MALFORMED_ORIGIN_REPLAY_AUTHORITY  NONE (fail closed)
+UNKNOWN_DESTINATION_REPLAY_AUTHORITY NONE (the destination authority is REQUIRED)
+MALFORMED_DESTINATION_REPLAY_AUTHORITY NONE (fail closed)
+OUTBOUND_CALLER_AUTHORITY_COVERAGE COMPLETE (toAiSdkMessages has exactly ONE
+                                     production caller, and it supplies the
+                                     required destination authority)
+EFFECTIVE_ENDPOINT_BINDING         VERIFIED (the RESOLVED base URL, including
+                                     its path and the API-line variant)
+SAME_PROVIDER_DIFFERENT_ENDPOINT   CLOSED (O2 is GREEN)
+REVERSE_PROVIDER_TRANSITION        CLOSED (O3 is GREEN)
+ORIGIN_CODEC_ROUNDTRIP             PASS (the origin survives the production
+                                     persistence codec, the production
+                                     restoration codec and restore())
+RESTORED_ORIGIN_ENFORCEMENT        PASS (O4: the restored payload cannot cross
+                                     the route boundary)
+SAME_ORIGIN_REPLAY_CONSERVATION    PASS (O5: byte-for-byte unchanged; switching
+                                     back to the compatible route replays it)
+ORIGIN_BOOKKEEPING_WIRE_EXCLUSION  PASS (the origin authority is consumed by the
+                                     outbound projection and is never sent)
+LEGACY_ORIGINLESS_POLICY           CONSERVED (no fixture deleted, no global
+                                     exemption; the policy was not weakened)
+ORIGIN_CORRECTION_NECESSITY        PROVEN (ablation F)
+
+The CORRECTION02 evidence is in
+`06-correction02-origin-authority.md`.
+
+--- CORRECTION02 / AMENDMENT-02 (the fail-closed, credential-free authority) ---
+
+UNRESOLVED_ROUTE_AUTHORITY            NONE (absence is EXPLICIT; there is no
+                                      nonempty sentinel)
+MALFORMED_ROUTE_AUTHORITY             NONE (an invalid endpoint is an
+                                      unresolved route)
+PERSISTED_AUTHORITY_CREDENTIAL_EXCLUSION PASS (user information, a
+                                      credential-bearing query and a fragment
+                                      produce NO authority, so no
+                                      credential-bearing URL is persisted)
+SAME_HOST_DIFFERENT_PATH_ISOLATION    PASS (O2b: the ACTUAL requested path
+                                      is asserted, and the foreign opaque
+                                      payload is excluded on EVERY attempt)
+ORIGIN_BOOKKEEPING_WIRE_EXCLUSION     PASS (asserted against the ACTUAL
+                                      `originAuthority` field)
+SWITCH_BACK_NONVACUOUS                PASS (the switch-back collection is
+                                      asserted non-empty before it is looped)
+COMPATIBLE_ROUTE_REPLAY                PASS (O5 / RT1-RT6: byte-for-byte
+                                      unchanged)
+FOCUSED_GATE                           PASS (15/15 agents, 47/47 core,
+                                      499/514 llms — the 15 llms failures
+                                      are the IDENTICAL pre-existing baseline)
+ACT_OWNED_DIAGNOSTICS                  NONE
+
+The AMENDMENT-02 evidence is in
+`07-correction02-amendment-02-authority.md`.
+
+FOCUSED_REGRESSION_GATE              PASS (238/238)
+TYPECHECK_GATE                      PASS (exit 0)
+ORDINARY_GATE                       PASS_WITH_PRE_EXISTING_FAILURES (1189 passed, 17 pre-existing failures in 3 unrelated suites)
+ACT_OWNED_DIAGNOSTICS               NONE
+
+FINAL_HEAD                          251da905c608ac483f6488bd14f6fabbc0b1ac6d
+ACT_BRANCH                          act/provider-reasoning-continuity-p0-01
+WORKTREE_PATH                       /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm-second/.worktrees/act-pr-p0-01
+TRACKED_DIRT                        none
+
+INTEGRATION                         NOT_AUTHORIZED (isolated branch only)
+VSIX_PACKAGING                      NOT_AUTHORIZED
+LIVE_PROVIDER_QUALIFICATION         NOT_AUTHORIZED
+```
+
+The CORRECTION01 evidence is in
+`05-correction01-real-runtime-and-block-identity.md`.
+
+## 2. Handoff identity
+
+| Property | Value |
+|---|---|
+| `ENTRY_HEAD` | `1d45a8d845eca27bce311949a08fca7868f211cd` |
+| `RED_SUBJECT_HEAD` | `1d45a8d845eca27bce311949a08fca7868f211cd` |
+| `FINAL_HEAD` | `251da905c608ac483f6488bd14f6fabbc0b1ac6d` |
+| `ACT_BRANCH` | `act/provider-reasoning-continuity-p0-01` |
+| `WORKTREE_PATH` | `/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm-second/.worktrees/act-pr-p0-01` |
+| `TRACKED_DIRT` | none (clean at exit) |
+| `CHANGED_FILES` | 1 production + 5 test + 4 evidence |
+| `PRODUCTION_DIFFSTAT` | `sdk/packages/llms/src/providers/ai-sdk.ts` — +77 / -7 |
+| `TEST_DIFFSTAT` | 5 new files, 1 000+ lines of assertions |
+| Commit message | `fix(llms): preserve provider reasoning across tool rounds` |
+
+The primary checkout (`main`, `1d45a8d84`) was NOT branched, merged,
+rebased, cherry-picked into, or otherwise modified. It was restored to its
+exact entry state.
+
+## 3. Required summary
+
+### 3.1 What actually failed
+
+The ClineMM AI SDK translator discarded the provider's reasoning SIGNATURE.
+
+The Anthropic-compatible transport (which serves MiniMax M3 / M3.1 Flash)
+streams a thinking block's signature as a SEPARATE, EMPTY-TEXT event. The
+resolved `@ai-sdk/anthropic@4.0.94` surfaces it as a `reasoning-delta` with
+an empty `delta` and the signature in `providerMetadata.anthropic`.
+
+ClineMM's translator had two independent gaps:
+
+1. its reasoning branch was guarded by a non-empty-text check, so the
+   signature-only event was **dropped entirely**;
+2. its metadata extractor read only the Google/Vertex buckets and never read
+   `providerMetadata.anthropic`.
+
+The consequence was not a cosmetic warning: the next outbound request
+serialised the reasoning WITHOUT a signature, and the Anthropic serializer
+then emitted `unsupported reasoning metadata` **and dropped the reasoning
+block from the request entirely**. The provider-required reasoning was
+silently lost between rounds.
+
+The deterministic reproduction emits the exact observed warning string —
+`AI SDK Warning (minimax / MiniMax-M3.1-Flash): unsupported reasoning
+metadata` — through the real gateway and the real resolved SDK.
+
+### 3.2 Where the information was lost
+
+**`sdk/packages/llms/src/providers/ai-sdk.ts`, the AI SDK stream translator.**
+
+The boundary matrix (measured, not inferred):
+
+| Boundary | Observed |
+|---|---|
+| Raw response | Contract-valid: thinking text + a separate `signature_delta` |
+| SDK stream | 2 `reasoning-delta` parts; 1 signature-bearing; 1 with an empty `delta` — **correct** |
+| **Translator** | 1 `reasoning-delta`; **0** carrying the Anthropic signature — **THE LOSS** |
+| HTTP request | No `thinking` block; warning emitted |
+
+The runtime accumulation, the persistence codec and the outbound conversion
+were all already correct — they were never reached with a signature to carry.
+
+### 3.3 Why the correction is necessary
+
+Three independent ablations, each restoring RED together with the exact
+warning string:
+
+| Ablation | Change | Result |
+|---|---|---|
+| A | revert the whole production change | RED restored |
+| B | keep the metadata extraction, restore the `if (text)` guard | RED restored |
+| C | forward the empty-text event, remove only the Anthropic extraction | RED restored |
+
+B and C isolate the two halves of the correction, so each half is
+independently necessary.
+
+### 3.4 What changed in production
+
+One file, `sdk/packages/llms/src/providers/ai-sdk.ts` (+77 / -7):
+
+1. `extractGoogleThoughtMetadata` → `extractReasoningMetadata`: the
+   Google/Vertex extraction is unchanged; the Anthropic `signature` and
+   `redactedData` are now carried verbatim under the same key names the
+   outbound conversion already reads — so the round trip needs no
+   provider-specific branch at the send boundary.
+2. A metadata-bearing reasoning event is forwarded even when its text is
+   empty. An event with neither text nor metadata remains a no-op, so every
+   other provider's default path is unchanged.
+
+Nothing else changed. No signature is fabricated; no reasoning replay is
+disabled; no signature validation is bypassed; no placeholder reasoning is
+inserted; reasoning is not converted into ordinary text; the warning is not
+suppressed; the provider registry, the MiniMax transport and the AI SDK
+dependency tree are untouched; no permanent diagnostic field was added.
+
+### 3.5 What executable evidence proves the repair
+
+- The RED is asserted against the **actual serialized outbound HTTP request
+  body** produced by the real gateway and the real resolved provider SDK,
+  with only the external network boundary replaced. The assertion is exact
+  equality on the reasoning text, the signature, the tool-call id and the
+  tool-result id — not a warning count and not a reconstructed history.
+- After the repair the follow-up request carries
+  `{"type":"thinking","thinking":"SYNTHETIC-REASONING-BLOCK-TEXT","signature":"synthetic-opaque-signature-aa11bb22"}`.
+- Focused regression gate: **238/238** (`src/providers/routing/`).
+- Existing provider regression: **245/245** (`gateway.test.ts`,
+  `ai-sdk.test.ts`, `ai-sdk.tool-calls.test.ts`,
+  `ai-sdk-transport-continuation.test.ts`); `gateway.test.ts` alone is
+  183/183, including the Vertex/Google `thoughtSignature` extraction and
+  replay tests.
+- Affected-package typecheck: exit 0, no diagnostics.
+- Biome check on every changed file: exit 0, no findings.
+- The ordinary package gate shows 1189 passed / 17 failed; those 17 failures
+  are **identical on the pristine baseline** and are in
+  `resolvePortableReasoning` and the SAP process-hygiene suites — unrelated
+  to this path. `ACT_OWNED_DIAGNOSTICS = NONE`.
+
+### 3.6 Which independent defects or uncertainties remain
+
+| Item | Disposition |
+|---|---|
+| **Redacted thinking** | A **distinct, pre-existing defect**. The SDK surfaces a redacted block as a `reasoning-start` part with no text delta; the translator reads only `reasoning-delta` / `reasoning`, so no runtime event is produced. Measured IDENTICAL before and after this repair. A redacted block is therefore NOT replayed on the wire. **A successor ACT is recommended** to handle `providerMetadata.anthropic.redactedData` on the `reasoning-start` part. This ACT does not claim to cover it. |
+| `INSTALLED_BUILD_CORRELATION` | `UNKNOWN` — the ACT forbids altering, reloading or restarting the installed extension, and no live capture of the `4.1.26-821b20e7a` installation was taken. The defect does not depend on that identity: it is a property of the resolved `@ai-sdk/anthropic@4.0.94` plus the translator, and it was reproduced deterministically on the source revision named above. |
+| `LIVE_WARNING_CORRELATION` | `LIVE_UNOBSERVABLE` — by design; the causal claim rests on the reproduction, which emits the byte-identical warning string for the same provider id and model id. |
+| Historical conversations | Existing conversations with already-lost reasoning metadata are **not** repaired by this change. Do not attempt to reconstruct unavailable historical provider metadata; use a fresh session for subsequent live qualification. |
+| gitleaks | The repository's secret-scanning binary is not installed in this environment, so the gitleaks gate was **not executed**. The fixtures were reviewed by hand and contain no credential-shaped values. |
+
+### 3.7 The exact isolated commit available for integration
+
+```
+branch: act/provider-reasoning-continuity-p0-01
+
+  (CORRECTION02 — the origin AUTHORITY correction:)
+commit: 251da905c608ac483f6488bd14f6fabbc0b1ac6d
+message: fix(llms): require a positively established reasoning origin authority
+parent:  0524b32afca587e9750a0dcc2b891ccc62cbc0a0
+
+  (CORRECTION01 — the block-identity and origin correction:)
+commit: 9079c4cd238b1b61533fe8873ed444ecb979bf40
+message: fix(llms): preserve reasoning block identity and bound the reasoning origin
+parent:  8687d4e3790900c5d9ed88ff49d0c0bf83c02c0c
+
+  (the original production repair:)
+commit: 57fc492d5451b9f95085a7fcace226cf68506dc0
+message: fix(llms): preserve provider reasoning across tool rounds
+parent:  1d45a8d845eca27bce311949a08fca7868f211cd
+```
+
+Integration into the advancing primary branch is a separate, explicitly
+authorised operation and was NOT performed.
+
+## 4. Successor recommendation
+
+**One successor ACT is recommended** (recorded, not initiated):
+
+> `ACT-CLINEMM-PROVIDER-REDACTED-REASONING-REPLAY-01` — make the AI SDK
+> translator handle the `reasoning-start` part's
+> `providerMetadata.anthropic.redactedData`, so an Anthropic
+> `redacted_thinking` block can be replayed on the wire, with the same
+> provider-origin conservation rules as this ACT.
+
+No reasoning-effort successor is recommended: `MINIMAX_LOW_WIRE_EFFORT =
+CORRECT`.

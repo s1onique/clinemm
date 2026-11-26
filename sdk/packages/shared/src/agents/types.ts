@@ -16,6 +16,8 @@ import type {
 	AgentTool,
 	ProviderErrorClass,
 } from "../agent";
+import type { BoundedObjectivePolicy } from "./bounded-objective";
+import type { ExecutionStagnationPolicy } from "./execution-stagnation";
 import type { ExtensionContext } from "../extensions/context";
 import type {
 	AgentExtensionApi,
@@ -806,6 +808,19 @@ export interface AgentConfig {
 	 * influence execution. When absent the runtime is observationally inert.
 	 */
 	modelBehaviorTraceSink?: import("../runtime/model-behavior-trace").ModelBehaviorTraceSink;
+	/**
+	 * ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01 (AMENDMENT-01):
+	 * optional read-only observation sink for the R2 bounded-objective
+	 * SELECTION boundary.
+	 *
+	 * The runtime REPORTS the generated objective text, the parsed proposal,
+	 * the exact validation disposition and the failing field or reference.
+	 * The runtime never reads a decision back from the sink, so it cannot
+	 * influence the selection, the validation, or the completion authority.
+	 *
+	 * DEFAULT OFF: when absent the runtime is observationally inert.
+	 */
+	boundedObjectiveSelectionTraceSink?: import("./bounded-objective").BoundedObjectiveSelectionTraceSink;
 	// -------------------------------------------------------------------------
 	// Provider Settings
 	// -------------------------------------------------------------------------
@@ -999,6 +1014,48 @@ export interface AgentConfig {
 		requireCompletionTool?: boolean;
 		completionGuard?: () => string | undefined;
 	};
+	/**
+	 * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (R1).
+	 *
+	 * The runtime-owned execution-stagnation recovery policy. When enabled,
+	 * the agent runtime observes each execution round and, after a
+	 * configurable streak of consecutive rounds that produced no productive
+	 * step, injects ONE runtime-owned corrective instruction before the next
+	 * model request. Execution continues AUTOMATICALLY — no user
+	 * confirmation, no new authority, no completion.
+	 *
+	 * The accounting is RUN-SCOPED and lives on the runtime instance, so it
+	 * survives compaction (compaction replaces the PROVIDER REQUEST messages,
+	 * never the runtime's canonical transcript or its counters).
+	 *
+	 * Opt-in: absent means the runtime behaves exactly as before.
+	 */
+	executionStagnationPolicy?: ExecutionStagnationPolicy;
+
+	/**
+	 * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 (R2).
+	 *
+	 * The runtime-owned bounded-objective recovery policy.
+	 *
+	 * R2 is the SECOND recovery stage. It activates ONLY after the R1
+	 * corrective-instruction allowance has been exhausted and the trajectory
+	 * is STILL unproductive. When it activates, the runtime SELECTS one
+	 * bounded, independently verifiable objective derived from the parent
+	 * task and makes it the CURRENT EXECUTION TARGET of the next dispatched
+	 * model request — materially different from R1's advisory nudge.
+	 *
+	 * The parent task remains authoritative throughout: the objective is a
+	 * child of it, the parent's completion obligations are untouched, and
+	 * the parent's terminal completion tool is never invoked on the
+	 * objective's behalf.
+	 *
+	 * The accounting is RUN-SCOPED and lives on the runtime instance, so it
+	 * survives compaction (compaction replaces the PROVIDER REQUEST messages,
+	 * never the runtime's canonical transcript or its counters).
+	 *
+	 * Opt-in: absent means the runtime behaves exactly as before.
+	 */
+	boundedObjectivePolicy?: BoundedObjectivePolicy;
 
 	// -------------------------------------------------------------------------
 	// Pending User Messages

@@ -1,0 +1,854 @@
+{
+  "schema": "cline.recovery-trigger-forensics.round-ledger/v1",
+  "sessionId": "1795612311440_l9mhl",
+  "installedExtensionVersion": "4.1.26-b5bf8d34f",
+  "productionPolicy": {
+    "r1": {
+      "unproductiveRoundThreshold": 5,
+      "maxRecoveryInstructions": 2,
+      "enabled": true
+    },
+    "r2": {
+      "enabled": false,
+      "maxActivations": 2,
+      "maxObjectiveRounds": 8,
+      "maxSelectionInferences": 1,
+      "entryPoint": "R1 decision kind == 'allowance_exhausted' (the ONLY R2 entry point)"
+    }
+  },
+  "runs": [
+    {
+      "index": 1,
+      "runId": "run_BaVA53Rx",
+      "kind": "user_input",
+      "startMsg": 0,
+      "endMsg": 9,
+      "userTextHead": "<user_input mode=\"act\"># ACT-INFRA-BASALT-LIFECYCLE-CORR02\n\nRepository: `not-so-awesome-argocd-infra`\n\nExpected entry HEAD: `995d0c87d49d183561a773e1e1ae12c91e6"
+    },
+    {
+      "index": 2,
+      "runId": "run_4iSCOZaN",
+      "kind": "user_input",
+      "startMsg": 10,
+      "endMsg": 73,
+      "userTextHead": "<user_input mode=\"act\">Build Nim tooling on 192.168.50.111, use SSH_AUTH_SOCK=/private/tmp/com.apple.launchd.d79HgW0fyF/Listeners to get there</user_input>"
+    }
+  ],
+  "observedRuntimeNotices": [
+    {
+      "index": 28,
+      "parsed": {
+        "unproductiveRounds": 5,
+        "toolNames": [
+          "read_files",
+          "run_commands"
+        ],
+        "editAttempts": 0
+      },
+      "text": "[SYSTEM] Execution has stalled: the last 5 consecutive execution round(s) produced no productive step. State the single smallest useful experiment or edit that would move this task forward, then perform it now. Observable facts: the 5 round(s) used only read_files, run_commands. No edit was attempted in those rounds."
+    },
+    {
+      "index": 57,
+      "parsed": {
+        "unproductiveRounds": 5,
+        "toolNames": [
+          "run_commands"
+        ],
+        "editAttempts": 0
+      },
+      "text": "[SYSTEM] Execution has stalled: the last 5 consecutive execution round(s) produced no productive step. State the single smallest useful experiment or edit that would move this task forward, then perform it now. Observable facts: the 5 round(s) used only run_commands. No edit was attempted in those rounds."
+    }
+  ],
+  "rounds": [
+    {
+      "run": 1,
+      "iteration": 1,
+      "transcriptMessageIndex": 2,
+      "toolIdentities": [
+        "run_commands"
+      ],
+      "productivityClassification": "inspected",
+      "availableExecutionOutcomes": {
+        "editAttempts": 0,
+        "successfulEdits": 0,
+        "executedCommands": 0,
+        "awaitingBackgroundWork": false
+      },
+      "stagnationCounterBefore": 0,
+      "stagnationCounterAfter": 1,
+      "remainingR1Allowance": 2,
+      "instructionsInjectedBefore": 0,
+      "instructionsInjectedAfter": 0,
+      "r1Decision": "none",
+      "r2Eligible": false,
+      "r2Reason": "R1_DECISION_NONE"
+    },
+    {
+      "run": 1,
+      "iteration": 2,
+      "transcriptMessageIndex": 4,
+      "toolIdentities": [
+        "run_commands"
+      ],
+      "productivityClassification": "executed",
+      "availableExecutionOutcomes": {
+        "editAttempts": 0,
+        "successfulEdits": 0,
+        "executedCommands": 1,
+        "awaitingBackgroundWork": false
+      },
+      "stagnationCounterBefore": 1,
+      "stagnationCounterAfter": 0,
+      "remainingR1Allowance": 2,
+      "instructionsInjectedBefore": 0,
+      "instructionsInjectedAfter": 0,
+      "r1Decision": "none",
+      "r2Eligible": false,
+      "r2Reason": "R1_DECISION_NONE"
+    },
+    {
+      "run": 1,
+      "iteration": 3,
+      "transcriptMessageIndex": 6,
+      "toolIdentities": [
+        "run_commands"
+      ],
+      "productivityClassification": "inspected",
+      "availableExecutionOutcomes": {
+        "editAttempts": 0,
+        "successfulEdits": 0,
+        "executedCommands": 0,
+        "awaitingBackgroundWork": false
+      },
+      "stagnationCounterBefore": 0,
+      "stagnationCounterAfter": 1,
+      "remainingR1Allowance": 2,
+      "instructionsInjectedBefore": 0,
+      "instructionsInjectedAfter": 0,
+      "r1Decision": "none",
+      "r2Eligible": false,
+      "r2Reason": "R1_DECISION_NONE"
+    },
+    {
+      "run": 1,
+      "iteration": 4,
+      "transcriptMessageIndex": 8,
+      "toolIdentities": [
+        "run_commands"
+      ],
+      "productivityClassification": "inspected",
+      "availableExecutionOutcomes": {
+        "editAttempts": 0,
+        "successfulEdits": 0,
+        "executedCommands": 0,
+        "awaitingBackgroundWork": false
+      },
+      "stagnationCounterBefore": 1,
+      "stagnationCounterAfter": 2,
+      "remainingR1Allowance": 2,
+      "instructionsInjectedBefore": 0,
+      "instructionsInjectedAfter": 0,
+      "r1Decision": "none",
+      "r2Eligible": false,
+      "r2Reason": "R1_DECISION_NONE"
+    },
+    {
+      "run": 2,
+      "iteration": 1,
+      "transcriptMessageIndex": 12,
+      "toolIdentities": [
+        "run_commands"
+      ],
+      "productivityClassification": "executed",
+      "availableExecutionOutcomes": {
+        "editAttempts": 0,
+        "successfulEdits": 0,
+        "executedCommands": 1,
+        "awaitingBackgroundWork": false
+      },
+      "stagnationCounterBefore": 0,
+      "stagnationCounterAfter": 0,
+      "remainingR1Allowance": 2,
+      "instructionsInjectedBefore": 0,
+      "instructionsInjectedAfter": 0,
+      "r1Decision": "none",
+      "r2Eligible": false,
+      "r2Reason": "R1_DECISION_NONE"
+    },
+    {
+      "run": 2,
+      "iteration": 2,
+      "transcriptMessageIndex": 14,
+      "toolIdentities": [
+        "run_commands"
+      ],
+      "productivityClassification": "executed",
+      "availableExecutionOutcomes": {
+        "editAttempts": 0,
+        "successfulEdits": 0,
+        "executedCommands": 1,
+        "awaitingBackgroundWork": false
+      },
+      "stagnationCounterBefore": 0,
+      "stagnationCounterAfter": 0,
+      "remainingR1Allowance": 2,
+      "instructionsInjectedBefore": 0,
+      "instructionsInjectedAfter": 0,
+      "r1Decision": "none",
+      "r2Eligible": false,
+      "r2Reason": "R1_DECISION_NONE"
+    },
+    {
+      "run": 2,
+      "iteration": 3,
+      "transcriptMessageIndex": 16,
+      "toolIdentities": [
+        "run_commands"
+      ],
+      "productivityClassification": "executed",
+      "availableExecutionOutcomes": {
+        "editAttempts": 0,
+        "successfulEdits": 0,
+        "executedCommands": 1,
+        "awaitingBackgroundWork": false
+      },
+      "stagnationCounterBefore": 0,
+      "stagnationCounterAfter": 0,
+      "remainingR1Allowance": 2,
+      "instructionsInjectedBefore": 0,
+      "instructionsInjectedAfter": 0,
+      "r1Decision": "none",
+      "r2Eligible": false,
+      "r2Reason": "R1_DECISION_NONE"
+    },
+    {
+      "run": 2,
+      "iteration": 4,
+      "transcriptMessageIndex": 18,
+      "toolIdentities": [
+        "run_commands"
+      ],
+      "productivityClassification": "inspected",
+      "availableExecutionOutcomes": {
+        "editAttempts": 0,
+        "successfulEdits": 0,
+        "executedCommands": 0,
+        "awaitingBackgroundWork": false
+      },
+      "stagnationCounterBefore": 0,
+      "stagnationCounterAfter": 1,
+      "remainingR1Allowance": 2,
+      "instructionsInjectedBefore": 0,
+      "instructionsInjectedAfter": 0,
+      "r1Decision": "none",
+      "r2Eligible": false,
+      "r2Reason": "R1_DECISION_NONE"
+    },
+    {
+      "run": 2,
+      "iteration": 5,
+      "transcriptMessageIndex": 20,
+      "toolIdentities": [
+        "run_commands"
+      ],
+      "productivityClassification": "inspected",
+      "availableExecutionOutcomes": {
+        "editAttempts": 0,
+        "successfulEdits": 0,
+        "executedCommands": 0,
+        "awaitingBackgroundWork": false
+      },
+      "stagnationCounterBefore": 1,
+      "stagnationCounterAfter": 2,
+      "remainingR1Allowance": 2,
+      "instructionsInjectedBefore": 0,
+      "instructionsInjectedAfter": 0,
+      "r1Decision": "none",
+      "r2Eligible": false,
+      "r2Reason": "R1_DECISION_NONE"
+    },
+    {
+      "run": 2,
+      "iteration": 6,
+      "transcriptMessageIndex": 22,
+      "toolIdentities": [
+        "read_files"
+      ],
+      "productivityClassification": "inspected",
+      "availableExecutionOutcomes": {
+        "editAttempts": 0,
+        "successfulEdits": 0,
+        "executedCommands": 0,
+        "awaitingBackgroundWork": false
+      },
+      "stagnationCounterBefore": 2,
+      "stagnationCounterAfter": 3,
+      "remainingR1Allowance": 2,
+      "instructionsInjectedBefore": 0,
+      "instructionsInjectedAfter": 0,
+      "r1Decision": "none",
+      "r2Eligible": false,
+      "r2Reason": "R1_DECISION_NONE"
+    },
+    {
+      "run": 2,
+      "iteration": 7,
+      "transcriptMessageIndex": 24,
+      "toolIdentities": [
+        "run_commands"
+      ],
+      "productivityClassification": "inspected",
+      "availableExecutionOutcomes": {
+        "editAttempts": 0,
+        "successfulEdits": 0,
+        "executedCommands": 0,
+        "awaitingBackgroundWork": false
+      },
+      "stagnationCounterBefore": 3,
+      "stagnationCounterAfter": 4,
+      "remainingR1Allowance": 2,
+      "instructionsInjectedBefore": 0,
+      "instructionsInjectedAfter": 0,
+      "r1Decision": "none",
+      "r2Eligible": false,
+      "r2Reason": "R1_DECISION_NONE"
+    },
+    {
+      "run": 2,
+      "iteration": 8,
+      "transcriptMessageIndex": 26,
+      "toolIdentities": [
+        "read_files"
+      ],
+      "productivityClassification": "inspected",
+      "availableExecutionOutcomes": {
+        "editAttempts": 0,
+        "successfulEdits": 0,
+        "executedCommands": 0,
+        "awaitingBackgroundWork": false
+      },
+      "stagnationCounterBefore": 4,
+      "stagnationCounterAfter": 5,
+      "remainingR1Allowance": 2,
+      "instructionsInjectedBefore": 0,
+      "instructionsInjectedAfter": 1,
+      "r1Decision": "inject",
+      "r2Eligible": false,
+      "r2Reason": "R1_DECISION_INJECT"
+    },
+    {
+      "run": 2,
+      "iteration": 9,
+      "transcriptMessageIndex": 29,
+      "toolIdentities": [
+        "run_commands"
+      ],
+      "productivityClassification": "executed",
+      "availableExecutionOutcomes": {
+        "editAttempts": 0,
+        "successfulEdits": 0,
+        "executedCommands": 1,
+        "awaitingBackgroundWork": false
+      },
+      "stagnationCounterBefore": 0,
+      "stagnationCounterAfter": 0,
+      "remainingR1Allowance": 1,
+      "instructionsInjectedBefore": 1,
+      "instructionsInjectedAfter": 1,
+      "r1Decision": "none",
+      "r2Eligible": false,
+      "r2Reason": "R1_DECISION_NONE"
+    },
+    {
+      "run": 2,
+      "iteration": 10,
+      "transcriptMessageIndex": 31,
+      "toolIdentities": [
+        "run_commands"
+      ],
+      "productivityClassification": "executed",
+      "availableExecutionOutcomes": {
+        "editAttempts": 0,
+        "successfulEdits": 0,
+        "executedCommands": 1,
+        "awaitingBackgroundWork": false
+      },
+      "stagnationCounterBefore": 0,
+      "stagnationCounterAfter": 0,
+      "remainingR1Allowance": 1,
+      "instructionsInjectedBefore": 1,
+      "instructionsInjectedAfter": 1,
+      "r1Decision": "none",
+      "r2Eligible": false,
+      "r2Reason": "R1_DECISION_NONE"
+    },
+    {
+      "run": 2,
+      "iteration": 11,
+      "transcriptMessageIndex": 33,
+      "toolIdentities": [
+        "run_commands"
+      ],
+      "productivityClassification": "executed",
+      "availableExecutionOutcomes": {
+        "editAttempts": 0,
+        "successfulEdits": 0,
+        "executedCommands": 1,
+        "awaitingBackgroundWork": false
+      },
+      "stagnationCounterBefore": 0,
+      "stagnationCounterAfter": 0,
+      "remainingR1Allowance": 1,
+      "instructionsInjectedBefore": 1,
+      "instructionsInjectedAfter": 1,
+      "r1Decision": "none",
+      "r2Eligible": false,
+      "r2Reason": "R1_DECISION_NONE"
+    },
+    {
+      "run": 2,
+      "iteration": 12,
+      "transcriptMessageIndex": 35,
+      "toolIdentities": [
+        "run_commands"
+      ],
+      "productivityClassification": "executed",
+      "availableExecutionOutcomes": {
+        "editAttempts": 0,
+        "successfulEdits": 0,
+        "executedCommands": 1,
+        "awaitingBackgroundWork": false
+      },
+      "stagnationCounterBefore": 0,
+      "stagnationCounterAfter": 0,
+      "remainingR1Allowance": 1,
+      "instructionsInjectedBefore": 1,
+      "instructionsInjectedAfter": 1,
+      "r1Decision": "none",
+      "r2Eligible": false,
+      "r2Reason": "R1_DECISION_NONE"
+    },
+    {
+      "run": 2,
+      "iteration": 13,
+      "transcriptMessageIndex": 37,
+      "toolIdentities": [
+        "run_commands"
+      ],
+      "productivityClassification": "executed",
+      "availableExecutionOutcomes": {
+        "editAttempts": 0,
+        "successfulEdits": 0,
+        "executedCommands": 1,
+        "awaitingBackgroundWork": false
+      },
+      "stagnationCounterBefore": 0,
+      "stagnationCounterAfter": 0,
+      "remainingR1Allowance": 1,
+      "instructionsInjectedBefore": 1,
+      "instructionsInjectedAfter": 1,
+      "r1Decision": "none",
+      "r2Eligible": false,
+      "r2Reason": "R1_DECISION_NONE"
+    },
+    {
+      "run": 2,
+      "iteration": 14,
+      "transcriptMessageIndex": 39,
+      "toolIdentities": [
+        "run_commands"
+      ],
+      "productivityClassification": "executed",
+      "availableExecutionOutcomes": {
+        "editAttempts": 0,
+        "successfulEdits": 0,
+        "executedCommands": 1,
+        "awaitingBackgroundWork": false
+      },
+      "stagnationCounterBefore": 0,
+      "stagnationCounterAfter": 0,
+      "remainingR1Allowance": 1,
+      "instructionsInjectedBefore": 1,
+      "instructionsInjectedAfter": 1,
+      "r1Decision": "none",
+      "r2Eligible": false,
+      "r2Reason": "R1_DECISION_NONE"
+    },
+    {
+      "run": 2,
+      "iteration": 15,
+      "transcriptMessageIndex": 41,
+      "toolIdentities": [
+        "run_commands"
+      ],
+      "productivityClassification": "executed",
+      "availableExecutionOutcomes": {
+        "editAttempts": 0,
+        "successfulEdits": 0,
+        "executedCommands": 1,
+        "awaitingBackgroundWork": false
+      },
+      "stagnationCounterBefore": 0,
+      "stagnationCounterAfter": 0,
+      "remainingR1Allowance": 1,
+      "instructionsInjectedBefore": 1,
+      "instructionsInjectedAfter": 1,
+      "r1Decision": "none",
+      "r2Eligible": false,
+      "r2Reason": "R1_DECISION_NONE"
+    },
+    {
+      "run": 2,
+      "iteration": 16,
+      "transcriptMessageIndex": 43,
+      "toolIdentities": [
+        "run_commands"
+      ],
+      "productivityClassification": "executed",
+      "availableExecutionOutcomes": {
+        "editAttempts": 0,
+        "successfulEdits": 0,
+        "executedCommands": 1,
+        "awaitingBackgroundWork": false
+      },
+      "stagnationCounterBefore": 0,
+      "stagnationCounterAfter": 0,
+      "remainingR1Allowance": 1,
+      "instructionsInjectedBefore": 1,
+      "instructionsInjectedAfter": 1,
+      "r1Decision": "none",
+      "r2Eligible": false,
+      "r2Reason": "R1_DECISION_NONE"
+    },
+    {
+      "run": 2,
+      "iteration": 17,
+      "transcriptMessageIndex": 45,
+      "toolIdentities": [
+        "run_commands"
+      ],
+      "productivityClassification": "executed",
+      "availableExecutionOutcomes": {
+        "editAttempts": 0,
+        "successfulEdits": 0,
+        "executedCommands": 1,
+        "awaitingBackgroundWork": false
+      },
+      "stagnationCounterBefore": 0,
+      "stagnationCounterAfter": 0,
+      "remainingR1Allowance": 1,
+      "instructionsInjectedBefore": 1,
+      "instructionsInjectedAfter": 1,
+      "r1Decision": "none",
+      "r2Eligible": false,
+      "r2Reason": "R1_DECISION_NONE"
+    },
+    {
+      "run": 2,
+      "iteration": 18,
+      "transcriptMessageIndex": 47,
+      "toolIdentities": [
+        "run_commands"
+      ],
+      "productivityClassification": "inspected",
+      "availableExecutionOutcomes": {
+        "editAttempts": 0,
+        "successfulEdits": 0,
+        "executedCommands": 0,
+        "awaitingBackgroundWork": false
+      },
+      "stagnationCounterBefore": 0,
+      "stagnationCounterAfter": 1,
+      "remainingR1Allowance": 1,
+      "instructionsInjectedBefore": 1,
+      "instructionsInjectedAfter": 1,
+      "r1Decision": "none",
+      "r2Eligible": false,
+      "r2Reason": "R1_DECISION_NONE"
+    },
+    {
+      "run": 2,
+      "iteration": 19,
+      "transcriptMessageIndex": 49,
+      "toolIdentities": [
+        "run_commands"
+      ],
+      "productivityClassification": "inspected",
+      "availableExecutionOutcomes": {
+        "editAttempts": 0,
+        "successfulEdits": 0,
+        "executedCommands": 0,
+        "awaitingBackgroundWork": false
+      },
+      "stagnationCounterBefore": 1,
+      "stagnationCounterAfter": 2,
+      "remainingR1Allowance": 1,
+      "instructionsInjectedBefore": 1,
+      "instructionsInjectedAfter": 1,
+      "r1Decision": "none",
+      "r2Eligible": false,
+      "r2Reason": "R1_DECISION_NONE"
+    },
+    {
+      "run": 2,
+      "iteration": 20,
+      "transcriptMessageIndex": 51,
+      "toolIdentities": [
+        "run_commands"
+      ],
+      "productivityClassification": "inspected",
+      "availableExecutionOutcomes": {
+        "editAttempts": 0,
+        "successfulEdits": 0,
+        "executedCommands": 0,
+        "awaitingBackgroundWork": false
+      },
+      "stagnationCounterBefore": 2,
+      "stagnationCounterAfter": 3,
+      "remainingR1Allowance": 1,
+      "instructionsInjectedBefore": 1,
+      "instructionsInjectedAfter": 1,
+      "r1Decision": "none",
+      "r2Eligible": false,
+      "r2Reason": "R1_DECISION_NONE"
+    },
+    {
+      "run": 2,
+      "iteration": 21,
+      "transcriptMessageIndex": 53,
+      "toolIdentities": [
+        "run_commands"
+      ],
+      "productivityClassification": "inspected",
+      "availableExecutionOutcomes": {
+        "editAttempts": 0,
+        "successfulEdits": 0,
+        "executedCommands": 0,
+        "awaitingBackgroundWork": false
+      },
+      "stagnationCounterBefore": 3,
+      "stagnationCounterAfter": 4,
+      "remainingR1Allowance": 1,
+      "instructionsInjectedBefore": 1,
+      "instructionsInjectedAfter": 1,
+      "r1Decision": "none",
+      "r2Eligible": false,
+      "r2Reason": "R1_DECISION_NONE"
+    },
+    {
+      "run": 2,
+      "iteration": 22,
+      "transcriptMessageIndex": 55,
+      "toolIdentities": [
+        "run_commands"
+      ],
+      "productivityClassification": "inspected",
+      "availableExecutionOutcomes": {
+        "editAttempts": 0,
+        "successfulEdits": 0,
+        "executedCommands": 0,
+        "awaitingBackgroundWork": false
+      },
+      "stagnationCounterBefore": 4,
+      "stagnationCounterAfter": 5,
+      "remainingR1Allowance": 1,
+      "instructionsInjectedBefore": 1,
+      "instructionsInjectedAfter": 2,
+      "r1Decision": "inject",
+      "r2Eligible": false,
+      "r2Reason": "R1_DECISION_INJECT"
+    },
+    {
+      "run": 2,
+      "iteration": 23,
+      "transcriptMessageIndex": 58,
+      "toolIdentities": [
+        "read_files"
+      ],
+      "productivityClassification": "inspected",
+      "availableExecutionOutcomes": {
+        "editAttempts": 0,
+        "successfulEdits": 0,
+        "executedCommands": 0,
+        "awaitingBackgroundWork": false
+      },
+      "stagnationCounterBefore": 0,
+      "stagnationCounterAfter": 1,
+      "remainingR1Allowance": 0,
+      "instructionsInjectedBefore": 2,
+      "instructionsInjectedAfter": 2,
+      "r1Decision": "none",
+      "r2Eligible": false,
+      "r2Reason": "R1_DECISION_NONE"
+    },
+    {
+      "run": 2,
+      "iteration": 24,
+      "transcriptMessageIndex": 60,
+      "toolIdentities": [
+        "read_files"
+      ],
+      "productivityClassification": "inspected",
+      "availableExecutionOutcomes": {
+        "editAttempts": 0,
+        "successfulEdits": 0,
+        "executedCommands": 0,
+        "awaitingBackgroundWork": false
+      },
+      "stagnationCounterBefore": 1,
+      "stagnationCounterAfter": 2,
+      "remainingR1Allowance": 0,
+      "instructionsInjectedBefore": 2,
+      "instructionsInjectedAfter": 2,
+      "r1Decision": "none",
+      "r2Eligible": false,
+      "r2Reason": "R1_DECISION_NONE"
+    },
+    {
+      "run": 2,
+      "iteration": 25,
+      "transcriptMessageIndex": 62,
+      "toolIdentities": [
+        "read_files"
+      ],
+      "productivityClassification": "inspected",
+      "availableExecutionOutcomes": {
+        "editAttempts": 0,
+        "successfulEdits": 0,
+        "executedCommands": 0,
+        "awaitingBackgroundWork": false
+      },
+      "stagnationCounterBefore": 2,
+      "stagnationCounterAfter": 3,
+      "remainingR1Allowance": 0,
+      "instructionsInjectedBefore": 2,
+      "instructionsInjectedAfter": 2,
+      "r1Decision": "none",
+      "r2Eligible": false,
+      "r2Reason": "R1_DECISION_NONE"
+    },
+    {
+      "run": 2,
+      "iteration": 26,
+      "transcriptMessageIndex": 64,
+      "toolIdentities": [
+        "run_commands"
+      ],
+      "productivityClassification": "executed",
+      "availableExecutionOutcomes": {
+        "editAttempts": 0,
+        "successfulEdits": 0,
+        "executedCommands": 1,
+        "awaitingBackgroundWork": false
+      },
+      "stagnationCounterBefore": 3,
+      "stagnationCounterAfter": 0,
+      "remainingR1Allowance": 0,
+      "instructionsInjectedBefore": 2,
+      "instructionsInjectedAfter": 2,
+      "r1Decision": "none",
+      "r2Eligible": false,
+      "r2Reason": "R1_DECISION_NONE"
+    },
+    {
+      "run": 2,
+      "iteration": 27,
+      "transcriptMessageIndex": 66,
+      "toolIdentities": [
+        "run_commands"
+      ],
+      "productivityClassification": "executed",
+      "availableExecutionOutcomes": {
+        "editAttempts": 0,
+        "successfulEdits": 0,
+        "executedCommands": 1,
+        "awaitingBackgroundWork": false
+      },
+      "stagnationCounterBefore": 0,
+      "stagnationCounterAfter": 0,
+      "remainingR1Allowance": 0,
+      "instructionsInjectedBefore": 2,
+      "instructionsInjectedAfter": 2,
+      "r1Decision": "none",
+      "r2Eligible": false,
+      "r2Reason": "R1_DECISION_NONE"
+    },
+    {
+      "run": 2,
+      "iteration": 28,
+      "transcriptMessageIndex": 68,
+      "toolIdentities": [
+        "read_files"
+      ],
+      "productivityClassification": "inspected",
+      "availableExecutionOutcomes": {
+        "editAttempts": 0,
+        "successfulEdits": 0,
+        "executedCommands": 0,
+        "awaitingBackgroundWork": false
+      },
+      "stagnationCounterBefore": 0,
+      "stagnationCounterAfter": 1,
+      "remainingR1Allowance": 0,
+      "instructionsInjectedBefore": 2,
+      "instructionsInjectedAfter": 2,
+      "r1Decision": "none",
+      "r2Eligible": false,
+      "r2Reason": "R1_DECISION_NONE"
+    },
+    {
+      "run": 2,
+      "iteration": 29,
+      "transcriptMessageIndex": 70,
+      "toolIdentities": [
+        "run_commands"
+      ],
+      "productivityClassification": "executed",
+      "availableExecutionOutcomes": {
+        "editAttempts": 0,
+        "successfulEdits": 0,
+        "executedCommands": 1,
+        "awaitingBackgroundWork": false
+      },
+      "stagnationCounterBefore": 1,
+      "stagnationCounterAfter": 0,
+      "remainingR1Allowance": 0,
+      "instructionsInjectedBefore": 2,
+      "instructionsInjectedAfter": 2,
+      "r1Decision": "none",
+      "r2Eligible": false,
+      "r2Reason": "R1_DECISION_NONE"
+    },
+    {
+      "run": 2,
+      "iteration": 30,
+      "transcriptMessageIndex": 72,
+      "toolIdentities": [
+        "run_commands"
+      ],
+      "productivityClassification": "inspected",
+      "availableExecutionOutcomes": {
+        "editAttempts": 0,
+        "successfulEdits": 0,
+        "executedCommands": 0,
+        "awaitingBackgroundWork": false
+      },
+      "stagnationCounterBefore": 0,
+      "stagnationCounterAfter": 1,
+      "remainingR1Allowance": 0,
+      "instructionsInjectedBefore": 2,
+      "instructionsInjectedAfter": 2,
+      "r1Decision": "none",
+      "r2Eligible": false,
+      "r2Reason": "R1_DECISION_NONE"
+    }
+  ],
+  "summary": {
+    "totalRounds": 34,
+    "r1InjectionsReplayed": 2,
+    "r1InjectionsObserved": 2,
+    "allowanceExhaustedReached": false,
+    "r2Eligible": false,
+    "maxStagnationStreak": 5
+  }
+}

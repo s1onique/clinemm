@@ -13,6 +13,7 @@ import {
 	buildWorkspaceMetadata,
 	type ClineCoreStartInput,
 	type CoreSessionConfig,
+	createHostExecutionProgressClassifier,
 	getProviderAuthHandler,
 	getSandboxBackend,
 	normalizeUserContextCeiling,
@@ -276,6 +277,30 @@ export interface HostClientContext {
 	platform?: string
 	platformVersion?: string
 	isMultiRoot: boolean
+}
+
+/**
+ * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 — AMENDMENT-01.
+ *
+ * The EXPLICIT DOGFOOD OPT-IN for the R2 bounded-objective recovery.
+ *
+ * R2 is EXPERIMENTAL. It is NOT enabled for ordinary production sessions.
+ * This predicate is the ONLY thing that can enable it, and it is an
+ * environment opt-in rather than a persisted setting:
+ *
+ *   - it is a per-invocation deliberate choice,
+ *   - it cannot be enabled by accident by a workspace file, a project file
+ *     or a task payload,
+ *   - it is ABSENT from every ordinary session, and with the policy key
+ *     absent the runtime behaves EXACTLY as it did before R2 existed:
+ *     no selection inference, no dispatch, no recovery, no accounting.
+ *
+ * The value must be exactly "1" or "true" (case-insensitive). Any other
+ * value — including an empty string — leaves R2 disabled.
+ */
+export function isBoundedObjectiveDogfoodEnabled(): boolean {
+	const raw = process.env.CLINE_BOUNDED_OBJECTIVE_DOGFOOD
+	return typeof raw === "string" && (raw.trim() === "1" || raw.trim().toLowerCase() === "true")
 }
 
 export async function resolveClineRequestClientContext(): Promise<HostClientContext> {
@@ -1543,6 +1568,75 @@ export async function buildSessionConfig(input: SessionConfigInput): Promise<Cor
 			: {}),
 		disableMcpSettingsTools: true,
 		mode: mode === "plan" ? "plan" : "act",
+		// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (R1): the
+		// runtime-owned execution-stagnation recovery policy.
+		//
+		// The runtime observes its own execution rounds and, after a
+		// configurable streak of consecutive rounds that produced no
+		// productive step, injects ONE runtime-owned corrective instruction
+		// before the next model request. Execution then continues
+		// AUTOMATICALLY — no user confirmation, no new authority, no
+		// completion.
+		//
+		// The policy is scoped to ACT mode: in PLAN mode the agent is
+		// explicitly forbidden to edit, so an "unproductive" round is the
+		// requested behaviour, not a stall.
+		//
+		// The `classifyToolCall` hook is the HOST's contribution: the
+		// runtime cannot tell a read-only shell inspection from a real
+		// execution without reading command text, so the host — which owns
+		// the command-policy layer — supplies that judgement.
+		...(mode === "plan"
+			? {}
+			: {
+					executionStagnationPolicy: {
+						unproductiveRoundThreshold: 5,
+						maxRecoveryInstructions: 2,
+						enabled: true,
+						classifyToolCall: createHostExecutionProgressClassifier(),
+					},
+					// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 (R2):
+					// the runtime-owned bounded-objective recovery policy.
+					//
+					// R2 is the SECOND recovery stage. It activates only
+					// after the R1 corrective-instruction allowance has
+					// been EXHAUSTED and the trajectory is still
+					// unproductive. The runtime then selects ONE bounded,
+					// independently verifiable objective derived from the
+					// parent task and makes it the current execution target
+					// of the next dispatched model request.
+					//
+					// Like R1, it is scoped to ACT mode: in PLAN mode the
+					// agent is explicitly forbidden to edit, so an
+					// "unproductive" round is the requested behaviour, not a
+					// stall.
+					//
+					// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01
+					// (AMENDMENT-01): R2 IS EXPLICITLY EXPERIMENTAL.
+					//
+					// It is NOT enabled for ordinary production sessions.
+					// The whole `boundedObjectivePolicy` key is ABSENT
+					// unless the DOGFOOD opt-in is explicitly selected, and
+					// with the key absent the runtime behaves EXACTLY as
+					// before: no selection inference, no dispatch, no
+					// recovery, no accounting.
+					//
+					// The dogfood selection is deliberately an ENVIRONMENT
+					// opt-in rather than a persisted setting: it is a
+					// per-invocation deliberate choice, it cannot be
+					// enabled by accident by a workspace or a project
+					// file, and it is absent from every ordinary session.
+					...(isBoundedObjectiveDogfoodEnabled()
+						? {
+								boundedObjectivePolicy: {
+									enabled: true,
+									maxActivations: 2,
+									maxObjectiveRounds: 8,
+									maxSelectionInferences: 1,
+								},
+							}
+						: {}),
+				}),
 		...reasoningConfig,
 		...(maxTokensPerTurn !== undefined ? { maxTokensPerTurn } : {}),
 		...(temperature !== undefined ? { temperature } : {}),

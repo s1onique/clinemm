@@ -73,6 +73,10 @@ import {
 	recordProviderRequestCapture,
 	wrapFetchForProviderRequestCapture,
 } from "./provider-request-capture";
+// ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION03: the
+// repository's PUBLISHED BUILTIN ROUTES, which are the only routes whose
+// reasoning origin authority may be established.
+import { isPublishedBuiltinRoute } from "./published-routes";
 import {
 	appendRequestId,
 	extractResponseRequestId,
@@ -414,6 +418,14 @@ function buildAiSdkRequestMessages(
 ) {
 	const aiMessages = toAiSdkMessages(request.messages, systemPrompt, {
 		includeReasoning: shouldIncludeReasoningHistory(request, context),
+		// ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION02 (A1):
+		// the destination authority is REQUIRED and is established here, at
+		// the single request-construction boundary. A caller that cannot
+		// establish it gets no opaque replay authority.
+		destinationAuthority: buildReasoningOriginAuthority({
+			providerId: request.providerId,
+			baseUrl: context.config.baseUrl,
+		}),
 		supportedInputModalities:
 			context.model.modalities?.input ??
 			(context.model.capabilities
@@ -757,10 +769,27 @@ function buildAiSdkRuntimeContext(
 
 function toAiSdkMessages(
 	messages: readonly AgentMessage[],
-	systemPrompt?: string,
-	options?: {
+	systemPrompt: string | undefined,
+	options: {
 		includeReasoning?: boolean;
 		supportedInputModalities?: readonly string[];
+		/**
+		 * ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION02 (A1).
+		 *
+		 * The ORIGIN AUTHORITY of the request the messages are replayed
+		 * into (the provider id plus the effective route).
+		 *
+		 * It is REQUIRED: an opaque reasoning payload may only be replayed
+		 * when the destination's authority is positively established. There
+		 * is deliberately no permissive fallback — a caller that cannot
+		 * establish the destination identity gets NO opaque replay authority.
+		 *
+		 * The VALUE may be `undefined`, which is how an UNRESOLVED
+		 * destination route (no base URL, an invalid base URL, or a
+		 * credential-bearing base URL) is represented. An unresolved
+		 * destination grants NO replay authority.
+		 */
+		destinationAuthority: string | undefined;
 	},
 ) {
 	const includeReasoning = options?.includeReasoning ?? true;
@@ -781,8 +810,33 @@ function toAiSdkMessages(
 					continue;
 				}
 				const metadata = part.metadata as Record<string, unknown> | undefined;
-				const signature = metadata?.signature;
-				const redactedData = metadata?.redactedData;
+				// ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION01.
+				//
+				// The ORIGIN boundary for opaque provider-owned reasoning
+				// metadata.
+				//
+				// The Anthropic thinking signature and the redacted-thinking
+				// payload are ISSUED BY one endpoint and authenticate a block to
+				// it. Replaying them to a DIFFERENT origin would disclose one
+				// endpoint's opaque metadata to another.
+				//
+				// The issuing provider is recorded WITH the payload when it is
+				// extracted (see `extractReasoningMetadata`). When that origin
+				// is KNOWN and differs from the request's provider, the opaque
+				// metadata is withheld. The reasoning TEXT is preserved — it is
+				// not opaque.
+				//
+				// When the origin is UNKNOWN (no recorded origin), the metadata
+				// is replayed: the absence of origin information is not evidence
+				// of a cross-origin replay, and dropping it would silently lose
+				// a provider-required signature.
+				const origin = metadata?.[REASONING_METADATA_ORIGIN_KEY];
+				const sameOrigin = mayReplayOpaqueReasoning({
+					origin,
+					destinationAuthority: options.destinationAuthority,
+				});
+				const signature = sameOrigin ? metadata?.signature : undefined;
+				const redactedData = sameOrigin ? metadata?.redactedData : undefined;
 				content.push({
 					type: "reasoning",
 					text: sanitizeSurrogates(part.text),
@@ -1421,6 +1475,19 @@ function suppressDanglingStreamPromises(
 	}
 }
 
+/**
+ * The GOOGLE / VERTEX thought metadata carried by a stream part.
+ *
+ * `thoughtSignature` is the opaque signature the Gemini family attaches to
+ * a thought block. It travels in `providerMetadata.google` /
+ * `providerMetadata.vertex`.
+ *
+ * This is the ORIGINAL extraction scope. It is deliberately kept SEPARATE
+ * from the Anthropic reasoning metadata (below): the Google/Vertex thought
+ * signature is a TOOL-CALL-scoped concept (it authorises the continuation
+ * of a tool call), while the Anthropic signature is a REASONING-BLOCK-scoped
+ * concept (it authenticates a thinking block).
+ */
 function extractGoogleThoughtMetadata(
 	part: AiSdkStreamPart,
 ): Record<string, unknown> | undefined {
@@ -1460,6 +1527,311 @@ function extractGoogleThoughtMetadata(
 		typeof googleMetadata?.thought_signature === "string"
 	) {
 		metadata.thought_signature = googleMetadata.thought_signature;
+	}
+
+	return Object.keys(metadata).length > 0 ? metadata : undefined;
+}
+
+/**
+ * ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION02.
+ *
+ * The metadata key that records the ORIGIN AUTHORITY of an opaque
+ * provider-owned reasoning payload.
+ *
+ * It is the SAME key the production persistence codec preserves
+ * (`agent-message-codec.ts`, `ThinkingContent.originAuthority`), so the
+ * authority travels with the payload through accumulation, persistence and
+ * restoration without a second representation.
+ *
+ * It is READ ONLY by the outbound conversion. It is never sent to a
+ * provider: the outbound conversion consumes it and does not forward it.
+ */
+const REASONING_METADATA_ORIGIN_KEY = "originAuthority";
+
+/**
+ * ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION02.
+ *
+ * The ORIGIN AUTHORITY of a provider endpoint.
+ *
+ * The opaque reasoning payloads (the Anthropic thinking signature and the
+ * redacted-thinking payload) authenticate a block to the ENDPOINT that
+ * issued them. A provider id alone does NOT establish a trust domain: two
+ * endpoints can share one provider id (a regional or self-hosted endpoint,
+ * a gateway, a proxy) while being entirely distinct trust domains.
+ *
+ * The authority therefore identifies BOTH:
+ *
+ *   - the provider id, and
+ *   - the EFFECTIVE endpoint (the resolved base URL), when one is known.
+ *
+ * CREDENTIAL FREEDOM (A2). The authority is PERSISTED alongside the
+ * payload, so it must never carry a credential. The repository's provider
+ * configuration contract places credentials in `apiKey` / `apiKeyResolver` /
+ * `apiKeyEnv` / `headers` — NEVER in the base URL — but the base URL is
+ * still SYNTACTICALLY capable of carrying one (the configuration schema
+ * accepts any `z.string().url()`, including user information, query
+ * strings and fragments). The route identity is therefore built ONLY from
+ * the URL components that are provably credential-free and provably
+ * route-identity, and a URL that carries any other component produces NO
+ * authority at all (fail closed) rather than a value that would either
+ * leak a credential or silently drop an identity-bearing component.
+ *
+ * ABSENCE IS EXPLICIT (A1). The authority is `string | undefined`, and
+ * `undefined` means "this route is UNRESOLVED". There is deliberately no
+ * nonempty sentinel: a sentinel would make two DIFFERENT unresolved routes
+ * compare EQUAL and would grant replay authority across a boundary that was
+ * never established.
+ *
+ * The two parts are joined with a separator that cannot occur in either,
+ * so the composite cannot be forged by moving characters between them.
+ */
+function buildReasoningOriginAuthority(input: {
+	providerId: string;
+	baseUrl: string | undefined;
+}): string | undefined {
+	// ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION02 (A2).
+	//
+	// The EFFECTIVE ROUTE, not merely the logical provider id and not the
+	// unresolved configuration value:
+	//
+	//   - `context.config.baseUrl` is the RESOLVED endpoint. The registry
+	//     resolves it as `config.baseUrl ?? apiLineBaseUrl ??
+	//     registration.defaults.baseUrl`, so the API-line variant (for
+	//     example MiniMax's China vs international endpoint) is already
+	//     applied.
+	//   - The full base URL is used, INCLUDING its PATH, because two
+	//     endpoints can share a hostname and differ only by path, and a
+	//     different path can be a different trust domain. The Anthropic
+	//     adapter builds its effective request URL as
+	//     `${baseURL}/messages`, so the base URL's path IS part of the
+	//     route.
+	//   - Only trailing slashes are normalized, so `/v1` and `/v1/` are the
+	//     same route while `/v1` and `/v2` are not.
+	//
+	// CREDENTIAL EXCLUSION. The URL is parsed and then INSPECTED; a URL
+	// that carries ANY of the following produces NO authority:
+	//
+	//   - USER INFORMATION (`https://user:secret@host/...`) — a
+	//     credential. It is not route identity, and stripping it would
+	//     make two different effective routes indistinguishable.
+	//   - a QUERY STRING (`?api_key=...`) — the canonical credential
+	//     carrier in a URL. It cannot be told apart from route identity
+	//     by shape, so it is refused rather than persisted or stripped.
+	//   - a FRAGMENT (`#...`) — never transmitted to the server, so it
+	//     cannot be route identity, and it may carry a credential.
+	//   - a URL that does not parse — an invalid endpoint, and therefore
+	//     an unresolved route.
+	//
+	// The PATH is RETAINED IN FULL for an ESTABLISHED route, because it is
+	// route identity under this repository's configuration contract
+	// (credentials travel in `apiKey` and `headers`, never in the path).
+	// Retaining it is what keeps a same-host / different-path pair two
+	// DISTINCT routes.
+	//
+	// ESTABLISHMENT IS THE GATE (CORRECTION03). The authority is established
+	// ONLY for an EXACT match against the repository's PUBLISHED BUILTIN
+	// ROUTES (the builtin spec's default base URL and its per-API-line base
+	// URLs). An UNESTABLISHED route — an operator-configured base URL, a
+	// self-hosted or proxied endpoint, an extension-registered provider —
+	// has NO published fact behind it, so it is WITHHELD authority: it
+	// produces NO authority at all, and nothing about it (host, path, or a
+	// credential in either) can reach the persisted record.
+	//
+	// LIMITATION (stated explicitly): route identity establishes the ROUTE
+	// that issued a payload. It does NOT by itself prove every account-,
+	// model- or conversation-level compatibility condition that a provider
+	// may require.
+	const providerId = input.providerId?.trim();
+	if (!providerId) {
+		return undefined;
+	}
+	const rawBaseUrl = input.baseUrl?.trim();
+	if (!rawBaseUrl) {
+		return undefined;
+	}
+	let url: URL;
+	try {
+		url = new URL(rawBaseUrl);
+	} catch {
+		// An INVALID endpoint is an UNRESOLVED route, not a route.
+		return undefined;
+	}
+	if (url.username.length > 0 || url.password.length > 0) {
+		return undefined;
+	}
+	if (url.search.length > 0) {
+		return undefined;
+	}
+	if (url.hash.length > 0) {
+		return undefined;
+	}
+	const origin = url.origin;
+	if (!origin || origin === "null") {
+		return undefined;
+	}
+	// ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION03.
+	//
+	// ESTABLISHMENT IS THE GATE. The authority is established ONLY for an
+	// EXACT match against the repository's PUBLISHED BUILTIN ROUTES (the
+	// builtin spec's default base URL and its per-API-line base URLs).
+	//
+	// An UNESTABLISHED route — an operator-configured base URL, a
+	// self-hosted or proxied endpoint, an extension-registered provider —
+	// has NO published fact behind it. Its path is operator-supplied and
+	// may carry a secret, and there is no published statement that the
+	// path is route identity rather than a credential. Such a route is
+	// therefore WITHHELD authority: it produces NO authority at all, so
+	// nothing about it — not the host, not the path, not a credential in
+	// either — reaches the persisted record.
+	//
+	// A PUBLISHED route, by contrast, IS established by the repository:
+	// its paths are the repository's own (deployment ids, API versions),
+	// never operator-placed secrets. Its COMPLETE route identity is
+	// therefore preserved, including the FULL path, because the path is
+	// what keeps a same-host / different-path pair two DISTINCT routes.
+	if (!isPublishedBuiltinRoute({ providerId, baseUrl: rawBaseUrl })) {
+		return undefined;
+	}
+	const path = url.pathname.replace(/\/+$/, "");
+	return `${providerId}\u0000${origin}\u0000${path}`;
+}
+
+/**
+ * ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION02.
+ *
+ * Whether an opaque reasoning payload may be replayed to a destination.
+ *
+ * The policy is FAIL-CLOSED:
+ *
+ *   - the recorded origin must be PRESENT and well formed, and
+ *   - it must EXACTLY equal the destination's origin authority.
+ *
+ * A missing or malformed origin does NOT grant replay authority: absence of
+ * provenance is not evidence of compatibility, and granting it would
+ * disclose one endpoint's opaque metadata to another.
+ *
+ * The reasoning TEXT is never gated by this — only the opaque payload is.
+ */
+function mayReplayOpaqueReasoning(input: {
+	origin: unknown;
+	destinationAuthority: string | undefined;
+}): boolean {
+	// ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION02 (A1).
+	//
+	// FAIL CLOSED on every branch:
+	//
+	//   - a MISSING or MALFORMED issuing origin grants no authority,
+	//   - a MISSING or MALFORMED destination identity grants no authority,
+	//   - KNOWN INCOMPATIBLE origins grant no authority,
+	//   - only POSITIVELY ESTABLISHED COMPATIBLE origins grant authority.
+	//
+	// The destination authority is REQUIRED by the caller, so a missing
+	// destination can never be reached through the ordinary request path —
+	// but its VALUE may be `undefined`, which is exactly how an UNRESOLVED
+	// destination route is represented. An unresolved destination therefore
+	// grants NO authority, exactly like a malformed one.
+	if (typeof input.origin !== "string" || input.origin.length === 0) {
+		return false;
+	}
+	if (
+		typeof input.destinationAuthority !== "string" ||
+		input.destinationAuthority.length === 0
+	) {
+		return false;
+	}
+	return input.origin === input.destinationAuthority;
+}
+
+/**
+ * ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01.
+ *
+ * The provider-owned reasoning METADATA carried by a REASONING stream part.
+ *
+ * Two families exist and BOTH are required for reasoning continuity:
+ *
+ *   - GOOGLE / VERTEX `thoughtSignature` — the opaque signature the Gemini
+ *     family attaches to a thought block. It travels in
+ *     `providerMetadata.google` / `providerMetadata.vertex`.
+ *   - ANTHROPIC `signature` / `redactedData` — the opaque signature the
+ *     Anthropic family attaches to a thinking block. It travels in
+ *     `providerMetadata.anthropic`.
+ *
+ * The Anthropic family is the Anthropic-COMPATIBLE transport too, so the
+ * MiniMax M3 / M3.1 Flash routes deliver their thinking signature through
+ * this bucket.
+ *
+ * The metadata is OPAQUE and PROVIDER-OWNED: it is carried verbatim, it is
+ * never synthesized, and it is never carried across a provider transition
+ * (the outbound conversion reads it per provider bucket).
+ *
+ * ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION01 (A2): this
+ * extractor is used ONLY on the REASONING path. The tool-call path and the
+ * recoverable-tool-error path keep the original Google/Vertex-only scope,
+ * so the Anthropic opaque reasoning metadata is not broadened into
+ * unrelated tool-call or error records.
+ */
+function extractReasoningMetadata(
+	part: AiSdkStreamPart,
+	issuingAuthority?: string,
+): Record<string, unknown> | undefined {
+	const metadata: Record<string, unknown> = {};
+
+	const providerMetadata =
+		part.providerMetadata && typeof part.providerMetadata === "object"
+			? (part.providerMetadata as Record<string, unknown>)
+			: undefined;
+	const anthropicMetadata =
+		providerMetadata?.anthropic &&
+		typeof providerMetadata.anthropic === "object"
+			? (providerMetadata.anthropic as Record<string, unknown>)
+			: undefined;
+
+	// ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01: the Anthropic
+	// thinking-block signature and the redacted-thinking payload.
+	//
+	// These are carried verbatim under the SAME key names the outbound
+	// conversion reads (`metadata.signature` / `metadata.redactedData`), so
+	// the round trip needs no provider-specific branch at the send boundary.
+	if (
+		typeof metadata.signature !== "string" &&
+		typeof anthropicMetadata?.signature === "string"
+	) {
+		metadata.signature = anthropicMetadata.signature;
+	}
+	if (
+		typeof metadata.redactedData !== "string" &&
+		typeof anthropicMetadata?.redactedData === "string"
+	) {
+		metadata.redactedData = anthropicMetadata.redactedData;
+	}
+
+	// The Google/Vertex thought signature is COMPOSED from the shared
+	// extractor rather than re-implemented, so the two extraction
+	// implementations cannot drift apart.
+	const googleMetadata = extractGoogleThoughtMetadata(part);
+	if (googleMetadata) {
+		Object.assign(metadata, googleMetadata);
+	}
+
+	// ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION01.
+	//
+	// The ORIGIN of the opaque metadata.
+	//
+	// The Anthropic thinking signature and the redacted-thinking payload
+	// are ISSUED BY one endpoint and authenticate a block to it. Replaying
+	// them to a DIFFERENT origin discloses one endpoint's opaque metadata
+	// to another, so the issuing provider is recorded WITH the metadata and
+	// the outbound conversion checks it before replaying.
+	//
+	// The origin is recorded only when the metadata actually carries an
+	// Anthropic opaque payload, and it is recorded under a ClineMM-owned
+	// key, so it never alters the provider's own metadata shape.
+	if (
+		issuingAuthority !== undefined &&
+		(typeof metadata.signature === "string" ||
+			typeof metadata.redactedData === "string")
+	) {
+		metadata[REASONING_METADATA_ORIGIN_KEY] = issuingAuthority;
 	}
 
 	return Object.keys(metadata).length > 0 ? metadata : undefined;
@@ -1584,13 +1956,57 @@ async function* emitAiSdkEvents(
 					const text =
 						(part.textDelta as string | undefined) ??
 						(part.text as string | undefined) ??
-						(part.reasoning as string | undefined);
-					if (text) {
-						sawVisibleContent = true;
+						(part.reasoning as string | undefined) ??
+						(part.delta as string | undefined) ??
+						"";
+					// ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01.
+					//
+					// The Anthropic family streams a thinking block's SIGNATURE
+					// as a SEPARATE event whose text is EMPTY. The resolved
+					// `@ai-sdk/anthropic` surfaces it as a `reasoning-delta`
+					// with `delta: ""` and the signature in
+					// `providerMetadata.anthropic`.
+					//
+					// Dropping such an event (the previous `if (text)` guard)
+					// discarded the signature, so the accumulated reasoning part
+					// carried no signature and the NEXT request serialized the
+					// reasoning WITHOUT one. The Anthropic serializer then
+					// emitted `unsupported reasoning metadata` and DROPPED the
+					// reasoning block from the request entirely.
+					//
+					// A metadata-bearing reasoning event is therefore FORWARDED
+					// even when its text is empty, so the provider-owned metadata
+					// survives to the accumulated reasoning part. An event with
+					// neither text nor metadata remains a no-op.
+					const metadata = extractReasoningMetadata(
+						part,
+						buildReasoningOriginAuthority({
+							providerId: request.providerId,
+							baseUrl: context.config.baseUrl,
+						}),
+					);
+					if (text || metadata) {
+						if (text) {
+							sawVisibleContent = true;
+						}
+						// ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION01.
+						//
+						// The provider's reasoning BLOCK identity. The resolved
+						// AI SDK's `reasoning-delta` part carries the provider's
+						// content-block id (the Anthropic content block index),
+						// which is what distinguishes two independently signed
+						// thinking blocks inside ONE assistant turn.
+						//
+						// Without it the runtime merges adjacent reasoning deltas
+						// into a single part, so two signed blocks collapse into
+						// one and only the LAST signature survives — the other
+						// signature is silently lost.
+						const blockId = typeof part.id === "string" ? part.id : undefined;
 						yield {
 							type: "reasoning-delta",
 							text,
-							metadata: extractGoogleThoughtMetadata(part),
+							metadata,
+							...(blockId !== undefined ? { blockId } : {}),
 						};
 					}
 					continue;

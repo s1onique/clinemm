@@ -7,6 +7,7 @@ import type {
 	GatewayModelDefinition,
 	GatewayModelHandleOptions,
 	GatewayModelSelection,
+	GatewayProviderContext,
 	GatewayProviderRegistration,
 	GatewayStreamRequest,
 	ITelemetryService,
@@ -21,6 +22,7 @@ import { BUILTIN_PROVIDER_REGISTRATIONS } from "./builtins-runtime";
 import { UnsupportedReasoningConfigurationError } from "./errors";
 import {
 	getModelReasoningControls,
+	isMiniMaxM31FlashModel,
 	modelMandatesReasoning,
 } from "./model-facts";
 import { providerManifestSupportsModelOperation } from "./model-operations";
@@ -43,6 +45,29 @@ export const DEFAULT_GATEWAY_MAX_OUTPUT_TOKENS = 32_000;
  */
 export const DEFAULT_GATEWAY_MAX_OUTPUT_FRACTION = 0.3;
 const GATEWAY_OUTPUT_RESERVE_TOKENS = 1_024;
+
+/**
+ * ACT-CLINEMM-MINIMAX-LOW-OUTPUT-DEFAULT-01.
+ *
+ * The built-in DEFAULT per-response generation allowance for the
+ * MiniMax-M3.1-Flash model at LOW reasoning effort.
+ *
+ * The gateway's SYNTHESIZED default is a FRACTION of the model's advertised
+ * output budget, which for this model is 524288 tokens — a quarter of a
+ * million tokens of generation budget for a single response. At LOW effort
+ * the model does not need that room, and the recorded dogfood session showed
+ * the large budget was spent almost entirely on reasoning the task did not
+ * need, at a large cost in wall-clock time.
+ *
+ * 8192 is the allowance the LOW effort actually needs: it is the SAME value
+ * the compaction summarizer already asks for
+ * (`DEFAULT_SUMMARY_MAX_OUTPUT_TOKENS`), so the two agree.
+ *
+ * This is a DEFAULT, not a ceiling: an explicit request-level limit still
+ * wins, and the model's own output cap and the remaining-context clamp
+ * still apply.
+ */
+export const MINIMAX_M31_FLASH_LOW_MAX_OUTPUT_TOKENS = 8_192;
 
 function mergeRequestMetadata(
 	defaults: Record<string, unknown> | undefined,
@@ -364,6 +389,41 @@ export function resolveGatewayRequestMaxTokens(input: {
 	return Math.max(1, Math.floor(Math.min(...caps)));
 }
 
+/**
+ * ACT-CLINEMM-MINIMAX-LOW-OUTPUT-DEFAULT-01.
+ *
+ * The default per-response generation allowance for a request, or
+ * `undefined` when the request does not qualify for a model-specific
+ * default.
+ *
+ * The MiniMax-M3.1-Flash model at LOW reasoning effort gets the
+ * `MINIMAX_M31_FLASH_LOW_MAX_OUTPUT_TOKENS` allowance. The LOW effort is the
+ * EFFECTIVE effort of the request: the effort that the request actually
+ * carries to the provider (the same value the MiniMax transport serializes
+ * into `output_config.effort`).
+ *
+ * Every other model, provider and effort keeps the pre-existing synthesized
+ * default, which is expressed here as `undefined` so the resolver applies
+ * its own default.
+ */
+function resolveModelDefaultMaxOutputTokens(input: {
+	request: GatewayStreamRequest;
+	context: Pick<GatewayProviderContext, "provider" | "model">;
+}): number | undefined {
+	if (input.request.reasoning?.effort !== "low") {
+		return undefined;
+	}
+	if (
+		!isMiniMaxM31FlashModel(
+			{ modelId: input.request.modelId, providerId: input.request.providerId },
+			input.context,
+		)
+	) {
+		return undefined;
+	}
+	return MINIMAX_M31_FLASH_LOW_MAX_OUTPUT_TOKENS;
+}
+
 export class DefaultGateway implements Gateway {
 	private readonly registry: GatewayRegistry;
 	private readonly logger: BasicLogger | undefined;
@@ -499,6 +559,16 @@ export class DefaultGateway implements Gateway {
 			requestedMaxTokens: request.maxTokens,
 			model: resolved.model,
 			estimatedInputTokens: estimateRequestInputTokens(request),
+			// ACT-CLINEMM-MINIMAX-LOW-OUTPUT-DEFAULT-01.
+			//
+			// The model-specific default per-response generation allowance.
+			// It is `undefined` for every request that does not qualify for
+			// one, so the resolver's own default (the flat default, raised by
+			// the catalog fraction) still applies everywhere else.
+			defaultMaxOutputTokens: resolveModelDefaultMaxOutputTokens({
+				request,
+				context: { provider: resolved.provider, model: resolved.model },
+			}),
 			reasoningBudgetTokens: request.reasoning?.budgetTokens,
 			onContextOverflow: (details) => {
 				this.logger?.log(

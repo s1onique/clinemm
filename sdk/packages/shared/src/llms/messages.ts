@@ -174,6 +174,31 @@ export interface ThinkingContent {
 	thinking: string;
 	/** Signature for the thinking block (provider-specific) */
 	signature?: string;
+	/**
+	 * ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION02 (A4).
+	 *
+	 * The ORIGIN AUTHORITY of the route that issued this block's opaque
+	 * signature.
+	 *
+	 * The signature authenticates a thinking block to the ENDPOINT that
+	 * issued it. Without the issuing authority the block cannot be replayed
+	 * safely, because it would disclose one endpoint's opaque metadata to
+	 * another.
+	 *
+	 * It is:
+	 *
+	 *   - CREDENTIAL-FREE: it identifies a ROUTE (the provider id, the
+	 *     endpoint origin and the endpoint path), never an account, a key
+	 *     or a header. A base URL that carries user information, a query
+	 *     string or a fragment produces NO authority at all, so a
+	 *     credential-bearing URL is never persisted,
+	 *   - OPTIONAL and BACKWARD-COMPATIBLE: a stored record written before
+	 *     this field existed simply has none, and such a record is not
+	 *     replayed across a route boundary,
+	 *   - NEVER sent to a provider: it is consumed by the outbound
+	 *     projection and is not part of any provider's wire shape.
+	 */
+	originAuthority?: string;
 	/** Provider-native call ID for this reasoning block (if available) */
 	call_id?: string;
 	/** Structured reasoning details that can be replayed for tool-call continuation */

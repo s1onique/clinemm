@@ -26,6 +26,14 @@ export {
 	createSubmitAndExitTool,
 	createWebFetchTool,
 } from "./definitions";
+// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01: the host-side
+// classification of a `run_commands` call into INSPECTION vs EXECUTION.
+// The runtime cannot make this judgement from shell text; the host owns the
+// command-policy layer and therefore owns this classification.
+export {
+	createHostExecutionProgressClassifier,
+	isInspectionCommandInput,
+} from "./execution-progress-classifier";
 // Built-in Executors
 export {
 	type ApplyPatchExecutorOptions,
@@ -52,14 +60,15 @@ export {
 	type RunningCommandRegistration,
 	type SearchExecutorOptions,
 	type ShellExecutorOptions,
-	spawnSupervisableShellCommand,
 	type SupervisableShellProcess,
+	spawnSupervisableShellCommand,
 	type WebFetchExecutorOptions,
 } from "./executors/index";
 export {
 	MAX_COMMAND_OUTPUT_CHARS,
 	truncateCommandOutput,
 } from "./executors/output-limits";
+export { normalizeRunCommandsInput } from "./helpers";
 export {
 	DEFAULT_MODEL_TOOL_ROUTING_RULES,
 	resolveToolRoutingConfig,
@@ -114,7 +123,6 @@ export {
 	type WebFetchRequest,
 	WebFetchRequestSchema,
 } from "./schemas";
-export { normalizeRunCommandsInput } from "./helpers";
 export { TEAM_TOOL_NAMES } from "./team/team-tools";
 // Types
 export type {
