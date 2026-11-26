@@ -309,16 +309,57 @@ export function toGatewayRequestMessages(
 							case "text":
 								return [{ type: "text", text: part.text }];
 							case "thinking":
+								// ACT-CLINEMM-PROVIDER-COMPAT-REASONING-CONTINUITY-01.
+								//
+								// The ORIGIN AUTHORITY is conserved across this
+								// conversion.
+								//
+								// The `thinking` block's `originAuthority` records the
+								// ROUTE that issued its opaque signature. The downstream
+								// outbound conversion (`toAiSdkMessages`,
+								// `providers/ai-sdk.ts`) reads that authority from the
+								// part's `metadata` bag under
+								// `REASONING_METADATA_ORIGIN_KEY` and gates the opaque
+								// payload through `mayReplayOpaqueReasoning`.
+								//
+								// Dropping it here is a SILENT LOSS: the gate is
+								// fail-closed, so an absent origin grants no replay
+								// authority, the signature is withheld, and the Anthropic
+								// serializer drops the whole thinking block -- even when
+								// the block was signed by the very endpoint the request
+								// is going to.
+								//
+								// It is carried under the SAME key the production
+								// persistence codec writes
+								// (`ThinkingContent.originAuthority`, see
+								// `core/src/runtime/config/agent-message-codec.ts`)
+								// and the SAME key the outbound conversion reads. No new
+								// authority field, identity service or registry is
+								// introduced, and the replay policy itself is unchanged.
+								//
+								// It is an INTERNAL authority: it is consumed by the
+								// outbound conversion and is never forwarded to the
+								// provider.
+								//
+								// The authority is only carried when it is actually
+								// present, so a record written before the field existed
+								// simply has none -- the fail-closed behaviour is
+								// preserved exactly.
 								return [
 									{
 										type: "reasoning" as const,
 										text: part.thinking,
 										metadata:
-											part.signature || part.call_id
+											part.signature || part.call_id || part.originAuthority
 												? {
 														signature: part.signature,
 														callId: part.call_id,
 														details: part.details,
+														...(part.originAuthority === undefined
+															? {}
+															: {
+																	originAuthority: part.originAuthority,
+																}),
 													}
 												: undefined,
 									},

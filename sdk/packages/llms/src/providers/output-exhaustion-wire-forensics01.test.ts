@@ -267,16 +267,21 @@ function measureBudget(messages: Message[]): number {
 }
 
 describe("ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-FORENSICS-01 — compat projection origin authority", () => {
-	it("DROPS the origin authority when projecting through the compat adapter", () => {
-		// The compat adapter's `thinking` -> `reasoning` case copies the
-		// signature into the part's metadata but NOT the origin authority.
-		// The downstream fail-closed authority gate therefore sees an absent
-		// origin and withholds the signature.
+	it("CONSERVES the origin authority when projecting through the compat adapter", () => {
+		// ACT-CLINEMM-PROVIDER-COMPAT-REASONING-CONTINUITY-01.
 		//
-		// This is the boundary the FROZEN ARCHIVE shows: across all 88
-		// captured SDK requests there are ZERO signed reasoning blocks and
-		// 697 unsigned ones, even though the canonical history carries 59
-		// signed blocks with their origin authority.
+		// This assertion was ORIGINALLY a DEFECT CHARACTERIZATION: it
+		// asserted that the compat adapter's `thinking` -> `reasoning` case
+		// copied the signature into the part's metadata but NOT the origin
+		// authority, and that the downstream fail-closed authority gate
+		// therefore saw an absent origin and withheld the signature.
+		//
+		// The defect is REPAIRED. The compat projection now conserves the
+		// origin authority, so the gate can establish route compatibility and
+		// the signed block survives to the wire. The characterization is
+		// converted into a PERMANENT CONSERVATION ASSERTION: the authority
+		// must survive the compat projection for every signed block.
+		//
 		// The compat adapter consumes the CONTENT-BLOCK `Message` shape
 		// (thinking / tool_use / tool_result), which is what
 		// `toProviderVisibleMessages` produces.
@@ -289,14 +294,19 @@ describe("ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-FORENSICS-01 — compat project
 			(message.content ?? []).filter((part) => part.type === "reasoning"),
 		);
 		expect(reasoningParts.length).toBeGreaterThan(0);
+		let signedCount = 0;
 		for (const part of reasoningParts) {
 			const metadata = (part.metadata ?? {}) as Record<string, unknown>;
 			// The SIGNATURE survives the compat projection...
 			if (metadata.signature !== undefined) {
-				// ...but the ORIGIN AUTHORITY does NOT.
-				expect(metadata.originAuthority).toBeUndefined();
+				signedCount++;
+				// ...and so does the ORIGIN AUTHORITY.
+				expect(metadata.originAuthority).toBe(MINIMAX_ORIGIN_AUTHORITY);
 			}
 		}
+		// The fixture carries exactly two signed reasoning blocks, so the
+		// conservation assertion actually covered both of them.
+		expect(signedCount).toBe(2);
 	});
 
 	it("PRESERVES the origin authority when projecting through the shared projection", () => {
