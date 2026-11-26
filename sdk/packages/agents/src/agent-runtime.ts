@@ -30,6 +30,18 @@ type LlmTransportAuthority = {
 		providerId: string;
 		baseUrl: string | undefined;
 	}) => string | undefined;
+	/**
+	 * ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A2): the SINGLE
+	 * destination origin-authority resolver. It consumes the route facts
+	 * (provider id, configured base URL, API line) and produces the ONE
+	 * destination authority the wire, the budget authority, the task-contract
+	 * guard and the compaction trigger all use.
+	 */
+	resolveDestinationOriginAuthority?: (input: {
+		providerId: string;
+		baseUrl?: string | undefined;
+		apiLine?: string | undefined;
+	}) => string | undefined;
 	resolveEffectiveBaseUrl?: (input: {
 		providerId: string;
 		baseUrl?: string | undefined;
@@ -38,6 +50,9 @@ type LlmTransportAuthority = {
 	resolveTransportFacts?: (input: { providerId: string; model?: unknown }) => {
 		client?: string;
 		apiProtocol?: string;
+		// ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A1): the
+		// EFFECTIVE transport — the serializer that actually runs.
+		effectiveClient?: string;
 	};
 };
 
@@ -332,6 +347,30 @@ export interface AgentRuntimeConfigWithProvider
 export type AgentRuntimeConfig =
 	| AgentRuntimeConfigWithModel
 	| AgentRuntimeConfigWithProvider;
+
+/**
+ * ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A2).
+ *
+ * Read the caller-selected API LINE out of the runtime config's gateway
+ * provider options.
+ *
+ * The value is the SAME field the registry resolves the wire's base URL
+ * from (`resolveApiLineBaseUrl(options)` reads `options.apiLine`), so the
+ * budget's destination authority names the endpoint the request is actually
+ * dispatched to.
+ *
+ * A value that is not one of the two established API lines yields NO api
+ * line, which leaves the route unresolved rather than guessing.
+ */
+function readApiLineOption(config: AgentRuntimeConfig): string | undefined {
+	if (!("options" in config)) {
+		return undefined;
+	}
+	const apiLine = config.options?.apiLine;
+	return apiLine === "china" || apiLine === "international"
+		? apiLine
+		: undefined;
+}
 
 function hasPrebuiltModel(
 	config: AgentRuntimeConfig,
@@ -1561,6 +1600,18 @@ export class AgentRuntime {
 	 */
 	private providerBaseUrl: string | undefined;
 	/**
+	 * ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A2).
+	 *
+	 * The caller-selected API LINE of the provider route.
+	 *
+	 * It is a ROUTE fact, not a credential: MiniMax's `china` and
+	 * `international` endpoints are different HOSTS, and therefore different
+	 * trust domains for the opaque reasoning payloads. The destination
+	 * origin authority is built from the EFFECTIVE endpoint, so the API line
+	 * must be part of the route the authority is resolved from.
+	 */
+	private providerApiLine: string | undefined;
+	/**
 	 * C1.4 snapshot of `recoverySecondStage.kind` taken BEFORE
 	 * the per-execution `applyRecoveryPostClassification` work
 	 * mutates it. Lets the post-record failure branch distinguish
@@ -1649,6 +1700,11 @@ export class AgentRuntime {
 		// through. It is what the destination origin authority is built
 		// from, and it is what the wire gate uses.
 		this.providerBaseUrl = "baseUrl" in config ? config.baseUrl : undefined;
+		// ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A2): the API
+		// LINE is part of the route. It is read from the gateway provider
+		// options, which is where the registry reads it from too
+		// (`resolveApiLineBaseUrl(options)`).
+		this.providerApiLine = readApiLineOption(config);
 		this.state.agentId = resolved.agentId ?? createUID("agent");
 		this.state.agentRole = resolved.agentRole;
 		this.state.parentAgentId = resolved.parentAgentId;
@@ -5259,6 +5315,13 @@ export class AgentRuntime {
 				},
 			);
 			const requiresSignedReasoning = requiresSignedReasoningCapability({
+				// ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A1).
+				//
+				// The EFFECTIVE transport — the serializer that actually runs
+				// for this provider/model pair — is the decisive fact. It
+				// already accounts for the per-model protocol override, which
+				// the provider client alone does NOT.
+				effectiveTransportClient: transportFacts?.effectiveClient,
 				transportClient: transportFacts?.client,
 				apiProtocol: transportFacts?.apiProtocol,
 				family: this.config.messageModelInfo?.family,
@@ -5272,14 +5335,22 @@ export class AgentRuntime {
 			// SINGLE resolver — the SAME one the wire gate uses, so the guard
 			// and the wire compare the recorded origin against the IDENTICAL
 			// destination authority.
+			//
+			// ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A2).
+			//
+			// The destination is resolved HERE, at the request boundary, from
+			// the CURRENT route facts — not from the base URL captured at
+			// CONSTRUCTION time. A request-scoped route change (or a
+			// configuration change between construction and dispatch) must be
+			// reflected, and the API LINE must be passed: MiniMax's `china`
+			// and `international` endpoints are different HOSTS and therefore
+			// different trust domains.
 			const transportAuthority = getLlmTransportAuthority();
 			const destinationAuthority =
-				transportAuthority.buildReasoningOriginAuthority?.({
+				transportAuthority.resolveDestinationOriginAuthority?.({
 					providerId: this.config.messageModelInfo?.provider ?? "",
-					baseUrl: transportAuthority.resolveEffectiveBaseUrl?.({
-						providerId: this.config.messageModelInfo?.provider ?? "",
-						baseUrl: this.providerBaseUrl,
-					}),
+					baseUrl: this.providerBaseUrl,
+					apiLine: this.providerApiLine,
 				});
 			assertProviderRequestWithinBudget({
 				systemPrompt: request.systemPrompt ?? "",
@@ -5765,7 +5836,30 @@ export class AgentRuntime {
 						// cached tokens are never subtracted.
 						const occupancy = event.usage.requestOccupancy;
 						if (occupancy !== undefined) {
-							if (occupancy.state === "unknown") {
+							// ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A5.1).
+							//
+							// The state and the CARDINALITY must be consistent.
+							// A contradictory record — `state: "single"` with
+							// `attemptCount: 3` — cannot be honoured: the
+							// "single" state means "the aggregate IS this
+							// request's occupancy", so honouring it would
+							// publish the AGGREGATE EXPENDITURE as the
+							// occupancy, which is exactly what the three-state
+							// architecture forbids.
+							//
+							// The record is therefore DENIED here as well as
+							// at the reader, so the authority cannot be
+							// re-established by a path that bypasses the
+							// reader.
+							const occupancyIsContradictory =
+								(occupancy.state === "single" &&
+									occupancy.attemptCount !== 1) ||
+								(occupancy.state === "known" && occupancy.attemptCount === 1);
+							if (occupancyIsContradictory) {
+								// An ESTABLISHED-DENIAL: no occupancy authority,
+								// and no stale value may stand in for it.
+								this.state.lastRequestInputTokens = 0;
+							} else if (occupancy.state === "unknown") {
 								// The occupancy is UNKNOWN: no authority, and the
 								// previous request's occupancy must not linger.
 								this.state.lastRequestInputTokens = 0;
@@ -5794,8 +5888,15 @@ export class AgentRuntime {
 							// preserved exactly. The stale value is NOT carried over,
 							// because the current request's occupancy is the fact being
 							// published.
+							//
+							// ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A5.1):
+							// the legacy count is validated as a FINITE number. The
+							// predecessor accepted `Infinity` (it is `> 0`), which would
+							// publish an infinite occupancy and disable the budget's
+							// calibration against it.
 							const legacy =
 								typeof event.usage.inputTokens === "number" &&
+								Number.isFinite(event.usage.inputTokens) &&
 								event.usage.inputTokens > 0
 									? event.usage.inputTokens
 									: undefined;

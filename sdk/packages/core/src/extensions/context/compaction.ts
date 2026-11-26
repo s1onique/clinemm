@@ -24,6 +24,18 @@ type LlmTransportAuthority = {
 		providerId: string;
 		baseUrl: string | undefined;
 	}) => string | undefined;
+	/**
+	 * ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A2): the SINGLE
+	 * destination origin-authority resolver. It consumes the route facts
+	 * (provider id, configured base URL, API line) and produces the ONE
+	 * destination authority the wire, the budget authority, the task-contract
+	 * guard and the compaction trigger all use.
+	 */
+	resolveDestinationOriginAuthority?: (input: {
+		providerId: string;
+		baseUrl?: string | undefined;
+		apiLine?: string | undefined;
+	}) => string | undefined;
 	resolveEffectiveBaseUrl?: (input: {
 		providerId: string;
 		baseUrl?: string | undefined;
@@ -32,6 +44,9 @@ type LlmTransportAuthority = {
 	resolveTransportFacts?: (input: { providerId: string; model?: unknown }) => {
 		client?: string;
 		apiProtocol?: string;
+		// ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A1): the
+		// EFFECTIVE transport — the serializer that actually runs.
+		effectiveClient?: string;
 	};
 };
 
@@ -477,7 +492,7 @@ export type CompactionInstallationRefusalReason =
  * assignable to the `saveState` signature.
  */
 export type CompactionInstallationReport =
-	| void
+	| undefined
 	| boolean
 	| CompactionInstallationOutcome;
 
@@ -1084,14 +1099,21 @@ export function createContextCompactionPrepareTurn(
 	// one, a credential-bearing one) produces NO authority, exactly as the
 	// wire treats it: no opaque replay authority, and the budget excludes
 	// the reasoning the wire would also drop.
+	//
+	// ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A2).
+	//
+	// The destination is resolved by the repository's SINGLE resolver, from
+	// the route facts — the configured base URL AND the API LINE. The API
+	// line is part of the route: MiniMax's `china` and `international`
+	// endpoints are different HOSTS, and therefore different trust domains
+	// for the opaque reasoning payloads.
 	const transportAuthority = getLlmTransportAuthority();
+	const connectionProviderConfig = resolveConnectionProviderConfig(config);
 	const destinationAuthority =
-		transportAuthority.buildReasoningOriginAuthority?.({
+		transportAuthority.resolveDestinationOriginAuthority?.({
 			providerId: config.providerId,
-			baseUrl: transportAuthority.resolveEffectiveBaseUrl?.({
-				providerId: config.providerId,
-				baseUrl: resolveConnectionProviderConfig(config).baseUrl,
-			}),
+			baseUrl: connectionProviderConfig.baseUrl,
+			apiLine: connectionProviderConfig.apiLine,
 		});
 
 	const estimateMessageTokens = createTokenEstimator();
@@ -1166,6 +1188,13 @@ export function createContextCompactionPrepareTurn(
 			model: context.model.info,
 		});
 		const requiresSignedReasoning = requiresSignedReasoningCapability({
+			// ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A1).
+			//
+			// The EFFECTIVE transport — the serializer that actually runs for
+			// this provider/model pair — is the decisive fact. It already
+			// accounts for the per-model protocol override, which the
+			// provider client alone does NOT.
+			effectiveTransportClient: transportFacts?.effectiveClient,
 			transportClient: transportFacts?.client,
 			apiProtocol: transportFacts?.apiProtocol,
 			family: context.model.info?.family,
@@ -2525,54 +2554,67 @@ export function createCompactionStateAwarePrepareTurn(input: {
 			) => Promise<readonly unknown[]>;
 			requiresSignedReasoning: boolean;
 			destinationAuthority: string | undefined;
-		} => ({
-			maxRequestTokens: contractMaxRequestTokens,
-			systemPrompt,
-			tools: context.tools,
-			// ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01: the guard must
-			// measure the request the provider actually receives, so it
-			// applies the SAME reasoning-authorization exclusion the
-			// resolved serializer performs.
-			requiresSignedReasoning: requiresSignedReasoningCapability({
-				transportClient: getLlmTransportAuthority().resolveTransportFacts?.({
+		} => {
+			// ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A1).
+			//
+			// The transport facts are resolved ONCE per call and shared by the
+			// guard, so the guard and the compaction trigger cannot disagree
+			// about the transport that actually runs.
+			const contractTransportFacts =
+				getLlmTransportAuthority().resolveTransportFacts?.({
 					providerId: context.model.provider,
 					model: context.model.info,
-				})?.client,
-				apiProtocol: getLlmTransportAuthority().resolveTransportFacts?.({
+				});
+			return {
+				maxRequestTokens: contractMaxRequestTokens,
+				systemPrompt,
+				tools: context.tools,
+				// ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01: the guard must
+				// measure the request the provider actually receives, so it
+				// applies the SAME reasoning-authorization exclusion the
+				// resolved serializer performs.
+				//
+				// ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A1): the
+				// EFFECTIVE transport — the serializer that actually runs for
+				// this provider/model pair — is the decisive fact. The facts are
+				// resolved ONCE and shared, so the guard and the trigger cannot
+				// disagree about the transport.
+				requiresSignedReasoning: requiresSignedReasoningCapability({
+					effectiveTransportClient: contractTransportFacts?.effectiveClient,
+					transportClient: contractTransportFacts?.client,
+					apiProtocol: contractTransportFacts?.apiProtocol,
+					family: context.model.info?.family,
+					apiFormat: context.model.info?.apiFormat,
+					modelId: context.model.id,
 					providerId: context.model.provider,
-					model: context.model.info,
-				})?.apiProtocol,
-				family: context.model.info?.family,
-				apiFormat: context.model.info?.apiFormat,
-				modelId: context.model.id,
-				providerId: context.model.provider,
-			}),
-			// ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (AMENDMENT-01,
-			// A2/A3): the guard applies the SAME destination-specific replay
-			// eligibility the wire applies.
-			destinationAuthority: input.destinationAuthority,
-			// ACT-CLINEMM-FLINT-128K-BUDGET-AUTHORITY-REPAIR01: the guard
-			// measures the PROVIDER-VISIBLE representation of the candidate,
-			// produced by the runtime's provider-request transform. The
-			// transform is applied to the CONTRACTED list (the guard passes
-			// the list it is about to measure), so the measured shape is
-			// exactly the one the provider would receive.
-			//
-			// The projection is taken with the ISOLATED accounting builder
-			// (`prepareBudgetAccountingMessages`), NOT with
-			// `prepareApiMessages`. The production `MessageBuilder` is
-			// STATEFUL — an extra, accounting-only build on the long-lived
-			// production builder would mutate its sticky cross-call state
-			// and could change a LATER real build. The isolated builder
-			// produces the same projection while leaving the production
-			// builder untouched.
-			//
-			// The input list has NOT been through the provider transform
-			// before (it is the freshly-compacted candidate), so the
-			// provider-request preparation is never applied twice to the same
-			// input and the dispatched request is unchanged.
-			providerMessages: async (messages) => await budgetProjection(messages),
-		});
+				}),
+				// ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (AMENDMENT-01,
+				// A2/A3): the guard applies the SAME destination-specific replay
+				// eligibility the wire applies.
+				destinationAuthority: input.destinationAuthority,
+				// ACT-CLINEMM-FLINT-128K-BUDGET-AUTHORITY-REPAIR01: the guard
+				// measures the PROVIDER-VISIBLE representation of the candidate,
+				// produced by the runtime's provider-request transform. The
+				// transform is applied to the CONTRACTED list (the guard passes
+				// the list it is about to measure), so the measured shape is
+				// exactly the one the provider would receive.
+				//
+				// The projection is taken with the ISOLATED accounting builder
+				// (`prepareBudgetAccountingMessages`), NOT with
+				// `prepareApiMessages`. The production `MessageBuilder` is
+				// STATEFUL — an extra, accounting-only build on the long-lived
+				// production builder would mutate its sticky cross-call state
+				// and could change a LATER real build. The isolated builder
+				// produces the same projection while leaving the production
+				// builder untouched.
+				//
+				// The input list has NOT been through the provider transform
+				// before (it is the freshly-compacted candidate), so the
+				// provider-request preparation is never applied twice to the same
+				// input and the dispatched request is unchanged.
+				providerMessages: async (messages) => await budgetProjection(messages),
+			};
+		};
 		if (existingState && projectedMessages) {
 			// Re-compaction intentionally starts from the compacted projection plus
 			// canonical tail. This keeps automatic turns bounded without rebuilding a

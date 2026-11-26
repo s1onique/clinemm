@@ -31,7 +31,15 @@ import {
 	modelProducesImages,
 	modelSupportsToolCalling,
 	parseJsonStream,
+	// ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A3): the metadata
+	// key the origin authority travels under. It is the SHARED constant, so
+	// the wire and the request-budget authority read the same field.
+	REASONING_ORIGIN_AUTHORITY_KEY,
 	sanitizeSurrogates,
+	// ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A3): the SHARED
+	// replay-eligibility authority. The wire gate delegates to it, so the
+	// wire and the request-budget authority consume ONE policy.
+	mayReplayOpaqueReasoning as sharedMayReplayOpaqueReasoning,
 	usesImageGenerationOperation,
 	validateAndReserveBase64Media,
 	validateAndReserveImageMedia,
@@ -1774,8 +1782,13 @@ function extractGoogleThoughtMetadata(
  *
  * It is READ ONLY by the outbound conversion. It is never sent to a
  * provider: the outbound conversion consumes it and does not forward it.
+ *
+ * ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A3): the value is the
+ * SHARED constant (`REASONING_ORIGIN_AUTHORITY_KEY`), not a local copy, so
+ * the wire and the request-budget authority read the SAME field by
+ * construction.
  */
-const REASONING_METADATA_ORIGIN_KEY = "originAuthority";
+const REASONING_METADATA_ORIGIN_KEY = REASONING_ORIGIN_AUTHORITY_KEY;
 
 /**
  * ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION02.
@@ -1941,34 +1954,33 @@ function buildReasoningOriginAuthority(input: {
  *
  * The reasoning TEXT is never gated by this — only the opaque payload is.
  */
+/**
+ * ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A3).
+ *
+ * The wire gate DELEGATES to the SHARED replay-eligibility authority.
+ *
+ * This function previously carried a LOCAL COPY of the policy. Its own
+ * docstring already said the policy was "EXTRACTED" into
+ * `@cline/shared`'s `llms/reasoning-replay-eligibility.ts` and that "the wire
+ * gate now delegates here" — but the code did not: the local copy was still
+ * the one the wire consulted, and the shared module was reachable only from
+ * the request-budget authority.
+ *
+ * Two copies of a SECURITY policy can drift, and the request-budget
+ * authority consumes the SHARED one. A drift would let the budget exclude a
+ * block the wire actually carries (or vice versa), which is exactly the
+ * authority mismatch this authority exists to prevent.
+ *
+ * The policy itself is UNCHANGED — the local copy and the shared module
+ * implement the SAME fail-closed rule. Only the LOCATION changed: the
+ * shared module is now the single implementation, and this delegation makes
+ * that true in the code rather than only in the documentation.
+ */
 function mayReplayOpaqueReasoning(input: {
 	origin: unknown;
 	destinationAuthority: string | undefined;
 }): boolean {
-	// ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION02 (A1).
-	//
-	// FAIL CLOSED on every branch:
-	//
-	//   - a MISSING or MALFORMED issuing origin grants no authority,
-	//   - a MISSING or MALFORMED destination identity grants no authority,
-	//   - KNOWN INCOMPATIBLE origins grant no authority,
-	//   - only POSITIVELY ESTABLISHED COMPATIBLE origins grant authority.
-	//
-	// The destination authority is REQUIRED by the caller, so a missing
-	// destination can never be reached through the ordinary request path —
-	// but its VALUE may be `undefined`, which is exactly how an UNRESOLVED
-	// destination route is represented. An unresolved destination therefore
-	// grants NO authority, exactly like a malformed one.
-	if (typeof input.origin !== "string" || input.origin.length === 0) {
-		return false;
-	}
-	if (
-		typeof input.destinationAuthority !== "string" ||
-		input.destinationAuthority.length === 0
-	) {
-		return false;
-	}
-	return input.origin === input.destinationAuthority;
+	return sharedMayReplayOpaqueReasoning(input);
 }
 
 /**
@@ -2753,6 +2765,30 @@ async function* emitAiSdkEvents(
 		// identity, so a reader can attribute a number to the link that
 		// lost or distorted it. NUMERIC ALLOWLIST ONLY: no transcript, no
 		// reasoning text, no response body, no credential, no signature.
+		//
+		// ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A6).
+		//
+		// THE SCOPE IS STATED, NOT INFERRED BY THE READER.
+		//
+		// The usage emitted here is the SDK's `stream.usage`, which the
+		// production retry middleware has already AGGREGATED over the
+		// turn's physical attempts. It is therefore the TURN AGGREGATE — the
+		// BILLING quantity — and it must not be readable as ONE physical
+		// request's usage.
+		//
+		// The scope is derived from an OBSERVED fact: the middleware-owned
+		// occupancy authority's attempt count. One attempt means the usage
+		// describes ONE physical request; several mean it is the turn's
+		// aggregate. When the authority is absent the scope is left
+		// unstated rather than guessed.
+		const observedAttemptCount =
+			readPhysicalRequestOccupancy(metadataToUse)?.attemptCount;
+		const observedUsageScope =
+			observedAttemptCount === undefined
+				? undefined
+				: observedAttemptCount === 1
+					? ("physical-attempt" as const)
+					: ("turn-aggregate" as const);
 		recordUsageObservability({
 			providerId: request.providerId,
 			modelId: request.modelId,
@@ -2765,6 +2801,7 @@ async function* emitAiSdkEvents(
 					: undefined,
 			sdkUsage: usageToEmit,
 			clineUsage: normalizedUsage,
+			usageScope: observedUsageScope,
 		});
 		yield {
 			type: "usage",

@@ -231,6 +231,11 @@ describe("ACT-CLINEMM-PROVIDER-USAGE-NORMALIZATION-AUTHORITY-01 — numeric usag
 			outputTokens: 100,
 			reasoningTokenCount: 800,
 		});
+		// ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A6): the SCOPE
+		// is stated. ONE physical attempt was observed, so the recorded usage
+		// describes that physical request — and a reader can tell it apart
+		// from a turn aggregate.
+		expect(capture.usageScope).toBe("physical-attempt");
 	});
 
 	it("never lets a capture failure change execution or accounting", () => {
@@ -244,5 +249,30 @@ describe("ACT-CLINEMM-PROVIDER-USAGE-NORMALIZATION-AUTHORITY-01 — numeric usag
 				clineUsage: { outputTokens: 100 },
 			}),
 		).not.toThrow();
+	});
+
+	it("states the scope so an aggregate is never read as one physical request's usage", () => {
+		// ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A6).
+		//
+		// The scope is stated verbatim by the caller and recorded verbatim by
+		// the capture. A turn AGGREGATE is therefore distinguishable from a
+		// single physical request's usage, which is the distinction the ACT
+		// requires: the two are different quantities (the billing total
+		// versus one request's own consumption).
+		process.env[OBSERVABILITY_ENV] = "1";
+		recordUsageObservability({
+			providerId: "minimax",
+			providerAttemptId: "attempt-obs",
+			raw: { output_tokens: 2700 },
+			clineUsage: { outputTokens: 2700 },
+			usageScope: "turn-aggregate",
+		});
+		const captures = readCaptures();
+		const aggregate = captures.find(
+			(capture) => capture.usageScope === "turn-aggregate",
+		);
+		expect(aggregate).toBeDefined();
+		expect(aggregate?.providerAttemptId).toBe("attempt-obs");
+		expect(aggregate?.clineUsage?.outputTokens).toBe(2700);
 	});
 });

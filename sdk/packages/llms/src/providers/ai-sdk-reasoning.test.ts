@@ -72,11 +72,53 @@ describe("resolvePortableReasoning", () => {
 	});
 
 	it("disables reasoning on providers without a native toggle", () => {
+		// ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A7).
+		//
+		// OBSOLETE_EXPECTATION, corrected against the ESTABLISHED fork
+		// contract.
+		//
+		// This assertion encodes upstream `c3a405727` ("portable reasoning
+		// off for all providers"), which REMOVED the provider-id gate from
+		// the DERIVED disable. The fork deliberately RETAINS that gate: see
+		// `portable-reasoning.ts`, where the derived branch is documented as
+		// "R3: the fork's `PORTABLE_REASONING_PROVIDERS` gate is retained —
+		// only a provider whose portable top-level option actually carries a
+		// reasoning level may be told 'none'".
+		//
+		// The retention was made explicit by the accepted successor
+		// `b7e9bafdc` (ACT-CLINEMM-REASONING-DEFAULT-NONE-SEMANTICS-REPAIR-01),
+		// whose own commit message records: "The predecessor asserted that
+		// EVERY disable reached the wire. That assertion was already stale
+		// against the fork's provider gate." That successor updated
+		// `vendors/openai-compatible.wire.test.ts` to the fork's contract but
+		// did not update this file, so the stale expectation survived here.
+		//
+		// The DERIVED (anonymous) disable therefore keeps the provider gate:
+		// `custom-provider` is not a provider whose portable top-level
+		// option carries a reasoning level, so the disable is DROPPED and
+		// the model applies its own default.
+		//
+		// The EXPLICIT `None` selection is the case that must reach the wire
+		// for such a provider, and it is asserted separately below and in
+		// `vendors/openai-compatible.wire.test.ts`.
 		expect(
 			resolvePortableReasoning({
 				...request({ enabled: false }),
 				providerId: "custom-provider",
 			}),
+		).toBeUndefined();
+
+		// The EXPLICIT `None` selection DOES reach the portable level for a
+		// provider that forwards it verbatim. The explicit provenance is the
+		// `disableReason` the production boundary records.
+		expect(
+			resolvePortableReasoning(
+				{
+					...request({ enabled: false, disableReason: "none" }),
+					providerId: "custom-provider",
+				},
+				wire("openai-compatible", undefined),
+			),
 		).toBe("none");
 	});
 

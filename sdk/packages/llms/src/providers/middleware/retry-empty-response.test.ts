@@ -295,10 +295,68 @@ describe("createRetryEmptyResponseMiddleware", () => {
 		expect(finishPart.usage.inputTokens.total).toBe(27);
 		expect(finishPart.usage.outputTokens.total).toBe(10);
 		expect(finishPart.usage.inputTokens.cacheRead).toBe(9);
-		expect(finishPart.usage.outputTokens.reasoning).toBe(2);
+		// ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A4.2).
+		//
+		// The OUTPUT BREAKDOWN is ALL-OR-NOTHING across the aggregate.
+		//
+		// Only the SERVED attempt reported a reasoning breakdown; the two
+		// discarded attempts reported none. The aggregate's reasoning is
+		// therefore NOT established — the discarded attempts' reasoning is
+		// UNKNOWN, not zero — so the breakdown is OMITTED rather than
+		// reported as the served attempt's value alone.
+		//
+		// The predecessor reported `reasoning = 2` here, which was a
+		// fabricated partition: it claimed the aggregate's reasoning was 2
+		// when two of the three attempts' contributions were unknown.
+		expect(finishPart.usage.outputTokens.reasoning).toBeUndefined();
+		expect(finishPart.usage.outputTokens.text).toBeUndefined();
 		// Fields undefined on every attempt stay undefined instead of
 		// becoming a fabricated zero.
 		expect(finishPart.usage.inputTokens.noCache).toBeUndefined();
+	});
+
+	it("aggregates the output breakdown when EVERY attempt reports one", async () => {
+		// The positive control for the all-or-nothing rule: when every
+		// attempt carries a complete breakdown, the aggregate's breakdown is
+		// emitted and satisfies the partition identity.
+		const doStream = vi
+			.fn()
+			.mockResolvedValueOnce(
+				streamOf([
+					streamStart,
+					finish("stop", v4Usage({ in: 7, out: 3, reasoning: 1 })),
+				]),
+			)
+			.mockResolvedValueOnce(
+				streamOf([
+					streamStart,
+					finish("stop", v4Usage({ in: 9, out: 2, reasoning: 2 })),
+				]),
+			)
+			.mockResolvedValueOnce(
+				streamOf([
+					streamStart,
+					{ type: "text-start", id: "t" },
+					{ type: "text-delta", id: "t", delta: "hello" },
+					{ type: "text-end", id: "t" },
+					finish("stop", v4Usage({ in: 11, out: 5, reasoning: 2 })),
+				]),
+			);
+		const parts = await collect(await run(doStream));
+
+		expect(doStream).toHaveBeenCalledTimes(3);
+		const finishPart = parts.find((p) => p.type === "finish") as Extract<
+			LanguageModelV4StreamPart,
+			{ type: "finish" }
+		>;
+		expect(finishPart.usage.outputTokens.total).toBe(10);
+		// The aggregate's reasoning is the SUM over the attempts it covers.
+		expect(finishPart.usage.outputTokens.reasoning).toBe(5);
+		// And the partition identity holds for the aggregate.
+		expect(
+			(finishPart.usage.outputTokens.text ?? 0) +
+				(finishPart.usage.outputTokens.reasoning ?? 0),
+		).toBe(finishPart.usage.outputTokens.total);
 	});
 
 	it("aggregates usage across all attempts when retries are exhausted", async () => {
@@ -766,7 +824,27 @@ describe("addUsage", () => {
 		expect(sum.inputTokens.total).toBe(18);
 		expect(sum.outputTokens.total).toBe(8);
 		expect(sum.inputTokens.cacheRead).toBe(5);
-		expect(sum.outputTokens.reasoning).toBe(2);
 		expect(sum.inputTokens.noCache).toBeUndefined();
+		// ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A4.2).
+		//
+		// The first record reports NO reasoning breakdown, so the aggregate's
+		// breakdown is INCOMPLETE: the first record's reasoning is UNKNOWN,
+		// not zero. The breakdown is therefore OMITTED rather than reported
+		// as the second record's value alone.
+		expect(sum.outputTokens.reasoning).toBeUndefined();
+		expect(sum.outputTokens.text).toBeUndefined();
+	});
+
+	it("emits the output breakdown when BOTH records report one", () => {
+		const sum = addUsage(
+			v4Usage({ in: 7, out: 3, reasoning: 1 }),
+			v4Usage({ in: 11, out: 5, reasoning: 2 }),
+		);
+		expect(sum.outputTokens.total).toBe(8);
+		expect(sum.outputTokens.reasoning).toBe(3);
+		expect(sum.outputTokens.text).toBe(5);
+		expect(
+			(sum.outputTokens.text ?? 0) + (sum.outputTokens.reasoning ?? 0),
+		).toBe(sum.outputTokens.total);
 	});
 });

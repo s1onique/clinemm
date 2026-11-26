@@ -1115,21 +1115,26 @@ export class LocalRuntimeHost implements RuntimeHost {
 		): string | undefined {
 			try {
 				const llms = require("@cline/llms") as {
-					buildReasoningOriginAuthority?: (input: {
-						providerId: string;
-						baseUrl: string | undefined;
-					}) => string | undefined;
-					resolveEffectiveBaseUrl?: (input: {
+					/**
+					 * ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A2):
+					 * the SINGLE destination origin-authority resolver.
+					 *
+					 * It consumes the route facts — the configured base URL AND
+					 * the API line — so the destination names the endpoint the
+					 * request is actually dispatched to.
+					 */
+					resolveDestinationOriginAuthority?: (input: {
 						providerId: string;
 						baseUrl?: string | undefined;
+						apiLine?: string | undefined;
 					}) => string | undefined;
 				};
-				return llms.buildReasoningOriginAuthority?.({
+				const connectionProviderConfig =
+					resolveConnectionProviderConfig(config);
+				return llms.resolveDestinationOriginAuthority?.({
 					providerId: config.providerId,
-					baseUrl: llms.resolveEffectiveBaseUrl?.({
-						providerId: config.providerId,
-						baseUrl: resolveConnectionProviderConfig(config).baseUrl,
-					}),
+					baseUrl: connectionProviderConfig.baseUrl,
+					apiLine: connectionProviderConfig.apiLine,
 				});
 			} catch {
 				return undefined;

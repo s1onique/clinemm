@@ -200,6 +200,50 @@ function addCounts(
 }
 
 /**
+ * ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A4.2).
+ *
+ * Whether an aggregate's output breakdown is COMPLETE.
+ *
+ * ## THE DEFECT THIS REPAIRS
+ * --------------------------
+ * The predecessor summed each attempt's breakdown with `addCounts`, which
+ * treats an ABSENT count as `0`. For the AGGREGATE TOTAL that is correct:
+ * an attempt that reported no output contributes nothing to the total
+ * expenditure.
+ *
+ * For the AGGREGATE BREAKDOWN it is NOT correct: an absent breakdown means
+ * the attempt's reasoning is UNKNOWN, not zero. Treating it as zero
+ * manufactures a complete partition:
+ *
+ *   - attempt 1: total 900, reasoning 800
+ *   - attempt 2: total 900, reasoning ABSENT
+ *   - served:    total 900, reasoning 700
+ *
+ * The predecessor reported `reasoning = 1500` and `text = 300`, which is
+ * WRONG twice over: the actual aggregate reasoning is not established (it is
+ * at least 1500, and attempt 2's contribution is unknown), and the reported
+ * `text` does not even satisfy `text + reasoning == total` (300 + 1500 =
+ * 1800, not 2700), so the aggregate was internally INCONSISTENT.
+ *
+ * ## THE CONTRACT
+ * ---------------
+ * A breakdown is COMPLETE only when EVERY attempt in the aggregate reports
+ * one. An attempt whose breakdown is absent makes the aggregate's breakdown
+ * INCOMPLETE, and an incomplete breakdown is OMITTED — the optional
+ * breakdown is not emitted, and the aggregate's TOTAL is conserved exactly.
+ *
+ * The consumer then reads the aggregate as "the total is established; the
+ * breakdown is not established", which is the truth. It never reads a
+ * fabricated partition.
+ */
+function isCompleteBreakdown(usage: LanguageModelV4Usage): boolean {
+	return (
+		readAttemptReasoning(usage) !== undefined &&
+		readAttemptVisibleOutput(usage) !== undefined
+	);
+}
+
+/**
  * ACT-CLINEMM-PROVIDER-USAGE-NORMALIZATION-AUTHORITY-01.
  *
  * The REASONING BREAKDOWN of a single attempt's usage.
@@ -298,11 +342,34 @@ export function addUsage(
 	// contributes nothing to the aggregate's breakdown: its output is
 	// unknown, not zero, so the aggregate's breakdown stays incomplete
 	// rather than falsely complete.
-	const reasoning = addCounts(readAttemptReasoning(a), readAttemptReasoning(b));
-	const text = addCounts(
-		readAttemptVisibleOutput(a),
-		readAttemptVisibleOutput(b),
-	);
+	//
+	// ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A4.2).
+	//
+	// THE BREAKDOWN IS ALL-OR-NOTHING.
+	//
+	// The predecessor summed the per-attempt breakdowns with `addCounts`,
+	// which treats an ABSENT breakdown as ZERO. That is correct for the
+	// TOTAL (an attempt that reported no output contributes nothing to the
+	// expenditure) but WRONG for the BREAKDOWN: an absent breakdown means the
+	// attempt's reasoning is UNKNOWN, not zero.
+	//
+	// The consequence was a fabricated AND internally inconsistent
+	// partition: for attempts of (900/800), (900/absent) and (900/700) the
+	// predecessor reported `reasoning = 1500` and `text = 300`, where
+	// 300 + 1500 != 2700 — the aggregate did not even satisfy its own
+	// partition identity.
+	//
+	// The breakdown is therefore emitted only when EVERY attempt in the
+	// aggregate reports a complete one. Otherwise it is OMITTED, and the
+	// TOTAL is conserved exactly. The aggregate then reads as "the
+	// expenditure is established; the breakdown is not", which is the truth.
+	const breakdownComplete = isCompleteBreakdown(a) && isCompleteBreakdown(b);
+	const reasoning = breakdownComplete
+		? addCounts(readAttemptReasoning(a), readAttemptReasoning(b))
+		: undefined;
+	const text = breakdownComplete
+		? addCounts(readAttemptVisibleOutput(a), readAttemptVisibleOutput(b))
+		: undefined;
 	const total = addCounts(a.outputTokens?.total, b.outputTokens?.total);
 	return {
 		inputTokens: {
@@ -316,6 +383,11 @@ export function addUsage(
 		},
 		outputTokens: {
 			total,
+			// The SDK's usage contract declares `text` and `reasoning` as
+			// `number | undefined` — the KEYS are always present and their
+			// VALUE is undefined when the quantity is not established. An
+			// INCOMPLETE breakdown is therefore carried as `undefined`, not
+			// as an omitted key and never as a fabricated zero.
 			text,
 			reasoning,
 		},
@@ -444,9 +516,29 @@ export function buildPhysicalRequestOccupancy(input: {
  * The value is read ONLY from the middleware-owned `cline` namespace. A
  * provider-supplied `usage.raw` field can never establish this authority.
  *
- * A malformed or absent authority yields `undefined`, which the consumer
- * treats as "no occupancy authority" — never as "the aggregate is the
- * occupancy".
+ * ## THE THREE OUTCOMES
+ * ---------------------
+ *   `undefined`  NO authority is present at all. The consumer treats this as
+ *                 the LEGACY single-request shape (the usage describes ONE
+ *                 request, so its input count IS that request's occupancy).
+ *
+ *   `{ state: "unknown" }`  an authority IS present but it establishes NO
+ *                 occupancy. The consumer MUST NOT fall back to the aggregate.
+ *
+ *   a valid record  the established occupancy.
+ *
+ * ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A5.1).
+ *
+ * The distinction between "absent" and "present but invalid" is LOAD-BEARING.
+ * The predecessor returned `undefined` for BOTH, so a CONTRADICTORY record
+ * (`state: "single"` with `attemptCount: 3`) was erased into the LEGACY
+ * shape — and the legacy shape reads the usage's input count as the
+ * occupancy, which for a multi-attempt turn is the AGGREGATE EXPENDITURE.
+ * That re-enabled exactly the aggregate fallback the three-state
+ * architecture exists to forbid.
+ *
+ * So a record that is PRESENT but invalid is now reported as an EXPLICIT
+ * denial (`state: "unknown"`), never as an absence.
  */
 export function readPhysicalRequestOccupancy(
 	providerMetadata: unknown,
@@ -467,18 +559,75 @@ export function readPhysicalRequestOccupancy(
 		return undefined;
 	}
 	const record = raw as Record<string, unknown>;
+	// ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A5.1).
+	//
+	// A record that is PRESENT but not VALID is an EXPLICIT denial, never an
+	// absence. The distinction matters: an absence means the LEGACY
+	// single-request shape, whose input count IS the occupancy — and for a
+	// multi-attempt turn that count is the AGGREGATE EXPENDITURE. An
+	// explicit denial forbids that fallback.
+	const denied: PhysicalRequestOccupancy = {
+		state: "unknown",
+		attemptCount: 1,
+	};
 	const state = record.state;
 	if (state !== "single" && state !== "known" && state !== "unknown") {
-		return undefined;
+		return denied;
 	}
-	const attemptCount =
-		typeof record.attemptCount === "number" &&
-		Number.isFinite(record.attemptCount)
-			? Math.max(1, Math.floor(record.attemptCount))
-			: 1;
+	// ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A5.1).
+	//
+	// THE CARDINALITY MUST BE CONSISTENT WITH THE STATE.
+	//
+	// The predecessor NORMALIZED the attempt count with
+	// `Math.max(1, Math.floor(...))` and accepted the record whatever it
+	// said. A CONTRADICTORY record — `state: "single"` with
+	// `attemptCount: 3` — was therefore accepted as a "single" request, and
+	// the consumer reads the "single" state as "the aggregate IS this
+	// request's occupancy". That re-enabled exactly the aggregate fallback
+	// the three-state architecture exists to forbid.
+	//
+	// The contract is now:
+	//
+	//   single + attemptCount = 1     VALID
+	//   single + attemptCount = 3     INVALID (denied)
+	//   known  + a valid positive value   VALID
+	//   known  + an invalid value          DENIED
+	//   unknown                      DENIED as an occupancy (it IS returned
+	//                                      here, and the consumer denies it)
+	//
+	// An invalid or contradictory record is DENIED outright: the reader
+	// returns NO authority, so the consumer falls into its legacy
+	// single-request branch — which uses THAT request's own usage, never an
+	// aggregate — and clears any stale occupancy.
+	const rawAttemptCount = record.attemptCount;
+	const attemptCountIsValid =
+		typeof rawAttemptCount === "number" &&
+		Number.isFinite(rawAttemptCount) &&
+		Number.isInteger(rawAttemptCount) &&
+		rawAttemptCount >= 1;
+	if (!attemptCountIsValid) {
+		return denied;
+	}
+	const attemptCount: number = rawAttemptCount;
+	if (state === "single" && attemptCount !== 1) {
+		// A "single" request cannot have made three attempts.
+		return denied;
+	}
+	if (state === "known" && attemptCount === 1) {
+		// A "known" occupancy describes a request among SEVERAL; with one
+		// attempt the aggregate IS the request's occupancy, which is the
+		// "single" state. The record is contradictory.
+		return denied;
+	}
 	const value = record.value;
 	const valueIsAMeasurement =
 		typeof value === "number" && Number.isFinite(value) && value > 0;
+	if (state === "known" && !valueIsAMeasurement) {
+		// A "known" occupancy without a valid value establishes NOTHING.
+		// Returning it would let the consumer read an absent value as an
+		// occupancy of zero.
+		return denied;
+	}
 	return {
 		state,
 		attemptCount,

@@ -130,8 +130,22 @@ function requiresNativeReasoningOption(
 	// The `anthropic-thinking` and `glm-thinking` formats are NOT listed here:
 	// those transports implement the portable top-level option natively, so
 	// delegating to it remains correct for them.
+	//
+	// ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A7).
+	//
+	// The chain is NULL-SAFE at EVERY hop. `context?.provider.metadata` only
+	// guards `context`: when a context is present but carries no resolved
+	// provider manifest, `provider` is `undefined` and the property access
+	// THREW. The MiniMax guard is a CONSERVATIVE, NEGATIVE check (it can only
+	// ever withhold the portable option), so an absent provider manifest is
+	// not evidence of the MiniMax native format: the guard must answer
+	// "false", not crash.
+	//
+	// The ESTABLISHED MiniMax contract is preserved exactly: a context that
+	// DOES carry the `minimax-thinking` format still answers "true", and the
+	// provider-id set above still short-circuits first.
 	return (
-		context?.provider.metadata?.routing?.reasoning?.format ===
+		context?.provider?.metadata?.routing?.reasoning?.format ===
 		"minimax-thinking"
 	);
 }

@@ -322,20 +322,35 @@ export function modelSupportsImageInput(model: {
  */
 export function requiresSignedReasoningCapability(input: {
 	/**
+	 * The EFFECTIVE transport client — the serializer that actually runs.
+	 *
+	 * ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A1).
+	 *
+	 * This is the decisive fact. It is the transport the production dispatch
+	 * actually selects for this provider/model pair — established by
+	 * `@cline/llms`'s `resolveEffectiveTransportClient`, which consumes the
+	 * SAME routing facts and the SAME selection rule the dispatch uses.
+	 *
+	 * `"anthropic"` is the ONLY value that requires provider-origin
+	 * authorization for a reasoning block, because the Anthropic AI SDK
+	 * module is the only serializer that drops an unsigned reasoning block.
+	 */
+	effectiveTransportClient?: string;
+	/**
 	 * The RESOLVED transport client the request is dispatched through.
 	 *
-	 * This is the `ProviderClient` the provider resolves to. `"anthropic"`
-	 * is the ONLY value that requires provider-origin authorization for a
-	 * reasoning block, because the Anthropic AI SDK module is the only
-	 * serializer that drops an unsigned reasoning block.
+	 * This is the `ProviderClient` the provider resolves to. It is the
+	 * FACTORY-level transport: the module the provider's own family selects.
+	 *
+	 * It is consulted only when the EFFECTIVE transport is not established.
 	 */
 	transportClient?: string;
 	/**
 	 * The model's declared wire protocol, when the catalog publishes one.
 	 *
 	 * This is the PER-MODEL override for a gateway that serves several API
-	 * formats. It is consulted only when the resolved transport client is
-	 * not established.
+	 * formats. It is consulted only when neither the effective transport nor
+	 * the provider client is established.
 	 */
 	apiProtocol?: string;
 	/**
@@ -352,6 +367,19 @@ export function requiresSignedReasoningCapability(input: {
 	/** The provider id. NOT a transport identity. */
 	providerId?: string;
 }): boolean {
+	// ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A1).
+	//
+	// The EFFECTIVE TRANSPORT is the authority: it is the serializer that
+	// actually runs, so it cannot disagree with the wire.
+	//
+	// It is consulted FIRST because it already accounts for the per-model
+	// protocol override, which the provider client alone does NOT.
+	const effectiveTransport = normalizeCapabilityValue(
+		input.effectiveTransportClient,
+	);
+	if (effectiveTransport) {
+		return effectiveTransport === ANTHROPIC_TRANSPORT_CLIENT;
+	}
 	// ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (AMENDMENT-01, A1).
 	//
 	// The RESOLVED TRANSPORT is the authority. It is consulted FIRST and it

@@ -517,8 +517,8 @@ describe("ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (ADDENDUM-01) — retry 
 		// The AGGREGATE the middleware emits covers EVERY physical attempt.
 		expect(single.usages).toHaveLength(1);
 		expect(multi.usages).toHaveLength(1);
-		const singleInput = single.usages[0]!.inputTokens as number;
-		const multiInput = multi.usages[0]!.inputTokens as number;
+		const singleInput = single.usages[0]?.inputTokens as number;
+		const multiInput = multi.usages[0]?.inputTokens as number;
 
 		// CONSERVATION: the aggregate expenditure grows with the attempt
 		// count. This is the billing/accounting authority and it is
@@ -894,5 +894,69 @@ describe("ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (ADDENDUM-01 CORRECTION-
 		expect(observed[0]).toBeUndefined();
 		expect(observed[1]).toBe(2_500);
 		expect(observed[2]).toBeUndefined();
+	});
+
+	// ---------------------------------------------------------------------
+	// ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A5.1/A5.2).
+	// ---------------------------------------------------------------------
+
+	it("CMP09-RETRY-11: the occupancy is the SERVED attempt's own count, not the aggregate divided", async () => {
+		// The HETEROGENEOUS positive control.
+		//
+		//   discarded attempt 1 = 2,000
+		//   discarded attempt 2 = 3,000
+		//   served attempt      = 1,500
+		//
+		// The aggregate expenditure is 6,500 and the physical occupancy is
+		// 1,500. The occupancy is the SERVED attempt's own count — it is NOT
+		// the aggregate, and it is NOT the aggregate divided by the attempt
+		// count (6,500 / 3 = 2,166.67).
+		const heterogeneous = await driveRuntimeWithUsage({
+			usage: {
+				inputTokens: 6_500,
+				requestOccupancy: { state: "known", value: 1_500, attemptCount: 3 },
+			},
+		});
+		expect(heterogeneous.sessionInputTokens).toBe(6_500);
+		expect(heterogeneous.previousRequestInputTokens).toBe(1_500);
+		// Explicitly NOT the aggregate, and NOT a derived value.
+		expect(heterogeneous.previousRequestInputTokens).not.toBe(6_500);
+		expect(heterogeneous.previousRequestInputTokens).not.toBe(6_500 / 3);
+	});
+
+	it("CMP09-RETRY-12: a CONTRADICTORY occupancy record grants NO authority", async () => {
+		// ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A5.1).
+		//
+		// The reader used to NORMALIZE a contradictory record instead of
+		// denying it: `state: "single"` with `attemptCount: 3` was accepted,
+		// and the runtime reads the "single" state as "the aggregate IS this
+		// request's occupancy". That re-enabled exactly the aggregate
+		// fallback the three-state architecture forbids.
+		//
+		// The runtime therefore sees NO authority and falls into its LEGACY
+		// single-request branch, which uses THAT request's own usage — never
+		// an aggregate — and publishes no stale occupancy.
+		const contradictory = await driveRuntimeWithUsage({
+			usage: {
+				inputTokens: 4_000,
+				requestOccupancy: { state: "single", attemptCount: 3 },
+			},
+		});
+		// The aggregate is still billed.
+		expect(contradictory.sessionInputTokens).toBe(4_000);
+		// But it is NOT published as the previous request's occupancy.
+		expect(contradictory.previousRequestInputTokens).not.toBe(4_000);
+	});
+
+	it("CMP09-RETRY-13: a NON-FINITE legacy occupancy is denied", async () => {
+		// ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A5.1).
+		//
+		// The legacy single-request branch accepted `Infinity` (it is `> 0`),
+		// which would publish an infinite occupancy and disable the budget's
+		// calibration against it.
+		const infinite = await driveRuntimeWithUsage({
+			usage: { inputTokens: Number.POSITIVE_INFINITY },
+		});
+		expect(infinite.previousRequestInputTokens).toBeUndefined();
 	});
 });

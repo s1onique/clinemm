@@ -190,7 +190,42 @@ export interface UsageObservabilityRecord {
 	readonly sdkUsage?: Record<string, number | undefined>;
 	/** ClineMM's final normalized numeric usage. */
 	readonly clineUsage?: Record<string, number | undefined>;
+	/**
+	 * The SCOPE of the usage recorded above.
+	 *
+	 * ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A6).
+	 *
+	 * The four observations are DIFFERENT quantities, and a reader must be
+	 * able to tell them apart:
+	 *
+	 *   "physical-attempt"  ONE physical request's own usage;
+	 *   "turn-aggregate"    the SUM over the turn's physical attempts (the
+	 *                       BILLING quantity);
+	 *   "served-occupancy"  the CONTEXT OCCUPANCY of the served request;
+	 *   "normalized"        the normalized runtime usage.
+	 *
+	 * The predecessor recorded the usage without a scope, so a TURN
+	 * AGGREGATE could be read as one PHYSICAL REQUEST's usage — the exact
+	 * conflation the ACT forbids. The scope is now stated explicitly, and it
+	 * is derived from the OBSERVED facts (the occupancy authority's attempt
+	 * count), never invented.
+	 */
+	readonly usageScope?: UsageObservabilityScope;
 }
+
+/**
+ * The scope of a recorded usage observation.
+ *
+ * ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A6).
+ *
+ * The values are the ESTABLISHED distinctions; no new registry is
+ * introduced.
+ */
+export type UsageObservabilityScope =
+	| "physical-attempt"
+	| "turn-aggregate"
+	| "served-occupancy"
+	| "normalized";
 
 /** The capture schema version. Bump when the record shape changes. */
 const USAGE_OBSERVABILITY_SCHEMA_VERSION = 1 as const;
@@ -312,6 +347,14 @@ export function recordUsageObservability(input: {
 	sdkUsage?: unknown;
 	/** ClineMM's final normalized usage. */
 	clineUsage?: unknown;
+	/**
+	 * The SCOPE of the recorded usage.
+	 *
+	 * ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A6). The caller
+	 * states the scope it observed; the capture records it verbatim and never
+	 * infers one.
+	 */
+	usageScope?: UsageObservabilityScope;
 }): void {
 	if (!isUsageObservabilityEnabled()) {
 		return;
@@ -334,6 +377,7 @@ export function recordUsageObservability(input: {
 			rawProviderUsage: readRawNumericUsage(input.raw),
 			...(sdkUsage ? { sdkUsage } : {}),
 			...(clineUsage ? { clineUsage } : {}),
+			...(input.usageScope ? { usageScope: input.usageScope } : {}),
 		};
 		writeObservabilityRecord(record);
 	} catch {

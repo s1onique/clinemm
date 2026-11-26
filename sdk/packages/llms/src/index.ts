@@ -177,7 +177,16 @@ export {
 // from here instead of guessing it from the model family.
 export {
 	type ResolvedTransportFacts,
+	// ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A2): the SINGLE
+	// destination origin-authority resolver. The wire gate, the
+	// request-budget authority, the task-contract guard and the compaction
+	// trigger all use it, so they name the SAME destination.
+	resolveDestinationOriginAuthority,
 	resolveEffectiveBaseUrl,
+	// ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A1): the
+	// EFFECTIVE TRANSPORT — the serializer that actually runs, established by
+	// the SAME selection the production dispatch performs.
+	resolveEffectiveTransportClient,
 	resolveTransportFacts,
 } from "./providers/resolved-transport";
 export {

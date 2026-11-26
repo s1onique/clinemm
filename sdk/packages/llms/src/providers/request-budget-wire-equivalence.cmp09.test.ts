@@ -127,6 +127,30 @@ function anthropicSseResponse(): Response {
 /**
  * Drive the REAL production request preparation and the REAL resolved
  * Anthropic serializer, with an INJECTED fetch. Returns the serialized body.
+ *
+ * ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A3).
+ *
+ * THE WIRE BRANCH IS NOT PRE-FILTERED.
+ *
+ * The predecessor projected the transcript with
+ * `toProviderVisibleMessages(messages, { requiresSignedReasoning: true,
+ * destinationAuthority })` BEFORE dispatching it, and the SAME projection
+ * (further filtered by `omitUnauthorizedReasoningBlocks`) fed the budget
+ * measurement. Both branches therefore received an ALREADY-EXCLUDED
+ * transcript, so the wire's negative controls could not establish that the
+ * WIRE GATE independently rejects the block: the budget's exclusion had
+ * already removed it.
+ *
+ * Here the wire branch receives the RAW projection — the provider-visible
+ * shape WITHOUT the reasoning-authorization exclusion — so the only thing
+ * that can remove a reasoning block from the serialized body is the WIRE's
+ * own gate (`toAiSdkMessages` -> `mayReplayOpaqueReasoning`).
+ *
+ * The destination authority the wire compares against is NOT injected: the
+ * wire builds it ITSELF, from the request's provider id and the resolved
+ * endpoint (`buildAiSdkRequestMessages` ->
+ * `buildReasoningOriginAuthority`). That is the production authority, and
+ * exercising it is the point.
  */
 async function serializeThroughRealTransport(
 	messages: readonly AgentMessage[],
@@ -142,12 +166,12 @@ async function serializeThroughRealTransport(
 	// The REAL production dispatch: the canonical transcript goes through
 	// the gateway's own message preparation and the resolved Anthropic
 	// adapter, and the serialized HTTP body is what `fetch` receives.
+	//
+	// The projection carries NO authorization exclusion, so the WIRE's own
+	// gate is the only thing that can drop a reasoning block.
 	const stream = handler.createMessage(
 		"system prompt",
-		toProviderVisibleMessages(messages, {
-			requiresSignedReasoning: true,
-			destinationAuthority: MINIMAX_ORIGIN_AUTHORITY,
-		}) as never,
+		toProviderVisibleMessages(messages) as never,
 	);
 	// Drain the stream so the request is actually dispatched.
 	for await (const _chunk of stream) {
@@ -296,6 +320,9 @@ function unauthorizedRedactedReasoning(): AgentMessagePart {
 function measureBudget(messages: readonly AgentMessage[]): number {
 	const transportFacts = resolveTransportFacts({ providerId: "minimax" });
 	const requiresSignedReasoning = requiresSignedReasoningCapability({
+		// ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A1): the
+		// EFFECTIVE transport — the serializer that actually runs.
+		effectiveTransportClient: transportFacts.effectiveClient,
 		transportClient: transportFacts.client,
 		apiProtocol: transportFacts.apiProtocol,
 	});
@@ -311,6 +338,46 @@ function measureBudget(messages: readonly AgentMessage[]): number {
 				destinationAuthority: MINIMAX_ORIGIN_AUTHORITY,
 			},
 		),
+		tools: [],
+	});
+}
+
+/**
+ * The budget measurement with the REASONING EXCLUSION DISABLED.
+ *
+ * ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A3).
+ *
+ * It is the NECESSITY control for the budget exclusion: with the exclusion
+ * off, the budget MUST measure MORE than it does with the exclusion on.
+ * Without that divergence, the exclusion would be inert and the negative
+ * controls would prove nothing about it.
+ *
+ * HOW THE EXCLUSION IS DISABLED
+ * -----------------------------
+ * The exclusion is applied in TWO places, and BOTH must be off for the
+ * measurement to diverge:
+ *
+ *   1. `toProviderVisibleMessages` omits the reasoning block whose recorded
+ *      origin is not authorized for the destination (the projection's own
+ *      `mayReplayOpaqueReasoning` check);
+ *   2. `omitUnauthorizedReasoningBlocks` omits the blocks that survive the
+ *      projection.
+ *
+ * The predecessor's control only disabled (2), which is why it measured
+ * IDENTICALLY to the production measurement: (1) had already removed the
+ * block, and no divergence was observable. Disabling the TRANSPORT
+ * CAPABILITY turns (1) off as well, so the measurement really does include
+ * the content the production measurement excludes.
+ *
+ * The control is deliberately built from the SAME production helpers, so it
+ * measures the same quantity — only the exclusion differs.
+ */
+function measureBudgetWithoutExclusion(
+	messages: readonly AgentMessage[],
+): number {
+	return estimateProviderRequestInputTokens({
+		systemPrompt: "system prompt",
+		messages: toProviderVisibleMessages(messages),
 		tools: [],
 	});
 }
@@ -339,8 +406,8 @@ describe("CMP-09 request-budget / wire equivalence", () => {
 		);
 		const blocks = serializedThinkingBlocks(body);
 		expect(blocks).toHaveLength(1);
-		expect(blocks[0]!.type).toBe("thinking");
-		expect(blocks[0]!.signature).toBe(VALID_SIGNATURE);
+		expect(blocks[0]?.type).toBe("thinking");
+		expect(blocks[0]?.signature).toBe(VALID_SIGNATURE);
 		// The budget MUST count it: the provider receives it.
 		expect(
 			measureBudget(transcriptWithReasoning(signedSameRouteReasoning())),
@@ -395,8 +462,8 @@ describe("CMP-09 request-budget / wire equivalence", () => {
 		);
 		const authorizedBlocks = serializedThinkingBlocks(authorizedBody);
 		expect(authorizedBlocks).toHaveLength(1);
-		expect(authorizedBlocks[0]!.type).toBe("redacted_thinking");
-		expect(authorizedBlocks[0]!.data).toBe(REDACTED_PAYLOAD);
+		expect(authorizedBlocks[0]?.type).toBe("redacted_thinking");
+		expect(authorizedBlocks[0]?.data).toBe(REDACTED_PAYLOAD);
 		// The budget MUST count it: the provider receives it.
 		expect(
 			measureBudget(transcriptWithReasoning(authorizedRedactedReasoning())),
@@ -428,9 +495,9 @@ describe("CMP-09 request-budget / wire equivalence", () => {
 			(message.content ?? []).filter((part) => part.type === "tool_result"),
 		);
 		expect(toolUses).toHaveLength(1);
-		expect(toolUses[0]!.id).toBe("call-1");
+		expect(toolUses[0]?.id).toBe("call-1");
 		expect(toolResults).toHaveLength(1);
-		expect(toolResults[0]!.tool_use_id).toBe("call-1");
+		expect(toolResults[0]?.tool_use_id).toBe("call-1");
 	});
 
 	it("CMP09-WIRE-07: the canonical transcript is unchanged by the projection", () => {
@@ -486,11 +553,89 @@ describe("CMP-09 request-budget / wire equivalence", () => {
 		expect(bedrockFacts.client).toBe("bedrock");
 		expect(
 			requiresSignedReasoningCapability({
+				effectiveTransportClient: bedrockFacts.effectiveClient,
 				transportClient: bedrockFacts.client,
 				apiProtocol: bedrockFacts.apiProtocol,
 				family: "anthropic",
 				providerId: "bedrock",
 			}),
 		).toBe(false);
+	});
+
+	// ---------------------------------------------------------------------
+	// ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A3).
+	//
+	// THE NECESSITY CONTROLS.
+	//
+	// The negative controls above assert that the WIRE excludes a block and
+	// that the BUDGET excludes it too. On their own they cannot establish
+	// that EITHER gate is necessary: a projection that dropped every
+	// reasoning block would satisfy both.
+	//
+	// The controls below establish necessity in both directions:
+	//
+	//   - the WIRE gate is necessary: the raw projection (which the wire
+	//     branch now receives) DOES carry the reasoning block, so the wire's
+	//     own gate is the only thing that removed it;
+	//   - the BUDGET exclusion is necessary: with the exclusion disabled the
+	//     measurement DIVERGES from the production measurement.
+	// ---------------------------------------------------------------------
+
+	it("CMP09-WIRE-09: the WIRE gate is necessary — the raw projection carries the block the wire drops", async () => {
+		// The RAW projection — no authorization exclusion applied — still
+		// carries the incompatible-origin reasoning block. The wire branch
+		// receives exactly this shape, so the ONLY thing that can remove the
+		// block from the serialized body is the wire's own gate.
+		const rawProjection = toProviderVisibleMessages(
+			transcriptWithReasoning(signedIncompatibleOriginReasoning()),
+		);
+		const rawBlocks = rawProjection.flatMap((message) =>
+			typeof message.content === "string"
+				? []
+				: message.content.filter(
+						(block) =>
+							block.type === "thinking" || block.type === "redacted_thinking",
+					),
+		);
+		expect(rawBlocks).toHaveLength(1);
+
+		// And the wire DROPS it.
+		const body = await serializeThroughRealTransport(
+			transcriptWithReasoning(signedIncompatibleOriginReasoning()),
+		);
+		expect(serializedThinkingBlocks(body)).toHaveLength(0);
+		expect(JSON.stringify(body)).not.toContain(REASONING_TEXT.slice(0, 80));
+	});
+
+	it("CMP09-WIRE-10: the BUDGET exclusion is necessary — disabling it diverges the measurement", () => {
+		// The incompatible-origin block: the budget excludes it.
+		expect(
+			measureBudget(
+				transcriptWithReasoning(signedIncompatibleOriginReasoning()),
+			),
+		).toBe(measureBaselineBudget());
+
+		// With the exclusion DISABLED, the budget measures MORE. The
+		// divergence is what makes the exclusion a live decision rather than
+		// an inert branch.
+		expect(
+			measureBudgetWithoutExclusion(
+				transcriptWithReasoning(signedIncompatibleOriginReasoning()),
+			),
+		).toBeGreaterThan(measureBaselineBudget());
+	});
+
+	it("CMP09-WIRE-11: the AUTHORIZED case diverges in the OPPOSITE direction — the exclusion retains it", () => {
+		// The same-route authorized block is RETAINED by the budget, so the
+		// exclusion does not remove it and the measurement is the same
+		// whether or not the exclusion is on.
+		expect(
+			measureBudget(transcriptWithReasoning(signedSameRouteReasoning())),
+		).toBeGreaterThan(measureBaselineBudget());
+		expect(
+			measureBudgetWithoutExclusion(
+				transcriptWithReasoning(signedSameRouteReasoning()),
+			),
+		).toBe(measureBudget(transcriptWithReasoning(signedSameRouteReasoning())));
 	});
 });
