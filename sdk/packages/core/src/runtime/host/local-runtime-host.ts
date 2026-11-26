@@ -1142,6 +1142,14 @@ export class LocalRuntimeHost implements RuntimeHost {
 			}
 		}
 
+		/**
+		 * ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 (AMENDMENT-01)
+		 * — C6.
+		 *
+		 * The ACTUAL RESOLVED PCK inference policy, captured at the
+		 * policy's resolution boundary.
+		 */
+		let resolvedPckInferencePolicyId: string | undefined;
 		const prepareTurn = createCompactionStateAwarePrepareTurn({
 			compact,
 			getState: () => activeSessionRef?.compactionState,
@@ -1162,6 +1170,14 @@ export class LocalRuntimeHost implements RuntimeHost {
 			// host has since refreshed or replaced, and it never introduces
 			// a second transport.
 			knowledgeCheckpoint: {
+				/**
+				 * ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01
+				 * (AMENDMENT-01) — C6.
+				 *
+				 * The ACTUAL RESOLVED inference policy, captured at the
+				 * policy's resolution boundary.
+				 */
+				resolvedInferencePolicyId: () => resolvedPckInferencePolicyId,
 				generate: async ({
 					systemPrompt,
 					request,
@@ -1204,6 +1220,16 @@ export class LocalRuntimeHost implements RuntimeHost {
 								policyResolution.parameters,
 							)
 						: checkpointProviderConfig;
+					// ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01
+					// (AMENDMENT-01) — C6.
+					//
+					// The ACTUAL RESOLVED inference policy is captured HERE,
+					// at the policy's RESOLUTION boundary, so the capture
+					// records the policy that was really applied rather than
+					// the one an operator selected.
+					resolvedPckInferencePolicyId = policyResolution.applied
+						? policyResolution.policyId
+						: undefined;
 					// ACT-CLINEMM-PCK-PHYSICAL-REQUEST-CARDINALITY-REPAIR-01.
 					//
 					// The PCK's NO-AUTOMATIC-RETRY contract is enforced at the

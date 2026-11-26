@@ -27,7 +27,10 @@
  */
 
 import type { MessageWithMetadata } from "@cline/shared";
-import { collectCanonicalToolEvents } from "./evidence";
+import {
+	collectCanonicalToolEvents,
+	collectObservedCanonicalReferences,
+} from "./evidence";
 import type {
 	BoundedObservation,
 	PrefixPreservingParentAuthority,
@@ -35,6 +38,9 @@ import type {
 } from "./prefix-preserving-request";
 import {
 	buildProviderVisibleBindings,
+	collectAuthorizedReferences,
+	collectAuthorizedToolEventReferences,
+	narrowCanonicalMessagesToAuthority,
 	type ProviderVisibleBinding,
 	type ProviderVisibleMessage,
 } from "./provider-visible-binding";
@@ -154,8 +160,33 @@ export function assembleParentRequestAuthority(
 			providerMessages: input.providerMessages,
 			authorizedMessageCount: input.authorizedMessageCount,
 		});
-	const observations: BoundedObservation[] = collectCanonicalToolEvents(
+	// ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 (AMENDMENT-01) —
+	// P0/P1.
+	//
+	// The EFFECTIVE citation authority is the INTERSECTION of the existing
+	// canonical evidence authority and the B' visible-and-unambiguous
+	// source authority.
+	//
+	// The canonical authority is `collectObservedCanonicalReferences()` over
+	// the SAME canonical history the binding was computed from, so the
+	// intersection can only ever NARROW it.
+	const canonicalAuthority = new Set(
+		collectObservedCanonicalReferences(input.canonicalMessages),
+	);
+	const authorizedReferences = collectAuthorizedReferences(bindings).filter(
+		(reference) => canonicalAuthority.has(reference),
+	);
+	// The NARROWED canonical view. It is the interpreter's input, so an
+	// excluded observation cannot re-enter the evidence.
+	const authorizedCanonicalMessages = narrowCanonicalMessagesToAuthority(
 		input.canonicalMessages,
+		bindings,
+	);
+	// The observation metadata is derived from the SAME narrowed view, so
+	// metadata from an EXCLUDED observation cannot silently reintroduce
+	// unauthorized evidence.
+	const observations: BoundedObservation[] = collectCanonicalToolEvents(
+		authorizedCanonicalMessages,
 	).map((event) => ({
 		toolCallId: event.toolCallId,
 		toolName: event.toolName,
@@ -166,6 +197,11 @@ export function assembleParentRequestAuthority(
 		messages: input.providerMessages,
 		tools: projectProviderVisibleToolSchema(input.tools),
 		bindings,
+		authorizedReferences,
+		authorizedCanonicalMessages,
+		authorizedToolEventReferences: collectAuthorizedToolEventReferences(
+			bindings,
+		).filter((reference) => canonicalAuthority.has(reference)),
 		authorizedMessageCount: input.authorizedMessageCount,
 		observations,
 		objective: PCK_EXTRACTION_OBJECTIVE,

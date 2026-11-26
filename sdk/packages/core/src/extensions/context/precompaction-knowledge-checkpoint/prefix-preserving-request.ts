@@ -32,6 +32,7 @@
  *     invokes an executor.
  */
 
+import type { MessageWithMetadata } from "@cline/shared";
 import {
 	BOUNDED_ASSURANCES,
 	KNOWLEDGE_KINDS,
@@ -154,6 +155,39 @@ export interface PrefixPreservingParentAuthority {
 	 */
 	readonly bindings: ReadonlyMap<string, ProviderVisibleBinding>;
 	/**
+	 * ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 (AMENDMENT-01) —
+	 * P0.
+	 *
+	 * The EFFECTIVE citation authority of the B' route.
+	 *
+	 * It is the INTERSECTION of the existing canonical evidence authority
+	 * and the B' visible-and-unambiguous source authority, so it can only
+	 * ever be NARROWER than the legacy authority. It is carried into the
+	 * publication enforcement boundary — NOT relied upon as a prompt
+	 * instruction.
+	 */
+	readonly authorizedReferences: readonly string[];
+	/**
+	 * ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 (AMENDMENT-01) —
+	 * P0/P1.
+	 *
+	 * The CANONICAL history NARROWED to the authorized, visible sources.
+	 *
+	 * It is the interpreter's INPUT, so an event whose result the model
+	 * cannot see is absent from it and cannot establish an observed
+	 * outcome. The existing canonical interpreter is NOT weakened.
+	 */
+	readonly authorizedCanonicalMessages: readonly MessageWithMetadata[];
+	/**
+	 * ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 (AMENDMENT-01) —
+	 * P1 (source completeness).
+	 *
+	 * The AUTHORIZED tool-event references — the decisive engineering
+	 * evidence. An event counts only when BOTH its invocation and its result
+	 * are provider-visible.
+	 */
+	readonly authorizedToolEventReferences: readonly string[];
+	/**
 	 * The AUTHORIZED SOURCE INTERVAL: the number of leading canonical
 	 * messages the compaction decision authorizes for extraction.
 	 */
@@ -182,6 +216,28 @@ export interface PrefixPreservingAuxiliaryRequest {
 }
 
 /**
+ * The COORDINATE SYSTEM of the positions the suffix reports.
+ *
+ * ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 (AMENDMENT-01) — P4.
+ *
+ * The positions are indexes into the CHECKPOINT PROJECTION — the
+ * `MessageBuilder.buildForApi` output the parent's provider-visible messages
+ * are. They are NOT indexes into the final HTTP wire body and NOT indexes
+ * into the rendered token stream.
+ *
+ * The distinction is EXPLICIT rather than implied, because the transport's
+ * own serializer re-frames the messages: it renders the system prompt as a
+ * separate channel or as `messages[0]`, and it mints a fresh id per
+ * rendered message. So the suffix's position is a PROJECTION position.
+ *
+ * The limitation is CLASSIFIED, not hidden: the position is a way for the
+ * model to locate the content it cites within the conversation it can see,
+ * and it is authoritative for the projection the suffix was built from.
+ */
+export const BINDING_POSITION_COORDINATE_SYSTEM =
+	"checkpoint projection (MessageBuilder.buildForApi output)";
+
+/**
  * Build the canonical source BINDINGS section of the suffix.
  *
  * Only the RESOLVED bindings appear. Each is rendered with the
@@ -198,14 +254,15 @@ function renderBindingsSection(
 		}
 		const position =
 			binding.providerBlockIndex === undefined
-				? `provider message ${binding.providerMessageIndex}`
-				: `provider message ${binding.providerMessageIndex} block ${binding.providerBlockIndex}`;
+				? `checkpoint projection message ${binding.providerMessageIndex}`
+				: `checkpoint projection message ${binding.providerMessageIndex} block ${binding.providerBlockIndex}`;
 		lines.push(`- ${binding.reference} -> ${position}`);
 	}
+	const header = `Canonical source bindings (use these exact keys; positions are ${BINDING_POSITION_COORDINATE_SYSTEM} indexes):`;
 	if (lines.length === 0) {
-		return ["Canonical source bindings (use these exact keys):", "(none)"];
+		return [header, "(none)"];
 	}
-	return ["Canonical source bindings (use these exact keys):", ...lines];
+	return [header, ...lines];
 }
 
 /**
@@ -296,7 +353,16 @@ export type PrefixPreservingNotEligibleReason =
 	/** The parent's provider-visible projection is empty. */
 	| "empty_parent_projection"
 	/** The canonical source provenance is missing or ambiguous. */
-	| "no_resolved_bindings";
+	| "no_resolved_bindings"
+	/**
+	 * ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 (AMENDMENT-01) —
+	 * P1 (source completeness).
+	 *
+	 * The DECISIVE engineering evidence is absent: no authorized tool event
+	 * survived the projection, so the B' source is materially NARROWER than
+	 * the legacy controlled source view.
+	 */
+	| "no_decisive_evidence";
 
 /**
  * The route selection.
@@ -353,6 +419,21 @@ export function selectPrefixPreservingRoute(input: {
 	}
 	if (resolvedCount === 0) {
 		return { selected: "legacy", reason: "no_resolved_bindings" };
+	}
+	// ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 (AMENDMENT-01) —
+	// P1 (source completeness).
+	//
+	// ONE resolved reference is NOT enough. A resolved USER-message
+	// reference is not the decisive engineering evidence: the legacy
+	// controlled source view's decisive content is the tool OBSERVATIONS.
+	//
+	// So when the decisive evidence is absent or truncated — while an
+	// unrelated user-message reference remains resolved — the B' source is
+	// materially NARROWER than the legacy view. Selecting A BEFORE the
+	// dispatch preserves the legacy source instead of silently degrading
+	// it, and it costs no additional inference.
+	if (authority.authorizedToolEventReferences.length === 0) {
+		return { selected: "legacy", reason: "no_decisive_evidence" };
 	}
 	return {
 		selected: "b_prime",

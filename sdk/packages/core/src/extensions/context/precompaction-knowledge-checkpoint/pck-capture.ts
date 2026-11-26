@@ -53,6 +53,7 @@
 import { appendFileSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { getPrefixForensicsCohortId } from "@cline/shared";
 
 /**
  * The environment variable that enables the capture.
@@ -76,25 +77,63 @@ export type PckPrefixCaptureRoute = "b_prime" | "legacy";
 /**
  * ONE capture record.
  *
- * Every field is a scalar, so the record is bounded by construction. The
+ * EVERY field is a scalar, so the record is bounded by construction. The
  * record NEVER carries conversation content, a prompt, a tool argument or a
  * credential.
+ *
+ * ============================================================================
+ * THE IDENTITY MODEL — EACH IDENTITY IS DISTINCT
+ * ============================================================================
+ *
+ * The amendment requires that no identity substitutes for another:
+ *
+ *   runCohortId           the RUN identity. It is the SAME cohort id the
+ *                         prefix-forensics capture uses, so the two captures
+ *                         join on it.
+ *   sessionId             the SESSION identity.
+ *   decisionId            the COMPACTION DECISION identity.
+ *   preparationRequestId  the CURRENT preparation identity — the request the
+ *                         runtime is preparing now.
+ *   lastDispatchedRequestId
+ *                         the LAST DISPATCHED ordinary request identity. It
+ *                         is ABSENT at the PCK boundary: the runtime does
+ *                         not retain the dispatched request's identity there.
+ *                         The ABSENCE is preserved explicitly by
+ *                         `lastDispatchedRequestIdAvailable`, so it is never
+ *                         inferred from timestamp proximity.
+ *   pckLogicalRequestId   the PCK LOGICAL request identity — the attempt's
+ *                         identity within the decision.
+ *   pckPhysicalAttemptId  the PCK PHYSICAL attempt identity — the
+ *                         transport's own per-request id. It is the JOIN key
+ *                         with the provider's own capture.
  */
 export interface PckPrefixCaptureRecord {
-	/** The RUN identity: the capture's cohort id. */
-	readonly cohortId: string;
+	/** The RUN identity: the shared prefix-forensics cohort id. */
+	readonly runCohortId: string;
 	/** The wall-clock instant of the attempt. */
 	readonly capturedAt: string;
 	/** The SESSION identity, when the host supplied it. */
 	readonly sessionId: string | undefined;
 	/** The COMPACTION DECISION identity. */
 	readonly decisionId: string;
-	/** The canonical source-prefix identity the attempt was bound to. */
-	readonly sourcePrefixKey: string;
-	/** The PARENT request identity, when the host supplied it. */
-	readonly parentRequestId: string | undefined;
-	/** The PHYSICAL provider request id — the JOIN key. */
-	readonly providerRequestId: string | undefined;
+	/** The CURRENT preparation identity, when the host supplied it. */
+	readonly preparationRequestId: string | undefined;
+	/**
+	 * The LAST DISPATCHED ordinary request identity.
+	 *
+	 * It is ABSENT at the PCK boundary. The absence is preserved, never
+	 * inferred.
+	 */
+	readonly lastDispatchedRequestId: string | undefined;
+	/** Whether a last-dispatched ordinary request identity was available. */
+	readonly lastDispatchedRequestIdAvailable: boolean;
+	/** The PCK LOGICAL request identity. */
+	readonly pckLogicalRequestId: string;
+	/**
+	 * The PCK PHYSICAL attempt identity — the JOIN key with the provider's
+	 * own capture.
+	 */
+	readonly pckPhysicalAttemptId: string | undefined;
 	/** The ROUTE the request took. */
 	readonly route: PckPrefixCaptureRoute;
 	/** The provider id. */
@@ -103,20 +142,42 @@ export interface PckPrefixCaptureRecord {
 	readonly modelId: string | undefined;
 	/** The REQUEST PURPOSE. It is ALWAYS "pck". */
 	readonly purpose: "pck";
-	/** The effective generation policy identifier, when one applied. */
-	readonly inferencePolicyId: string | undefined;
-	/** The provider-reported input tokens. */
+	/**
+	 * The ACTUAL RESOLVED inference policy identifier.
+	 *
+	 * It is captured at the policy's RESOLUTION boundary, so it is the policy
+	 * that was really applied — not the one an operator selected.
+	 */
+	readonly resolvedInferencePolicyId: string | undefined;
+	/** The provider-reported input tokens. ABSENT means UNKNOWN. */
 	readonly inputTokens: number | undefined;
-	/** The provider-reported CACHE-READ tokens. */
+	/** The provider-reported CACHE-READ tokens. ABSENT means UNKNOWN. */
 	readonly cacheReadTokens: number | undefined;
 	/** The request duration, in milliseconds, as observed by the runtime. */
 	readonly durationMs: number | undefined;
+	/**
+	 * The PHYSICAL attempt cardinality — how many physical provider
+	 * requests the attempt issued, including retries.
+	 */
+	readonly physicalAttemptCount: number;
 	/** The EXTRACTION outcome. */
 	readonly extractionOutcome: "accepted" | "rejected" | "failed";
 	/** The failure reason, when the attempt failed. */
 	readonly failureReason: string | undefined;
-	/** The PUBLICATION outcome: how many records were admitted. */
-	readonly publishedRecordCount: number;
+	/**
+	 * The number of records the PUBLICATION GATE admitted.
+	 *
+	 * It is NOT the installed count.
+	 */
+	readonly gateAdmittedRecordCount: number;
+	/**
+	 * The number of records actually INSTALLED into the compacted
+	 * transcript.
+	 *
+	 * It is DISTINCT from `gateAdmittedRecordCount`: the projection can
+	 * carry fewer records than the gate admitted.
+	 */
+	readonly installedRecordCount: number;
 }
 
 /**
@@ -139,8 +200,14 @@ function captureDirectory(): string {
  *
  * It is failure-isolated: a filesystem error never changes the request's
  * outcome.
+ *
+ * The RUN identity is the SHARED prefix-forensics cohort id, so the two
+ * captures join on it. It is resolved HERE, at the capture's own boundary,
+ * and it is never a substituted identity.
  */
-export function recordPckPrefixCapture(record: PckPrefixCaptureRecord): void {
+export function recordPckPrefixCapture(
+	record: Omit<PckPrefixCaptureRecord, "runCohortId">,
+): void {
 	try {
 		if (!isPckPrefixCaptureEnabled()) {
 			return;
@@ -149,7 +216,10 @@ export function recordPckPrefixCapture(record: PckPrefixCaptureRecord): void {
 		mkdirSync(directory, { recursive: true, mode: 0o700 });
 		appendFileSync(
 			join(directory, "pck-prefix-capture.jsonl"),
-			`${JSON.stringify(record)}\n`,
+			`${JSON.stringify({
+				...record,
+				runCohortId: getPrefixForensicsCohortId(),
+			})}\n`,
 			{ encoding: "utf8", mode: 0o600 },
 		);
 	} catch {

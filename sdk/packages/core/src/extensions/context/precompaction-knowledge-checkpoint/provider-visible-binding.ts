@@ -81,6 +81,32 @@ export type ProviderVisibleBinding =
 			 * denotes the whole message.
 			 */
 			readonly providerBlockIndex: number | undefined;
+			/**
+			 * ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01
+			 * (AMENDMENT-01) — P1.
+			 *
+			 * The provider-visible position of the tool event's RESULT.
+			 *
+			 * It is SEPARATE from the invocation position because a
+			 * completed tool event legitimately occupies BOTH: the
+			 * `tool_use` block that declared it and the `tool_result` block
+			 * that answered it. Collecting them together made a NORMAL
+			 * completed event look like an AMBIGUITY, so the decisive
+			 * engineering evidence could never be authorized.
+			 *
+			 * It is ABSENT when the RESULT is not visible. The invocation
+			 * alone cannot authorize an observed OUTCOME.
+			 */
+			readonly providerResultMessageIndex: number | undefined;
+			/** The provider-visible block index of the RESULT. */
+			readonly providerResultBlockIndex: number | undefined;
+			/**
+			 * Whether the reference denotes a TOOL EVENT.
+			 *
+			 * It is the discriminator the source-completeness rule uses: a
+			 * tool event is the DECISIVE engineering evidence.
+			 */
+			readonly toolEvent: boolean;
 	  }
 	| {
 			/** The canonical reference key. */
@@ -281,6 +307,9 @@ export function buildProviderVisibleBindings(input: {
 			status: "resolved",
 			providerMessageIndex: providerIndexes[0],
 			providerBlockIndex: undefined,
+			providerResultMessageIndex: undefined,
+			providerResultBlockIndex: undefined,
+			toolEvent: false,
 		});
 	}
 
@@ -302,19 +331,43 @@ export function buildProviderVisibleBindings(input: {
 			input.providerMessages,
 			toolCallId,
 		);
-		if (providerPositions.length === 0) {
-			bindings.set(toolCallId, unresolved(toolCallId, "absent"));
-			continue;
-		}
-		if (providerPositions.length > 1) {
+		// ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01
+		// (AMENDMENT-01) — P1.
+		//
+		// The INVOCATION and the RESULT are counted SEPARATELY. A normal
+		// completed tool event has one of each, and the pair is COMPLEMENTARY
+		// evidence, not an ambiguity.
+		//
+		// A DUPLICATE identity — two invocations, or two results, for the
+		// same call id — IS an ambiguity, because it cannot be attributed to
+		// either.
+		const invocations = providerPositions.filter(
+			(position) => position.kind === "invocation",
+		);
+		const results = providerPositions.filter(
+			(position) => position.kind === "result",
+		);
+		if (invocations.length > 1 || results.length > 1) {
 			bindings.set(toolCallId, unresolved(toolCallId, "ambiguous"));
 			continue;
 		}
+		if (invocations.length === 0) {
+			bindings.set(toolCallId, unresolved(toolCallId, "absent"));
+			continue;
+		}
+		// The invocation is visible. The RESULT may or may not be: an
+		// invocation-only event is CITABLE, but it cannot authorize an
+		// observed OUTCOME, because the outcome lives in the result.
+		const invocation = invocations[0];
+		const result = results.length === 1 ? results[0] : undefined;
 		bindings.set(toolCallId, {
 			reference: toolCallId,
 			status: "resolved",
-			providerMessageIndex: providerPositions[0].messageIndex,
-			providerBlockIndex: providerPositions[0].blockIndex,
+			providerMessageIndex: invocation.messageIndex,
+			providerBlockIndex: invocation.blockIndex,
+			providerResultMessageIndex: result?.messageIndex,
+			providerResultBlockIndex: result?.blockIndex,
+			toolEvent: true,
 		});
 	}
 
@@ -322,18 +375,32 @@ export function buildProviderVisibleBindings(input: {
 }
 
 /**
+ * The provider-visible position of ONE side of a tool event.
+ */
+interface ProviderToolPosition {
+	readonly messageIndex: number;
+	readonly blockIndex: number;
+	/**
+	 * Whether the position is the INVOCATION (`tool_use`) or the RESULT
+	 * (`tool_result`).
+	 */
+	readonly kind: "invocation" | "result";
+}
+
+/**
  * The provider-visible positions of the tool call and its result.
  *
- * A tool call contributes TWO positions in the provider projection: the
- * `tool_use` block that DECLARED it and the `tool_result` block that
- * ANSWERED it. Both are returned, so the caller can decide whether the
- * event is fully visible.
+ * The two sides are returned SEPARATELY, because a completed tool event
+ * legitimately occupies BOTH: the `tool_use` block that DECLARED it and the
+ * `tool_result` block that ANSWERED it. Collecting them into one list
+ * made a normal completed event indistinguishable from a duplicate
+ * identity.
  */
 function findProviderToolPositions(
 	providerMessages: readonly ProviderVisibleMessage[],
 	toolCallId: string,
-): readonly { messageIndex: number; blockIndex: number }[] {
-	const positions: { messageIndex: number; blockIndex: number }[] = [];
+): readonly ProviderToolPosition[] {
+	const positions: ProviderToolPosition[] = [];
 	for (const [messageIndex, message] of providerMessages.entries()) {
 		if (!Array.isArray(message.content)) {
 			continue;
@@ -347,11 +414,12 @@ function findProviderToolPositions(
 				id?: unknown;
 				tool_use_id?: unknown;
 			};
-			if (
-				(record.type === "tool_use" && record.id === toolCallId) ||
-				(record.type === "tool_result" && record.tool_use_id === toolCallId)
-			) {
-				positions.push({ messageIndex, blockIndex });
+			if (record.type === "tool_use" && record.id === toolCallId) {
+				positions.push({ messageIndex, blockIndex, kind: "invocation" });
+				continue;
+			}
+			if (record.type === "tool_result" && record.tool_use_id === toolCallId) {
+				positions.push({ messageIndex, blockIndex, kind: "result" });
 			}
 		}
 	}
@@ -375,4 +443,94 @@ export function collectAuthorizedReferences(
 		}
 	}
 	return authorized;
+}
+
+/**
+ * The AUTHORIZED TOOL-EVENT references: the decisive engineering evidence.
+ *
+ * A tool event is decisive only when BOTH its invocation AND its result are
+ * provider-visible, because the OUTCOME lives in the result. An
+ * invocation-only event is citable but cannot establish an observed
+ * outcome.
+ */
+export function collectAuthorizedToolEventReferences(
+	bindings: ReadonlyMap<string, ProviderVisibleBinding>,
+): readonly string[] {
+	const events: string[] = [];
+	for (const binding of bindings.values()) {
+		if (
+			binding.status === "resolved" &&
+			binding.toolEvent &&
+			binding.providerResultMessageIndex !== undefined
+		) {
+			events.push(binding.reference);
+		}
+	}
+	return events;
+}
+
+/**
+ * Narrow the CANONICAL history to the AUTHORIZED, VISIBLE sources.
+ *
+ * ============================================================================
+ * WHY THIS EXISTS
+ * ============================================================================
+ *
+ * The publication gate's authority is the set of references it may cite.
+ * The EXISTING canonical interpreter then interprets THOSE references. It
+ * reads the canonical history, so it can establish an event whose RESULT the
+ * model cannot see.
+ *
+ * The narrowed view closes that: it contains ONLY the canonical material
+ * that the B' source authority covers. An event whose result was truncated,
+ * filtered, merged away or out of the authorized interval is ABSENT from it,
+ * so the existing interpreter — which is NOT weakened — cannot establish it.
+ *
+ * The narrowing is applied to the INTERPRETER'S INPUT, never to the
+ * interpreter itself.
+ *
+ * ============================================================================
+ * THE RULES
+ * ============================================================================
+ *
+ *   - A canonical message is KEPT only when its own reference is
+ *     AUTHORIZED. A message the projection merged away, truncated, or placed
+ *     outside the authorized interval is DROPPED, so its content cannot
+ *     re-enter the evidence through another message's identity.
+ *   - A canonical message with NO id is DROPPED: it has no citable
+ *     reference, so it can never be authorized.
+ *   - Within a KEPT message, a `tool_use` or `tool_result` block whose tool
+ *     reference is NOT authorized is DROPPED, so an excluded observation
+ *     cannot silently reintroduce unauthorized evidence.
+ */
+export function narrowCanonicalMessagesToAuthority(
+	canonicalMessages: readonly MessageWithMetadata[],
+	bindings: ReadonlyMap<string, ProviderVisibleBinding>,
+): readonly MessageWithMetadata[] {
+	const authorized = new Set(collectAuthorizedReferences(bindings));
+	const narrowed: MessageWithMetadata[] = [];
+	for (const message of canonicalMessages) {
+		const id = message.id;
+		if (typeof id !== "string" || id.length === 0) {
+			continue;
+		}
+		if (!authorized.has(`id:${id}`)) {
+			continue;
+		}
+		if (!Array.isArray(message.content)) {
+			narrowed.push(message);
+			continue;
+		}
+		const blocks = message.content.filter((block) => {
+			if (block.type === "tool_use") {
+				return authorized.has(block.id);
+			}
+			if (block.type === "tool_result") {
+				return authorized.has(block.tool_use_id);
+			}
+			return true;
+		});
+		narrowed.push({ ...message, content: blocks } as MessageWithMetadata);
+	}
+	return narrowed;
 }

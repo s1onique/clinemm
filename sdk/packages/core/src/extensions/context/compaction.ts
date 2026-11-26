@@ -127,6 +127,7 @@ import {
 	resolveEffectiveMaxInputTokens,
 } from "./compaction-shared";
 import { applyVerifiedEvidenceToCompactedMessages } from "./evidence-continuity";
+import { recordPckPrefixCapture } from "./precompaction-knowledge-checkpoint/pck-capture";
 import type { PrefixPreservingParentAuthority } from "./precompaction-knowledge-checkpoint/prefix-preserving-request";
 import { selectPrefixPreservingRoute } from "./precompaction-knowledge-checkpoint/prefix-preserving-request";
 import {
@@ -141,6 +142,7 @@ import {
 	isPckClosedEnabled,
 	type PckAttemptIdentity,
 	type PckGenerate,
+	type PckObservedAttempt,
 	resolvePckDeadlineMs,
 	runPckAttempt,
 } from "./precompaction-knowledge-checkpoint/runtime";
@@ -226,6 +228,17 @@ export interface ContextPipelinePrepareTurnInput {
 		generate: PckGenerate;
 		decisionId: () => string;
 		deadlineMs?: () => number;
+		/**
+		 * ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 (AMENDMENT-01)
+		 * — C6.
+		 *
+		 * The ACTUAL RESOLVED inference policy of the checkpoint request.
+		 *
+		 * It is resolved at the policy's own boundary and read here only
+		 * for the capture. It is never a substituted or reconstructed
+		 * value.
+		 */
+		resolvedInferencePolicyId?: () => string | undefined;
 	};
 	/**
 	 * ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01.
@@ -326,6 +339,30 @@ export interface ContextPipelinePrepareTurnResult {
 	 * no accepted record, or when the feature is disabled.
 	 */
 	knowledgeCheckpointRecords?: readonly ProjectableCheckpointRecord[];
+	/**
+	 * ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 (AMENDMENT-01) —
+	 * C6.
+	 *
+	 * The OBSERVED checkpoint attempt, carried with the records.
+	 *
+	 * It travels with the SPECIFIC compaction invocation that generated
+	 * it, so the capture can record the gate-admitted count AND the
+	 * installed count, which are DISTINCT.
+	 */
+	knowledgeCheckpointObserved?: PckObservedAttempt;
+	/**
+	 * The CAPTURE CONTEXT for the observed attempt.
+	 *
+	 * It travels with the attempt for the same reason.
+	 */
+	knowledgeCheckpointCaptureContext?: {
+		readonly sessionId?: string;
+		readonly parentRequestId?: string;
+		readonly providerId?: string;
+		readonly modelId?: string;
+		readonly resolvedInferencePolicyId?: string;
+		readonly decisionId?: string;
+	};
 }
 
 export type ContextPipelinePrepareTurn = (
@@ -371,6 +408,17 @@ export interface ContextCompactionPrepareTurnOptions {
 		generate: PckGenerate;
 		decisionId: () => string;
 		deadlineMs?: () => number;
+		/**
+		 * ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 (AMENDMENT-01)
+		 * — C6.
+		 *
+		 * The ACTUAL RESOLVED inference policy of the checkpoint request.
+		 *
+		 * It is resolved at the policy's own boundary and read here only
+		 * for the capture. It is never a substituted or reconstructed
+		 * value.
+		 */
+		resolvedInferencePolicyId?: () => string | undefined;
 	};
 }
 
@@ -1555,9 +1603,33 @@ export function createContextCompactionPrepareTurn(
 			effectiveMode !== "overflow_recovery" &&
 			pckSeam !== undefined;
 		let checkpointRecords: readonly ProjectableCheckpointRecord[] = [];
+		/**
+		 * ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 (AMENDMENT-01)
+		 * — C6.
+		 *
+		 * The OBSERVED checkpoint attempt. It is retained so the capture
+		 * can record the gate-admitted count AND the installed count, which
+		 * are DISTINCT.
+		 */
+		let observedCheckpointAttempt: PckObservedAttempt | undefined;
+		/**
+		 * The CAPTURE CONTEXT for the observed attempt. It is built at
+		 * the attempt's own boundary, where the decision identity and the
+		 * preparation identity are known.
+		 */
+		let checkpointCaptureContext:
+			| {
+					readonly sessionId?: string;
+					readonly parentRequestId?: string;
+					readonly providerId?: string;
+					readonly modelId?: string;
+					readonly resolvedInferencePolicyId?: string;
+					readonly decisionId?: string;
+			  }
+			| undefined;
 		if (pckEligible && pckSeam) {
-			const checkpointRecordsForDecision =
-				await generatePreCompactionKnowledgeCheckpoint({
+			const checkpointDecision = await generatePreCompactionKnowledgeCheckpoint(
+				{
 					seam: {
 						generate: pckSeam.generate,
 						// The seam's OWN decision identity is used when it
@@ -1606,8 +1678,24 @@ export function createContextCompactionPrepareTurn(
 								}),
 							}
 						: {}),
-				});
-			checkpointRecords = checkpointRecordsForDecision;
+				},
+			);
+			checkpointRecords = checkpointDecision.records;
+			observedCheckpointAttempt = checkpointDecision.observed;
+			checkpointCaptureContext = {
+				sessionId: config.sessionId,
+				parentRequestId: context.preparationRequestId,
+				providerId: config.providerId,
+				modelId: config.modelId,
+				decisionId: pckSeam.decisionId() || decisionIdForObservation,
+				// The ACTUAL RESOLVED policy, read at the policy's own
+				// resolution boundary.
+				...(pckSeam.resolvedInferencePolicyId?.() !== undefined
+					? {
+							resolvedInferencePolicyId: pckSeam.resolvedInferencePolicyId?.(),
+						}
+					: {}),
+			};
 		}
 		let requestTargetTokens: number;
 		let messageTargetTokens: number;
@@ -2078,6 +2166,8 @@ export function createContextCompactionPrepareTurn(
 			return {
 				...result,
 				knowledgeCheckpointRecords: checkpointRecords,
+				knowledgeCheckpointObserved: observedCheckpointAttempt,
+				knowledgeCheckpointCaptureContext: checkpointCaptureContext,
 			};
 		}
 
@@ -2279,13 +2369,16 @@ async function generatePreCompactionKnowledgeCheckpoint(input: {
 		readonly parentRequestId?: string;
 		readonly providerId?: string;
 		readonly modelId?: string;
-		readonly inferencePolicyId?: string;
+		readonly resolvedInferencePolicyId?: string;
 	};
-}): Promise<readonly ProjectableCheckpointRecord[]> {
+}): Promise<{
+	readonly records: readonly ProjectableCheckpointRecord[];
+	readonly observed: PckObservedAttempt | undefined;
+}> {
 	// DEFAULT-OFF: with the feature disabled, the seam returns immediately
 	// and NOTHING downstream changes.
 	if (!isPckClosedEnabled() || !input.seam) {
-		return [];
+		return { records: [], observed: undefined };
 	}
 	// The checkpoint is bound to the canonical source prefix it was
 	// generated from. The identity is RE-VERIFIED at publication time, so a
@@ -2344,8 +2437,11 @@ async function generatePreCompactionKnowledgeCheckpoint(input: {
 			...(input.captureContext?.modelId !== undefined
 				? { modelId: input.captureContext.modelId }
 				: {}),
-			...(input.captureContext?.inferencePolicyId !== undefined
-				? { inferencePolicyId: input.captureContext.inferencePolicyId }
+			...(input.captureContext?.resolvedInferencePolicyId !== undefined
+				? {
+						resolvedInferencePolicyId:
+							input.captureContext.resolvedInferencePolicyId,
+					}
 				: {}),
 		},
 		// ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 — the ROUTE.
@@ -2354,6 +2450,23 @@ async function generatePreCompactionKnowledgeCheckpoint(input: {
 		// launches a second inference after a failed B' attempt.
 		...(prefixPreservingRoute?.selected === "b_prime"
 			? { prefixPreservingRequest: prefixPreservingRoute.request }
+			: {}),
+		// ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 (AMENDMENT-01)
+		// — P0.
+		//
+		// The EFFECTIVE citation authority is carried into the PUBLICATION
+		// ENFORCEMENT BOUNDARY. It is NOT relied upon as a prompt
+		// instruction: the suffix's binding list is advisory, this is the
+		// enforcement.
+		...(prefixPreservingRoute?.selected === "b_prime" &&
+		input.parentAuthority !== undefined
+			? {
+					prefixPreservingAuthority: {
+						authorizedReferences: input.parentAuthority.authorizedReferences,
+						authorizedCanonicalMessages:
+							input.parentAuthority.authorizedCanonicalMessages,
+					},
+				}
 			: {}),
 		// ACT-CLINEMM-PCK-GENERATION-ELIGIBILITY-REPAIR-01 — the SOURCE
 		// PREFIX OWNERSHIP QUALIFICATION.
@@ -2385,17 +2498,20 @@ async function generatePreCompactionKnowledgeCheckpoint(input: {
 				decisionId: identity.decisionId,
 			},
 		);
-		return [];
+		return { records: [], observed: outcome };
 	}
-	return outcome.records.map((record) => ({
-		id: record.id,
-		kind: record.kind,
-		assurance: record.assurance,
-		status: record.status,
-		statement: record.statement,
-		qualifications: record.qualifications,
-		evidenceRefs: record.evidenceRefs,
-	}));
+	return {
+		records: outcome.records.map((record) => ({
+			id: record.id,
+			kind: record.kind,
+			assurance: record.assurance,
+			status: record.status,
+			statement: record.statement,
+			qualifications: record.qualifications,
+			evidenceRefs: record.evidenceRefs,
+		})),
+		observed: outcome,
+	};
 }
 
 /**
@@ -2414,15 +2530,36 @@ async function generatePreCompactionKnowledgeCheckpoint(input: {
 function projectPreCompactionKnowledgeCheckpoint(
 	compactedMessages: readonly MessageWithMetadata[],
 	records: readonly ProjectableCheckpointRecord[],
-): MessageWithMetadata[] {
+): {
+	readonly messages: MessageWithMetadata[];
+	/**
+	 * Whether the records were actually APPLIED to the transcript.
+	 */
+	readonly applied: boolean;
+	/**
+	 * The number of records the projection actually CARRIED.
+	 *
+	 * It is DISTINCT from the gate-admitted count: the projection can carry
+	 * fewer records than the gate admitted.
+	 */
+	readonly carriedRecordCount: number;
+} {
 	if (records.length === 0) {
-		return [...compactedMessages];
+		return {
+			messages: [...compactedMessages],
+			applied: false,
+			carriedRecordCount: 0,
+		};
 	}
 	const applied = applyCheckpointToCompactedMessages(
 		compactedMessages,
 		records,
 	);
-	return applied.messages;
+	return {
+		messages: applied.messages,
+		applied: applied.applied,
+		carriedRecordCount: applied.carriedRecordCount,
+	};
 }
 
 export function createCompactionStateAwarePrepareTurn(input: {
@@ -2594,6 +2731,17 @@ export function createCompactionStateAwarePrepareTurn(input: {
 		 * qualification tests can drive the same seam deterministically.
 		 */
 		generate: PckGenerate;
+		/**
+		 * ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 (AMENDMENT-01)
+		 * — C6.
+		 *
+		 * The ACTUAL RESOLVED inference policy of the checkpoint request.
+		 *
+		 * It is resolved at the policy's own boundary and read here only
+		 * for the capture. It is never a substituted or reconstructed
+		 * value.
+		 */
+		resolvedInferencePolicyId?: () => string | undefined;
 		/**
 		 * The DECISION identity of the compaction that the checkpoint
 		 * belongs to.
@@ -3178,7 +3326,58 @@ export function createCompactionStateAwarePrepareTurn(input: {
 				adjudicated.messages,
 				checkpointRecords,
 			);
-			const contractedMessages = checkpointed;
+			const contractedMessages = checkpointed.messages;
+			// ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01
+			// (AMENDMENT-01) — C6.
+			//
+			// The CAPTURE. It is emitted here, where the INSTALLED count
+			// is known, so the gate-admitted count and the installed count
+			// are recorded as DISTINCT fields.
+			//
+			// The record is only CONSTRUCTED when the capture is enabled,
+			// and the capture is DEFAULT-OFF, bounded, failure-isolated and
+			// removable.
+			const observedAttempt = result.knowledgeCheckpointObserved;
+			const attemptCaptureContext = result.knowledgeCheckpointCaptureContext;
+			if (observedAttempt !== undefined) {
+				const captureContext = attemptCaptureContext ?? {};
+				recordPckPrefixCapture({
+					capturedAt: new Date().toISOString(),
+					sessionId: captureContext.sessionId,
+					decisionId:
+						(captureContext.decisionId ??
+						observedAttempt.physicalAttemptCount === 0)
+							? "unknown"
+							: "unknown",
+					preparationRequestId: captureContext.parentRequestId,
+					// The LAST DISPATCHED ordinary request identity is NOT
+					// available at the PCK boundary. The ABSENCE is
+					// preserved explicitly; it is never inferred.
+					lastDispatchedRequestId: undefined,
+					lastDispatchedRequestIdAvailable: false,
+					pckLogicalRequestId: `${captureContext.decisionId ?? "decision"}#${observedAttempt.route}`,
+					pckPhysicalAttemptId: observedAttempt.providerRequestId,
+					route: observedAttempt.route,
+					providerId: captureContext.providerId,
+					modelId: captureContext.modelId,
+					purpose: "pck",
+					resolvedInferencePolicyId: captureContext.resolvedInferencePolicyId,
+					inputTokens: observedAttempt.inputTokens,
+					cacheReadTokens: observedAttempt.cacheReadTokens,
+					durationMs: undefined,
+					physicalAttemptCount: observedAttempt.physicalAttemptCount,
+					extractionOutcome: observedAttempt.accepted
+						? "accepted"
+						: observedAttempt.failureReason === undefined
+							? "failed"
+							: "rejected",
+					failureReason: observedAttempt.failureReason,
+					gateAdmittedRecordCount: observedAttempt.records.length,
+					installedRecordCount: checkpointed.applied
+						? checkpointed.carriedRecordCount
+						: 0,
+				});
+			}
 			// ACT-CLINEMM-CMP05-CANCELLATION-COMMIT-AUTHORITY-01: the
 			// INSTALLATION AUTHORITY CHECK.
 			//

@@ -175,12 +175,29 @@ interface SeamOptions {
 	readonly checkpointUsedTools?: boolean;
 	/** The provider-visible projection the ordinary request carries. */
 	readonly providerMessages?: MessageWithMetadata[];
+	/**
+	 * The canonical history to supply to production.
+	 *
+	 * When it is supplied, the caller owns the EXACT object the production
+	 * seam receives, so a conservation assertion can observe it.
+	 */
+	readonly canonicalMessages?: MessageWithMetadata[];
 }
 
 interface SeamResult {
 	readonly dispatches: readonly CapturedDispatch[];
 	readonly parentProjection: readonly unknown[];
 	readonly productionMessages: readonly MessageWithMetadata[];
+	/**
+	 * ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 (AMENDMENT-01) —
+	 * the EXACT canonical history object that was supplied to production
+	 * execution.
+	 *
+	 * The conservation assertions use THIS object, not a separately
+	 * constructed fixture, so they observe the array the production seam
+	 * actually received.
+	 */
+	readonly canonicalMessages: readonly MessageWithMetadata[];
 }
 
 /**
@@ -237,7 +254,8 @@ async function runSeam(options: SeamOptions = {}): Promise<SeamResult> {
 		>
 	>[0]["model"];
 
-	const canonicalMessages = syntheticCanonicalHistory();
+	const canonicalMessages =
+		options.canonicalMessages ?? syntheticCanonicalHistory();
 	const parentProjection = new MessageBuilder().buildForApi(
 		canonicalMessages as unknown as Parameters<
 			MessageBuilder["buildForApi"]
@@ -306,6 +324,7 @@ async function runSeam(options: SeamOptions = {}): Promise<SeamResult> {
 		dispatches: [...capturedDispatches],
 		parentProjection,
 		productionMessages: result?.messages ?? [],
+		canonicalMessages,
 	};
 }
 
@@ -381,9 +400,14 @@ describe("ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 — C6 REQUEST CON
 	it("G8: the parent branch is unchanged after the auxiliary completion", async () => {
 		const canonical = syntheticCanonicalHistory();
 		const before = JSON.stringify(canonical);
-		const { productionMessages } = await runSeam({ enabled: true });
-		// The CANONICAL history is untouched by the auxiliary request.
-		expect(JSON.stringify(canonical)).toBe(before);
+		const { productionMessages, canonicalMessages } = await runSeam({
+			enabled: true,
+			canonicalMessages: canonical,
+		});
+		// The EXACT canonical history object that was supplied to production
+		// execution is untouched by the auxiliary request.
+		expect(canonicalMessages).toBe(canonical);
+		expect(JSON.stringify(canonicalMessages)).toBe(before);
 		// The production messages are the COMPACTED transcript: the
 		// auxiliary suffix is not persisted as an ordinary message.
 		const serialized = JSON.stringify(productionMessages);
@@ -590,22 +614,17 @@ describe("ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 — C4 TOOL EXECUT
 	});
 
 	it("C4.2: the tool-calling attempt installs NOTHING through the production seam", async () => {
-		// The WORKSPACE is measured before and after: a fixture mutation
-		// check, so the "no workspace mutation" fact is an observation of
-		// the filesystem rather than a hardcoded zero.
-		const { mkdtempSync, readdirSync, statSync } = await import("node:fs");
-		const { tmpdir } = await import("node:os");
-		const { join } = await import("node:path");
-		const workspace = mkdtempSync(join(tmpdir(), "pck-prefix-"));
-		const snapshot = (): string[] => {
-			const entries: string[] = [];
-			for (const entry of readdirSync(workspace)) {
-				const path = join(workspace, entry);
-				entries.push(`${entry}:${statSync(path).size}`);
-			}
-			return entries.sort();
-		};
-		const before = snapshot();
+		// ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 (AMENDMENT-01)
+		// — the disconnected WORKSPACE assertion is REMOVED.
+		//
+		// The previous witness measured a temporary directory that no
+		// production code ever touched, so it observed nothing about the
+		// execution boundary. The tool-execution denial is now measured at
+		// the REAL execution boundary by
+		// `pck-real-transport.test.ts`, which drives the production
+		// transport, the real provider handler and the real stream parser
+		// with an injected fetch, and counts the PHYSICAL provider requests
+		// the composition issued.
 		const { dispatches, productionMessages } = await runSeam({
 			enabled: true,
 			// A syntactically valid checkpoint JSON ALONGSIDE a tool call.
@@ -631,8 +650,12 @@ describe("ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 — C4 TOOL EXECUT
 		const serialized = JSON.stringify(productionMessages);
 		expect(serialized).not.toContain("Working knowledge checkpoint");
 		expect(serialized).not.toContain("OPERATION_INVOKED");
-		// NO workspace mutation: the fixture is unchanged.
-		expect(snapshot()).toEqual(before);
+		// NO tool-driven additional inference: the checkpoint dispatch
+		// happened EXACTLY ONCE.
+		const checkpointDispatches = dispatches.filter(
+			(dispatch) => dispatch.fromCheckpoint,
+		);
+		expect(checkpointDispatches.length).toBe(1);
 	});
 
 	it("G12b: the auxiliary branch NEVER invokes an executor — the import closure contains no executor", async () => {
@@ -658,8 +681,15 @@ describe("ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 — C4 TOOL EXECUT
 	it("G13: the ordinary parent history is unchanged by a failed auxiliary attempt", async () => {
 		const canonical = syntheticCanonicalHistory();
 		const before = JSON.stringify(canonical);
-		await runSeam({ enabled: true, checkpointUsedTools: true });
-		expect(JSON.stringify(canonical)).toBe(before);
+		const { canonicalMessages } = await runSeam({
+			enabled: true,
+			checkpointUsedTools: true,
+			canonicalMessages: canonical,
+		});
+		// The EXACT canonical history object that was supplied to production
+		// execution is byte-identical after the failed auxiliary attempt.
+		expect(canonicalMessages).toBe(canonical);
+		expect(JSON.stringify(canonicalMessages)).toBe(before);
 	});
 });
 
@@ -693,11 +723,27 @@ describe("ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 — C5 GENERATION 
 		expect(typeof appended.content).toBe("string");
 	});
 
-	it("C5.2: the PCK inference policy changes GENERATION parameters, not the rendered message prefix", () => {
-		// The policy's parameters are generation-side: the reasoning
-		// effort, the sampling temperature, the output budget and the
-		// JSON-object response format. NONE of them is a message, so NONE
-		// of them can change the rendered prompt tokens.
+	it("C5.2: the PCK inference policy is applied to a NEW configuration and never mutates the shared one", () => {
+		// ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 (AMENDMENT-01)
+		// — P7.
+		//
+		// The CORRECTED disposition. The predecessor asserted that
+		// generation-side settings "cannot change the rendered prompt
+		// tokens". That assertion is NOT supported: reasoning effort and
+		// structured-output settings MAY be consumed by provider-specific
+		// rendering logic.
+		//
+		// The evidence distinctions are therefore:
+		//
+		//   REQUEST_CONFIGURATION:  OBSERVED_AT_PROVIDER_BOUNDARY
+		//   MESSAGE_PREFIX:         QUALIFIED_IN_TESTED_SCOPE
+		//   HTTP_WIRE_PREFIX:       QUALIFY_WITH_REAL_SERIALIZER
+		//   RENDERED_TOKEN_PREFIX:  UNKNOWN
+		//   ACTUAL_CACHE_RESIDENCY:  NOT_EXECUTED
+		//   ENGINE_PREFILL_DURATION: NOT_EXECUTED
+		//
+		// What IS established here is only that the policy is applied to a
+		// NEW configuration, so it cannot leak into the ordinary request.
 		expect(QWEN_STRATA_V1_PARAMETERS.reasoningEffort).toBe("none");
 		expect(QWEN_STRATA_V1_PARAMETERS.temperature).toBe(0.1);
 		expect(QWEN_STRATA_V1_PARAMETERS.maxOutputTokens).toBe(1024);
@@ -732,24 +778,29 @@ describe("ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 — C8 CAPTURE REA
 			process.env.HOME = directory;
 			process.env.CLINEMM_PCK_PREFIX_CAPTURE = "1";
 			recordPckPrefixCapture({
-				cohortId: "cohort-1",
 				capturedAt: new Date(0).toISOString(),
 				sessionId: "session-1",
 				decisionId: "decision-1",
-				sourcePrefixKey: "prefix-1",
-				parentRequestId: "preparation-1",
-				providerRequestId: "gw_1",
+				preparationRequestId: "preparation-1",
+				// The LAST DISPATCHED ordinary request identity is ABSENT
+				// at the PCK boundary, and the absence is preserved.
+				lastDispatchedRequestId: undefined,
+				lastDispatchedRequestIdAvailable: false,
+				pckLogicalRequestId: "decision-1#b_prime",
+				pckPhysicalAttemptId: "gw_1",
 				route: "b_prime",
 				providerId: "openai-compatible",
 				modelId: "model-1",
 				purpose: "pck",
-				inferencePolicyId: "qwen-strata-v1",
+				resolvedInferencePolicyId: "qwen-strata-v1",
 				inputTokens: 1234,
 				cacheReadTokens: 1000,
 				durationMs: 42,
+				physicalAttemptCount: 1,
 				extractionOutcome: "accepted",
 				failureReason: undefined,
-				publishedRecordCount: 1,
+				gateAdmittedRecordCount: 1,
+				installedRecordCount: 1,
 			});
 			const file = join(
 				directory,
@@ -760,18 +811,31 @@ describe("ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 — C8 CAPTURE REA
 			);
 			expect(existsSync(file)).toBe(true);
 			const record = JSON.parse(readFileSync(file, "utf8").trim());
+			// The RUN identity is the SHARED prefix-forensics cohort id.
+			expect(typeof record.runCohortId).toBe("string");
+			expect(record.runCohortId.length).toBeGreaterThan(0);
 			// The JOIN key with the provider's own capture.
-			expect(record.providerRequestId).toBe("gw_1");
-			// The PCK-SPECIFIC identity.
+			expect(record.pckPhysicalAttemptId).toBe("gw_1");
+			// The PCK-SPECIFIC identity, with NO identity substituting for
+			// another.
 			expect(record.purpose).toBe("pck");
 			expect(record.route).toBe("b_prime");
 			expect(record.decisionId).toBe("decision-1");
-			expect(record.parentRequestId).toBe("preparation-1");
+			expect(record.preparationRequestId).toBe("preparation-1");
+			expect(record.pckLogicalRequestId).toBe("decision-1#b_prime");
+			// The LAST DISPATCHED ordinary request identity is ABSENT, and
+			// the absence is explicit.
+			expect(record.lastDispatchedRequestId).toBeUndefined();
+			expect(record.lastDispatchedRequestIdAvailable).toBe(false);
 			// The measurement fields.
 			expect(record.cacheReadTokens).toBe(1000);
 			expect(record.inputTokens).toBe(1234);
 			expect(record.extractionOutcome).toBe("accepted");
-			expect(record.publishedRecordCount).toBe(1);
+			expect(record.physicalAttemptCount).toBe(1);
+			// The gate-admitted count and the installed count are DISTINCT
+			// fields.
+			expect(record.gateAdmittedRecordCount).toBe(1);
+			expect(record.installedRecordCount).toBe(1);
 		} finally {
 			if (previousHome === undefined) {
 				delete process.env.HOME;

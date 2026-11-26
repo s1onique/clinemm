@@ -66,7 +66,6 @@ import {
 	extractCheckpointJson,
 	extractCheckpointProposals,
 } from "./model-request";
-import { recordPckPrefixCapture } from "./pck-capture";
 import type { PrefixPreservingAuxiliaryRequest } from "./prefix-preserving-request";
 import {
 	type AdmittedCheckpointRecord,
@@ -188,6 +187,39 @@ export interface PckAttemptOutcome {
 	readonly gateCodes?: readonly string[];
 	/** Whether the attempt was ACCEPTED (at least one admitted record). */
 	readonly accepted: boolean;
+	/**
+	 * ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 (AMENDMENT-01) —
+	 * C6.
+	 *
+	 * The PHYSICAL attempt identity — the transport's own per-request id.
+	 * It is the JOIN key with the provider's own capture.
+	 */
+	readonly providerRequestId?: string;
+	/** The provider-reported usage. ABSENT means UNKNOWN. */
+	readonly inputTokens?: number;
+	/** The provider-reported CACHE-READ tokens. ABSENT means UNKNOWN. */
+	readonly cacheReadTokens?: number;
+}
+
+/**
+ * ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 (AMENDMENT-01) — C6.
+ *
+ * The OBSERVED attempt, as the capture records it.
+ *
+ * It is DISTINCT from `PckAttemptOutcome`: the outcome is the attempt's
+ * DECISION, while this is the observation of what the attempt DID.
+ */
+export interface PckObservedAttempt extends PckAttemptOutcome {
+	/**
+	 * The PHYSICAL attempt cardinality — how many physical provider
+	 * requests this attempt issued.
+	 *
+	 * The WIRE retry cardinality is observed by the provider's own capture,
+	 * not here.
+	 */
+	readonly physicalAttemptCount: number;
+	/** The ROUTE the attempt took. */
+	readonly route: "b_prime" | "legacy";
 }
 
 /**
@@ -377,43 +409,42 @@ export async function runPckAttempt(input: {
 	 * suffix, and the `request` string is not sent.
 	 */
 	readonly prefixPreservingRequest?: PrefixPreservingAuxiliaryRequest;
-}): Promise<PckAttemptOutcome> {
-	const startedAt = Date.now();
+	/**
+	 * ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 (AMENDMENT-01) —
+	 * P0.
+	 *
+	 * The EFFECTIVE citation authority of the B' route.
+	 *
+	 * It is carried into the PUBLICATION ENFORCEMENT BOUNDARY — not
+	 * relied upon as a prompt instruction. When it is ABSENT the LEGACY
+	 * authority is used unchanged, so the legacy A route is preserved
+	 * exactly.
+	 */
+	readonly prefixPreservingAuthority?: {
+		readonly authorizedReferences: readonly string[];
+		readonly authorizedCanonicalMessages: readonly MessageWithMetadata[];
+	};
+}): Promise<PckObservedAttempt> {
 	const observed: {
 		providerRequestId?: string;
 		inputTokens?: number;
 		cacheReadTokens?: number;
 	} = {};
 	const outcome = await executePckAttempt(input, observed);
-	recordPckPrefixCapture({
-		cohortId: input.identity.decisionId,
-		capturedAt: new Date(startedAt).toISOString(),
-		sessionId: input.captureContext?.sessionId,
-		decisionId: input.identity.decisionId,
-		sourcePrefixKey: input.identity.sourcePrefixKey,
-		parentRequestId: input.captureContext?.parentRequestId,
-		providerRequestId: observed.providerRequestId ?? outcome.providerRequestId,
-		route: input.route ?? "legacy",
-		providerId: input.captureContext?.providerId,
-		modelId: input.captureContext?.modelId,
-		purpose: "pck",
-		inferencePolicyId: input.captureContext?.inferencePolicyId,
+	return {
+		...outcome,
+		providerRequestId: observed.providerRequestId,
 		inputTokens: observed.inputTokens,
 		cacheReadTokens: observed.cacheReadTokens,
-		durationMs: Date.now() - startedAt,
-		extractionOutcome: outcome.accepted
-			? "accepted"
-			: outcome.failureReason === undefined
-				? "failed"
-				: "rejected",
-		failureReason: outcome.failureReason,
-		publishedRecordCount: outcome.records.length,
-	});
-	return outcome;
+		// ONE physical provider request per attempt. The WIRE retry
+		// cardinality is observed by the provider's own capture, not here.
+		physicalAttemptCount: 1,
+		route: input.route ?? "legacy",
+	};
 }
 
 /**
- * The attempt itself. It is separated from the wrapper so the capture
+ * The attempt itself. It is separated from the wrapper so the wrapper
  * observes EVERY outcome through ONE call site.
  */
 async function executePckAttempt(
@@ -425,20 +456,45 @@ async function executePckAttempt(
 		readonly deadlineMs: number;
 		readonly currentSourcePrefixKey: () => string;
 		readonly prefixPreservingRequest?: PrefixPreservingAuxiliaryRequest;
+		readonly prefixPreservingAuthority?: {
+			readonly authorizedReferences: readonly string[];
+			readonly authorizedCanonicalMessages: readonly MessageWithMetadata[];
+		};
 	},
 	observed: {
 		providerRequestId?: string;
 		inputTokens?: number;
 		cacheReadTokens?: number;
 	},
-): Promise<
-	PckAttemptOutcome & {
-		readonly providerRequestId?: string;
-	}
-> {
+): Promise<PckAttemptOutcome> {
 	const observedReferences = collectObservedCanonicalReferences(
 		input.canonicalMessages,
 	);
+	// ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 (AMENDMENT-01) —
+	// P0.
+	//
+	// The EFFECTIVE citation authority.
+	//
+	// On the LEGACY route it is the CANONICAL authority, unchanged.
+	//
+	// On the B' route it is the INTERSECTION of the canonical authority and
+	// the B' visible-and-unambiguous source authority, so it can only ever
+	// be NARROWER. The intersection is recomputed here against the SAME
+	// canonical authority, so a reference the binding resolved but the
+	// canonical history does not contain is NOT granted authority.
+	const canonicalAuthority = new Set(observedReferences);
+	const effectiveReferences = input.prefixPreservingAuthority
+		? input.prefixPreservingAuthority.authorizedReferences.filter((reference) =>
+				canonicalAuthority.has(reference),
+			)
+		: observedReferences;
+	// The interpreter's INPUT. On the B' route it is the canonical history
+	// NARROWED to the authorized, visible sources, so the EXISTING
+	// interpreter — which is not weakened — cannot establish an event whose
+	// result the model cannot see.
+	const effectiveCanonicalMessages = input.prefixPreservingAuthority
+		? input.prefixPreservingAuthority.authorizedCanonicalMessages
+		: input.canonicalMessages;
 	const inputView = buildCheckpointInputView(input.canonicalMessages);
 	const request = buildCheckpointRequest(inputView, observedReferences);
 	const handle = createPckAbortHandle({
@@ -484,7 +540,6 @@ async function executePckAttempt(
 			records: [],
 			failureReason,
 			accepted: false,
-			providerRequestId: response?.providerRequestId,
 		};
 	} finally {
 		handle.dispose();
@@ -494,7 +549,6 @@ async function executePckAttempt(
 			records: [],
 			failureReason: "timeout",
 			accepted: false,
-			providerRequestId: response?.providerRequestId,
 		};
 	}
 	if (input.taskSignal.aborted) {
@@ -502,7 +556,6 @@ async function executePckAttempt(
 			records: [],
 			failureReason: "cancelled",
 			accepted: false,
-			providerRequestId: response?.providerRequestId,
 		};
 	}
 	// A model request that attempts a tool call is NOT an accepted
@@ -512,7 +565,6 @@ async function executePckAttempt(
 			records: [],
 			failureReason: "tool_call_attempted",
 			accepted: false,
-			providerRequestId: response.providerRequestId,
 		};
 	}
 	if (response.failed) {
@@ -520,7 +572,6 @@ async function executePckAttempt(
 			records: [],
 			failureReason: "provider_failure",
 			accepted: false,
-			providerRequestId: response.providerRequestId,
 		};
 	}
 	if (response.text.length > MAX_PCK_RESPONSE_CHARS) {
@@ -528,7 +579,6 @@ async function executePckAttempt(
 			records: [],
 			failureReason: "oversized_output",
 			accepted: false,
-			providerRequestId: response.providerRequestId,
 		};
 	}
 	const publicText = response.text.trim();
@@ -539,7 +589,6 @@ async function executePckAttempt(
 			records: [],
 			failureReason: "no_public_response",
 			accepted: false,
-			providerRequestId: response.providerRequestId,
 		};
 	}
 	const parsed = extractCheckpointJson(publicText);
@@ -548,7 +597,6 @@ async function executePckAttempt(
 			records: [],
 			failureReason: "invalid_json",
 			accepted: false,
-			providerRequestId: response.providerRequestId,
 		};
 	}
 	const proposals = extractCheckpointProposals(parsed);
@@ -559,14 +607,21 @@ async function executePckAttempt(
 			records: [],
 			failureReason: "stale_source_prefix",
 			accepted: false,
-			providerRequestId: response.providerRequestId,
 		};
 	}
 	const gate = gateClosedProposals({
 		proposals,
 		sourcePrefixKey: input.identity.sourcePrefixKey,
 		evidence: {
-			canonicalReferences: observedReferences,
+			// ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01
+			// (AMENDMENT-01) — P0.
+			//
+			// The gate's MEMBERSHIP authority is the EFFECTIVE authority: the
+			// canonical authority on the legacy route, and the narrowed
+			// authority on the B' route. A reference the B' source authority
+			// excludes is NOT canonical for this gate, so it is rejected with
+			// REFERENCE_NOT_CANONICAL.
+			canonicalReferences: effectiveReferences,
 			// ACT-CLINEMM-PCK-CLOSED-PUBLICATION-IMPLEMENT-01-CORRECTION02:
 			// the SELECTED ARGUMENT is passed to the interpreter, because
 			// the rendered proposition is the atom's label joined with the
@@ -574,7 +629,7 @@ async function executePckAttempt(
 			// the rendered argument with the observed operation.
 			maximumAssuranceFor: (references, atom, argument) =>
 				interpretCanonicalEvidence({
-					canonicalMessages: input.canonicalMessages,
+					canonicalMessages: effectiveCanonicalMessages,
 					references,
 					atom,
 					argument,
@@ -587,7 +642,6 @@ async function executePckAttempt(
 			failureReason: "gate_rejected",
 			gateCodes: gate.codes,
 			accepted: false,
-			providerRequestId: response.providerRequestId,
 		};
 	}
 	return {

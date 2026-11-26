@@ -1,3 +1,103 @@
+# ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 (AMENDMENT-01) — READY_FOR_EXPERIMENTAL_LIVE_QUALIFICATION_PENDING_SOURCE_ACCEPTANCE — 2026-11-26
+
+```text
+ACT_ID:       ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 (AMENDMENT-01)
+TYPE:         bounded implementation correction cycle
+VERDICT:      READY_FOR_EXPERIMENTAL_LIVE_QUALIFICATION_PENDING_SOURCE_ACCEPTANCE
+EPIC:         EPIC-CLINEMM-IECR
+WORK_ITEM:    CPA-02
+ENTRY_HEAD:   01ecefb78ee9562532b203a1dfb7d94388013e19
+BRANCH:       main
+```
+
+**THE REVIEW'S BLOCKING FINDING IS CONFIRMED, REPAIRED AND QUALIFIED.** The
+publication authority was UNBOUND: `collectAuthorizedReferences()` computed the B'
+source authority and then never used it — `executePckAttempt()` passed the CANONICAL
+set to the publication gate, so a proposal citing a reference the B' binding EXCLUDES
+was ADMITTED and INSTALLED. The RED proves it through the REAL production B' attempt
+and publication path: a merged-away reference, a reasoning-only reference and a
+MIXED authorized+unauthorized reference were all admitted and installed.
+
+**THE REPAIR.** The gate's membership authority is now the EFFECTIVE authority: the
+canonical authority on the legacy route (unchanged), and
+`authorizedReferences ∩ observedReferences` on the B' route — so it can only ever
+NARROW. The suffix's binding list is ADVISORY; the GATE is the enforcement. The
+existing canonical interpreter is NOT weakened: it is given a NARROWED INPUT (the
+canonical history restricted to the authorized, visible sources), so an event whose
+RESULT the model cannot see cannot establish an observed outcome. A genuinely
+supported observation is still admitted and installed — the repair did not over-block.
+
+**THE TOOL-EVENT PROVENANCE DEFECT IS REPAIRED.** The invocation and the result were
+collected into ONE position list, so a NORMAL COMPLETED tool event was `ambiguous` and
+the decisive engineering evidence could NEVER be authorized. The two sides are now
+counted SEPARATELY: one invocation + one result is COMPLEMENTARY evidence; a DUPLICATE
+identity is still `ambiguous`; an invocation WITHOUT a visible result cannot authorize
+an observed outcome.
+
+**THE SOURCE-COMPLETENESS GAP IS CLOSED.** One resolved reference is not enough — a
+resolved USER-message reference is not the decisive evidence. The route now requires an
+authorized TOOL EVENT; when the decisive evidence is absent or truncated while an
+unrelated reference remains resolved, A is selected BEFORE the dispatch
+(`no_decisive_evidence`), so the legacy source is preserved and NO additional inference
+is issued.
+
+**THE WITNESSES ARE NOW NON-VACUOUS.** The tool-execution denial is witnessed through
+the REAL production composition — the real transport, the real provider handler, an
+INJECTED fetch, the REAL stream parser, the real gate and the real installation — with
+a syntactically valid MUTATION tool call carrying concrete arguments:
+`tool_call_attempted`, 0 admitted, 0 installed, and exactly ONE physical PCK request.
+G8 and G13 now assert the EXACT canonical object supplied to production execution; the
+disconnected workspace assertion was REMOVED.
+
+**THE CAPTURE CORRELATION IS CORRECTED.** Each identity is distinct and none
+substitutes for another: the SHARED prefix-forensics cohort id (the run identity and
+the join key), session, compaction decision, current preparation, the PCK LOGICAL id
+and the PCK PHYSICAL attempt id. The LAST-DISPATCHED ordinary request identity is
+ABSENT at the PCK boundary and the absence is preserved explicitly, never inferred
+from timestamp proximity. `gateAdmittedRecordCount` and `installedRecordCount` are
+DISTINCT fields, and the ACTUAL RESOLVED inference policy is captured at the policy's
+own resolution boundary.
+
+**THE GENERATION-POLICY DISPOSITION.** `qwen-strata-v1` is KEPT. The predecessor's
+UNSUPPORTED assertion that generation-side settings cannot influence rendered prompt
+tokens is CORRECTED — reasoning effort and structured-output settings MAY be consumed
+by provider-specific rendering logic. The evidence distinctions are now explicit:
+REQUEST_CONFIGURATION OBSERVED_AT_PROVIDER_BOUNDARY; MESSAGE_PREFIX
+QUALIFIED_IN_TESTED_SCOPE; HTTP_WIRE_PREFIX QUALIFY_WITH_REAL_SERIALIZER;
+RENDERED_TOKEN_PREFIX UNKNOWN; ACTUAL_CACHE_RESIDENCY NOT_EXECUTED;
+ENGINE_PREFILL_DURATION NOT_EXECUTED. JSON equality is never substituted for token
+equality.
+
+**OPERATOR SOURCE ACCEPTANCE HAS NOT BEEN GRANTED.** The verdict remains pending. The
+bounded private-reasoning wire exposure and the W1 knowledge benchmark are the
+outstanding acceptance items.
+
+```text
+PUBLICATION_AUTHORITY_RED:  REPRODUCED (the bypass existed and was admitted+installed)
+PUBLICATION_AUTHORITY_GREEN: PASS (0 admitted, 0 installed for every excluded class)
+TOOL_EVENT_PROVENANCE:      REPAIRED (complementary sides; duplicates still ambiguous)
+AUTHORIZED_INTERVAL:        PASS (out_of_interval even when visible)
+TRUNCATION_AND_COALESCING:  PASS (truncated / absent; no laundering through another id)
+POSITIVE_PUBLICATION_CONTROL: PASS (a supported observation is still published)
+REAL_TRANSPORT_WITNESS:     PASS (real transport + real handler + real stream parser)
+TOOL_EXECUTION_DENIAL:      PASS (tool_call_attempted, 0/0, 1 physical request)
+CANONICAL_HISTORY_CONSERVATION: PASS (the exact production-supplied object)
+LEGACY_CONSERVATION:        PASS
+FOCUSED_TESTS:              29/29
+AFFECTED_TESTS:             181/181 (PCK); 1509/1511 (extensions/context + runtime/host)
+TYPECHECK_DELTA:            0 (90 == 90)
+LINT_DELTA:                 0
+NEGATIVE_CONTROLS:          DETECTED (the P0 ablation reproduced P0.2/P0.3)
+INFERENCE REQUESTS:         0 (injected fetch + synthetic SSE only)
+VSIX PACKAGED:              NO
+FROZEN EVIDENCE:            CONSERVED
+PROTECTED STASHES:          CONSERVED
+```
+
+Evidence: `.factory/evidence/ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01/02-amendment-01-terminal-report.md`.
+
+---
+
 # ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 — READY_FOR_EXPERIMENTAL_LIVE_QUALIFICATION_PENDING_SOURCE_ACCEPTANCE — 2026-11-26
 
 ```text
