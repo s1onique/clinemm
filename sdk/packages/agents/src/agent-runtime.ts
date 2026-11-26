@@ -60,7 +60,9 @@ import {
 	MODEL_BEHAVIOR_WIRE_REASONING_REQUEST_ID_METADATA_KEY,
 	mergeModelOptions,
 	normalizeJsonLikeStringsForSchema,
+	omitUnauthorizedReasoningBlocks,
 	omitUndefinedValues,
+	requiresSignedReasoningCapability,
 	sanitizeTraceErrorMessage,
 	TASK_CANCELLED_EVENT,
 	TASK_FIRST_CHUNK_RECEIVED_EVENT,
@@ -2892,9 +2894,29 @@ export class AgentRuntime {
 		// the host supplies none, this check is disabled, exactly as before
 		// the repair.
 		if (typeof this.requestBudgetCeilingTokens === "number") {
+			// ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01.
+			//
+			// The guard measures the request the provider ACTUALLY receives.
+			// On a transport that requires provider-origin authorization for a
+			// reasoning block (the Anthropic family), an UNSIGNED reasoning
+			// block is omitted by the resolved serializer, so measuring it
+			// would over-count content the provider never sees and could
+			// reject a request the provider would have accepted.
+			//
+			// The exclusion is the SAME one the serializer performs, applied
+			// to the SAME provider-visible projection, so the guard and the
+			// wire cannot disagree.
+			const requiresSignedReasoning = requiresSignedReasoningCapability({
+				family: this.config.messageModelInfo?.family,
+				modelId: this.config.messageModelInfo?.id,
+				providerId: this.config.messageModelInfo?.provider,
+			});
 			assertProviderRequestWithinBudget({
 				systemPrompt: request.systemPrompt ?? "",
-				messages: toProviderVisibleMessages(request.messages),
+				messages: omitUnauthorizedReasoningBlocks(
+					toProviderVisibleMessages(request.messages),
+					{ requiresSignedReasoning },
+				),
 				tools: request.tools,
 				maxRequestTokens: this.requestBudgetCeilingTokens,
 			});

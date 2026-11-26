@@ -41,6 +41,7 @@ import {
 	estimateProviderRequestInputTokens,
 	isCompletionToolReminderMessage,
 	type MessageWithMetadata,
+	omitUnauthorizedReasoningBlocks,
 	TaskContractBudgetError,
 	toProviderVisibleMessages,
 } from "@cline/shared";
@@ -388,6 +389,18 @@ export function applyTaskContractToCompactedMessages(
 		providerMessages?: (
 			messages: readonly MessageWithMetadata[],
 		) => Promise<readonly unknown[]> | readonly unknown[];
+		/**
+		 * ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01.
+		 *
+		 * Whether the target transport REQUIRES provider-origin authorization
+		 * for a reasoning block.
+		 *
+		 * On such a transport an UNSIGNED reasoning block is omitted by the
+		 * resolved serializer, so it is not provider-visible content and the
+		 * guard must not measure it. `undefined`/absent keeps the pre-existing
+		 * behaviour exactly: every reasoning block is measured.
+		 */
+		requiresSignedReasoning?: boolean;
 	} = {},
 ): Promise<TaskContractApplicationResult> {
 	/**
@@ -430,9 +443,23 @@ export function applyTaskContractToCompactedMessages(
 		const providerVisible = toProviderVisibleMessages(
 			messagesToAgentMessages(providerMessages as MessageWithMetadata[]),
 		);
+		// ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01: the guard measures
+		// the request the provider ACTUALLY receives. On a transport that
+		// requires provider-origin authorization for a reasoning block (the
+		// Anthropic family), an UNSIGNED reasoning block is omitted by the
+		// resolved serializer, so measuring it would over-count content the
+		// provider never sees.
+		//
+		// The exclusion is the SAME one the serializer performs, applied to
+		// the SAME provider-visible projection, so the guard and the wire
+		// cannot disagree.
+		const authorizedProviderVisible = omitUnauthorizedReasoningBlocks(
+			providerVisible,
+			{ requiresSignedReasoning: options.requiresSignedReasoning === true },
+		);
 		return estimateProviderRequestInputTokens({
 			systemPrompt: options.systemPrompt ?? "",
-			messages: providerVisible,
+			messages: authorizedProviderVisible,
 			tools: options.tools ?? [],
 		});
 	};

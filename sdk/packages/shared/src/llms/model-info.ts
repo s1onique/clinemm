@@ -253,6 +253,68 @@ export function modelSupportsImageInput(model: {
 	return modelHasCapability(model, "images", { assumeWhenUnspecified: true });
 }
 
+/**
+ * ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01.
+ *
+ * THE REASONING-AUTHORIZATION CAPABILITY.
+ *
+ * ## WHAT THIS IS
+ * ---------------
+ * Some transports REQUIRE provider-origin authorization for a reasoning
+ * block: the block is only valid on the wire when it carries the provider's
+ * signature. The Anthropic family is the canonical case. The resolved
+ * Anthropic serializer OMITS an unsigned reasoning block from the serialized
+ * request (it warns "unsupported reasoning metadata").
+ *
+ * A reasoning block that carries no signature is therefore NOT
+ * provider-visible content on those transports, and the request-budget
+ * authority must not measure it.
+ *
+ * ## WHY IT LIVES HERE
+ * -------------------
+ * The provider-visible projection and the request-budget authority live in
+ * `@cline/shared`, and so does `ModelInfo`. The transports' own routing
+ * authority lives in `@cline/llms`, which depends on `@cline/shared`. Putting
+ * the predicate HERE lets BOTH consume ONE definition, so the projection and
+ * the serializer can never drift apart.
+ *
+ * ## THE CLASSIFICATION
+ * ---------------------
+ * The capability is carried by the model/provider metadata the catalog
+ * already publishes (`family`, `apiFormat`), never by a provider-id string
+ * comparison.
+ */
+export function requiresSignedReasoningCapability(input: {
+	/** The model's declared family, when the catalog publishes one. */
+	family?: string;
+	/** The model's declared API format, when the catalog publishes one. */
+	apiFormat?: string;
+	/** The model's id, used only as a fallback when no family is published. */
+	modelId?: string;
+	/** The provider id, used only as a fallback when no family is published. */
+	providerId?: string;
+}): boolean {
+	const family = normalizeCapabilityValue(input.family);
+	if (family) {
+		return family.includes("anthropic") || family.includes("claude");
+	}
+	const apiFormat = normalizeCapabilityValue(input.apiFormat);
+	if (apiFormat) {
+		return apiFormat === "anthropic";
+	}
+	const modelId = normalizeCapabilityValue(input.modelId);
+	return modelId
+		? modelId.includes("anthropic") || modelId.includes("claude")
+		: false;
+}
+
+function normalizeCapabilityValue(
+	value: string | undefined,
+): string | undefined {
+	const normalized = value?.trim().toLowerCase();
+	return normalized ? normalized : undefined;
+}
+
 export const ModelInfoSchema = z.object({
 	id: z.string(),
 	name: z.string().optional(),

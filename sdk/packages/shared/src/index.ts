@@ -238,6 +238,7 @@ export {
 	modelProducesImages,
 	modelSupportsImageInput,
 	modelSupportsToolCalling,
+	requiresSignedReasoningCapability,
 	supportsChatModalities,
 	type ThinkingConfig,
 	ThinkingConfigSchema,
@@ -264,7 +265,9 @@ export {
 export {
 	assertProviderRequestWithinBudget,
 	estimateProviderRequestInputTokens,
+	omitUnauthorizedReasoningBlocks,
 	type ProviderRequestBudgetInput,
+	type ProviderVisibleProjectionOptions,
 	TaskContractBudgetError,
 	toPersistedToolResultContent,
 	toProviderVisibleMessages,

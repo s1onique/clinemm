@@ -122,6 +122,59 @@ export function toPersistedToolResultContent(
 }
 
 /**
+ * The provider-capability options that shape the provider-visible
+ * projection.
+ *
+ * ## WHY THIS EXISTS
+ * ------------------
+ * The provider-visible projection is the representation the provider ACTUALLY
+ * receives, and it is the representation the request-budget authority
+ * measures. Those two must agree, or the budget over-counts content the
+ * provider never sees.
+ *
+ * Some transports REQUIRE provider-origin authorization for a reasoning
+ * block. The Anthropic family is the canonical case: an assistant `thinking`
+ * block is only valid on the wire when it carries the provider's signature.
+ * The resolved Anthropic serializer therefore DROPS an unsigned reasoning
+ * block (it warns "unsupported reasoning metadata" and omits the block from
+ * the serialized body).
+ *
+ * A reasoning block that carries NO signature is, on those transports, not
+ * provider-visible content at all. The projection used to carry it in full,
+ * so the request-budget authority counted text that never reached the
+ * provider.
+ *
+ * The historical consequence (ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01,
+ * session `1795639776267_j3nki`, run `run_kR2y9UwW`): 659,674 characters of
+ * unsigned reasoning accumulated across 18 output-exhausted responses, and
+ * 30.1% of a later measured request was content the provider would never
+ * receive. The compaction trigger consumes that measurement, so the
+ * divergence is CAUSAL: it can flip the compaction verdict for a request the
+ * provider would have accepted.
+ *
+ * ## THE DEFAULT
+ * --------------
+ * `requiresSignedReasoning` DEFAULTS TO `false`. The default therefore
+ * preserves the pre-existing projection EXACTLY, for every transport and
+ * every existing caller. Only a transport that declares the requirement
+ * (the Anthropic family, via the shared capability authority) opts in.
+ *
+ * This is deliberately NOT a provider-id string comparison: the capability
+ * is carried by the model/provider metadata the catalog already publishes.
+ */
+export interface ProviderVisibleProjectionOptions {
+	/**
+	 * Whether the target transport requires provider-origin authorization
+	 * (a provider signature) for a reasoning block to be provider-visible.
+	 *
+	 * `false` (the default) keeps every reasoning block, signed or not.
+	 * `true` omits the reasoning blocks that carry no signature, because
+	 * that transport would drop them from the serialized request.
+	 */
+	requiresSignedReasoning?: boolean;
+}
+
+/**
  * Project an agent-message list onto the representation the provider
  * actually receives.
  *
@@ -143,11 +196,13 @@ export function toPersistedToolResultContent(
  */
 export function toProviderVisibleMessages(
 	messages: readonly AgentMessage[],
+	options?: ProviderVisibleProjectionOptions,
 ): Message[] {
+	const requiresSignedReasoning = options?.requiresSignedReasoning === true;
 	const out: Message[] = [];
 	for (const message of messages) {
 		const content = message.content
-			.map(agentPartToContentBlock)
+			.map((part) => agentPartToContentBlock(part, requiresSignedReasoning))
 			.filter((block): block is ContentBlock => block !== undefined);
 		const role = message.role === "tool" ? "user" : message.role;
 		const previous = out[out.length - 1];
@@ -169,6 +224,7 @@ export function toProviderVisibleMessages(
 
 function agentPartToContentBlock(
 	part: AgentMessagePart,
+	requiresSignedReasoning: boolean,
 ): ContentBlock | undefined {
 	switch (part.type) {
 		case "text":
@@ -181,6 +237,26 @@ function agentPartToContentBlock(
 			}
 			const signature = extractThoughtSignature(part.metadata);
 			const details = extractReasoningDetails(part.metadata);
+			if (requiresSignedReasoning && signature === undefined) {
+				// ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01.
+				//
+				// The transport REQUIRES provider-origin authorization for a
+				// reasoning block: the resolved Anthropic serializer omits an
+				// unsigned reasoning block from the serialized request (it warns
+				// "unsupported reasoning metadata"). Such a block is therefore
+				// NOT provider-visible content, and the request-budget authority
+				// must not measure it.
+				//
+				// The canonical transcript is NOT modified: this is the
+				// PROJECTION, which is a pure, non-mutating view. The reasoning
+				// text remains in the canonical history and in the session
+				// persistence path.
+				//
+				// Only the UNSIGNED block is omitted. A signed block keeps its
+				// text, its signature and its details, so provider-authorized
+				// reasoning continuity is conserved exactly.
+				return undefined;
+			}
 			return {
 				type: "thinking",
 				thinking: part.text,
@@ -256,6 +332,57 @@ function extractReasoningDetails(metadata: unknown): unknown[] | undefined {
 	}
 	const record = metadata as { details?: unknown };
 	return Array.isArray(record.details) ? record.details : undefined;
+}
+
+/**
+ * ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01.
+ *
+ * OMIT THE REASONING BLOCKS THE TARGET TRANSPORT WOULD NEVER RECEIVE.
+ *
+ * The provider-visible message list is the representation the request-budget
+ * authority measures. On a transport that REQUIRES provider-origin
+ * authorization for a reasoning block (the Anthropic family), an unsigned
+ * reasoning block is omitted by the resolved serializer, so measuring it
+ * over-counts content the provider never sees.
+ *
+ * This helper applies that exclusion to an ALREADY-PROJECTED provider-visible
+ * message list. It is the SAME projection the wire consumes, so the budget
+ * and the wire cannot disagree.
+ *
+ * The exclusion is NARROW and EXACT:
+ *
+ *   - only `thinking` blocks with NO signature are omitted;
+ *   - a signed `thinking` block keeps its text, signature and details;
+ *   - `redacted_thinking` blocks are KEPT (the Anthropic serializer emits
+ *     them as `redacted_thinking` when the redacted payload is present);
+ *   - every other block, and the message ORDER, are untouched.
+ *
+ * The function is PURE and does not mutate its input.
+ */
+export function omitUnauthorizedReasoningBlocks(
+	messages: readonly Message[],
+	options?: ProviderVisibleProjectionOptions,
+): Message[] {
+	if (options?.requiresSignedReasoning !== true) {
+		return messages as Message[];
+	}
+	const out: Message[] = [];
+	for (const message of messages) {
+		if (typeof message.content === "string") {
+			out.push(message);
+			continue;
+		}
+		const content = message.content.filter(
+			(block) =>
+				block.type !== "thinking" || typeof block.signature === "string",
+		);
+		if (content.length === message.content.length) {
+			out.push(message);
+			continue;
+		}
+		out.push({ ...message, content });
+	}
+	return out;
 }
 
 /**

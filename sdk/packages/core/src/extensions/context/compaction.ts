@@ -3,6 +3,8 @@ import {
 	computeCandidateContentFingerprint,
 	estimateRequestInputTokens,
 	type MessageWithMetadata,
+	omitUnauthorizedReasoningBlocks,
+	requiresSignedReasoningCapability,
 } from "@cline/shared";
 import {
 	CompactionCandidateCaptureStore,
@@ -1064,18 +1066,57 @@ export function createContextCompactionPrepareTurn(
 			(total: number, message) => total + estimateMessageTokens(message),
 			0,
 		);
+		// ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01.
+		//
+		// The measurement MUST describe the request the provider actually
+		// receives. On a transport that requires provider-origin
+		// authorization for a reasoning block (the Anthropic family), an
+		// UNSIGNED reasoning block is omitted by the resolved serializer, so
+		// measuring it over-counts content the provider never sees.
+		//
+		// The historical consequence (session `1795639776267_j3nki`, run
+		// `run_kR2y9UwW`): 659,674 characters of unsigned reasoning
+		// accumulated across 18 output-exhausted responses, and 30.1% of a
+		// later measured request was provider-excluded content. Because this
+		// measurement IS the trigger's input, the divergence is causal: it
+		// can flip the compaction verdict for a request the provider would
+		// have accepted.
+		//
+		// The exclusion is applied to the SAME provider-visible projection
+		// the wire consumes, and it is exactly the exclusion the resolved
+		// serializer performs, so the two cannot drift.
+		const requiresSignedReasoning = requiresSignedReasoningCapability({
+			family: context.model.info?.family,
+			apiFormat: context.model.info?.apiFormat,
+			modelId: context.model.id,
+			providerId: context.model.provider,
+		});
+		const measuredApiMessages = omitUnauthorizedReasoningBlocks(
+			context.apiMessages,
+			{ requiresSignedReasoning },
+		);
 		const requestInputTokens = estimateRequestInputTokens({
 			systemPrompt: context.systemPrompt,
-			messages: context.apiMessages,
+			messages: measuredApiMessages,
 			tools: context.tools,
 		});
 		const messageInputTokens = context.messages.reduce(
 			(total: number, message) => total + estimateMessageTokens(message),
 			0,
 		);
+		// ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01: the overhead is the
+		// difference between the measured REQUEST and the measured MESSAGES.
+		// Both must be taken from the SAME list, or the overhead would
+		// silently absorb the excluded reasoning and the target computation
+		// (which is derived from the overhead) would be computed against a
+		// different request than the trigger measured.
+		const measuredApiMessageTokens = measuredApiMessages.reduce(
+			(total: number, message) => total + estimateMessageTokens(message),
+			0,
+		);
 		const requestOverheadTokens = Math.max(
 			0,
-			requestInputTokens - apiMessageTokens,
+			requestInputTokens - measuredApiMessageTokens,
 		);
 		const modelMaxInputTokens = resolveEffectiveMaxInputTokens({
 			maxInputTokens: context.model.info?.maxInputTokens,
@@ -2387,10 +2428,21 @@ export function createCompactionStateAwarePrepareTurn(input: {
 			providerMessages: (
 				messages: readonly CoreCompactionContext["messages"][number][],
 			) => Promise<readonly unknown[]>;
+			requiresSignedReasoning: boolean;
 		} => ({
 			maxRequestTokens: contractMaxRequestTokens,
 			systemPrompt,
 			tools: context.tools,
+			// ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01: the guard must
+			// measure the request the provider actually receives, so it
+			// applies the SAME reasoning-authorization exclusion the
+			// resolved serializer performs.
+			requiresSignedReasoning: requiresSignedReasoningCapability({
+				family: context.model.info?.family,
+				apiFormat: context.model.info?.apiFormat,
+				modelId: context.model.id,
+				providerId: context.model.provider,
+			}),
 			// ACT-CLINEMM-FLINT-128K-BUDGET-AUTHORITY-REPAIR01: the guard
 			// measures the PROVIDER-VISIBLE representation of the candidate,
 			// produced by the runtime's provider-request transform. The
