@@ -4932,6 +4932,29 @@ export class AgentRuntime {
 		// The allowance is spent exactly once per run.
 		this.pendingRecoveryOutputOverride = undefined;
 		this.recoveryOutputOverrideConsumed = true;
+		// ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01 (C8).
+		//
+		// The recovery-only override use is OBSERVABLE through the EXISTING
+		// `status-notice` metadata bag — the same extensible seam the
+		// ordinary max-tokens recovery and the R1/R2 recovery already use.
+		//
+		// No permanent public protocol field is added, no new diagnostic
+		// registry is created, and no transcript duplication or provider
+		// reasoning capture is introduced. When the policy is disabled the
+		// runtime emits NOTHING extra, so the disabled posture has no
+		// state-semantic delta at all.
+		void this.emit({
+			type: "status-notice",
+			snapshot: this.snapshot(),
+			message: `recovery-only generation override applied to this request (${pending} output tokens)`,
+			metadata: {
+				kind: "max_tokens_recovery",
+				reason: "recovery_output_override_applied",
+				phase: "override_applied",
+				iteration: this.state.iteration,
+				maxOutputTokens: pending,
+			},
+		});
 		return pending;
 	}
 

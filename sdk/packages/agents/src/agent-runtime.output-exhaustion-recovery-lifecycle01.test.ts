@@ -515,3 +515,94 @@ describe("ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01 — D3 premature t
 		});
 	});
 });
+
+describe("ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01 — C4 production reachability", () => {
+	it("reaches BOTH R1 interventions and the R1 allowance-exhausted branch with the PRODUCTION constants", async () => {
+		// The ACTUAL production constants:
+		//   ordinary R1 threshold .......... 5 unproductive rounds
+		//   ordinary R1 allowance ......... 2 corrective instructions per run
+		//   R2 activation allowance ....... 2 per run
+		//   R2 selection-inference ........ 1 per run
+		//
+		// The production discriminator: a continuously exhausted, tool-less
+		// trajectory must reach the FIRST R1 intervention, the SECOND R1
+		// intervention, and then the R1 `allowance_exhausted` branch (which
+		// is the ONLY branch R2 activates at).
+		const steps: Array<
+			(request: AgentModelRequest) => Iterable<AgentModelEvent>
+		> = [];
+		for (let i = 0; i < 20; i += 1) {
+			steps.push(exhaustedTurn);
+		}
+		const model = new ScriptedModel(steps);
+		const runtime = new AgentRuntime({
+			model,
+			executionStagnationPolicy: {
+				unproductiveRoundThreshold: 5,
+				maxRecoveryInstructions: 2,
+				enabled: true,
+			},
+		});
+		const notices: string[] = [];
+		runtime.subscribe((event) => {
+			if (
+				event.type === "status-notice" &&
+				event.metadata?.kind === "execution_stagnation_recovery"
+			) {
+				notices.push(String(event.message));
+			}
+		});
+
+		await runtime.run("Hi");
+
+		// BOTH R1 corrective instructions were injected.
+		expect(notices).toHaveLength(2);
+		// The first injection reported the five-round threshold.
+		expect(notices[0]).toContain("after 5 unproductive round(s)");
+		// The second injection required a FRESH five-round streak.
+		expect(notices[1]).toContain("after 5 unproductive round(s)");
+	});
+
+	it("reaches the R1 allowance-exhausted branch (the R2 entry) with a tool-less trajectory", async () => {
+		// The R2 entry point is R1's `allowance_exhausted` branch. With the
+		// correction, a TOOL-LESS trajectory reaches it — the predecessor
+		// could not, because a tool-less exhausted round never reached the
+		// iteration boundary.
+		const steps: Array<
+			(request: AgentModelRequest) => Iterable<AgentModelEvent>
+		> = [];
+		for (let i = 0; i < 30; i += 1) {
+			steps.push(exhaustedTurn);
+		}
+		const model = new ScriptedModel(steps);
+		const runtime = new AgentRuntime({
+			model,
+			executionStagnationPolicy: {
+				unproductiveRoundThreshold: 5,
+				maxRecoveryInstructions: 2,
+				enabled: true,
+			},
+			boundedObjectivePolicy: {
+				enabled: true,
+				maxActivations: 2,
+				maxObjectiveRounds: 8,
+				maxSelectionInferences: 1,
+			},
+		});
+		let boundedObjectiveActivations = 0;
+		runtime.subscribe((event) => {
+			if (
+				event.type === "status-notice" &&
+				event.metadata?.kind === "bounded_objective_recovery"
+			) {
+				boundedObjectiveActivations += 1;
+			}
+		});
+
+		await runtime.run("Hi");
+
+		// The R1 allowance-exhausted branch was reached and R2 activated
+		// from a TOOL-LESS trajectory.
+		expect(boundedObjectiveActivations).toBeGreaterThan(0);
+	});
+});
