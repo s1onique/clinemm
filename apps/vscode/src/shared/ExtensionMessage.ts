@@ -1175,6 +1175,25 @@ export interface TaskDurationSnapshot {
 	 * Whether the accounting covers every observed interval.
 	 */
 	coverage: "complete" | "partial"
+	/**
+	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (CORRECTION-01 /
+	 * W2): the PUBLICATION IDENTITY of this duration publication.
+	 *
+	 * The webview anchors its presentation-only forward projection to
+	 * the moment a snapshot was PUBLISHED. A REPLACEMENT publication must
+	 * re-anchor: projecting it from the previous publication's anchor
+	 * would silently extrapolate the replacement from a stale anchor.
+	 *
+	 * The identity is minted by the HOST when the snapshot's content
+	 * changes, using the EXISTING process-wide `MessageIdMinter`
+	 * sequence that already orders every other host-side observation. No
+	 * parallel counter and no webview-owned clock is introduced.
+	 *
+	 * It is OPTIONAL: a host that does not project it (an older host, a
+	 * Hub/Remote host) leaves it absent, and the webview falls back to
+	 * the snapshot's own content identity.
+	 */
+	publicationId?: number
 }
 
 /**

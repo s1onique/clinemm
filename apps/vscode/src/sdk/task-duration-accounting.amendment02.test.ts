@@ -619,7 +619,11 @@ describe("OBS-05 AMENDMENT-02 — legacy resume coverage", () => {
 		tracker.startTask("task-legacy")
 		expect(tracker.hasDurationAccounting).toBe(false)
 		expect(tracker.get()?.duration).toBeUndefined()
-		tracker.restoreDurationAccounting("task-legacy", undefined)
+		// The production restoration path ALSO reports that the task has
+		// a REAL history that was never measured (the third argument is
+		// the production fact the controller passes when the
+		// `HistoryItem` exists but carries no accounting record).
+		tracker.restoreDurationAccounting("task-legacy", undefined, true)
 		expect(tracker.hasDurationAccounting).toBe(false)
 		expect(tracker.get()?.duration).toBeUndefined()
 		expect(tracker.durationPersistence).toBeUndefined()
@@ -633,5 +637,19 @@ describe("OBS-05 AMENDMENT-02 — legacy resume coverage", () => {
 		// historical part is NOT claimed.
 		expect(resumed?.activeMs).toBe(1 * MS_PER_SECOND)
 		expect(resumed?.elapsedMs).toBe(1 * MS_PER_SECOND)
+		// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01
+		// (CORRECTION-01 / W1): the COVERAGE is asserted. The legacy
+		// task's pre-resumption history was NEVER observed by the
+		// accounting, so the accounting must NOT claim COMPLETE
+		// coverage: it is either UNAVAILABLE (no accounting at all) or
+		// explicitly PARTIAL (the live part is measured, the history is
+		// disclosed as unobserved).
+		//
+		// This assertion is the load-bearing part of RED-18: without it
+		// the witness only proved that the legacy task is unavailable
+		// BEFORE the resumption, and a resumed legacy task could have
+		// published "complete" coverage without any witness noticing.
+		expect(resumed?.coverage === "partial" || resumed === undefined).toBe(true)
+		expect(resumed?.coverage).not.toBe("complete")
 	})
 })

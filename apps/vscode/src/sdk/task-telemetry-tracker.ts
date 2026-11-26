@@ -107,6 +107,7 @@ import type {
 	MycPrimeStatusWire,
 	MycTelemetrySummary,
 	RuntimeErrorIncident,
+	TaskDurationSnapshot,
 	TaskHeaderTelemetryStrip,
 	ToolMechanismSummary,
 	ToolOutcomeSummary,
@@ -329,6 +330,62 @@ export class TaskTelemetryTracker {
 		this.localCaptureSeq = next
 		return next
 	}
+	/**
+	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (CORRECTION-01 /
+	 * W2): the CONTENT SIGNATURE of the last published duration snapshot.
+	 *
+	 * The publication identity is minted ONLY when the snapshot's content
+	 * changes. A re-render of the SAME publication (the host pushes the
+	 * state again without the duration changing) keeps the previous
+	 * identity, so the webview keeps the same anchor — the quiet-gate
+	 * behaviour is preserved.
+	 *
+	 * A REPLACEMENT publication (any content change: a new elapsed value,
+	 * a phase change, a coverage downgrade, a waiting-reason change)
+	 * mints a NEW identity, so the webview re-anchors to the
+	 * replacement instead of extrapolating it from the previous
+	 * publication's anchor.
+	 */
+	private lastPublishedDurationSignature: string | undefined
+	/**
+	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (CORRECTION-01 /
+	 * W2): the publication identity of the last published duration
+	 * snapshot. It reuses the EXISTING process-wide `MessageIdMinter`
+	 * sequence (the same reader as the persistence capture order) — no
+	 * parallel counter is introduced.
+	 */
+	private lastPublishedDurationId: number | undefined
+	/**
+	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (CORRECTION-01 /
+	 * W2): the publication identity for the CURRENT duration snapshot.
+	 *
+	 * Returns the previous identity when the content is unchanged, and a
+	 * freshly minted one when the content changed. `undefined` when no
+	 * duration snapshot is published at all.
+	 */
+	private resolveDurationPublicationId(duration: TaskDurationSnapshot | undefined): number | undefined {
+		if (!duration) {
+			return undefined
+		}
+		const signature = [
+			duration.taskId,
+			duration.elapsedMs,
+			duration.activeMs,
+			duration.waitingMs,
+			duration.unknownMs,
+			duration.phase,
+			duration.waitingReason ?? "",
+			duration.coverage,
+		].join("|")
+		if (signature === this.lastPublishedDurationSignature) {
+			// The SAME publication: keep the identity (and therefore the
+			// webview's anchor).
+			return this.lastPublishedDurationId
+		}
+		this.lastPublishedDurationSignature = signature
+		this.lastPublishedDurationId = this.readCaptureSeq()
+		return this.lastPublishedDurationId
+	}
 	private toolCalls = 0
 	private recoveryBudgetFailures = 0
 	private prevEpisodeFailures = 0
@@ -448,12 +505,29 @@ export class TaskTelemetryTracker {
 	 *   total, does not change the lifecycle phase, does not reset an
 	 *   open interval's anchor and does not freeze a live accounting.
 	 */
-	restoreDurationAccounting(taskId: string, record: TaskDurationPersistence | undefined): TaskHeaderTelemetryStrip | undefined {
+	restoreDurationAccounting(
+		taskId: string,
+		record: TaskDurationPersistence | undefined,
+		hasUnobservedHistory?: boolean,
+	): TaskHeaderTelemetryStrip | undefined {
 		if (this.currentTaskId !== taskId) {
 			Logger.debug(`[TaskTelemetryTracker] restoreDurationAccounting for a different task id; ignored (taskId=${taskId})`)
 			return this.get()
 		}
 		if (!record) {
+			// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01
+			// (CORRECTION-01 / W1): a task with NO accounting record but
+			// a REAL history is a LEGACY task. Its history was never
+			// observed by the accounting, so the coverage is declared
+			// PARTIAL — the live part of a resumed session is measured
+			// and the unobserved history is disclosed rather than
+			// silently excluded from a "complete" claim.
+			//
+			// A task with NO history at all is genuinely new: it has no
+			// unobserved history, so its coverage stays "complete".
+			if (hasUnobservedHistory === true) {
+				this.durationAccountant.markHistoricalCoveragePartial()
+			}
 			// A legacy task with no persisted accounting record: the
 			// accounting stays absent. The UI renders "unavailable" —
 			// never a fabricated zero.
@@ -578,6 +652,14 @@ export class TaskTelemetryTracker {
 		// identity resets the duration accounting too — a task never
 		// inherits another task's active / waiting totals.
 		this.durationAccountant.reset()
+		// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (CORRECTION-01 /
+		// W2): a NEW task identity starts a NEW publication generation, so
+		// the previous task's publication identity is dropped. Without
+		// this the new task's first publication could reuse the previous
+		// task's identity and the webview would keep the previous task's
+		// anchor.
+		this.lastPublishedDurationSignature = undefined
+		this.lastPublishedDurationId = undefined
 		// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01 /
 		// F5): a NEW task identity starts a NEW execution context, so the
 		// epoch fence restarts with it.
@@ -753,6 +835,12 @@ export class TaskTelemetryTracker {
 		// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01: clearing the
 		// telemetry window clears the duration accounting with it.
 		this.durationAccountant.reset()
+		// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (CORRECTION-01 /
+		// W2): the publication generation is cleared with it, so the next
+		// task's first publication cannot reuse the previous task's
+		// publication identity.
+		this.lastPublishedDurationSignature = undefined
+		this.lastPublishedDurationId = undefined
 		// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01 /
 		// F5): a NEW task identity starts a NEW execution context, so the
 		// epoch fence restarts with it.
@@ -1322,6 +1410,14 @@ export class TaskTelemetryTracker {
 		// that has not projected it). The webview renders "unavailable"
 		// for absence — never a fabricated zero.
 		const duration = this.durationAccountant.snapshot(this.currentTaskId)
+		// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (CORRECTION-01 /
+		// W2): the PUBLICATION IDENTITY. It is attached to the wire
+		// snapshot so the webview can distinguish a REPLACEMENT
+		// publication from a re-render of the same one, and therefore
+		// re-anchor the presentation-only forward projection.
+		const publicationId = this.resolveDurationPublicationId(duration)
+		const publishedDuration =
+			duration !== undefined && publicationId !== undefined ? { ...duration, publicationId } : duration
 		return {
 			startedAt: this.startedAt,
 			...(this.endedAt !== undefined ? { endedAt: this.endedAt } : {}),
@@ -1340,7 +1436,7 @@ export class TaskTelemetryTracker {
 			// projected the field simply omit it and the webview renders
 			// the existing V1 mechanism display unchanged.
 			outcome: this.buildOutcomeSummary(),
-			...(duration !== undefined ? { duration } : {}),
+			...(publishedDuration !== undefined ? { duration: publishedDuration } : {}),
 			// ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01: cumulative
 			// structured runtime error incidents. Emitted only when > 0
 			// so the wire strip stays minimal in the common (zero-error)

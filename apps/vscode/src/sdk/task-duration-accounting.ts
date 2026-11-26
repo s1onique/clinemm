@@ -354,6 +354,40 @@ export class TaskDurationAccountant {
 	}
 
 	/**
+	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (CORRECTION-01 /
+	 * W1): mark the accounting's HISTORICAL coverage as PARTIAL.
+	 *
+	 * WHY THIS EXISTS
+	 *
+	 *   A task that was recorded BEFORE the accounting existed has NO
+	 *   persisted accounting record. When such a task is later
+	 *   RESUMED, the live accounting starts from zero and the live part
+	 *   of the session IS measured. The historical part — everything
+	 *   that happened before the resumption — was NEVER observed by the
+	 *   accounting, so it is UNOBSERVABLE.
+	 *
+	 *   Without this marker the resumed task published
+	 *   `coverage: "complete"`, which silently claims that the whole
+	 *   task history was measured. It was not: the header showed a
+	 *   complete-looking accounting whose total silently EXCLUDED the
+	 *   entire pre-resumption history. That is a fabricated claim of
+	 *   completeness, which is exactly what the coverage field exists
+	 *   to prevent.
+	 *
+	 *   The marker downgrades the coverage to "partial" — the known
+	 *   totals are still reported, and the gap is NOT invented as a
+	 *   numeric duration. The webview renders the explicit partial
+	 *   disclosure.
+	 *
+	 *   A GENUINELY NEW task is NOT affected: a task that has no
+	 *   history at all has no unobservable history either, so its
+	 *   coverage stays "complete".
+	 */
+	markHistoricalCoveragePartial(): void {
+		this.state.partial = true
+	}
+
+	/**
 	 * Reset the accounting for a NEW task identity. The accumulated
 	 * totals are discarded together with the task's other telemetry —
 	 * a new task never inherits another task's duration.

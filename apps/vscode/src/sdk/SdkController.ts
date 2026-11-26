@@ -336,6 +336,22 @@ function isDurationCaptureNewerThan(candidateSeq: number, writtenSeq: number): b
 	return candidateSeq > writtenSeq
 }
 
+/**
+ * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (CORRECTION-01 / W3):
+ * the BOUNDED CAPACITY of the last-written capture-order map.
+ *
+ * The map holds one NUMBER per task that has a durably written
+ * accounting checkpoint. Without a bound it accumulates one entry per
+ * task that EVER persisted — a retired task identity is never
+ * re-activated, so nothing would ever remove it.
+ *
+ * The capacity is deliberately generous: it is a safety bound, not a
+ * tuning knob. Every task that is currently active, and every task whose
+ * write is still in flight, is retained regardless of the capacity (see
+ * `evictRetiredDurationCaptureGenerations`).
+ */
+const DURATION_WRITTEN_SEQ_CAPACITY = 64
+
 function historyItemToTaskResponse(item: HistoryItem): TaskResponse {
 	return TaskResponse.create({
 		id: item.id,
@@ -6809,6 +6825,14 @@ export class Controller {
 				// A skipped write (the `HistoryItem` does not exist yet)
 				// leaves the checkpoint eligible for a later retry.
 				this.durationWrittenSeq.set(taskId, seq)
+				// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01
+				// (CORRECTION-01 / W3): the map is BOUNDED. A retired task
+				// identity is never re-activated, so nothing else would
+				// ever remove its entry and the map would accumulate one
+				// entry per task that ever persisted. The eviction never
+				// touches the active task or an in-flight write, so the
+				// checkpoint-ordering authority is preserved.
+				this.evictRetiredDurationCaptureGenerations()
 			}
 		})
 		// The chain's TAIL is the CATCHED promise that is stored in the
@@ -6836,6 +6860,11 @@ export class Controller {
 				// This write IS the tail of the chain: drop the entry so
 				// the map does not grow without bound.
 				this.durationChains.delete(taskId)
+				// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01
+				// (CORRECTION-01 / W3): with the chain drained, the task
+				// is no longer "in flight" and is therefore ELIGIBLE for
+				// the bounded eviction of retired identities.
+				this.evictRetiredDurationCaptureGenerations()
 			}
 		}
 	}
@@ -6897,6 +6926,70 @@ export class Controller {
 	}
 
 	/**
+	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (CORRECTION-01 /
+	 * W3): the BOUNDED EVICTION of retired task identities from the
+	 * last-written capture-order map.
+	 *
+	 * WHY THIS IS NEEDED
+	 *
+	 *   The map holds one entry per task that has a durably written
+	 *   accounting checkpoint. `forgetDurationCaptureGeneration` removes
+	 *   an entry when its task is (re)activated — but a RETIRED task
+	 *   identity is never re-activated, so nothing ever removed it. The
+	 *   map therefore accumulated one entry per task that ever
+	 *   persisted, for the lifetime of the extension host.
+	 *
+	 * WHAT IS PRESERVED (the checkpoint-ordering authority)
+	 *
+	 *   The eviction is deliberately CONSERVATIVE. It NEVER removes:
+	 *
+	 *   - the CURRENTLY ACTIVE task's entry — its ordering authority
+	 *     must survive, or a legitimate newer checkpoint could be
+	 *     compared against a forgotten value;
+	 *   - a task whose write is still IN FLIGHT — its chain is pending
+	 *     and its entry is the comparison basis of that write.
+	 *
+	 *   Everything else is RETIRED: its task is neither active nor
+	 *   writing. A retired task's checkpoint cannot be written again
+	 *   (the host only writes the ACTIVE task's accounting), so
+	 *   forgetting its comparison value cannot cause an out-of-order
+	 *   write to be accepted.
+	 *
+	 *   The eviction order is the map's INSERTION order, so the oldest
+	 *   retired identity is dropped first.
+	 *
+	 * It is a PROTOTYPE METHOD (not an arrow-function class field) on
+	 * purpose: the host test harnesses build a controller through the
+	 * PROTOTYPE without running the constructor, so an arrow-function
+	 * field would never be initialized there and the eviction would
+	 * silently never run.
+	 */
+	private evictRetiredDurationCaptureGenerations(): void {
+		const written = this.durationWrittenSeq
+		if (written.size <= DURATION_WRITTEN_SEQ_CAPACITY) {
+			return
+		}
+		const activeTaskId = this.taskTelemetry?.currentTask
+		// `Map` preserves INSERTION order, so the first key is the
+		// OLDEST entry. Deleting during iteration is safe for `Map`.
+		for (const taskId of [...written.keys()]) {
+			if (written.size <= DURATION_WRITTEN_SEQ_CAPACITY) {
+				break
+			}
+			if (taskId === activeTaskId) {
+				// The active task's ordering authority is retained.
+				continue
+			}
+			if (this.durationChains.has(taskId)) {
+				// A write is still in flight for this task: its entry is
+				// the comparison basis of that write.
+				continue
+			}
+			written.delete(taskId)
+		}
+	}
+
+	/**
 	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01: the guarded
 	 * restore entry point.
 	 *
@@ -6922,6 +7015,16 @@ export class Controller {
 			// A legacy task with no accounting record: the accounting
 			// stays absent, and the UI renders "unavailable" — never a
 			// fabricated zero.
+			//
+			// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01
+			// (CORRECTION-01 / W1): the task DOES have a history (the
+			// `HistoryItem` exists), so that history was never observed
+			// by the accounting. The tracker is told the fact through the
+			// SAME restore seam, so the coverage of a resumed legacy task
+			// is PARTIAL rather than a silent "complete".
+			if (historyItem) {
+				this.taskTelemetry.restoreDurationAccounting(taskId, undefined, true)
+			}
 			return
 		}
 		this.taskTelemetry.restoreDurationAccounting(taskId, record)

@@ -1,3 +1,81 @@
+# ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (CORRECTION-01) — PASS_STRUCTURAL_ONLY — 2026-11-27
+
+```text
+ACT_ID:       ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (CORRECTION-01)
+TYPE:         bounded implementation correction cycle
+VERDICT:      PASS_STRUCTURAL_ONLY
+EPIC:         OBS-05
+WORK_ITEM:    OBS-05 — Active execution and waiting-time accounting
+ENTRY_HEAD:   691b140efd632b040d41ce1d9d336826e591733f
+BRANCH:       main
+```
+
+**OBS-05 — Active execution and waiting-time accounting. STATUS: ACCEPTED_FOR_LIVE_QUALIFICATION
+(bounded terminal correction complete, executable gates GREEN, installed-runtime qualification
+not executed).**
+
+**WHY THIS CORRECTION EXISTS.** The reviewer's verdict was `PASS_WITH_NONBLOCKING_RESIDUE`
+with `C1: GO` and `NEW_FORMAL_AMENDMENT: false`. The AMENDMENT-02 repairs of G1–G4 were
+accepted. This pass performs ONE bounded correction of the three residual defects the
+review named. The AMENDMENT-02 architecture is RETAINED unchanged: the `TurnStateTracker`
+lifecycle authority, the `TaskTelemetryTracker` host ownership, the interval accumulator,
+the existing `HistoryItem` persistence and the existing runtime-to-webview publication are
+all RETAINED. The accounting architecture, the restore algorithm and the checkpoint-ordering
+design were NOT reopened. No new lifecycle state machine, timing service, database or public
+SDK API was introduced.
+
+**LEGACY COVERAGE (W1).** A legacy task — one recorded before the accounting existed — has
+no persisted accounting record. When it was RESUMED, the live accounting measured the live
+part of the session but published `coverage: "complete"`: a FABRICATION OF COMPLETENESS,
+because the pre-resumption history was never observed and the total silently excluded it.
+The prior `RED-18` proved only that the legacy task is unavailable BEFORE the resumption and
+asserted nothing about the coverage AFTER it, so the defect was invisible to it. The host
+now reports the production fact it already knows — the task HAS a persisted `HistoryItem`
+but that item carries NO accounting record — through the EXISTING restore seam
+(`hasUnobservedHistory`), and the accumulator downgrades the historical coverage to
+`partial`. A GENUINELY NEW task has no history at all, so it keeps `complete` coverage.
+`RED-18` is STRENGTHENED to assert the coverage.
+
+**PRESENTATION ANCHOR (W2).** The webview's anchor identity was the `(taskId, elapsedMs,
+phase)` TRIPLE, which does NOT identify a PUBLICATION: a replacement publication can carry
+the SAME triple (a coverage downgrade, a waiting-reason change, or an elapsed that did not
+advance). When that happened the anchor was not reset and the replacement was EXTRAPOLATED
+FROM THE PREVIOUS SNAPSHOT'S ANCHOR — silently aged by the time that belonged to the
+previous publication. The identity is now the HOST'S PUBLICATION IDENTITY where available
+(minted from the EXISTING process-wide `MessageIdMinter.nextSeq()` reader — no parallel
+counter, no webview-owned clock) and the snapshot's FULL CONTENT identity otherwise. The
+anchor is DERIVED DURING RENDER, so a replacement is structurally unable to use the previous
+anchor even for one committed frame. The five-minute clamp and the explicit `estimated`
+marker are RETAINED, and the quiet gate still keeps its anchor across a re-render.
+
+**PERSISTENCE BOOKKEEPING (W3).** The last-written capture-order map's only removal path
+ran on (re)activation, so a RETIRED task identity was never removed and the map accumulated
+one entry per task that ever persisted. A BOUNDED EVICTION of retired identities was added
+(capacity 64). It NEVER removes the ACTIVE task's entry (its ordering authority) nor a task
+with an IN-FLIGHT write (its comparison basis), so checkpoint ordering is NOT weakened. The
+eviction is a PROTOTYPE method on purpose: the host test harnesses build a controller
+through the prototype without running the constructor, so an arrow-function field would have
+silently never run — that hazard was caught by `RED-24` and fixed.
+
+**THE LIVE-QUALIFICATION MATRIX WAS NOT NARROWED.** The complete original matrix is
+RETAINED (real execution and human waiting, webview recreation, resume and completion,
+terminal stability, task switching and restoration, extension-host recovery, conservation,
+actual background-job and provider lifecycle classification, and the machine-suspend
+observation limitation). Every one of them remains an EXPLICIT qualification requirement,
+not a passed claim.
+
+**LIVE QUALIFICATION: NOT EXECUTED.** No VSIX was built, no artifact was installed and no
+live qualification was performed. VSIX packaging and installation remain subject to OPERATOR
+AUTHORIZATION. The verdict is PASS_STRUCTURAL_ONLY and OBS-05 is
+**ACCEPTED_FOR_LIVE_QUALIFICATION**. The full receipt, the witness table, the targeted
+suite results, the static gates and the residual risk are recorded in
+`.factory/evidence/ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01/16-correction01-receipt.md`.
+
+**STRUCTURAL QUALIFICATION STOPS HERE.** No further pre-execution review is required
+unless a NEW P0 is reproduced.
+
+---
+
 # ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-02) — PASS_STRUCTURAL_ONLY — 2026-11-27
 
 ```text

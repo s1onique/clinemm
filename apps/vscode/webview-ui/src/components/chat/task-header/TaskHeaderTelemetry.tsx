@@ -404,17 +404,59 @@ const TaskHeaderTelemetry: React.FC<TaskHeaderTelemetryProps> = ({
 	// the displayed split can progress between two host publications
 	// without the webview accumulating anything of its own.
 	//
-	// The snapshot identity is the (taskId, elapsedMs, phase) triple:
-	// a NEW snapshot from the host resets the anchor. A snapshot that
-	// is merely re-rendered (the same values) keeps its anchor.
+	// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (CORRECTION-01 /
+	// W2) — the REPLACEMENT-SNAPSHOT ANCHOR DEFECT.
+	//
+	//   The pre-repair identity was the (taskId, elapsedMs, phase)
+	//   TRIPLE. That triple does NOT identify a PUBLICATION: a
+	//   REPLACEMENT publication can carry the SAME triple (a coverage
+	//   downgrade, a waiting-reason change, or an elapsed that did not
+	//   advance). When that happened the anchor was NOT reset, so the
+	//   replacement snapshot was EXTRAPOLATED FROM THE PREVIOUS
+	//   SNAPSHOT'S ANCHOR — the replacement was silently aged by the
+	//   time that belonged to the previous publication.
+	//
+	//   The identity is now the HOST'S PUBLICATION IDENTITY when it is
+	//   available (`duration.publicationId`): the host mints it from the
+	//   EXISTING process-wide sequence whenever the published content
+	//   changes, so a replacement always re-anchors and a mere
+	//   re-render of the same publication keeps its anchor.
+	//
+	//   Without a publication identity (an older host, a Hub/Remote
+	//   host), the fallback is the snapshot's FULL CONTENT identity, so
+	//   a replacement is still distinguished from a re-render. The
+	//   fallback is a pure function of the host's own values — it is
+	//   NOT a webview-owned clock.
 	const durationSnapshot = telemetry?.duration
 	const durationSnapshotKey = durationSnapshot
-		? `${durationSnapshot.taskId}|${durationSnapshot.elapsedMs}|${durationSnapshot.phase}`
+		? durationSnapshot.publicationId !== undefined
+			? `pub:${durationSnapshot.publicationId}`
+			: [
+					durationSnapshot.taskId,
+					durationSnapshot.elapsedMs,
+					durationSnapshot.activeMs,
+					durationSnapshot.waitingMs,
+					durationSnapshot.unknownMs,
+					durationSnapshot.phase,
+					durationSnapshot.waitingReason ?? "",
+					durationSnapshot.coverage,
+				].join("|")
 		: undefined
-	const [durationPublishedAt, setDurationPublishedAt] = useState<number | undefined>(undefined)
-	useEffect(() => {
-		setDurationPublishedAt(Date.now())
-	}, [durationSnapshotKey])
+	// The anchor is DERIVED DURING RENDER (React's documented
+	// "adjusting state when props change" pattern) rather than in an
+	// effect: an effect runs AFTER the render is committed, so a
+	// replacement publication would be projected from the PREVIOUS
+	// publication's anchor for one committed frame. Deriving it during
+	// render makes it structurally impossible for a replacement snapshot
+	// to be extrapolated from a stale anchor.
+	const [durationAnchor, setDurationAnchor] = useState<{ key: string | undefined; publishedAt: number }>({
+		key: undefined,
+		publishedAt: 0,
+	})
+	if (durationAnchor.key !== durationSnapshotKey) {
+		setDurationAnchor({ key: durationSnapshotKey, publishedAt: Date.now() })
+	}
+	const durationPublishedAt = durationSnapshotKey === undefined ? undefined : durationAnchor.publishedAt
 	useEffect(() => {
 		if (!state.live) {
 			return
