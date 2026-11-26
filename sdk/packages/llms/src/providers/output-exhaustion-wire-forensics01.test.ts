@@ -29,6 +29,7 @@ import {
 	toProviderVisibleMessages,
 } from "@cline/shared";
 import { describe, expect, it } from "vitest";
+import { toGatewayRequestMessages } from "./compat";
 import { createGateway } from "./gateway";
 import type { Message } from "./types";
 
@@ -264,6 +265,61 @@ function measureBudget(messages: Message[]): number {
 		messages: toProviderVisibleMessages(messages as never),
 	});
 }
+
+describe("ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-FORENSICS-01 — compat projection origin authority", () => {
+	it("DROPS the origin authority when projecting through the compat adapter", () => {
+		// The compat adapter's `thinking` -> `reasoning` case copies the
+		// signature into the part's metadata but NOT the origin authority.
+		// The downstream fail-closed authority gate therefore sees an absent
+		// origin and withholds the signature.
+		//
+		// This is the boundary the FROZEN ARCHIVE shows: across all 88
+		// captured SDK requests there are ZERO signed reasoning blocks and
+		// 697 unsigned ones, even though the canonical history carries 59
+		// signed blocks with their origin authority.
+		// The compat adapter consumes the CONTENT-BLOCK `Message` shape
+		// (thinking / tool_use / tool_result), which is what
+		// `toProviderVisibleMessages` produces.
+		const projected = toGatewayRequestMessages(
+			toProviderVisibleMessages(canonicalHistory() as never) as never,
+		) as unknown as Array<{
+			content: Array<Record<string, unknown>>;
+		}>;
+		const reasoningParts = projected.flatMap((message) =>
+			(message.content ?? []).filter((part) => part.type === "reasoning"),
+		);
+		expect(reasoningParts.length).toBeGreaterThan(0);
+		for (const part of reasoningParts) {
+			const metadata = (part.metadata ?? {}) as Record<string, unknown>;
+			// The SIGNATURE survives the compat projection...
+			if (metadata.signature !== undefined) {
+				// ...but the ORIGIN AUTHORITY does NOT.
+				expect(metadata.originAuthority).toBeUndefined();
+			}
+		}
+	});
+
+	it("PRESERVES the origin authority when projecting through the shared projection", () => {
+		// The shared projection (the one the runtime's budget authority and
+		// the gateway dispatch use) carries the authority in the content
+		// block, so the fail-closed gate can establish compatibility and the
+		// signed block survives to the wire.
+		const projected = toProviderVisibleMessages(
+			canonicalHistory() as never,
+		) as unknown as Array<{
+			content: Array<Record<string, unknown>>;
+		}>;
+		const signed = projected
+			.flatMap((message) => message.content ?? [])
+			.filter(
+				(part) => part.type === "thinking" && part.signature !== undefined,
+			);
+		expect(signed.length).toBe(2);
+		for (const part of signed) {
+			expect(part.originAuthority).toBe(MINIMAX_ORIGIN_AUTHORITY);
+		}
+	});
+});
 
 describe("ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-FORENSICS-01 — retry projection (wire)", () => {
 	it("DROPS the unsigned exhausted reasoning block from the outbound HTTP body", async () => {

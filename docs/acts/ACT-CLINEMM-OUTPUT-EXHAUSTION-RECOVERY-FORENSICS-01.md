@@ -476,3 +476,121 @@ TRACKED_DIRT:                     none beyond this ACT's own files
 No production repair. No new diagnostics framework. No R3 implementation. No
 paid inference. No VSIX packaging. No Factory documentation campaign. The
 frozen archive was read only and is unchanged.
+
+## 9. Addendum — the origin-authority loss at the compat projection (LIVE archive evidence)
+
+### 9.1 CMP-09 evidence availability — REVISED
+
+At the time of the integration, CMP-09 had **no committed** implementation or
+evidence in either repository (`git log --all`, `git ls-files`, and the source
+repository's local `main` at `e740e3dd` all confirmed this).
+
+AFTER the integration, the source repository's worktree acquired **uncommitted**
+CMP-09 work (7 modified production files, 298 insertions, plus two new test
+files). Per the ACT's instruction — "If CMP-09 evidence remains uncommitted or
+unavailable, report that fact. Do not import arbitrary dirty source files or
+claim the merge recovered them" — **nothing was imported**. The integration
+commit `c166d9caf` contains NO CMP-09 code.
+
+The uncommitted CMP-09 witness was, however, INDEPENDENTLY EXECUTED against
+the integrated tree as a read-only verification (the file was copied in, run,
+and removed; the tree is clean):
+
+```text
+sdk/packages/llms/src/providers/request-budget-wire-equivalence.cmp09.test.ts
+  CMP09-WIRE-01  signed reasoning reaches the serialized body   FAIL (see §9.3)
+  CMP09-WIRE-02  unsigned reasoning does NOT reach the wire       PASS
+  CMP09-WIRE-03  the budget measurement COUNTS the unsigned       PASS
+  CMP09-WIRE-04  the compaction trigger CONSUMES the measurement  PASS
+  CMP09-WIRE-05  valid signed reasoning is conserved             PASS
+  CMP09-WIRE-06  tool identity and order preserved               PASS
+  CMP09-WIRE-07  the canonical transcript is unchanged            PASS
+```
+
+**CMP-09's uncommitted conclusions CONVERGE with this ACT's independent
+findings**: unsigned reasoning does not reach the wire, is nevertheless counted
+by the budget, and the compaction trigger consumes that measurement. CMP-09's
+own source comment cites the SAME 659,674 unsigned characters and the SAME 18
+output-exhausted responses from THIS frozen session.
+
+CMP-09 remains the owner of compaction-trigger causality and of the
+budget-authority repair.
+
+### 9.2 The historical archive settles the signed-reasoning question — LIVE
+
+The frozen archive's 88 SDK request captures are the `ai_sdk_prompt` stage:
+the production projection, captured BEFORE the Anthropic wire serializer.
+Parsing every one of them:
+
+```text
+signed reasoning blocks across all 88 captures   = 0
+unsigned reasoning blocks across all 88 captures = 697
+```
+
+Meanwhile the CANONICAL history of the same session contains **59 signed**
+reasoning blocks and **18 unsigned** ones, each signed block carrying
+`originAuthority: "minimax\u0000https://api.minimax.io\u0000/anthropic/v1"`.
+
+**So in the historical run the origin authority was ALREADY LOST by the time
+the request was projected.** Every signed reasoning block became unsigned in
+the provider-visible projection.
+
+The boundary is `toGatewayRequestMessages` (`llms/providers/compat.ts:311`):
+its `thinking` → `reasoning` case copies `signature`, `call_id` and `details`
+into the part's `metadata` bag but **does not copy `originAuthority`**. The
+downstream `mayReplayOpaqueReasoning` gate then fails closed (the origin is
+absent), the signature is withheld, and the Anthropic serializer drops the
+block.
+
+This means the historical run's provider received **NO reasoning blocks at
+all** — not the unsigned ones, and not the signed ones.
+
+### 9.3 Why CMP09-WIRE-01 fails, and what it means
+
+CMP09-WIRE-01 asserts that a signed reasoning block reaches the serialized
+body. It fails on the integrated tree because its fixture supplies the
+signature but **no `originAuthority`** — so the production fail-closed
+authority correctly withholds the signature and the block is dropped.
+
+Adding the historical `originAuthority` to the fixture does NOT make it pass,
+because `toGatewayRequestMessages` drops that field anyway. The ONLY path
+that preserves the authority is `toProviderVisibleMessages`
+(`shared/src/llms/request-budget.ts`), which carries `originAuthority` into
+the content block — and this ACT's own discriminator drives that path and
+observes the signed blocks conserved with both signatures.
+
+**Two independent boundaries are therefore in play, and they are NOT the
+same boundary:**
+
+| Boundary | Path | Signed reasoning | Unsigned reasoning |
+|---|---|---|---|
+| `toGatewayRequestMessages` (compat) | `createGatewayApiHandler*` | authority LOST → dropped | dropped |
+| `toProviderVisibleMessages` (shared) | the runtime's budget + gateway projection | authority PRESERVED → on the wire | dropped |
+
+Both drop the UNSIGNED block — that is the boundary this ACT's R-A
+recommendation addresses, and it is the one CMP-09 owns.
+
+The SIGNED-block loss on the compat path is a SEPARATE, ADDITIONAL defect
+that this ACT did not set out to find and did not repair. It is recorded
+here as a NEW finding for the owning workstream to triage.
+
+**Disposition.** `COMPAT_PROJECTION_ORIGIN_AUTHORITY_LOSS: REPRODUCED (LIVE
+ARCHIVE + EXECUTED)`. Confidence: LIVE (the 88 frozen captures are direct
+evidence of the historical projection) for the historical occurrence, and
+SYNTHETIC_REAL_PRODUCTION_SEAM for the mechanism.
+
+## 10. Final disposition summary
+
+```text
+REASONING_USAGE_AUTHORITY:              provider-reported total, forwarded faithfully
+REASONING_USAGE_LOSS_BOUNDARY:          provider boundary (reasoning breakdown name / absence)
+UNSIGNED_REASONING_WIRE_RETENTION:      ABSENT
+UNSIGNED_REASONING_BUDGET_CONTRIBUTION:  PRESENT (55 tokens per 131-char block)
+RECOVERY_ALLOWANCE_RESET_RULE:          any tool-calling turn resets the consecutive streak
+TOOLLESS_EXHAUSTION_STAGNATION_ACCOUNTING: GAP REPRODUCED (R1 never observes it)
+RECOVERY_ONLY_OUTPUT_OVERRIDE_FEASIBILITY: FEASIBLE (existing per-request contract)
+COMPAT_PROJECTION_ORIGIN_AUTHORITY_LOSS: REPRODUCED (signed blocks also dropped on the compat path)
+SMALLEST_NEXT_REPAIR:                   R-A — make the request-budget measure the WIRE (owner: CMP-09)
+FINAL_HEAD:                             (this commit)
+TRACKED_DIRT:                           none beyond this ACT's own files
+```
