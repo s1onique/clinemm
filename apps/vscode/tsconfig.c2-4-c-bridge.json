@@ -231,7 +231,15 @@
 		// `LocalRuntimeHost` AgentConfig forwarding seam, and the REAL
 		// `AgentRuntime` with the PRODUCED policy. The bridge aliases
 		// resolve the production SDK classes for typecheck.
-		"src/sdk/__tests__/autonomous-execution-recovery-r2.production-reachability02.c24-c-bridge.test.ts"
+		"src/sdk/__tests__/autonomous-execution-recovery-r2.production-reachability02.c24-c-bridge.test.ts",
+		// ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01
+		// (AMENDMENT-01): the production REACHABILITY witness for the
+		// RECOVERY-ONLY GENERATION OVERRIDE (D4). Drives the REAL
+		// `buildSessionConfig()` producer, the REAL `LocalRuntimeHost`
+		// AgentConfig forwarding seam, and the REAL `AgentRuntime` with
+		// the PRODUCED policy. The bridge aliases resolve the production
+		// SDK classes for typecheck.
+		"src/sdk/__tests__/recovery-output-override.production-reachability01.c24-c-bridge.test.ts"
 	],
 	"exclude": [
 		"node_modules",

@@ -303,6 +303,61 @@ export function isBoundedObjectiveDogfoodEnabled(): boolean {
 	return typeof raw === "string" && (raw.trim() === "1" || raw.trim().toLowerCase() === "true")
 }
 
+/**
+ * ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01 (AMENDMENT-01).
+ *
+ * The EXPLICIT OPERATOR OPT-IN for the RECOVERY-ONLY GENERATION OVERRIDE
+ * (D4).
+ *
+ * THE EXPERIMENT
+ * --------------
+ * The recovery-only generation override attaches ONE request-local
+ * output-budget increase (16384 tokens) to the next AUTHORIZED recovery
+ * request, so that a model which repeatedly exhausts its output allowance
+ * gets exactly ONE attempt with a larger allowance. The NORMAL generation
+ * limit (8192 for MiniMax-M3.1-Flash at LOW reasoning effort) is untouched,
+ * and no other model, provider or reasoning effort is affected.
+ *
+ * WHY AN ENVIRONMENT OPT-IN
+ * -------------------------
+ * This is a BOUNDED BEHAVIORAL EXPERIMENT, not an established remedy. It is
+ * deliberately an ENVIRONMENT opt-in rather than a persisted setting:
+ *
+ *   - it is a per-invocation deliberate choice,
+ *   - it cannot be enabled by accident by a workspace file, a project file
+ *     or a task payload,
+ *   - there is NO persisted setting and NO models.json modification, and
+ *   - it is ABSENT from every ordinary session: with the opt-in absent, the
+ *     `recoveryOutputOverridePolicy` key is not installed at all and the
+ *     runtime behaves EXACTLY as it did before D4 existed.
+ *
+ * The value must be exactly "1" or "true" (case-insensitive). Any other
+ * value — including an empty string — leaves the experiment disabled.
+ *
+ * This mirrors the established R2 experimental-policy opt-in
+ * (`isBoundedObjectiveDogfoodEnabled`) exactly: it is the SAME composition
+ * pattern, not a new mechanism.
+ */
+export function isRecoveryOutputOverrideEnabled(): boolean {
+	const raw = process.env.CLINEMM_RECOVERY_OUTPUT_OVERRIDE
+	return typeof raw === "string" && (raw.trim() === "1" || raw.trim().toLowerCase() === "true")
+}
+
+/**
+ * ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01 (AMENDMENT-01).
+ *
+ * The EXACT AUTHORIZED TARGET of the recovery-only generation override.
+ *
+ * The override is applied ONLY to this exact provider, model and effective
+ * reasoning effort. Anything else — another provider, another model, another
+ * effort, or an UNKNOWN target — means NO override.
+ */
+export const RECOVERY_OUTPUT_OVERRIDE_PROVIDER_ID = "minimax"
+export const RECOVERY_OUTPUT_OVERRIDE_MODEL_ID = "MiniMax-M3.1-Flash"
+export const RECOVERY_OUTPUT_OVERRIDE_REASONING_EFFORT = "low"
+/** The request-local output allowance the authorized recovery request receives. */
+export const RECOVERY_OUTPUT_OVERRIDE_MAX_OUTPUT_TOKENS = 16_384
+
 export async function resolveClineRequestClientContext(): Promise<HostClientContext> {
 	const [hostIdentity, isMultiRoot] = await Promise.all([resolveHostIdentity(), resolveIsMultiRootWorkspace()])
 	return {
@@ -1633,6 +1688,63 @@ export async function buildSessionConfig(input: SessionConfigInput): Promise<Cor
 									maxActivations: 2,
 									maxObjectiveRounds: 8,
 									maxSelectionInferences: 1,
+								},
+							}
+						: {}),
+					// ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01
+					// (AMENDMENT-01): the RECOVERY-ONLY GENERATION OVERRIDE.
+					//
+					// A BOUNDED BEHAVIORAL EXPERIMENT, not an established
+					// remedy. It attaches ONE request-local output-budget
+					// increase (16384) to the next AUTHORIZED recovery
+					// request. The NORMAL generation limit (8192 for
+					// MiniMax-M3.1-Flash at LOW reasoning effort) is
+					// untouched, and no other provider, model or reasoning
+					// effort is affected.
+					//
+					// Like R1 and R2, it is scoped to ACT mode: in PLAN
+					// mode the agent is explicitly forbidden to edit.
+					//
+					// DEFAULT_OFF: the whole `recoveryOutputOverridePolicy`
+					// key is ABSENT unless the operator opt-in is
+					// explicitly selected. With the key absent the runtime
+					// behaves EXACTLY as before: no override is ever
+					// armed, no request ever carries a different
+					// allowance.
+					//
+					// The opt-in is an ENVIRONMENT opt-in rather than a
+					// persisted setting: there is NO persisted setting and
+					// NO models.json modification.
+					//
+					// The EXACT TARGET is established HERE, by the host:
+					// the provider, the model and the EFFECTIVE reasoning
+					// effort must all be the authorized ones. An UNKNOWN
+					// target means NO override — the predicate below
+					// requires an exact match on all three.
+					//
+					// The host predicate may NARROW the eligibility, never
+					// bypass it: the runtime's own minimum
+					// repeated-exhaustion requirement still applies, and
+					// the host predicate can only ever ADD a restriction.
+					...(isRecoveryOutputOverrideEnabled()
+						? {
+								recoveryOutputOverridePolicy: {
+									enabled: true,
+									recoveryMaxOutputTokens: RECOVERY_OUTPUT_OVERRIDE_MAX_OUTPUT_TOKENS,
+									modelId: RECOVERY_OUTPUT_OVERRIDE_MODEL_ID,
+									reasoningEffort: RECOVERY_OUTPUT_OVERRIDE_REASONING_EFFORT,
+									isAuthorizedTarget: ({
+										modelId,
+										reasoningEffort,
+										providerId,
+									}: {
+										readonly modelId: string | undefined
+										readonly reasoningEffort: string | undefined
+										readonly providerId: string | undefined
+									}) =>
+										providerId === RECOVERY_OUTPUT_OVERRIDE_PROVIDER_ID &&
+										modelId === RECOVERY_OUTPUT_OVERRIDE_MODEL_ID &&
+										reasoningEffort === RECOVERY_OUTPUT_OVERRIDE_REASONING_EFFORT,
 								},
 							}
 						: {}),

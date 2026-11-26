@@ -372,6 +372,14 @@
 		// aliases that resolve under `tsconfig.c2-4-c-bridge.json` only.
 		// Excluded here so `bun run check-types` does not see the
 		// base-config-incompatible import paths.
-		"src/sdk/__tests__/autonomous-execution-recovery-r2.production-reachability02.c24-c-bridge.test.ts"
+		"src/sdk/__tests__/autonomous-execution-recovery-r2.production-reachability02.c24-c-bridge.test.ts",
+		// ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01
+		// (AMENDMENT-01): the production REACHABILITY witness for the
+		// RECOVERY-ONLY GENERATION OVERRIDE (D4). Bridge-only: it
+		// requires the `@cline-internal/core/...` aliases declared in
+		// `tsconfig.c2-4-c-bridge.json` only. Excluded from the base
+		// config so the base `@cline/core` stub alias stays in scope for
+		// other tests.
+		"src/sdk/__tests__/recovery-output-override.production-reachability01.c24-c-bridge.test.ts"
 	]
 }

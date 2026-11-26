@@ -279,6 +279,7 @@ const MAX_TOKENS_EXHAUSTION_STREAK_LIMIT = 3;
  *
  * DERIVATION (against the ACTUAL production constants)
  * -----------------------------------------------------
+ *   - ordinary conciseness-reminder allowance ........ 3 per run
  *   - ordinary R1 threshold ..................... 5 unproductive rounds
  *   - R1 corrective-instruction allowance ....... 2 per run
  *   - R2 activation allowance ................... 2 per run
@@ -297,19 +298,71 @@ const MAX_TOKENS_EXHAUSTION_STREAK_LIMIT = 3;
  * closed out. The parent then continues, and the parent may itself stall
  * again — at which point the SAME bounded escalation applies.
  *
- * The ceiling below is therefore a DEFENSIVE ENGINEERING CEILING, strictly
- * larger than the 11 rounds needed to reach R1's exhausted branch and larger
- * than the R2 objective allowance, so every AUTHORIZED intervention remains
- * reachable inside it. It is an UPPER BOUND, never a target: the runtime
- * terminates truthfully as soon as no useful authorized intervention remains,
- * and it does not consume the ceiling merely because the ceiling exists.
+ * AMENDMENT-01 — THE CORRECTED TOTAL BOUND
+ * -----------------------------------------
+ * AMENDMENT-01 makes EVERY exhaustion-driven continuation — the ordinary
+ * reminders INCLUDED — spend ONE unit of THIS counter, and it makes the
+ * continuation decision CONSUME the R1/R2 lifecycle authority instead of
+ * asking only whether the stagnation policy is enabled.
+ *
+ * The predecessor's bound of 20 was derived from the R1/R2 constants as if
+ * the ordinary reminders and the escalations were counted on DIFFERENT
+ * counters. They are not: they share this one. The reachable lifecycle
+ * therefore costs:
+ *
+ *   11 exhaustion-driven continuations to reach the R1
+ *   `allowance_exhausted` branch and the R2 entry point — that is the
+ *   5 + 5 + 1 pure-stagnation rounds above, and it ALREADY INCLUDES the
+ *   three rounds the ordinary reminders consumed, because those three
+ *   rounds are part of the same 5-round streak;
+ * +  8 R2 objective rounds;
+ * =  19 ... plus the 3 ordinary reminders themselves, which are
+ *   continuations too, = 23.
+ *
+ * MEASURED AGAINST THE REAL RUNTIME (AMENDMENT-01, production constants,
+ * a persistently exhausted tool-less trajectory with R1 and R2 both
+ * enabled), the reachable lifecycle is EXACTLY:
+ *
+ *     3  ordinary conciseness reminders        (requests 1-3)
+ *   + 11  escalations to the R1 exhausted branch (requests 4-14)
+ *   +  0  the R2 selection inference            (NOT a continuation: it
+ *                                                is a separate request
+ *                                                that executes nothing)
+ *   +  7  the R2 objective's own rounds          (requests 16-22)
+ *   = 21 exhaustion-driven continuations
+ *
+ * The R2 objective then closes out with a truthful verdict
+ * (`objective_rounds_exhausted_without_verification`) and the run
+ * terminates TRUTHFULLY.
+ *
+ * The predecessor bound of 20 therefore TRUNCATED the R2 objective's own
+ * budget: the objective received only 6 of its 8 authorized rounds and
+ * the run was terminated by the DEFENSIVE CEILING instead of by the
+ * objective's own verdict. That is a real, demonstrated truncation of an
+ * ACCEPTED intervention, and it is the production-state analysis the ACT
+ * asks for, so the bound is raised.
+ *
+ * THE NEW BOUND is 32: the reachable lifecycle's 21 continuations plus a
+ * margin of 11. The margin covers the SECOND R2 activation (the activation
+ * allowance is 2 and the selection-inference allowance is 1 per run, so a
+ * second activation cannot select again — the second activation is
+ * reachable only through the same 11-round stagnation plus 8 objective
+ * rounds, i.e. 19 more continuations, which would exceed any single
+ * finite bound; the margin therefore covers the reachable part of that
+ * second cycle without pretending to bound an unbounded repetition).
+ *
+ * It remains a DEFENSIVE ENGINEERING CEILING, strictly larger than the
+ * reachable lifecycle, so every AUTHORIZED intervention remains reachable
+ * inside it. It is an UPPER BOUND, never a target: the runtime terminates
+ * truthfully as soon as no useful authorized intervention remains, and it
+ * does not consume the ceiling merely because the ceiling exists.
  *
  * The counter is spent ONLY by an exhaustion-driven continuation. It is never
  * replenished by an inspection, by compaction, by a provider retry, by an
  * ordinary recovery escalation, or by the internal continuation of the same
  * recovery episode.
  */
-const MAX_EXHAUSTION_RECOVERY_CONTINUATIONS = 20;
+const MAX_EXHAUSTION_RECOVERY_CONTINUATIONS = 32;
 /** Nudge appended after an output-limit cut-off, asking for more concise output. */
 const MAX_TOKENS_RECOVERY_NUDGE =
 	"Your previous response was cut off because it reached the model's output-token limit before finishing. Keep responses concise: take one small step at a time, avoid long explanations, and write large files or command output in smaller chunks across multiple tool calls.";
@@ -1549,6 +1602,31 @@ export class AgentRuntime {
 	 * failed experiment, or by an unknown observation.
 	 */
 	private maxTokensExhaustionStreak = 0;
+	/**
+	 * ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01 (AMENDMENT-01).
+	 *
+	 * Whether a R1 CORRECTIVE INSTRUCTION is PENDING DELIVERY — i.e. it was
+	 * injected at the current execution-round boundary and the model has not
+	 * yet had the opportunity to respond to it.
+	 *
+	 * WHY THIS IS AN AUTHORITY
+	 * ------------------------
+	 * An injected corrective instruction authorizes exactly ONE further
+	 * parent request: the request that CARRIES the instruction and lets the
+	 * model act on it. Without that request the instruction is undelivered
+	 * and the intervention never happened.
+	 *
+	 * The exhaustion recovery therefore treats a pending instruction as a
+	 * PENDING AUTHORIZED INTERVENTION, and continues the run so the
+	 * instruction can be delivered. This is the same authority the
+	 * correction-only generation override relies on: the override is armed
+	 * on the R1 inject and is consumed by the NEXT request — the request the
+	 * instruction authorizes — so that request MUST be able to happen.
+	 *
+	 * The flag is set by the R1 inject branch and cleared as soon as the
+	 * model has had its turn.
+	 */
+	private executionStagnationInstructionPending = false;
 	/**
 	 * ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01 CORRECTION-01.
 	 *
@@ -2821,6 +2899,39 @@ export class AgentRuntime {
 			return;
 		}
 		const observation = this.buildExecutionRoundObservation();
+		// ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01 (AMENDMENT-01).
+		//
+		// THE FINALIZED EXECUTION-ROUND ACCOUNTING BOUNDARY.
+		//
+		// The CONSECUTIVE output-exhaustion streak is cleared here, by a
+		// genuinely PRODUCTIVE round, using the SAME already-computed
+		// productivity classification the R1 accounting consumes. The
+		// logical round is therefore classified ONCE, at the boundary
+		// where its tool calls have actually been executed and their
+		// outcomes observed.
+		//
+		// The predecessor's site was BEFORE `executeToolCalls()`, so it
+		// observed an EMPTY round and the streak was never cleared by a
+		// productive round at all.
+		//
+		// CONSERVATION:
+		//   - a successful native edit / successful execution / legitimate
+		//     wait clears the streak (the existing contract),
+		//   - a read-only inspection does NOT clear it,
+		//   - a failed experiment does NOT clear it,
+		//   - an unknown outcome does NOT clear it.
+		//
+		// The productive round clears ONLY the consecutive streak. It
+		// replenishes NO run-scoped resource: neither the ordinary
+		// conciseness-reminder allowance nor the exhaustion-driven
+		// continuation ceiling is touched here.
+		if (
+			observation.productivity === "edited" ||
+			observation.productivity === "executed" ||
+			observation.productivity === "awaiting"
+		) {
+			this.maxTokensExhaustionStreak = 0;
+		}
 		this.executionStagnation = foldExecutionRound(
 			this.executionStagnation,
 			observation,
@@ -2852,6 +2963,13 @@ export class AgentRuntime {
 			this.executionStagnation,
 			decision,
 		);
+		// ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01 (AMENDMENT-01).
+		//
+		// The corrective instruction authorizes exactly ONE further parent
+		// request — the request that CARRIES it and lets the model act on it.
+		// The exhaustion recovery therefore treats the instruction as a
+		// PENDING AUTHORIZED INTERVENTION until the model has had its turn.
+		this.executionStagnationInstructionPending = true;
 		await this.emit({
 			type: "status-notice",
 			snapshot: this.snapshot(),
@@ -4336,6 +4454,10 @@ export class AgentRuntime {
 		this.exhaustionRecoveryContinuations = 0;
 		this.recoveryOutputOverrideConsumed = false;
 		this.pendingRecoveryOutputOverride = undefined;
+		// ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01 (AMENDMENT-01):
+		// the pending-delivery flag for an injected corrective instruction is
+		// RUN-SCOPED, exactly like every other recovery resource.
+		this.executionStagnationInstructionPending = false;
 		// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (R1): the
 		// execution-stagnation accounting is RUN-SCOPED. A fresh run starts
 		// from a clean streak AND a clean instruction allowance, so a prior
@@ -4425,6 +4547,16 @@ export class AgentRuntime {
 				this.resetLastError();
 				const { message, finishReason, interrupted } =
 					await this.generateAssistantMessageWithProviderRetry();
+				// ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01
+				// (AMENDMENT-01).
+				//
+				// The model has now had its turn, so a corrective instruction
+				// that was pending delivery is no longer pending: the
+				// intervention happened. The flag is cleared HERE, before the
+				// round's own accounting decides whether another
+				// continuation is authorized, so the pending-instruction
+				// authority covers exactly ONE further parent request.
+				this.executionStagnationInstructionPending = false;
 				if (interrupted && message.content.length === 0) {
 					await this.emit({
 						type: "turn-finished",
@@ -4534,6 +4666,26 @@ export class AgentRuntime {
 					// are NOT relabelled as output exhaustion.
 					this.maxTokensExhaustionStreak += 1;
 					await this.evaluateExecutionStagnation();
+					// ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01
+					// (AMENDMENT-01).
+					//
+					// THE ACTIVE BOUNDED OBJECTIVE'S ROUND BUDGET.
+					//
+					// The R2 objective's round budget is consumed at the
+					// FINALIZED execution-round accounting boundary. Before
+					// AMENDMENT-01 that boundary was reached ONLY by a
+					// tool-calling round, so a TOOL-LESS exhausted round
+					// consumed NO objective round: an active objective could
+					// then never expire, and the run could never terminate
+					// truthfully while the objective remained active.
+					//
+					// The tool-less exhausted round IS an execution round of
+					// the active objective — it is the objective's own turn,
+					// and it produced no observable tool outcome. Folding it
+					// into the EXISTING objective accounting keeps the
+					// objective's budget meaningful and lets the objective
+					// close out with a truthful verdict.
+					await this.evaluateActiveBoundedObjective();
 
 					if (await this.recoverFromIncompleteMaxTokensTurn()) {
 						await this.emit({
@@ -4553,7 +4705,7 @@ export class AgentRuntime {
 					throw new Error(this.state.lastError ?? "Model stream failed");
 				}
 				// ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01
-				// CORRECTION-01.
+				// CORRECTION-01 (AMENDMENT-01).
 				//
 				// The CONSECUTIVE exhaustion streak is cleared by a genuinely
 				// PRODUCTIVE round, NOT by the mere PRESENCE of a tool call.
@@ -4563,13 +4715,26 @@ export class AgentRuntime {
 				// allowance — the defect that produced the frozen session's 17
 				// conciseness reminders against a nominal allowance of 3.
 				//
-				// The classification comes from the EXISTING production
-				// classifier: `classifyExecutionRound()` consults the
-				// host's authoritative verdict (the SAME
-				// `executionStagnationPolicy.classifyToolCall` seam the R1
-				// accounting uses) and falls back to the runtime's own
-				// structural classification. No new classifier and no command
-				// parser is introduced.
+				// AMENDMENT-01: the reset is NOT performed HERE.
+				//
+				// This site is BEFORE `executeToolCalls()`, so the current
+				// round's observable facts are still EMPTY: classifying the
+				// round here observes NOTHING about the round that is about
+				// to run, and the streak was therefore never cleared by a
+				// genuinely productive round. The classification must
+				// happen at the FINALIZED execution-round accounting
+				// boundary, where the round's tool calls have actually been
+				// executed and their outcomes observed.
+				//
+				// The finalized boundary is
+				// {@link evaluateExecutionStagnation}, which already
+				// computes the SAME production classification
+				// (`buildExecutionRoundObservation()` →
+				// `classifyExecutionRound()`, consulting the host's
+				// authoritative `executionStagnationPolicy.classifyToolCall`
+				// seam). The reset therefore REUSES the already-computed
+				// productivity classification and never classifies the same
+				// logical round twice.
 				//
 				// CONSERVATION:
 				//   - a successful native edit / successful execution /
@@ -4581,16 +4746,6 @@ export class AgentRuntime {
 				// The RUN-SCOPED consumable allowance
 				// ({@link maxTokensRecoveryCount}) is NOT touched here at all:
 				// no productive round ever replenishes it.
-				if (toolCalls.length > 0) {
-					const productivity = this.classifyExecutionRound();
-					if (
-						productivity === "edited" ||
-						productivity === "executed" ||
-						productivity === "awaiting"
-					) {
-						this.maxTokensExhaustionStreak = 0;
-					}
-				}
 				this.state.pendingToolCalls = toolCalls.map((part) => part.toolCallId);
 
 				if (toolCalls.length === 0) {
@@ -5020,7 +5175,11 @@ export class AgentRuntime {
 		// actually using.
 		const modelId = this.telemetryModelId;
 		const reasoningEffort = this.effectiveReasoningEffort();
-		if (policy.isAuthorizedTarget?.({ modelId, reasoningEffort }) === false) {
+		const providerId = this.telemetryProviderId;
+		if (
+			policy.isAuthorizedTarget?.({ modelId, reasoningEffort, providerId }) ===
+			false
+		) {
 			return;
 		}
 		if (policy.modelId !== undefined && policy.modelId !== modelId) {
@@ -5112,12 +5271,55 @@ export class AgentRuntime {
 	 * The continuation is counted against the finite run-scoped ceiling
 	 * {@link MAX_EXHAUSTION_RECOVERY_CONTINUATIONS}, which is spent exactly
 	 * once per exhaustion-driven continuation and is never replenished.
+	 *
+	 * THE CONTINUATION AUTHORITY (AMENDMENT-01)
+	 * ----------------------------------------
+	 * "The stagnation policy is enabled" is NOT "recovery is eligible".
+	 *
+	 * The predecessor's escalation branch asked only whether the R1 policy
+	 * was present and enabled, and therefore kept driving parent model
+	 * requests for the whole defensive ceiling AFTER every authorized
+	 * intervention (both R1 corrective instructions) had been spent and R2
+	 * was absent, unreachable, or already exhausted. Those extra requests
+	 * could not do anything useful: no intervention remained to authorise
+	 * them. The ordinary reminder path was worse still — it returned `true`
+	 * WITHOUT spending the continuation ceiling at all, so the declared
+	 * total bound did not bound the ordinary reminders either.
+	 *
+	 * The continuation decision therefore CONSUMES the EXISTING R1/R2
+	 * lifecycle authority through {@link isAuthorizedInterventionReachable}:
+	 *
+	 *   - an ordinary reminder remains available, OR
+	 *   - an authorized intervention is PENDING or remains REACHABLE within
+	 *     the remaining budget.
+	 *
+	 * The defensive ceiling remains a NECESSARY but NOT SUFFICIENT
+	 * condition, and EVERY exhaustion-driven continuation — ordinary
+	 * reminders included — now spends exactly ONE unit of the common
+	 * run-scoped continuation ceiling.
 	 */
 	private async recoverFromIncompleteMaxTokensTurn(): Promise<boolean> {
+		// CANCELLATION PRECEDENCE: a cancelled run never dispatches another
+		// recovery continuation. Cancellation outranks every continuation
+		// authority, including an available ordinary reminder.
+		if (this.abortController?.signal.aborted) {
+			return false;
+		}
+		// THE DEFENSIVE CEILING is necessary but NOT sufficient: it bounds the
+		// run, it does not AUTHORISE it.
+		if (
+			this.exhaustionRecoveryContinuations >=
+			MAX_EXHAUSTION_RECOVERY_CONTINUATIONS
+		) {
+			return false;
+		}
 		// The ORDINARY conciseness reminder. Its allowance is finite and
-		// run-scoped.
+		// run-scoped, and an available ordinary reminder IS an authorized
+		// intervention — but it spends ONE unit of the COMMON continuation
+		// ceiling, so the declared total bound covers it too.
 		if (this.maxTokensRecoveryCount < MAX_TOKENS_RECOVERY_LIMIT) {
 			this.maxTokensRecoveryCount += 1;
+			this.exhaustionRecoveryContinuations += 1;
 			await this.emit({
 				type: "status-notice",
 				snapshot: this.snapshot(),
@@ -5139,24 +5341,13 @@ export class AgentRuntime {
 		//
 		// The ordinary allowance is spent. A still-eligible bounded R1/R2
 		// intervention must remain REACHABLE, so the run continues WITHOUT
-		// another ordinary reminder — but ONLY within the finite run-scoped
-		// continuation ceiling.
-		if (
-			this.exhaustionRecoveryContinuations >=
-			MAX_EXHAUSTION_RECOVERY_CONTINUATIONS
-		) {
-			return false;
-		}
-		// CANCELLATION PRECEDENCE: a cancelled run never dispatches another
-		// recovery continuation.
-		if (this.abortController?.signal.aborted) {
-			return false;
-		}
-		// A still-eligible R1/R2 intervention must remain. The R1 policy is
-		// disabled when absent, so with no policy there is nothing to
-		// escalate to and the run terminates truthfully.
-		const policy = this.config.executionStagnationPolicy;
-		if (!policy || policy.enabled === false) {
+		// another ordinary reminder — but ONLY when the EXISTING lifecycle
+		// authority says an intervention is pending or still reachable.
+		//
+		// When no useful authorized intervention remains, the run terminates
+		// TRUTHFULLY instead of driving requests that no intervention can
+		// authorise.
+		if (!this.isAuthorizedInterventionReachable()) {
 			return false;
 		}
 		this.exhaustionRecoveryContinuations += 1;
@@ -5174,6 +5365,127 @@ export class AgentRuntime {
 			},
 		});
 		return true;
+	}
+
+	/**
+	 * ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01 (AMENDMENT-01).
+	 *
+	 * Whether a USEFUL AUTHORIZED INTERVENTION is pending or still reachable
+	 * within the remaining run-scoped budget.
+	 *
+	 * THIS IS A READ-ONLY CONSULTATION OF THE EXISTING LIFECYCLE AUTHORITY.
+	 * It does NOT duplicate the R1/R2 decision algorithm, does NOT fold any
+	 * accounting, does NOT inject anything and does NOT decide completion.
+	 * It asks the SAME authority the runtime already owns:
+	 *
+	 *   - R1: the run-scoped execution-stagnation accounting and its policy
+	 *     (the corrective-instruction allowance and the streak), and
+	 *   - R2: the bounded-objective policy, the activation and
+	 *     selection-inference allowances, the ACTIVE objective and its
+	 *     remaining objective rounds.
+	 *
+	 * THE THREE REACHABLE SHAPES
+	 * --------------------------
+	 *
+	 *   1. R1 CORRECTIVE INSTRUCTION PENDING.
+	 *      The R1 decision function would produce `inject` right now: the
+	 *      streak has reached the threshold and the run-scoped
+	 *      corrective-instruction allowance remains.
+	 *
+	 *   2. R1 CORRECTIVE INSTRUCTION STILL REACHABLE.
+	 *      The allowance remains and the streak has NOT yet reached the
+	 *      threshold, so further unproductive rounds can still reach it.
+	 *      This is the shape that lets the ordinary allowance (3) be
+	 *      exhausted BEFORE the R1 threshold (5) without terminating the
+	 *      run prematurely — the accepted "premature termination" fix.
+	 *
+	 *   3. R2 BOUNDED OBJECTIVE REACHABLE.
+	 *      Either an objective is ACTIVE and still has objective rounds
+	 *      left, or the R1 allowance-exhausted branch is live and R2 may
+	 *      still activate: R2 is enabled, the run is active, no objective is
+	 *      already active, the activation allowance remains, the
+	 *      selection-inference allowance remains, and an authorized parent
+	 *      objective exists to derive one from.
+	 *
+	 * WHEN NONE OF THE THREE HOLDS, the run has NO useful authorized
+	 * intervention left, and the exhaustion recovery must terminate
+	 * truthfully.
+	 */
+	private isAuthorizedInterventionReachable(): boolean {
+		// ---- A PENDING R1 CORRECTIVE INSTRUCTION ----
+		//
+		// The instruction was injected at the current execution-round boundary
+		// and the model has NOT yet had the opportunity to respond to it. The
+		// request that carries it is the request the instruction authorizes,
+		// so the run MUST continue for it to be delivered.
+		if (this.executionStagnationInstructionPending) {
+			return true;
+		}
+		// ---- R1: the corrective-instruction lifecycle ----
+		const policy = this.config.executionStagnationPolicy;
+		if (policy && policy.enabled !== false) {
+			const threshold = Math.max(
+				1,
+				Math.floor(policy.unproductiveRoundThreshold),
+			);
+			const maxInstructions = Math.max(0, policy.maxRecoveryInstructions);
+			const allowanceRemains =
+				this.executionStagnation.instructionsInjected < maxInstructions;
+			if (allowanceRemains) {
+				// (1) PENDING: the decision function would inject NOW.
+				const decision = decideExecutionStagnation(
+					this.executionStagnation,
+					policy,
+				);
+				if (decision.kind === "inject") {
+					return true;
+				}
+				// (2) STILL REACHABLE: the allowance remains and further
+				// unproductive rounds can still reach the threshold.
+				if (this.executionStagnation.unproductiveRounds < threshold) {
+					return true;
+				}
+			}
+		}
+		// ---- R2: the bounded-objective lifecycle ----
+		const r2Policy = this.getBoundedObjectivePolicy();
+		if (!r2Policy) {
+			return false;
+		}
+		if (this.activeBoundedObjective !== undefined) {
+			// (3a) An objective is ACTIVE: it is useful while it still has
+			// objective rounds left to execute.
+			const maxObjectiveRounds = Math.max(
+				0,
+				r2Policy.maxObjectiveRounds ??
+					DEFAULT_BOUNDED_OBJECTIVE_POLICY.maxObjectiveRounds,
+			);
+			return this.boundedObjectiveFacts.rounds < maxObjectiveRounds;
+		}
+		// (3b) No objective is active: R2 may still activate, but only when
+		// the run is live and EVERY allowance remains.
+		if (this.state.status !== "running") {
+			return false;
+		}
+		const maxActivations = Math.max(
+			0,
+			r2Policy.maxActivations ??
+				DEFAULT_BOUNDED_OBJECTIVE_POLICY.maxActivations,
+		);
+		if (this.boundedObjectiveActivations >= maxActivations) {
+			return false;
+		}
+		const maxSelectionInferences = Math.max(
+			0,
+			r2Policy.maxSelectionInferences ??
+				DEFAULT_BOUNDED_OBJECTIVE_POLICY.maxSelectionInferences,
+		);
+		if (this.boundedObjectiveSelectionInferences >= maxSelectionInferences) {
+			return false;
+		}
+		// Without an authorized parent objective there is nothing to derive
+		// a bounded objective FROM, so R2 cannot activate.
+		return this.buildBoundedObjectiveSelectionContext() !== undefined;
 	}
 
 	/**

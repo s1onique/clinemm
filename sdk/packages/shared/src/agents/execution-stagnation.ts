@@ -277,6 +277,20 @@ export interface RecoveryOutputOverridePolicy {
 	readonly isAuthorizedTarget?: (context: {
 		readonly modelId: string | undefined;
 		readonly reasoningEffort: string | undefined;
+		/**
+		 * The PROVIDER identity of the request's model.
+		 *
+		 * ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01
+		 * (AMENDMENT-01): the host owns the exact authorized TARGET, and
+		 * the target is a PROVIDER, a MODEL and an effective reasoning
+		 * effort. The provider is part of the target, so it must be
+		 * visible to the host's judgement.
+		 *
+		 * It is `undefined` when the runtime cannot establish the
+		 * provider identity — and an UNKNOWN provider is NOT the
+		 * authorized one.
+		 */
+		readonly providerId: string | undefined;
 	}) => boolean;
 	/**
 	 * The host-supplied predicate that ESTABLISHES whether repeated output

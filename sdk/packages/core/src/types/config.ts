@@ -390,6 +390,21 @@ export interface CoreSessionConfig
 	 */
 	executionStagnationPolicy?: AgentConfig["executionStagnationPolicy"];
 	/**
+	 * ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01 (AMENDMENT-01).
+	 *
+	 * The OPT-IN, HOST-SUPPLIED recovery-only generation override policy.
+	 *
+	 * A BOUNDED BEHAVIORAL EXPERIMENT: it attaches ONE request-local
+	 * output-budget increase to the next authorized recovery request. It is
+	 * NOT a global generation-limit increase, NOT a compaction-threshold
+	 * change and NOT a provider or model switch.
+	 *
+	 * When absent (the default), the runtime behaves EXACTLY as before: no
+	 * override is ever armed, no request ever carries a different output
+	 * allowance, and no recovery accounting exists.
+	 */
+	recoveryOutputOverridePolicy?: AgentConfig["recoveryOutputOverridePolicy"];
+	/**
 	 * ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 (R2).
 	 *
 	 * The OPT-IN, HOST-SUPPLIED bounded-objective recovery policy.

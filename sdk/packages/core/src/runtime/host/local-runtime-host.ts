@@ -1498,6 +1498,22 @@ export class LocalRuntimeHost implements RuntimeHost {
 			// command-policy judgement — and the runtime never resolves,
 			// relaxes or invents a policy of its own.
 			executionStagnationPolicy: configWithProvider.executionStagnationPolicy,
+			// ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01 (AMENDMENT-01):
+			// forward the runtime-owned recovery-only generation override
+			// policy into the `AgentConfig` the runtime actually receives.
+			//
+			// The host (VS Code) supplies the policy on the SESSION CONFIG
+			// for ACT mode only, and only when the operator opt-in is
+			// explicitly selected; otherwise the key is absent and the
+			// runtime behaves exactly as before.
+			//
+			// It is forwarded VERBATIM. The host owns the policy — including
+			// its `isAuthorizedTarget` hook, which is the host's own
+			// judgement of whether the exact provider, model and effective
+			// reasoning effort are the authorized ones — and the runtime
+			// never resolves, relaxes or invents a policy of its own.
+			recoveryOutputOverridePolicy:
+				configWithProvider.recoveryOutputOverridePolicy,
 			// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 (R2):
 			// forward the runtime-owned bounded-objective recovery policy
 			// into the `AgentConfig` the runtime actually receives.

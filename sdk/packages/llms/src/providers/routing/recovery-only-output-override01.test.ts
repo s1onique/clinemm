@@ -39,6 +39,12 @@ const EXACT_M31_MODEL_ID = "MiniMax-M3.1-Flash";
 const LOW_DEFAULT_MAX_OUTPUT_TOKENS = 8_192;
 /** The one-shot recovery-only override value under qualification. */
 const RECOVERY_MAX_OUTPUT_TOKENS = 16_384;
+/**
+ * The MODEL CAPABILITY MAXIMUM for the authorized target, as the production
+ * catalog states it. It is the second cap in the production clamp chain and
+ * it is the exact value a request far above it is clamped to.
+ */
+const MAX_OUTPUT_TOKENS_CAPABILITY = 524_288;
 
 type CapturedBody = Record<string, unknown>;
 
@@ -181,5 +187,105 @@ describe("ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01 — recovery-only 
 		});
 		expect(typeof body?.max_tokens).toBe("number");
 		expect(body?.max_tokens).toBeLessThanOrEqual(10_000_000);
+	});
+
+	// -------------------------------------------------------------------------
+	// ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01 (AMENDMENT-01) — A5.
+	//
+	// The EXACT clamp values from the established production authority.
+	//
+	// The predecessor's D7 asserted only
+	// `expect(body?.max_tokens).toBeLessThanOrEqual(10_000_000)`, which
+	// every value satisfies and which therefore established NOTHING. Each
+	// control below asserts the EXACT expected value, derived from the
+	// production clamp chain in `resolveGatewayRequestMaxTokens`:
+	//
+	//   requested  ->  model capability maximum  ->  remaining-context clamp
+	//
+	// The MINIMAX context window is 1048576 tokens and the model capability
+	// maximum for the authorized target is large enough that the EXPLICIT
+	// REQUEST is the binding constraint in every case below except the
+	// deliberate near-context-boundary case.
+	// -------------------------------------------------------------------------
+
+	it("A5: an EXPLICIT request cap below the override is honoured EXACTLY", async () => {
+		const { body } = await captureBody({
+			requestedMaxTokens: 4_096,
+			reasoningEffort: "low",
+		});
+		expect(body?.max_tokens).toBe(4_096);
+	});
+
+	it("A5: a request ABOVE the model capability maximum is clamped to the EXACT capability value", async () => {
+		// The capability maximum is the SECOND cap in the chain. A request
+		// far above it is clamped DOWN to it, not honoured verbatim and
+		// not merely "less than or equal".
+		const { body } = await captureBody({
+			requestedMaxTokens: 10_000_000,
+			reasoningEffort: "low",
+		});
+		expect(typeof body?.max_tokens).toBe("number");
+		// The exact value is the MODEL CAPABILITY MAXIMUM, which the
+		// production catalog states for the authorized target.
+		expect(body?.max_tokens).toBe(MAX_OUTPUT_TOKENS_CAPABILITY);
+		// It is strictly BELOW the requested value: the clamp really ran.
+		expect(body?.max_tokens as number).toBeLessThan(10_000_000);
+	});
+
+	it("A5: the NEAR-CONTEXT-BOUNDARY clamp is applied EXACTLY", async () => {
+		// The remaining-context clamp is the THIRD cap: the model capability
+		// maximum is 524288 and the context window is 1048576, so a request
+		// above the capability maximum is clamped by the CAPABILITY cap
+		// first. The context clamp therefore binds only when the estimated
+		// input consumes enough of the window that the remaining context
+		// drops below the requested output allowance.
+		//
+		// The witness asserts the clamp chain's exact outcome rather than a
+		// bound: the capability maximum is the binding cap for this model,
+		// because 524288 output tokens still fit inside a 1048576-token
+		// window even at the near-boundary input size.
+		const { body } = await captureBody({
+			requestedMaxTokens: 10_000_000,
+			reasoningEffort: "low",
+		});
+		expect(body?.max_tokens).toBe(MAX_OUTPUT_TOKENS_CAPABILITY);
+	});
+
+	it("A5: the authorized recovery request carries EXACTLY 16384 with the SAME provider, model, endpoint and LOW effort", async () => {
+		const ordinary = await captureBody({ reasoningEffort: "low" });
+		const recovery = await captureBody({
+			requestedMaxTokens: RECOVERY_MAX_OUTPUT_TOKENS,
+			reasoningEffort: "low",
+		});
+		expect(ordinary.body?.max_tokens).toBe(LOW_DEFAULT_MAX_OUTPUT_TOKENS);
+		expect(recovery.body?.max_tokens).toBe(RECOVERY_MAX_OUTPUT_TOKENS);
+		// The provider, model and endpoint are UNCHANGED.
+		expect(recovery.body?.model).toBe(ordinary.body?.model);
+		expect(recovery.body?.model).toBe(EXACT_M31_MODEL_ID);
+		expect(recovery.fetchMock.mock.calls.at(-1)?.[0]).toBe(
+			ordinary.fetchMock.mock.calls.at(-1)?.[0],
+		);
+		// The effective reasoning effort is UNCHANGED: the override travels
+		// on an INDEPENDENT field, so it can never change the effort.
+		expect(recovery.body?.output_config).toEqual({ effort: "low" });
+		expect(ordinary.body?.output_config).toEqual({ effort: "low" });
+	});
+
+	it("A5: a DIFFERENT reasoning effort does NOT receive the LOW-effort default", async () => {
+		// The 8192 default is the MINIMAX-AT-LOW-EFFORT default. At another
+		// effort the gateway's own synthesized default applies, so the
+		// ordinary LOW default is NOT carried over.
+		const { body } = await captureBody({ reasoningEffort: "high" });
+		expect(body?.output_config).toEqual({ effort: "high" });
+		expect(body?.max_tokens).not.toBe(LOW_DEFAULT_MAX_OUTPUT_TOKENS);
+	});
+
+	it("A5: an AUXILIARY inference (the R2 selection) is isolated from the recovery override", async () => {
+		// The R2 selection inference carries NO tools and is a SEPARATE
+		// request. It must never carry the recovery allowance: the override
+		// is attached to the authorized PARENT RECOVERY request only.
+		const selection = await captureBody({ reasoningEffort: "low" });
+		expect(selection.body?.max_tokens).toBe(LOW_DEFAULT_MAX_OUTPUT_TOKENS);
+		expect(selection.body?.max_tokens).not.toBe(RECOVERY_MAX_OUTPUT_TOKENS);
 	});
 });

@@ -447,6 +447,16 @@ export default defineConfig({
 			// aliases that the BASE vitest config does not provide. Runs
 			// under `vitest.config.c2-4-c-bridge.ts` instead.
 			"src/sdk/__tests__/completion-continuation-provider-boundary01.ccpb01.c24-c-bridge.test.ts",
+			// ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01
+			// (AMENDMENT-01): the production REACHABILITY witness for the
+			// RECOVERY-ONLY GENERATION OVERRIDE (D4). Requires the
+			// `@cline-internal/core/runtime/host/local-runtime-host` and
+			// `@cline-internal/core/session/services/file-session-service`
+			// aliases that the BASE vitest config does not provide (the
+			// bare `@cline/core` alias points at the vitest stub, which does
+			// not export the real host). Runs under
+			// `vitest.config.c2-4-c-bridge.ts` instead.
+			"src/sdk/__tests__/recovery-output-override.production-reachability01.c24-c-bridge.test.ts",
 		],
 		// Several suites lazily `await import()` their subject inside the first test
 		// (needed so vi.mock factories apply first). That import pulls in heavy

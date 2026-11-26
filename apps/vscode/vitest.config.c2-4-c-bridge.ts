@@ -529,6 +529,15 @@ export default defineConfig({
 			// Needs the `@cline-internal/core/...` aliases declared only
 			// here.
 			"src/sdk/__tests__/autonomous-execution-recovery-r2.production-reachability02.c24-c-bridge.test.ts",
+			// ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01
+			// (AMENDMENT-01): production REACHABILITY of the RECOVERY-ONLY
+			// GENERATION OVERRIDE (D4). Drives the REAL
+			// `buildSessionConfig()` producer (ACT vs PLAN, DEFAULT_OFF vs
+			// the EXPLICIT operator opt-in), the REAL `LocalRuntimeHost`
+			// AgentConfig forwarding seam, and the REAL `AgentRuntime`
+			// with the PRODUCED policy. Needs the `@cline-internal/core/...`
+			// aliases declared only here.
+			"src/sdk/__tests__/recovery-output-override.production-reachability01.c24-c-bridge.test.ts",
 		],
 		testTimeout: 30_000,
 	},

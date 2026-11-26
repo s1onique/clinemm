@@ -43786,3 +43786,191 @@ EXPERIMENT.** This ACT authorizes exact-head artifact packaging and an
 isolated live experiment only. It does NOT authorize unrestricted R2
 rollout, permanent activation of the recovery-only generation override, or
 any claim that MiniMax will recover successfully.
+
+# ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01 (AMENDMENT-01) — GO_OUTPUT_EXHAUSTION_RECOVERY_DOGFOOD — 2026-11-26
+
+```text
+ACT_ID:       ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01 (AMENDMENT-01)
+TYPE:         bounded recovery-lifecycle and production-reachability correction
+              (one bounded cycle, no recursive review campaign)
+VERDICT:      GO_OUTPUT_EXHAUSTION_RECOVERY_DOGFOOD
+EPIC:         OUTPUT-EXHAUSTION RECOVERY LIFECYCLE
+ENTRY_HEAD:   a4e8b251836f718409224da3e3b17bd2127aa082
+BRANCH:       main
+```
+
+**A1 — RECOVERY CONTINUATION AUTHORITY (REPRODUCED, REPAIRED).** The
+predecessor's `recoverFromIncompleteMaxTokensTurn()` permitted escalation
+whenever the stagnation policy was merely ENABLED. "Policy enabled" is NOT
+"recovery eligible": the run kept driving parent model requests for the
+whole defensive ceiling AFTER every authorized intervention (both R1
+corrective instructions) had been spent and R2 was absent, unreachable, or
+already exhausted. The ordinary reminder path was worse still — it returned
+`true` WITHOUT spending the continuation ceiling, so the declared total
+bound did not bound the ordinary reminders either.
+
+RED RECEIPT (real `AgentRuntime`, persistently exhausted scripted model with
+more scripted responses than the fixture can consume, production R1
+constants): with R2 ABSENT the run made **24** logical responses — 3 ordinary
+reminders, 2 R1 interventions and **20** escalation continuations — i.e. **23**
+exhaustion-driven continuations, above the declared ceiling of 20, and every
+one of those extra requests could not do anything useful.
+
+The continuation decision now CONSUMES the EXISTING R1/R2 lifecycle
+authority through `isAuthorizedInterventionReachable()`: a pending R1
+corrective instruction (the instruction authorizes exactly ONE further
+parent request — the one that CARRIES it), an R1 intervention that is
+PENDING or still REACHABLE, an ACTIVE bounded objective with objective
+rounds left, or an R2 activation that every allowance still permits. The
+decision does NOT duplicate the R1/R2 algorithm, does NOT fold accounting
+and does NOT decide completion. CANCELLATION takes precedence over every
+continuation. EVERY exhaustion-driven continuation — ordinary reminders
+INCLUDED — spends exactly ONE unit of the common run-scoped ceiling. The
+defensive ceiling remains NECESSARY but NOT SUFFICIENT.
+
+**THE REACHABLE LIFECYCLE (measured, not compared).** With the correction
+the real runtime consumes: **10** continuations with R2 absent (3 ordinary
++ 7 escalations, stopping at the second R1 instruction because R2 is
+unreachable) and **21** with R2 present and a PRODUCTION-VALID selection
+(3 ordinary + 11 escalations to the R1 `allowance_exhausted` branch + 7
+objective rounds; the R2 selection inference is NOT a continuation). The
+declared ceiling of **20** therefore TRUNCATED the R2 objective's own
+budget — it received 6 of its 8 authorized rounds and the run was terminated
+by the defensive ceiling instead of by the objective's own verdict. That is
+a demonstrated truncation of an ACCEPTED intervention, so the ceiling is
+raised to **32** (21 reachable + 11 margin). It remains an UPPER BOUND,
+never a target.
+
+**A2 — PRODUCTION-HOST REACHABILITY OF D4 (WAS UNREACHABLE, NOW WIRED).**
+`recoveryOutputOverridePolicy` was declared in the shared contract but no
+production composition path installed it: reachability could not be inferred
+from the type declaration, so the actual path was inspected. The policy is
+now composed by the EXISTING producer — `apps/vscode/src/sdk/cline-session-factory.ts`
+`buildSessionConfig()` — following the ESTABLISHED R2 experimental-policy
+pattern, and forwarded verbatim through `CoreSessionConfig` →
+`AgentConfig` (`local-runtime-host.ts`) → `AgentRuntimeConfig`
+(`agent-runtime-config-builder.ts`).
+
+The opt-in is ONE explicit, operator-local environment switch:
+`CLINEMM_RECOVERY_OUTPUT_OVERRIDE=1`. It is DEFAULT_OFF: with the opt-in
+absent the `recoveryOutputOverridePolicy` key is NOT INSTALLED AT ALL, so
+the runtime behaves exactly as before. No persisted setting and no
+models.json modification. ACT mode only — PLAN mode installs no policy. The
+EXACT authorized target is established by the HOST: provider `minimax`,
+model `MiniMax-M3.1-Flash`, effective reasoning effort `low`. An UNKNOWN
+provider, model or effort means NO override. The normal generation limit
+(8192) is untouched and the requested recovery override is 16384. The host
+predicate may only NARROW eligibility; it cannot bypass the runtime's own
+minimum repeated-exhaustion requirement.
+
+**A3 — CURRENT-ROUND PRODUCTIVITY AUTHORITY (REPRODUCED, REPAIRED).** The
+new `classifyExecutionRound()` call sat BEFORE `executeToolCalls()`, so the
+round's observable facts were still EMPTY and the classification observed
+NOTHING about the round about to run. The consequence was that the
+CONSECUTIVE exhaustion streak was NEVER cleared by a genuinely productive
+round — not even by a successful native edit. The RED receipt confirmed it:
+a successful edit at round 5 did not clear the streak and the R1 threshold
+still fired.
+
+The reset now happens at the FINALIZED execution-round accounting boundary
+(`evaluateExecutionStagnation()`), where the round's tool calls have
+actually been executed and their outcomes observed, reusing the SAME
+already-computed classification the R1 accounting consumes. The logical
+round is classified ONCE. The productive round clears ONLY the consecutive
+streak and replenishes NO run-scoped resource. The PAIRED TRAJECTORIES are
+qualified with the PRODUCTION host classifier
+(`createHostExecutionProgressClassifier()`) as the load-bearing
+discriminator: successful edit, failed edit, successful execution, read-only
+inspection, failed/unknown execution and legitimate wait.
+
+**A4 — R2 BEHAVIOURAL EVIDENCE (STRENGTHENED).** The predecessor's
+Trajectory B used a selection reply with a `candidates` ARRAY and an ARRAY
+`mutationScope`, which the PRODUCTION validator REJECTS (it requires six
+scalar string fields), and it used `verifyObjective: () => true`, an
+unconditional predicate that proves nothing. The witness now uses a
+PRODUCTION-VALID selection and a REAL bounded verification predicate over
+ACTUAL workspace state, and walks the ordered lifecycle: R1 allowance
+exhausted → EXACTLY ONE R2 selection inference → the production validator
+ACCEPTS the proposal → an ACTUAL subsequent parent request CARRIES the
+accepted bounded objective → a permitted tool changes ACTUAL workspace bytes
+→ an ACTUAL verification result establishes the objective's success → the
+objective CLOSES → a subsequent parent request NO LONGER carries it → the
+parent completes ONLY through its existing completion authority. The
+REJECTED-selection control is retained (`fabricated_evidence`: one
+selection inference, no objective, no retry, no verification attempted).
+
+**A5 — D4 ELIGIBILITY AND END-TO-END GENERATION AUTHORITY.** The override
+is one-shot per LOGICAL request. The wire witness now drives ONE REAL
+runtime-to-gateway trajectory with an INJECTED FETCH and observes the ACTUAL
+SERIALIZED BODIES: ordinary `max_tokens=8192`, authorized R1 recovery
+`max_tokens=16384`, subsequent ordinary `max_tokens=8192`, with EVERY
+request retaining LOW reasoning effort and the SAME provider/model/endpoint.
+The LOGICAL requests and the PHYSICAL attempts are classified SEPARATELY: a
+physical retry re-sends the same logical request, so the request-local
+override rides along. The gateway-level witness now asserts the EXACT clamp
+values from the established production authority — the explicit cap 4096
+verbatim, and the model capability maximum **524288** exactly (the
+predecessor's `toBeLessThanOrEqual(10_000_000)` established nothing).
+
+**A6 — BEHAVIOURAL WITNESS FIDELITY (STRENGTHENED).** The R1 trajectory is
+now CONDITIONAL: the scripted model edits ONLY after it has actually
+OBSERVED the R1 corrective instruction in the request it received. The
+INTERVENTION-DENIED control uses the SAME conditional script with the R1
+policy DISABLED: no request ever carries the instruction, the scripted
+recovery does NOT occur, the workspace bytes are UNCHANGED and the run
+terminates truthfully. The verification invocation is asserted against the
+ACTUAL bytes, and the reconnaissance fixture is INITIALIZED with the file it
+claims to inspect.
+
+```text
+ACT-OWNED WITNESSES:   54 (all PASSED)
+                       — A1 continuation authority 5 (lifecycle suite)
+                       — A2 production-host reachability 8 (bridge suite)
+                       — A3 finalized round productivity 7 (core suite)
+                       — A4 R2 ordered lifecycle + rejected control 2
+                       — A5 gateway wire 6 + runtime-to-gateway wire 2
+                       — A6 R1 conditional + denied control + conservation 5
+HISTORICAL WITNESS:    5 (forensics, INVERTED, predecessor expectations
+                       quoted verbatim)
+EXISTING SUITES:       agents focused 67 PASSED (output-exhaustion,
+                       execution-stagnation, R1, R2 conservation) | core
+                       focused 30 PASSED (A3, A5 wire, host classifier) |
+                       llms cmp09 + override 26 PASSED | core cmp08 24 +
+                       cmp09 retry 20 PASSED | apps/vscode bridge 21 PASSED
+                       (R1, R2, D4 production reachability) | shared 717
+                       PASSED
+NO_NEW_FAILURES:       agents 43 pre-existing failures, IDENTICAL
+                       identities (diff-verified against the ENTRY_HEAD
+                       baseline); llms 4 pre-existing (diff-verified); core
+                       260 pre-existing failing files IDENTICAL
+                       (diff-verified); apps/vscode base 266 IDENTICAL
+                       (diff-verified); apps/vscode bridge 23 IDENTICAL
+                       (diff-verified)
+TYPECHECK:             @cline/shared CLEAN; @cline/llms CLEAN;
+                       @cline/agents CLEAN; apps/vscode base CLEAN;
+                       apps/vscode bridge 5 -> 5, ZERO DELTA (pre-existing)
+BIOME:                 clean on all changed files
+SDK REBUILD:           bun run build:sdk, CLEAN
+VSIX PACKAGING:        NOT EXECUTED (no packaging in this amendment)
+INFERENCE REQUESTS:    0 (synthetic SSE only; no paid inference)
+ACT-OWNED DIAGNOSTICS: 0
+LIVE BEHAVIOURAL
+EFFECTIVENESS:         NOT ESTABLISHED — the evidence class remains
+                       SYNTHETIC_REAL_PRODUCTION_SEAM
+```
+
+**CMP-09 REMAINS CLOSED AND UNREOPENED.** The CMP-08 and CMP-09 focused
+conservation gates pass; the CMP-09 context-budget suite's three failures
+are pre-existing and IDENTICAL to the ENTRY_HEAD baseline (diff-verified).
+No CMP-09 accounting was changed.
+
+**NO R3, NO PCK OPTIMIZATION, NO INVESTIGATION-SPECIFIC STAGNATION
+CLASSIFIER, NO CREDENTIAL-OUTPUT WORK, NO PROVIDER/MODEL SWITCHING, NO
+GLOBAL GENERATION-LIMIT OR REASONING-EFFORT CHANGE, NO NEW DIAGNOSTICS
+FRAMEWORK, NO HISTORICAL PAID REPLAY.**
+
+**THE NEXT MEANINGFUL LEARNING EVENT IS THE ISOLATED LIVE BEHAVIOURAL
+EXPERIMENT.** This amendment authorizes exact-head artifact packaging and an
+isolated live experiment only. It does NOT authorize unrestricted R2
+rollout, permanent activation of the recovery-only generation override, or
+any claim that MiniMax will recover successfully.
