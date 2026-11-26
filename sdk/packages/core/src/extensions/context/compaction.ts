@@ -1,4 +1,56 @@
 import { join } from "node:path";
+
+// ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (AMENDMENT-01, A1/A2/A3).
+//
+// The transport authority and the destination origin authority live in
+// `@cline/llms`.
+//
+// They are reached through a LAZY, DEFENSIVE accessor rather than a
+// module-scope binding for one concrete reason: the compaction module is
+// imported by hosts and witnesses that substitute `@cline/llms` wholesale.
+// A module-scope named import would make every such substitute fail at the
+// FIRST CALL, because a substituted module does not carry these exports.
+//
+// The accessor therefore resolves the authority when it is needed and
+// degrades to "NOT ESTABLISHED" when the module does not provide it. That
+// degradation is the SAFE direction: an unestablished transport grants no
+// reasoning-authorization requirement (every reasoning block is measured,
+// exactly as before this repair) and an unestablished destination grants
+// no opaque replay authority (the reasoning the wire would also drop is
+// not measured). Neither can silently exclude content the provider
+// receives.
+type LlmTransportAuthority = {
+	buildReasoningOriginAuthority?: (input: {
+		providerId: string;
+		baseUrl: string | undefined;
+	}) => string | undefined;
+	resolveEffectiveBaseUrl?: (input: {
+		providerId: string;
+		baseUrl?: string | undefined;
+		apiLine?: string | undefined;
+	}) => string | undefined;
+	resolveTransportFacts?: (input: { providerId: string; model?: unknown }) => {
+		client?: string;
+		apiProtocol?: string;
+	};
+};
+
+let llmTransportAuthority: LlmTransportAuthority | undefined;
+let llmTransportAuthorityResolved = false;
+
+function getLlmTransportAuthority(): LlmTransportAuthority {
+	if (!llmTransportAuthorityResolved) {
+		llmTransportAuthorityResolved = true;
+		try {
+			llmTransportAuthority =
+				require("@cline/llms") as Partial<LlmTransportAuthority>;
+		} catch {
+			llmTransportAuthority = undefined;
+		}
+	}
+	return llmTransportAuthority ?? {};
+}
+
 import {
 	computeCandidateContentFingerprint,
 	estimateRequestInputTokens,
@@ -1018,6 +1070,30 @@ export function createContextCompactionPrepareTurn(
 		return undefined;
 	}
 
+	// ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (AMENDMENT-01, A2/A3).
+	//
+	// The DESTINATION ORIGIN AUTHORITY of the request this turn dispatches.
+	//
+	// The trigger measures the request the provider ACTUALLY receives, and
+	// the opaque reasoning payloads are replay-eligible only for the
+	// destination that issued them. The budget therefore needs the SAME
+	// destination authority the WIRE gate compares the recorded origin
+	// against, and it is built by the repository's single resolver.
+	//
+	// An UNRESOLVED destination (an operator-configured base URL, a missing
+	// one, a credential-bearing one) produces NO authority, exactly as the
+	// wire treats it: no opaque replay authority, and the budget excludes
+	// the reasoning the wire would also drop.
+	const transportAuthority = getLlmTransportAuthority();
+	const destinationAuthority =
+		transportAuthority.buildReasoningOriginAuthority?.({
+			providerId: config.providerId,
+			baseUrl: transportAuthority.resolveEffectiveBaseUrl?.({
+				providerId: config.providerId,
+				baseUrl: resolveConnectionProviderConfig(config).baseUrl,
+			}),
+		});
+
 	const estimateMessageTokens = createTokenEstimator();
 	const strategy = userCompaction?.strategy ?? "agentic";
 	const runBuiltinStrategy = BUILTIN_COMPACTION_STRATEGIES[strategy];
@@ -1085,7 +1161,13 @@ export function createContextCompactionPrepareTurn(
 		// The exclusion is applied to the SAME provider-visible projection
 		// the wire consumes, and it is exactly the exclusion the resolved
 		// serializer performs, so the two cannot drift.
+		const transportFacts = getLlmTransportAuthority().resolveTransportFacts?.({
+			providerId: context.model.provider,
+			model: context.model.info,
+		});
 		const requiresSignedReasoning = requiresSignedReasoningCapability({
+			transportClient: transportFacts?.client,
+			apiProtocol: transportFacts?.apiProtocol,
 			family: context.model.info?.family,
 			apiFormat: context.model.info?.apiFormat,
 			modelId: context.model.id,
@@ -1093,7 +1175,7 @@ export function createContextCompactionPrepareTurn(
 		});
 		const measuredApiMessages = omitUnauthorizedReasoningBlocks(
 			context.apiMessages,
-			{ requiresSignedReasoning },
+			{ requiresSignedReasoning, destinationAuthority },
 		);
 		const requestInputTokens = estimateRequestInputTokens({
 			systemPrompt: context.systemPrompt,
@@ -2232,6 +2314,19 @@ export function createCompactionStateAwarePrepareTurn(input: {
 		messages: CoreCompactionContext["messages"],
 	) => Promise<CoreCompactionContext["messages"]>;
 	/**
+	 * ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (AMENDMENT-01, A2/A3).
+	 *
+	 * The ORIGIN AUTHORITY of the destination the request is dispatched to.
+	 *
+	 * The task-contract budget guard applies the SAME destination-specific
+	 * replay eligibility the WIRE gate applies, so it needs the SAME
+	 * destination authority.
+	 *
+	 * `undefined` means the destination route is UNRESOLVED, which grants no
+	 * replay authority — exactly as the wire treats it.
+	 */
+	destinationAuthority?: string;
+	/**
 	 * Persist a freshly-computed compaction state. `sourceMessages` are the
 	 * exact canonical messages the state's source-prefix hash was computed
 	 * over; hosts must validate projection against these rather than a
@@ -2429,6 +2524,7 @@ export function createCompactionStateAwarePrepareTurn(input: {
 				messages: readonly CoreCompactionContext["messages"][number][],
 			) => Promise<readonly unknown[]>;
 			requiresSignedReasoning: boolean;
+			destinationAuthority: string | undefined;
 		} => ({
 			maxRequestTokens: contractMaxRequestTokens,
 			systemPrompt,
@@ -2438,11 +2534,23 @@ export function createCompactionStateAwarePrepareTurn(input: {
 			// applies the SAME reasoning-authorization exclusion the
 			// resolved serializer performs.
 			requiresSignedReasoning: requiresSignedReasoningCapability({
+				transportClient: getLlmTransportAuthority().resolveTransportFacts?.({
+					providerId: context.model.provider,
+					model: context.model.info,
+				})?.client,
+				apiProtocol: getLlmTransportAuthority().resolveTransportFacts?.({
+					providerId: context.model.provider,
+					model: context.model.info,
+				})?.apiProtocol,
 				family: context.model.info?.family,
 				apiFormat: context.model.info?.apiFormat,
 				modelId: context.model.id,
 				providerId: context.model.provider,
 			}),
+			// ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (AMENDMENT-01,
+			// A2/A3): the guard applies the SAME destination-specific replay
+			// eligibility the wire applies.
+			destinationAuthority: input.destinationAuthority,
 			// ACT-CLINEMM-FLINT-128K-BUDGET-AUTHORITY-REPAIR01: the guard
 			// measures the PROVIDER-VISIBLE representation of the candidate,
 			// produced by the runtime's provider-request transform. The

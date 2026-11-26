@@ -46,6 +46,10 @@
 
 import type { AgentMessage, AgentMessagePart } from "../agent";
 import type { ContentBlock, Message, ToolResultContent } from "./messages";
+import {
+	extractReasoningOriginAuthority,
+	mayReplayOpaqueReasoning,
+} from "./reasoning-replay-eligibility";
 import { estimateRequestInputTokens } from "./tokens";
 
 /**
@@ -157,10 +161,27 @@ export function toPersistedToolResultContent(
  * `requiresSignedReasoning` DEFAULTS TO `false`. The default therefore
  * preserves the pre-existing projection EXACTLY, for every transport and
  * every existing caller. Only a transport that declares the requirement
- * (the Anthropic family, via the shared capability authority) opts in.
+ * (the Anthropic transport, via the shared capability authority) opts in.
  *
  * This is deliberately NOT a provider-id string comparison: the capability
- * is carried by the model/provider metadata the catalog already publishes.
+ * is carried by the RESOLVED TRANSPORT the repository already publishes.
+ *
+ * ## THE DESTINATION AUTHORITY
+ * ---------------------------
+ * ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (AMENDMENT-01, A2).
+ *
+ * Signature presence alone does NOT establish that a reasoning block is
+ * provider-visible. The opaque payload (the thinking signature, the
+ * redacted-thinking payload) authenticates a block to the ENDPOINT that
+ * issued it, and the WIRE gate withholds it unless the recorded origin
+ * EXACTLY equals the destination's own origin authority.
+ *
+ * The budget must therefore consume the SAME decision the wire consumes.
+ * `destinationAuthority` carries the destination's origin authority into
+ * the projection, and the shared `mayReplayOpaqueReasoning` authority
+ * decides. When it is not supplied, the destination is UNRESOLVED, and an
+ * unresolved destination grants NO replay authority (fail closed) — exactly
+ * as the wire treats it.
  */
 export interface ProviderVisibleProjectionOptions {
 	/**
@@ -172,6 +193,14 @@ export interface ProviderVisibleProjectionOptions {
 	 * that transport would drop them from the serialized request.
 	 */
 	requiresSignedReasoning?: boolean;
+	/**
+	 * The ORIGIN AUTHORITY of the destination the request is dispatched to.
+	 *
+	 * It is the authority the WIRE gate compares the recorded origin
+	 * against. `undefined` means the destination route is UNRESOLVED, and
+	 * an unresolved destination grants NO opaque replay authority.
+	 */
+	destinationAuthority?: string;
 }
 
 /**
@@ -199,10 +228,15 @@ export function toProviderVisibleMessages(
 	options?: ProviderVisibleProjectionOptions,
 ): Message[] {
 	const requiresSignedReasoning = options?.requiresSignedReasoning === true;
+	const destinationAuthority = options?.destinationAuthority;
 	const out: Message[] = [];
 	for (const message of messages) {
 		const content = message.content
-			.map((part) => agentPartToContentBlock(part, requiresSignedReasoning))
+			.map((part) =>
+				agentPartToContentBlock(part, requiresSignedReasoning, {
+					destinationAuthority,
+				}),
+			)
 			.filter((block): block is ContentBlock => block !== undefined);
 		const role = message.role === "tool" ? "user" : message.role;
 		const previous = out[out.length - 1];
@@ -225,18 +259,12 @@ export function toProviderVisibleMessages(
 function agentPartToContentBlock(
 	part: AgentMessagePart,
 	requiresSignedReasoning: boolean,
+	replay: { destinationAuthority: string | undefined },
 ): ContentBlock | undefined {
 	switch (part.type) {
 		case "text":
 			return { type: "text", text: part.text };
 		case "reasoning": {
-			if (part.redacted === true) {
-				const data =
-					(part.metadata as { data?: string } | undefined)?.data ?? "";
-				return { type: "redacted_thinking", data };
-			}
-			const signature = extractThoughtSignature(part.metadata);
-			const details = extractReasoningDetails(part.metadata);
 			// ACT-CLINEMM-REASONING-PROJECTION-CONTINUITY-P0-01.
 			//
 			// The ORIGIN AUTHORITY of the route that issued the opaque
@@ -258,6 +286,38 @@ function agentPartToContentBlock(
 			// entirely. The authority is optional and backward-compatible: a
 			// record written before this field existed simply has none.
 			const originAuthority = extractReasoningOriginAuthority(part.metadata);
+			if (part.redacted === true) {
+				// ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (AMENDMENT-01,
+				// A2).
+				//
+				// The redacted-thinking payload is an OPAQUE provider-owned
+				// payload exactly like the thinking signature: it
+				// authenticates the block to the endpoint that issued it. The
+				// wire gate withholds it unless the recorded origin matches
+				// the destination's authority, and the Anthropic serializer
+				// then DROPS the whole block ("unsupported reasoning
+				// metadata").
+				//
+				// The budget must therefore apply the SAME decision, or it
+				// counts content the provider never receives.
+				if (
+					requiresSignedReasoning &&
+					!mayReplayOpaqueReasoning({
+						origin: originAuthority,
+						destinationAuthority: replay.destinationAuthority,
+					})
+				) {
+					return undefined;
+				}
+				const data = extractRedactedPayload(part.metadata);
+				return {
+					type: "redacted_thinking",
+					data,
+					...(originAuthority === undefined ? {} : { originAuthority }),
+				};
+			}
+			const signature = extractThoughtSignature(part.metadata);
+			const details = extractReasoningDetails(part.metadata);
 			if (requiresSignedReasoning && signature === undefined) {
 				// ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01.
 				//
@@ -276,6 +336,30 @@ function agentPartToContentBlock(
 				// Only the UNSIGNED block is omitted. A signed block keeps its
 				// text, its signature and its details, so provider-authorized
 				// reasoning continuity is conserved exactly.
+				return undefined;
+			}
+			if (
+				requiresSignedReasoning &&
+				!mayReplayOpaqueReasoning({
+					origin: originAuthority,
+					destinationAuthority: replay.destinationAuthority,
+				})
+			) {
+				// ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (AMENDMENT-01,
+				// A2).
+				//
+				// A SIGNED block whose recorded origin is ABSENT or
+				// INCOMPATIBLE with the destination is NOT provider-visible:
+				// the wire gate withholds the opaque payload, and the
+				// Anthropic serializer then drops the whole block.
+				//
+				// Signature presence alone does NOT establish destination-
+				// specific replay eligibility, so counting it here would
+				// inflate the budget with content the provider never sees.
+				//
+				// The canonical transcript is NOT modified: the reasoning text
+				// and its signature remain in the canonical history and in the
+				// session persistence path.
 				return undefined;
 			}
 			return {
@@ -357,26 +441,68 @@ function extractReasoningDetails(metadata: unknown): unknown[] | undefined {
 }
 
 /**
- * ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01.
+ * The opaque redacted-thinking payload carried by a reasoning part.
+ *
+ * ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (AMENDMENT-01, A2/A3).
+ *
+ * It is read under BOTH keys the repository uses for it:
+ *
+ *   - `data` — the key the production persistence codec has always written;
+ *   - `redactedData` — the key the OUTBOUND conversion reads
+ *     (`providers/ai-sdk.ts`) to build the `providerOptions.anthropic`
+ *     bucket the Anthropic serializer consumes.
+ *
+ * Reading both keys is what makes the provider-visible projection and the
+ * wire agree about WHICH payload a redacted block carries.
+ */
+function extractRedactedPayload(metadata: unknown): string {
+	if (!metadata || typeof metadata !== "object") {
+		return "";
+	}
+	const record = metadata as { data?: unknown; redactedData?: unknown };
+	if (typeof record.redactedData === "string") {
+		return record.redactedData;
+	}
+	return typeof record.data === "string" ? record.data : "";
+}
+
+/**
+ * ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (AMENDMENT-01, A2).
  *
  * OMIT THE REASONING BLOCKS THE TARGET TRANSPORT WOULD NEVER RECEIVE.
  *
  * The provider-visible message list is the representation the request-budget
  * authority measures. On a transport that REQUIRES provider-origin
- * authorization for a reasoning block (the Anthropic family), an unsigned
- * reasoning block is omitted by the resolved serializer, so measuring it
- * over-counts content the provider never sees.
+ * authorization for a reasoning block (the Anthropic transport), a reasoning
+ * block is omitted by the resolved serializer unless it carries an
+ * AUTHORIZED opaque payload, so measuring it over-counts content the
+ * provider never sees.
  *
  * This helper applies that exclusion to an ALREADY-PROJECTED provider-visible
  * message list. It is the SAME projection the wire consumes, so the budget
  * and the wire cannot disagree.
  *
- * The exclusion is NARROW and EXACT:
+ * THE DECISION IS THE WIRE'S DECISION (AMENDMENT-01, A2).
  *
- *   - only `thinking` blocks with NO signature are omitted;
- *   - a signed `thinking` block keeps its text, signature and details;
- *   - `redacted_thinking` blocks are KEPT (the Anthropic serializer emits
- *     them as `redacted_thinking` when the redacted payload is present);
+ * The previous implementation decided by SIGNATURE PRESENCE alone. That is
+ * strictly weaker than the wire's fail-closed destination-specific replay
+ * eligibility, so it KEPT blocks the wire DROPS:
+ *
+ *   - a signed `thinking` block with a MISSING origin,
+ *   - a signed `thinking` block with an INCOMPATIBLE origin,
+ *   - a `redacted_thinking` block with a MISSING origin.
+ *
+ * It also kept an EMPTY signature (`""`), which the Anthropic serializer
+ * does not emit as a `thinking` block either.
+ *
+ * This helper now applies the SINGLE shared replay-eligibility authority
+ * (`mayReplayOpaqueReasoning`), so a block survives only when the wire would
+ * actually carry it. The exclusion is therefore EXACT:
+ *
+ *   - a `thinking` block survives when it carries a signature AND its
+ *     recorded origin matches the destination's authority;
+ *   - a `redacted_thinking` block survives when its recorded origin matches
+ *     the destination's authority;
  *   - every other block, and the message ORDER, are untouched.
  *
  * The function is PURE and does not mutate its input.
@@ -388,15 +514,15 @@ export function omitUnauthorizedReasoningBlocks(
 	if (options?.requiresSignedReasoning !== true) {
 		return messages as Message[];
 	}
+	const destinationAuthority = options?.destinationAuthority;
 	const out: Message[] = [];
 	for (const message of messages) {
 		if (typeof message.content === "string") {
 			out.push(message);
 			continue;
 		}
-		const content = message.content.filter(
-			(block) =>
-				block.type !== "thinking" || typeof block.signature === "string",
+		const content = message.content.filter((block) =>
+			isProviderVisibleReasoningBlock(block, destinationAuthority),
 		);
 		if (content.length === message.content.length) {
 			out.push(message);
@@ -408,33 +534,59 @@ export function omitUnauthorizedReasoningBlocks(
 }
 
 /**
- * ACT-CLINEMM-REASONING-PROJECTION-CONTINUITY-P0-01.
+ * Whether the resolved Anthropic serializer would actually carry this
+ * reasoning block on the wire.
+ *
+ * It mirrors the serializer's own contract:
+ *
+ *   - a `thinking` block needs a NON-EMPTY signature, and the opaque
+ *     payload must be authorized for the destination;
+ *   - a `redacted_thinking` block needs the opaque payload to be authorized
+ *     for the destination;
+ *   - every other block type is not a reasoning block at all.
+ */
+function isProviderVisibleReasoningBlock(
+	block: ContentBlock,
+	destinationAuthority: string | undefined,
+): boolean {
+	if (block.type === "thinking") {
+		if (typeof block.signature !== "string" || block.signature.length === 0) {
+			return false;
+		}
+		return mayReplayOpaqueReasoning({
+			origin: block.originAuthority,
+			destinationAuthority,
+		});
+	}
+	if (block.type === "redacted_thinking") {
+		return mayReplayOpaqueReasoning({
+			origin: block.originAuthority,
+			destinationAuthority,
+		});
+	}
+	return true;
+}
+
+/**
+ * ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (AMENDMENT-01, A2).
  *
  * The ORIGIN AUTHORITY carried by a reasoning part.
  *
- * It is read ONLY from the part's own metadata bag, under the SAME key the
- * production persistence codec writes (`originAuthority`, see
- * `agent-message-codec.ts`) and the SAME key the outbound conversion reads
- * (`REASONING_METADATA_ORIGIN_KEY` in `@cline/llms`). No new metadata field
- * is introduced and no route-authorization policy is changed: this only
- * carries the authority across an internal projection that used to drop it.
+ * ACT-CLINEMM-REASONING-PROJECTION-CONTINUITY-P0-01 established that the
+ * authority travels WITH the payload. It is read ONLY from the part's own
+ * metadata bag, under the SAME key the production persistence codec writes
+ * (`originAuthority`, see `agent-message-codec.ts`) and the SAME key the
+ * outbound conversion reads.
+ *
+ * The reader itself now lives in the SINGLE replay-eligibility authority
+ * module (`./reasoning-replay-eligibility`), so the projection, the budget
+ * and the wire gate all name the same field and apply the same policy.
  *
  * A non-string value yields NO authority, exactly as the outbound conversion
  * treats a malformed origin: an absent authority grants no replay authority,
  * which is the fail-closed behaviour.
  */
-function extractReasoningOriginAuthority(
-	metadata: unknown,
-): string | undefined {
-	if (!metadata || typeof metadata !== "object") {
-		return undefined;
-	}
-	const record = metadata as { originAuthority?: unknown };
-	return typeof record.originAuthority === "string"
-		? record.originAuthority
-		: undefined;
-}
-}
+export { extractReasoningOriginAuthority };
 
 /**
  * Estimate the provider-visible request input size.

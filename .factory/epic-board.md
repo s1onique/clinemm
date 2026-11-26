@@ -1,3 +1,139 @@
+# ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (AMENDMENT-01) — GO_CMP09_REPLAY_ELIGIBILITY_AUTHORITY — 2026-11-26
+
+```text
+ACT_ID:       ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (AMENDMENT-01)
+TYPE:         bounded correction (one P0 transport authority, one P0 replay eligibility)
+VERDICT:      GO_CMP09_REPLAY_ELIGIBILITY_AUTHORITY
+DESTINATION_ENTRY_HEAD: 12b20d49e3d0b09322cba050903d9bf20c3c579b
+SOURCE_HEAD:  0d95d0dc2b0a78bcb3b64c9fbc42808af918bd5b
+MERGED_SOURCE_HEAD: 0d95d0dc2b0a78bcb3b64c9fbc42808af918bd5b
+MERGE_BASE:   e740e3dd92e9091cf9c6d5d54627abb11c72fbbd
+INTEGRATED_HEAD: 02274b4cd363fea42579fcb8fa304c2535084e85
+BRANCH:       main
+EPIC:         CMP-09
+```
+
+**THE INTEGRATION PRESERVED BOTH PRODUCTION CONTRACTS.** The source
+workstream's reasoning-continuity authority (the origin authority established
+only for published builtin routes, the fail-closed destination-specific
+replay eligibility, and the compat projection that carries the authority
+with the payload) and the destination's CMP-09 request-budget authority (the
+provider-visible measurement and the exclusion of the reasoning the target
+transport would never receive) are BOTH live. The shared provider-visible
+projection now carries the origin authority WITH the payload AND applies the
+authorization exclusion, so the budget and the wire consume the SAME
+reasoning-eligibility semantics. The merge conflicts were resolved without a
+blanket ours/theirs resolution.
+
+**A1 — THE RESOLVED TRANSPORT AUTHORITY (P0, REPAIRED).** The reviewer
+executed the exact added `requiresSignedReasoningCapability` helper and
+found BOTH counterexamples real: `family=minimax, apiFormat=anthropic` ->
+false, and `family=anthropic, apiFormat=openai` -> true. The implementation
+gave the model FAMILY precedence over the transport format.
+
+The defect was confirmed against the REAL production data. The MiniMax
+builtin MODEL publishes `family: "minimax"` and NO `apiFormat` and NO
+`metadata.apiProtocol`, while the MiniMax PROVIDER resolves to the
+ANTHROPIC transport (`ProviderInfo.client === "anthropic"`, and the
+resolved serializer emits the Anthropic wire body). The family-first
+predicate therefore answered FALSE on exactly the route the historical
+defect was observed on, which made the CMP-09 exclusion UNREACHABLE in
+production there.
+
+The repair replaces the family heuristic with the RESOLVED TRANSPORT. The
+authority is `ProviderInfo.client` — the repository's own published
+transport fact, and the SAME value the gateway's transport factory is
+selected by. No new registry and no provider-id string comparison was
+introduced. The per-model wire protocol (`metadata.apiProtocol`) overrides it
+for a multi-format gateway. The Bedrock transport is CONSERVED: it has its
+OWN module (`vendors/bedrock`), so it is not the Anthropic serializer.
+
+**A2 — THE DESTINATION-SPECIFIC REPLAY ELIGIBILITY (P0, REPAIRED).** The
+reviewer executed the exact added `omitUnauthorizedReasoningBlocks` helper
+and found it kept signed thinking with a missing origin, signed thinking with
+an incompatible origin, empty signatures, and redacted thinking with a
+missing origin. It was strictly WEAKER than the existing fail-closed wire
+replay policy, so the budget counted content the wire DROPS.
+
+The repair EXTRACTS the existing wire decision (`mayReplayOpaqueReasoning`)
+into the single shared authority (`@cline/shared`'s
+`llms/reasoning-replay-eligibility.ts`) and makes the wire gate DELEGATE to
+it. The policy itself is UNCHANGED: it is still fail-closed on every branch.
+The budget, the task-contract guard, the final request guard and the
+compaction trigger now consume that ONE decision, so they cannot disagree.
+
+The DESTINATION ORIGIN AUTHORITY was extracted the same way
+(`@cline/llms`'s `providers/reasoning-origin-authority.ts`), because the
+authority was previously computed INSIDE the outbound conversion and was
+therefore unreachable to the budget. The wire and the budget now compare the
+recorded origin against the IDENTICAL destination authority, built by the
+IDENTICAL resolver. The EFFECTIVE endpoint resolution
+(`config.baseUrl ?? apiLineBaseUrl ?? registration.defaults.baseUrl`) was
+mirrored so the budget measures the route the wire dispatches to.
+
+**A3 — COMPAT REASONING CONTINUITY (CONSERVED).** The compat projection
+preserves the `originAuthority` field, and the compat origin-authority
+continuity witnesses still PASS. The compat dispatch DROPPED
+`redacted_thinking` blocks entirely and the core persistence codec wrote the
+redacted payload under `metadata.data` while the OUTBOUND conversion reads
+`metadata.redactedData`; both were repaired so the redacted payload reaches
+the wire under the key the wire reads, WITH the origin authority. The
+historical dispatch-path attribution remains separate and is not claimed.
+
+**THE WITNESSES WERE CORRECTED, NOT REPLACED.** CMP09-WIRE-01 supplied a
+signature WITHOUT `originAuthority` and nevertheless expected wire replay:
+that is the RED the amendment reports, and it reproduced exactly. It is now
+paired with the destination authority, so it exercises the AUTHORIZED case.
+CMP09-WIRE-03 measured the UNCHANGED default projection; it now exercises
+the REPAIRED production measurement. CMP09-PROJ-03/04 encoded the
+signature-presence rule; they now encode the destination-specific replay
+eligibility. The canonical-history conservation control now exercises the
+FILTERING-ENABLED projection. No new test framework was introduced and the
+existing test files were reused.
+
+**THE PAIRED BUDGET/WIRE CONTROLS.** CMP09-WIRE-01..05 are paired: the
+budget contribution and the serialized body are asserted for the valid
+same-route signed case, the unsigned case, the absent-origin case, the
+incompatible-origin case, and the authorized/unauthorized redacted cases.
+CMP09-WIRE-08 asserts the resolved transport classification and the
+conservation of a non-Anthropic transport. CMP09-TRIG-05 and CMP09-TRIG-06
+extend the trigger discriminator only as far as necessary: the first shows
+that incompatible-origin opaque reasoning cannot inflate the trigger
+measurement, and the second is the NECESSITY control showing that the
+SAME-ROUTE authorized reasoning IS measured.
+
+```text
+ACT-OWNED WITNESSES:   62 (all PASSED)
+  CMP09-WIRE-01..08    8 paired budget/wire + transport controls
+  CMP09-PROJ-01..04    9 projection controls (03b/03c added)
+  CMP09-TRIG-01..06    6 compaction-trigger controls (05/06 added)
+  COMPAT CONTINUITY    5 compat + 6 core reasoning-projection controls
+EXISTING SUITES:       shared 717 passed | llms 1252 passed
+                        core 6477 passed | agents 655 passed
+  FAILURE SETS:        IDENTICAL to the pre-change baseline (no new failing
+                        file in llms, agents or core; the CMP-09 file is FIXED)
+TYPECHECK:              shared/llms/agents CLEAN; core 2 pre-existing
+                        production errors in untouched files
+BIOME:                  clean on every touched file
+SDK BUILD:              shared, llms, agents, core all built
+INFERENCE REQUESTS:     0
+```
+
+**AN INHERITED CROSS-WORKSTREAM DIVERGENCE IS RECORDED, NOT REPAIRED.** The
+integrated workstreams developed `portable-reasoning.ts` (destination line,
+commit `b7e9bafdc`) and `model-facts.ts` (source workstream, commit
+`daa6699af`) independently, and their reasoning-control semantics disagree:
+15 `ai-sdk-reasoning.test.ts` rows and 2 SAP process-hygiene rows fail. The
+failures are IDENTICAL with the merge commit's `ai-sdk.ts` restored and the
+two files are byte-identical to the source workstream's versions, so they
+are PRE-EXISTING and inherited from the integration. They concern the
+reasoning-EFFORT contract, not the CMP-09 replay-eligibility authority, and
+repairing them would require re-deriving the source workstream's
+reasoning-control contract — outside this ACT's scope. They are recorded
+here for the next ACT to own.
+
+**A SUCCESSOR ACT IS NOT STARTED AUTOMATICALLY.**
+
 # ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 — GO_CMP09_CONTEXT_BUDGET_AUTHORITY + MEASUREMENT_DIVERGENCE_NOT_CAUSAL — 2026-11-26
 
 ```text

@@ -146,6 +146,11 @@ export {
 	recordPrefixForensicsRuntimeProjection,
 } from "./providers/prefix-forensics-capture";
 export { resolveProviderModelCatalogKeys } from "./providers/provider-keys";
+// ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (AMENDMENT-01, A2/A3): the
+// SINGLE destination origin-authority resolver. The wire gate and the
+// request-budget authority both use it, so they compare the recorded origin
+// against the IDENTICAL destination authority.
+export { buildReasoningOriginAuthority } from "./providers/reasoning-origin-authority";
 export {
 	type OpenAICodexRequestHeaderContext,
 	type ProviderRequestHeaderClientContext,
@@ -153,6 +158,15 @@ export {
 	type ResolveProviderRequestHeadersInput,
 	resolveProviderRequestHeaders,
 } from "./providers/request-headers";
+// ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (AMENDMENT-01, A1): the
+// RESOLVED TRANSPORT authority. The request-budget authority, the
+// task-contract guard and the compaction trigger read the transport identity
+// from here instead of guessing it from the model family.
+export {
+	type ResolvedTransportFacts,
+	resolveEffectiveBaseUrl,
+	resolveTransportFacts,
+} from "./providers/resolved-transport";
 export {
 	type ClineProvider,
 	type ClineProviderOptions,

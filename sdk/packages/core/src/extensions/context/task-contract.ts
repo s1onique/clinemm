@@ -528,6 +528,19 @@ export function applyTaskContractToCompactedMessages(
 		 * behaviour exactly: every reasoning block is measured.
 		 */
 		requiresSignedReasoning?: boolean;
+		/**
+		 * ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (AMENDMENT-01, A2/A3).
+		 *
+		 * The ORIGIN AUTHORITY of the destination the request is dispatched to.
+		 *
+		 * The guard applies the SAME destination-specific replay eligibility the
+		 * WIRE gate applies: an opaque reasoning payload is provider-visible
+		 * only when its recorded origin EXACTLY equals this authority.
+		 *
+		 * `undefined` means the destination route is UNRESOLVED, which grants no
+		 * replay authority — exactly as the wire treats it.
+		 */
+		destinationAuthority?: string;
 	} = {},
 ): Promise<TaskContractApplicationResult> {
 	/**
@@ -582,7 +595,10 @@ export function applyTaskContractToCompactedMessages(
 		// cannot disagree.
 		const authorizedProviderVisible = omitUnauthorizedReasoningBlocks(
 			providerVisible,
-			{ requiresSignedReasoning: options.requiresSignedReasoning === true },
+			{
+				requiresSignedReasoning: options.requiresSignedReasoning === true,
+				destinationAuthority: options.destinationAuthority,
+			},
 		);
 		return estimateProviderRequestInputTokens({
 			systemPrompt: options.systemPrompt ?? "",

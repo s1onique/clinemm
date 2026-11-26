@@ -1,5 +1,5 @@
 /**
- * ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01.
+ * ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (AMENDMENT-01).
  *
  * THE REQUEST-BUDGET / WIRE-EQUIVALENCE WITNESS.
  *
@@ -20,18 +20,23 @@
  *   - final SDK payload estimate ~559,893 tokens against a
  *     provider-reported input of ~248,325 tokens.
  *
- * A SIGNATURE-BEARING reasoning block is provider-authorized: the
- * Anthropic-compatible serializer emits it as a `thinking` block. An
- * UNSIGNED reasoning block is NOT provider-authorized: the resolved
- * Anthropic serializer DROPS it (it emits an "unsupported reasoning
- * metadata" warning and omits the block from the body).
+ * ## THE TWO AUTHORITIES THIS WITNESS JOINS
+ * -------------------------------------------
  *
- * So the question is precise:
+ * 1. THE RESOLVED TRANSPORT (A1).
+ *    A reasoning block is provider-visible only on a transport whose
+ *    serializer requires provider-origin authorization. The MINIMAX builtin
+ *    route is such a route: its MODEL family is "minimax" while its
+ *    RESOLVED TRANSPORT is the Anthropic module. The witness therefore uses
+ *    the repository's RESOLVED transport facts, never a family guess.
  *
- *   1. Does the unsigned reasoning survive to the serialized HTTP body?
- *   2. Does it nevertheless contribute to the request-budget measurement?
- *   3. If so, is the COMPACTION TRIGGER actually consuming that
- *      measurement (so the discrepancy is causal, not cosmetic)?
+ * 2. THE DESTINATION-SPECIFIC REPLAY ELIGIBILITY (A2).
+ *    The opaque payload (the thinking signature, the redacted-thinking
+ *    payload) authenticates a block to the ENDPOINT that issued it. The
+ *    wire gate withholds it unless the recorded origin EXACTLY equals the
+ *    destination's own origin authority. Signature presence ALONE does not
+ *    establish replay eligibility, so the budget must consume the SAME
+ *    decision.
  *
  * ## WHAT THIS WITNESS DRIVES
  * ---------------------------
@@ -47,24 +52,32 @@
  *
  * ## THE CONTROLS
  * --------------
- *   CMP09-WIRE-01  signed reasoning reaches the serialized body
+ *   CMP09-WIRE-01  SAME-ROUTE signed reasoning reaches the serialized body
+ *                  AND contributes to the budget
  *   CMP09-WIRE-02  unsigned reasoning does NOT reach the serialized body
- *   CMP09-WIRE-03  the budget measurement COUNTS the unsigned reasoning
- *                  (the divergence, measured)
- *   CMP09-WIRE-04  the compaction trigger CONSUMES the request-budget
- *                  measurement (necessity: the divergence is causal)
- *   CMP09-WIRE-05  valid signed reasoning is conserved (positive control)
+ *                  AND does NOT inflate the budget
+ *   CMP09-WIRE-03  signed reasoning with an ABSENT origin is excluded
+ *                  from BOTH the wire and the budget
+ *   CMP09-WIRE-04  signed reasoning with an INCOMPATIBLE origin is excluded
+ *                  from BOTH the wire and the budget
+ *   CMP09-WIRE-05  an AUTHORIZED redacted reasoning block reaches the wire
+ *                  and the budget; an UNAUTHORIZED one reaches NEITHER
  *   CMP09-WIRE-06  tool calls / tool results keep their identity and order
  *   CMP09-WIRE-07  the canonical transcript is unchanged by the projection
+ *   CMP09-WIRE-08  the RESOLVED TRANSPORT facts classify the MiniMax route
+ *                  as Anthropic and conserve a non-Anthropic transport
  */
 import {
 	type AgentMessage,
 	type AgentMessagePart,
 	estimateProviderRequestInputTokens,
+	omitUnauthorizedReasoningBlocks,
+	requiresSignedReasoningCapability,
 	toProviderVisibleMessages,
 } from "@cline/shared";
 import { describe, expect, it, vi } from "vitest";
 import { createGatewayApiHandlerAsync } from "./compat";
+import { resolveTransportFacts } from "./resolved-transport";
 
 /**
  * The Anthropic-compatible MiniMax transport, resolved exactly as production
@@ -72,6 +85,21 @@ import { createGatewayApiHandlerAsync } from "./compat";
  */
 const MINIMAX_BASE_URL = "https://api.minimax.io/anthropic/v1";
 const MODEL_ID = "MiniMax-M3.1-Flash";
+
+/**
+ * The origin authority the production code computes for the PUBLISHED
+ * MiniMax route: `${providerId}\u0000${origin}\u0000${path}`.
+ *
+ * It is the EXACT value the frozen session recorded on every signed
+ * reasoning block, and the EXACT value the wire gate compares the recorded
+ * origin against.
+ */
+const MINIMAX_ORIGIN_AUTHORITY =
+	"minimax\u0000https://api.minimax.io\u0000/anthropic/v1";
+
+/** An origin authority for a DIFFERENT (incompatible) established route. */
+const FOREIGN_ORIGIN_AUTHORITY =
+	"anthropic\u0000https://api.anthropic.com\u0000/v1";
 
 /** A provider signature, as the provider returns it for a COMPLETE turn. */
 const VALID_SIGNATURE =
@@ -82,6 +110,9 @@ const REASONING_TEXT =
 	"Now I have a good understanding. Let me now carefully analyze the three defects.\n\n".repeat(
 		40,
 	);
+
+/** The opaque redacted-thinking payload, as the provider returns it. */
+const REDACTED_PAYLOAD = "EmwKAhgBEgy3va3pzix/PS9leL5jXgy0DTVL18L6WW5r0u+/";
 
 function anthropicSseResponse(): Response {
 	const body = [
@@ -113,7 +144,10 @@ async function serializeThroughRealTransport(
 	// adapter, and the serialized HTTP body is what `fetch` receives.
 	const stream = handler.createMessage(
 		"system prompt",
-		toProviderVisibleMessages(messages) as never,
+		toProviderVisibleMessages(messages, {
+			requiresSignedReasoning: true,
+			destinationAuthority: MINIMAX_ORIGIN_AUTHORITY,
+		}) as never,
 	);
 	// Drain the stream so the request is actually dispatched.
 	for await (const _chunk of stream) {
@@ -150,9 +184,12 @@ function serializedThinkingBlocks(
 }
 
 /**
- * A transcript with a SIGNED reasoning block, a tool call and its result.
+ * A transcript with a reasoning block, a tool call and its result.
+ *
+ * The reasoning block's shape is the CALLER'S choice, so the SAME production
+ * path is exercised for every authorization case.
  */
-function transcriptWithSignedReasoning(): AgentMessage[] {
+function transcriptWithReasoning(reasoning: AgentMessagePart): AgentMessage[] {
 	return [
 		{
 			role: "user",
@@ -161,11 +198,7 @@ function transcriptWithSignedReasoning(): AgentMessage[] {
 		{
 			role: "assistant",
 			content: [
-				{
-					type: "reasoning",
-					text: "signed reasoning",
-					metadata: { signature: VALID_SIGNATURE },
-				},
+				reasoning,
 				{
 					type: "tool-call",
 					toolCallId: "call-1",
@@ -188,90 +221,201 @@ function transcriptWithSignedReasoning(): AgentMessage[] {
 	];
 }
 
-/**
- * The SAME transcript with the reasoning block UNSIGNED (the
- * output-exhaustion shape) and substantially larger, plus the same tool
- * call / result so the pairing differs ONLY in the reasoning block.
- */
-function transcriptWithUnsignedReasoning(): AgentMessage[] {
-	return [
-		{
-			role: "user",
-			content: [{ type: "text", text: "run the command" }],
-		} as AgentMessage,
-		{
-			role: "assistant",
-			content: [
-				{
-					type: "reasoning",
-					text: REASONING_TEXT,
-				},
-				{
-					type: "tool-call",
-					toolCallId: "call-1",
-					toolName: "run_commands",
-					input: { commands: ["ls"] },
-				},
-			] as AgentMessagePart[],
-		} as AgentMessage,
-		{
-			role: "tool",
-			content: [
-				{
-					type: "tool-result",
-					toolCallId: "call-1",
-					toolName: "run_commands",
-					output: "ok",
-				},
-			] as AgentMessagePart[],
-		} as AgentMessage,
-	];
+/** The SAME-ROUTE signed reasoning: authorized for the destination. */
+function signedSameRouteReasoning(): AgentMessagePart {
+	return {
+		type: "reasoning",
+		text: "signed reasoning",
+		metadata: {
+			signature: VALID_SIGNATURE,
+			originAuthority: MINIMAX_ORIGIN_AUTHORITY,
+		},
+	} as AgentMessagePart;
+}
+
+/** The UNSIGNED reasoning: the output-exhaustion shape. */
+function unsignedReasoning(): AgentMessagePart {
+	return {
+		type: "reasoning",
+		text: REASONING_TEXT,
+	} as AgentMessagePart;
+}
+
+/** A SIGNED reasoning block with NO recorded origin. */
+function signedMissingOriginReasoning(): AgentMessagePart {
+	return {
+		type: "reasoning",
+		text: REASONING_TEXT,
+		metadata: { signature: VALID_SIGNATURE },
+	} as AgentMessagePart;
+}
+
+/** A SIGNED reasoning block issued by a DIFFERENT (incompatible) route. */
+function signedIncompatibleOriginReasoning(): AgentMessagePart {
+	return {
+		type: "reasoning",
+		text: REASONING_TEXT,
+		metadata: {
+			signature: VALID_SIGNATURE,
+			originAuthority: FOREIGN_ORIGIN_AUTHORITY,
+		},
+	} as AgentMessagePart;
+}
+
+/** An AUTHORIZED redacted reasoning block. */
+function authorizedRedactedReasoning(): AgentMessagePart {
+	return {
+		type: "reasoning",
+		text: "",
+		redacted: true,
+		metadata: {
+			data: REDACTED_PAYLOAD,
+			redactedData: REDACTED_PAYLOAD,
+			originAuthority: MINIMAX_ORIGIN_AUTHORITY,
+		},
+	} as AgentMessagePart;
+}
+
+/** An UNAUTHORIZED redacted reasoning block (no recorded origin). */
+function unauthorizedRedactedReasoning(): AgentMessagePart {
+	return {
+		type: "reasoning",
+		text: "",
+		redacted: true,
+		metadata: { data: REDACTED_PAYLOAD, redactedData: REDACTED_PAYLOAD },
+	} as AgentMessagePart;
 }
 
 /**
  * The budget measurement, over the SAME provider-visible projection the
  * production compaction trigger measures.
+ *
+ * It is the REPAIRED production measurement: the resolved-transport
+ * capability AND the destination-specific replay eligibility.
  */
 function measureBudget(messages: readonly AgentMessage[]): number {
+	const transportFacts = resolveTransportFacts({ providerId: "minimax" });
+	const requiresSignedReasoning = requiresSignedReasoningCapability({
+		transportClient: transportFacts.client,
+		apiProtocol: transportFacts.apiProtocol,
+	});
 	return estimateProviderRequestInputTokens({
 		systemPrompt: "system prompt",
-		messages: toProviderVisibleMessages(messages),
+		messages: omitUnauthorizedReasoningBlocks(
+			toProviderVisibleMessages(messages, {
+				requiresSignedReasoning,
+				destinationAuthority: MINIMAX_ORIGIN_AUTHORITY,
+			}),
+			{
+				requiresSignedReasoning,
+				destinationAuthority: MINIMAX_ORIGIN_AUTHORITY,
+			},
+		),
 		tools: [],
 	});
 }
 
+/**
+ * The budget measurement of the SAME transcript shape carrying NO reasoning
+ * content at all.
+ *
+ * It is the baseline every reasoning case is compared against, so the
+ * comparison isolates the reasoning contribution alone: the transcript, the
+ * tool call and the tool result are identical in every case.
+ */
+function measureBaselineBudget(): number {
+	return measureBudget(
+		transcriptWithReasoning({
+			type: "reasoning",
+			text: "",
+		} as AgentMessagePart),
+	);
+}
+
 describe("CMP-09 request-budget / wire equivalence", () => {
-	it("CMP09-WIRE-01: valid signed reasoning reaches the serialized body", async () => {
+	it("CMP09-WIRE-01: same-route signed reasoning reaches the wire AND the budget", async () => {
 		const body = await serializeThroughRealTransport(
-			transcriptWithSignedReasoning(),
+			transcriptWithReasoning(signedSameRouteReasoning()),
 		);
 		const blocks = serializedThinkingBlocks(body);
 		expect(blocks).toHaveLength(1);
 		expect(blocks[0]!.type).toBe("thinking");
 		expect(blocks[0]!.signature).toBe(VALID_SIGNATURE);
+		// The budget MUST count it: the provider receives it.
+		expect(
+			measureBudget(transcriptWithReasoning(signedSameRouteReasoning())),
+		).toBeGreaterThan(measureBaselineBudget());
 	});
 
-	it("CMP09-WIRE-02: unsigned reasoning does NOT reach the serialized body", async () => {
+	it("CMP09-WIRE-02: unsigned reasoning reaches NEITHER the wire NOR the budget", async () => {
 		const body = await serializeThroughRealTransport(
-			transcriptWithUnsignedReasoning(),
+			transcriptWithReasoning(unsignedReasoning()),
 		);
 		const blocks = serializedThinkingBlocks(body);
 		expect(blocks).toHaveLength(0);
 		// The reasoning text must not appear ANYWHERE in the body.
 		expect(JSON.stringify(body)).not.toContain(REASONING_TEXT.slice(0, 80));
+		// The budget MUST NOT count it: the provider never receives it.
+		expect(measureBudget(transcriptWithReasoning(unsignedReasoning()))).toBe(
+			measureBaselineBudget(),
+		);
 	});
 
-	it("CMP09-WIRE-03: the budget measurement COUNTS the unsigned reasoning", () => {
-		const signed = measureBudget(transcriptWithSignedReasoning());
-		const unsigned = measureBudget(transcriptWithUnsignedReasoning());
-		// The unsigned reasoning is NOT provider-authorized, so the budget
-		// must not count it. It does: the divergence is measured here.
-		expect(unsigned).toBeGreaterThan(signed);
+	it("CMP09-WIRE-03: signed reasoning with an ABSENT origin is excluded from BOTH", async () => {
+		const body = await serializeThroughRealTransport(
+			transcriptWithReasoning(signedMissingOriginReasoning()),
+		);
+		const blocks = serializedThinkingBlocks(body);
+		expect(blocks).toHaveLength(0);
+		expect(JSON.stringify(body)).not.toContain(REASONING_TEXT.slice(0, 80));
+		// The budget MUST NOT count it: the wire withholds the opaque payload
+		// (fail closed on an absent origin) and the serializer drops the block.
+		expect(
+			measureBudget(transcriptWithReasoning(signedMissingOriginReasoning())),
+		).toBe(measureBaselineBudget());
+	});
+
+	it("CMP09-WIRE-04: signed reasoning with an INCOMPATIBLE origin is excluded from BOTH", async () => {
+		const body = await serializeThroughRealTransport(
+			transcriptWithReasoning(signedIncompatibleOriginReasoning()),
+		);
+		const blocks = serializedThinkingBlocks(body);
+		expect(blocks).toHaveLength(0);
+		expect(JSON.stringify(body)).not.toContain(REASONING_TEXT.slice(0, 80));
+		expect(
+			measureBudget(
+				transcriptWithReasoning(signedIncompatibleOriginReasoning()),
+			),
+		).toBe(measureBaselineBudget());
+	});
+
+	it("CMP09-WIRE-05: authorized redacted reasoning reaches BOTH; unauthorized reaches NEITHER", async () => {
+		const authorizedBody = await serializeThroughRealTransport(
+			transcriptWithReasoning(authorizedRedactedReasoning()),
+		);
+		const authorizedBlocks = serializedThinkingBlocks(authorizedBody);
+		expect(authorizedBlocks).toHaveLength(1);
+		expect(authorizedBlocks[0]!.type).toBe("redacted_thinking");
+		expect(authorizedBlocks[0]!.data).toBe(REDACTED_PAYLOAD);
+		// The budget MUST count it: the provider receives it.
+		expect(
+			measureBudget(transcriptWithReasoning(authorizedRedactedReasoning())),
+		).toBeGreaterThan(measureBaselineBudget());
+
+		const unauthorizedBody = await serializeThroughRealTransport(
+			transcriptWithReasoning(unauthorizedRedactedReasoning()),
+		);
+		expect(serializedThinkingBlocks(unauthorizedBody)).toHaveLength(0);
+		expect(JSON.stringify(unauthorizedBody)).not.toContain(REDACTED_PAYLOAD);
+		// The budget MUST NOT count it.
+		expect(
+			measureBudget(transcriptWithReasoning(unauthorizedRedactedReasoning())),
+		).toBe(measureBaselineBudget());
 	});
 
 	it("CMP09-WIRE-06: tool calls / tool results keep their identity and order", async () => {
 		const body = await serializeThroughRealTransport(
-			transcriptWithUnsignedReasoning(),
+			transcriptWithReasoning(unsignedReasoning()),
 		);
 		const messages = (body.messages ?? []) as Array<{
 			role?: string;
@@ -289,32 +433,64 @@ describe("CMP-09 request-budget / wire equivalence", () => {
 		expect(toolResults[0]!.tool_use_id).toBe("call-1");
 	});
 
-	it("CMP09-WIRE-05: the shared capability predicate classifies the Anthropic family", async () => {
-		// The NECESSITY discriminator: the repair's exclusion must be
-		// gated on the SAME capability the wire's serializer enforces. The
-		// predicate is the shared one; the Anthropic family is the transport
-		// whose serializer drops an unsigned reasoning block.
-		const { requiresSignedReasoningCapability } = await import("@cline/shared");
+	it("CMP09-WIRE-07: the canonical transcript is unchanged by the projection", () => {
+		const transcript = transcriptWithReasoning(unsignedReasoning());
+		const before = JSON.stringify(transcript);
+		const projected = toProviderVisibleMessages(transcript, {
+			requiresSignedReasoning: true,
+			destinationAuthority: MINIMAX_ORIGIN_AUTHORITY,
+		});
+		omitUnauthorizedReasoningBlocks(projected, {
+			requiresSignedReasoning: true,
+			destinationAuthority: MINIMAX_ORIGIN_AUTHORITY,
+		});
+		expect(JSON.stringify(transcript)).toBe(before);
+	});
+
+	it("CMP09-WIRE-08: the RESOLVED TRANSPORT classifies MiniMax as Anthropic and conserves a non-Anthropic transport", () => {
+		// ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (AMENDMENT-01, A1).
+		//
+		// The MiniMax builtin route's MODEL family is "minimax" while its
+		// RESOLVED TRANSPORT is the Anthropic module. The capability MUST
+		// follow the transport.
+		const minimaxFacts = resolveTransportFacts({ providerId: "minimax" });
+		expect(minimaxFacts.client).toBe("anthropic");
 		expect(
 			requiresSignedReasoningCapability({
-				family: "anthropic",
-				modelId: "MiniMax-M3.1-Flash",
+				transportClient: minimaxFacts.client,
+				apiProtocol: minimaxFacts.apiProtocol,
+				family: "minimax",
+				modelId: MODEL_ID,
 				providerId: "minimax",
 			}),
 		).toBe(true);
+
+		// A NON-Anthropic transport is CONSERVED: it keeps every reasoning
+		// block, so no reasoning the provider would have received is
+		// excluded.
+		const geminiFacts = resolveTransportFacts({ providerId: "gemini" });
+		expect(geminiFacts.client).not.toBe("anthropic");
 		expect(
 			requiresSignedReasoningCapability({
-				family: "minimax",
-				modelId: "MiniMax-M3.1-Flash",
-				providerId: "minimax",
+				transportClient: geminiFacts.client,
+				apiProtocol: geminiFacts.apiProtocol,
+				family: "anthropic",
+				modelId: "claude-sonnet-4-5",
+				providerId: "gemini",
 			}),
 		).toBe(false);
-	});
 
-	it("CMP09-WIRE-07: the canonical transcript is unchanged by the projection", () => {
-		const transcript = transcriptWithUnsignedReasoning();
-		const before = JSON.stringify(transcript);
-		toProviderVisibleMessages(transcript);
-		expect(JSON.stringify(transcript)).toBe(before);
+		// The Bedrock transport has its OWN module (not the Anthropic one),
+		// so it is conserved too even though its protocol is "anthropic".
+		const bedrockFacts = resolveTransportFacts({ providerId: "bedrock" });
+		expect(bedrockFacts.client).toBe("bedrock");
+		expect(
+			requiresSignedReasoningCapability({
+				transportClient: bedrockFacts.client,
+				apiProtocol: bedrockFacts.apiProtocol,
+				family: "anthropic",
+				providerId: "bedrock",
+			}),
+		).toBe(false);
 	});
 });

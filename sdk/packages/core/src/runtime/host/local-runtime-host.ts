@@ -1096,6 +1096,46 @@ export class LocalRuntimeHost implements RuntimeHost {
 						: {}),
 				})
 			: undefined;
+		/**
+		 * ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (AMENDMENT-01, A2/A3).
+		 *
+		 * The DESTINATION ORIGIN AUTHORITY of the request this session dispatches.
+		 *
+		 * The resolver lives in `@cline/llms` and is the SAME one the wire gate
+		 * uses, so the budget and the wire compare the recorded origin against the
+		 * IDENTICAL destination authority.
+		 *
+		 * It is reached through a LAZY, DEFENSIVE accessor because the host is
+		 * imported by witnesses that substitute `@cline/llms` wholesale. An
+		 * unestablished destination grants NO opaque replay authority, which is the
+		 * SAFE direction: the reasoning the wire would also drop is not measured.
+		 */
+		function resolveDestinationOriginAuthority(
+			config: Parameters<typeof resolveConnectionProviderConfig>[0],
+		): string | undefined {
+			try {
+				const llms = require("@cline/llms") as {
+					buildReasoningOriginAuthority?: (input: {
+						providerId: string;
+						baseUrl: string | undefined;
+					}) => string | undefined;
+					resolveEffectiveBaseUrl?: (input: {
+						providerId: string;
+						baseUrl?: string | undefined;
+					}) => string | undefined;
+				};
+				return llms.buildReasoningOriginAuthority?.({
+					providerId: config.providerId,
+					baseUrl: llms.resolveEffectiveBaseUrl?.({
+						providerId: config.providerId,
+						baseUrl: resolveConnectionProviderConfig(config).baseUrl,
+					}),
+				});
+			} catch {
+				return undefined;
+			}
+		}
+
 		const prepareTurn = createCompactionStateAwarePrepareTurn({
 			compact,
 			getState: () => activeSessionRef?.compactionState,
@@ -1260,6 +1300,21 @@ export class LocalRuntimeHost implements RuntimeHost {
 			// measured in its internal form. Both fallbacks are CONSERVATIVE:
 			// they can only over-count, never under-count, so the fail-closed
 			// invariant is preserved either way.
+			// ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (AMENDMENT-01,
+			// A2/A3).
+			//
+			// The DESTINATION ORIGIN AUTHORITY of the request this session
+			// dispatches.
+			//
+			// The task-contract budget guard applies the SAME
+			// destination-specific replay eligibility the WIRE gate
+			// applies, so it needs the SAME destination authority, built by
+			// the repository's single resolver.
+			//
+			// An UNRESOLVED destination produces NO authority, exactly as the
+			// wire treats it.
+			destinationAuthority:
+				resolveDestinationOriginAuthority(configWithProvider),
 			prepareBudgetAccountingMessages: async (messages) => {
 				const agent = activeSessionRef?.agent;
 				if (!agent) {

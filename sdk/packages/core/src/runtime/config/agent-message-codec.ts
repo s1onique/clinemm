@@ -269,7 +269,33 @@ function contentBlockToAgentPart(block: ContentBlock): AgentMessagePart {
 				type: "reasoning",
 				text: "",
 				redacted: true,
-				metadata: { data: block.data },
+				// ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (AMENDMENT-01,
+				// A2/A3).
+				//
+				// The redacted-thinking payload is an OPAQUE provider-owned
+				// payload exactly like the thinking signature, and the OUTBOUND
+				// conversion reads it under `metadata.redactedData`
+				// (`providers/ai-sdk.ts`). The codec wrote it under
+				// `metadata.data` only, so the opaque payload never reached
+				// the wire under the key the wire reads: the Anthropic
+				// serializer dropped the block ("unsupported reasoning
+				// metadata") even for a payload the very issuing endpoint had
+				// authorized.
+				//
+				// It is written under BOTH keys: `data` is the historical
+				// key the provider-visible projection reads, and
+				// `redactedData` is the key the outbound conversion reads.
+				// The ORIGIN AUTHORITY travels WITH the payload, exactly as it
+				// does for the thinking signature, so the fail-closed
+				// destination-specific replay eligibility can be applied to
+				// the redacted payload too.
+				metadata: {
+					data: block.data,
+					redactedData: block.data,
+					...(block.originAuthority
+						? { originAuthority: block.originAuthority }
+						: {}),
+				},
 			};
 		case "image":
 			return { type: "image", image: block.data, mediaType: block.mediaType };

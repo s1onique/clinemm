@@ -28,13 +28,26 @@
  *                  requirement
  *   CMP09-PROJ-02  an unauthorized (unsigned) reasoning block is omitted
  *                  when the transport requires a signature
- *   CMP09-PROJ-03  a SIGNED reasoning block is conserved verbatim (text,
- *                  signature and details)
- *   CMP09-PROJ-04  redacted reasoning is conserved (the serializer emits it)
+ *   CMP09-PROJ-03  an AUTHORIZED signed reasoning block is conserved
+ *                  verbatim (text, signature and details)
+ *   CMP09-PROJ-04  an AUTHORIZED redacted reasoning block is conserved; an
+ *                  UNAUTHORIZED one is omitted
  *   CMP09-PROJ-05  the canonical transcript is NOT mutated
  *   CMP09-PROJ-06  tool calls, tool results and their ORDER are conserved
  *   CMP09-PROJ-07  the omitted block's text appears NOWHERE in the measured
  *                  request, so the budget cannot count it
+ *
+ * ## THE REPLAY ELIGIBILITY (AMENDMENT-01, A2)
+ * --------------------------------------------
+ * Signature presence alone does NOT establish that a reasoning block is
+ * provider-visible. The opaque payload authenticates a block to the
+ * ENDPOINT that issued it, and the WIRE gate withholds it unless the
+ * recorded origin EXACTLY equals the destination's own origin authority.
+ *
+ * The controls therefore supply the ORIGIN AUTHORITY for the blocks that
+ * are expected to survive, and a DESTINATION AUTHORITY for the projection
+ * to compare against. A block with an absent or incompatible origin is
+ * expected NOT to survive, because that is exactly what the wire does.
  */
 
 import { describe, expect, it } from "vitest";
@@ -47,6 +60,17 @@ import {
 } from "./request-budget";
 
 const SIGNATURE = "a".repeat(64);
+
+/**
+ * The origin authority of the destination the request is dispatched to.
+ *
+ * It is the value the WIRE gate compares the recorded origin against, so it
+ * is what makes a block's replay eligibility decidable.
+ */
+const DESTINATION_AUTHORITY = "minimax https://api.minimax.io /anthropic/v1";
+
+/** An origin authority for a DIFFERENT (incompatible) established route. */
+const FOREIGN_ORIGIN_AUTHORITY = "anthropic https://api.anthropic.com /v1";
 
 function assistantWithReasoning(
 	reasoning: AgentMessage["content"][number],
@@ -62,7 +86,10 @@ function assistantWithReasoning(
 const SIGNED_REASONING: AgentMessage["content"][number] = {
 	type: "reasoning",
 	text: "signed reasoning",
-	metadata: { signature: SIGNATURE },
+	metadata: {
+		signature: SIGNATURE,
+		originAuthority: DESTINATION_AUTHORITY,
+	},
 };
 
 const UNSIGNED_REASONING: AgentMessage["content"][number] = {
@@ -72,6 +99,7 @@ const UNSIGNED_REASONING: AgentMessage["content"][number] = {
 
 const REQUIRES_SIGNATURE: ProviderVisibleProjectionOptions = {
 	requiresSignedReasoning: true,
+	destinationAuthority: DESTINATION_AUTHORITY,
 };
 
 describe("CMP-09 reasoning-authorization projection", () => {
@@ -94,7 +122,7 @@ describe("CMP-09 reasoning-authorization projection", () => {
 		expect(projected[0]!.content).toHaveLength(0);
 	});
 
-	it("CMP09-PROJ-03: a SIGNED reasoning block is conserved verbatim", () => {
+	it("CMP09-PROJ-03: an AUTHORIZED signed reasoning block is conserved verbatim", () => {
 		const projected = toProviderVisibleMessages(
 			[assistantWithReasoning(SIGNED_REASONING)],
 			REQUIRES_SIGNATURE,
@@ -107,8 +135,48 @@ describe("CMP-09 reasoning-authorization projection", () => {
 		});
 	});
 
-	it("CMP09-PROJ-04: redacted reasoning is conserved", () => {
+	it("CMP09-PROJ-03b: a signed reasoning block with an INCOMPATIBLE origin is omitted", () => {
+		// ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (AMENDMENT-01, A2).
+		//
+		// The signature is present, but the opaque payload was issued by a
+		// DIFFERENT endpoint. The wire withholds it and the serializer drops
+		// the block, so the budget must not count it either.
 		const projected = toProviderVisibleMessages(
+			[
+				assistantWithReasoning({
+					type: "reasoning",
+					text: "signed reasoning",
+					metadata: {
+						signature: SIGNATURE,
+						originAuthority: FOREIGN_ORIGIN_AUTHORITY,
+					},
+				}),
+			],
+			REQUIRES_SIGNATURE,
+		);
+		expect(projected[0]!.content).toHaveLength(0);
+	});
+
+	it("CMP09-PROJ-03c: a signed reasoning block with an ABSENT origin is omitted", () => {
+		// ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (AMENDMENT-01, A2).
+		//
+		// The fail-closed wire policy grants no replay authority to an
+		// absent origin, so the block is not provider-visible.
+		const projected = toProviderVisibleMessages(
+			[
+				assistantWithReasoning({
+					type: "reasoning",
+					text: "signed reasoning",
+					metadata: { signature: SIGNATURE },
+				}),
+			],
+			REQUIRES_SIGNATURE,
+		);
+		expect(projected[0]!.content).toHaveLength(0);
+	});
+
+	it("CMP09-PROJ-04: an AUTHORIZED redacted reasoning block is conserved; an UNAUTHORIZED one is omitted", () => {
+		const authorized = toProviderVisibleMessages(
 			[
 				{
 					id: "m1",
@@ -119,18 +187,42 @@ describe("CMP-09 reasoning-authorization projection", () => {
 							type: "reasoning",
 							text: "",
 							redacted: true,
-							metadata: { data: "opaque" },
+							metadata: {
+								data: "opaque",
+								redactedData: "opaque",
+								originAuthority: DESTINATION_AUTHORITY,
+							},
 						},
 					],
 				},
 			],
 			REQUIRES_SIGNATURE,
 		);
-		expect(projected[0]!.content).toHaveLength(1);
-		expect(projected[0]!.content[0]).toMatchObject({
+		expect(authorized[0]!.content).toHaveLength(1);
+		expect(authorized[0]!.content[0]).toMatchObject({
 			type: "redacted_thinking",
 			data: "opaque",
 		});
+
+		const unauthorized = toProviderVisibleMessages(
+			[
+				{
+					id: "m1",
+					role: "assistant",
+					createdAt: 1,
+					content: [
+						{
+							type: "reasoning",
+							text: "",
+							redacted: true,
+							metadata: { data: "opaque", redactedData: "opaque" },
+						},
+					],
+				},
+			],
+			REQUIRES_SIGNATURE,
+		);
+		expect(unauthorized[0]!.content).toHaveLength(0);
 	});
 
 	it("CMP09-PROJ-05: the canonical transcript is NOT mutated", () => {

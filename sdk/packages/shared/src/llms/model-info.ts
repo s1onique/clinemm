@@ -278,35 +278,120 @@ export function modelSupportsImageInput(model: {
  * the predicate HERE lets BOTH consume ONE definition, so the projection and
  * the serializer can never drift apart.
  *
- * ## THE CLASSIFICATION
- * ---------------------
- * The capability is carried by the model/provider metadata the catalog
- * already publishes (`family`, `apiFormat`), never by a provider-id string
- * comparison.
+ * ## THE CLASSIFICATION (AMENDMENT-01 CORRECTION)
+ * ----------------------------------------------
+ * The capability is decided by the RESOLVED TRANSPORT — the transport
+ * CLIENT the request is actually dispatched through — and never by a
+ * model-name, model-family or provider-id substring guess.
+ *
+ * The previous implementation classified the MODEL FAMILY first and only
+ * then consulted the API format. That inverted the authority: the family
+ * is a property of the MODEL LINEAGE, while the requirement is a property
+ * of the SERIALIZER that runs. The two disagree on exactly the routes that
+ * matter:
+ *
+ *   - `family: "minimax"`, resolved transport `anthropic` -> the Anthropic
+ *     serializer DOES drop an unsigned reasoning block, so the capability is
+ *     TRUE. The family-first implementation answered FALSE.
+ *   - `family: "anthropic"`, resolved transport `openai` -> the OpenAI
+ *     serializer does NOT drop an unsigned reasoning block, so the
+ *     capability is FALSE. The family-first implementation answered TRUE.
+ *
+ * Both answers were wrong, and the first one made the CMP-09 exclusion
+ * UNREACHABLE on the real MiniMax builtin route (the MiniMax model family
+ * is "minimax" while the MiniMax provider resolves to the Anthropic
+ * transport), so the unsigned reasoning that the MiniMax serializer drops
+ * was still counted by the budget.
+ *
+ * The RESOLVED TRANSPORT CLIENT is the repository's own published fact
+ * (`ProviderInfo.client` — the `ProviderClient` the provider collection
+ * resolves to, and the same value the gateway's transport factory is
+ * selected by). It is a transport identity, not a lineage guess, so it
+ * cannot disagree with the serializer that actually runs.
+ *
+ * The transport is resolved from the MODEL's declared wire protocol when the
+ * catalog publishes one (`metadata.apiProtocol`, the per-model override for
+ * gateways that serve multiple API formats), and from the PROVIDER's
+ * resolved client otherwise.
+ *
+ * ## THE DEFAULT
+ * --------------
+ * `false`. A transport that is not positively established as the Anthropic
+ * transport keeps every reasoning block, so every existing caller and every
+ * non-Anthropic transport is bit-for-bit unchanged.
  */
 export function requiresSignedReasoningCapability(input: {
-	/** The model's declared family, when the catalog publishes one. */
-	family?: string;
-	/** The model's declared API format, when the catalog publishes one. */
+	/**
+	 * The RESOLVED transport client the request is dispatched through.
+	 *
+	 * This is the `ProviderClient` the provider resolves to. `"anthropic"`
+	 * is the ONLY value that requires provider-origin authorization for a
+	 * reasoning block, because the Anthropic AI SDK module is the only
+	 * serializer that drops an unsigned reasoning block.
+	 */
+	transportClient?: string;
+	/**
+	 * The model's declared wire protocol, when the catalog publishes one.
+	 *
+	 * This is the PER-MODEL override for a gateway that serves several API
+	 * formats. It is consulted only when the resolved transport client is
+	 * not established.
+	 */
+	apiProtocol?: string;
+	/**
+	 * The model's declared API format, when the catalog publishes one.
+	 *
+	 * Retained for compatibility with the previous signature. `"anthropic"`
+	 * names the Anthropic transport.
+	 */
 	apiFormat?: string;
-	/** The model's id, used only as a fallback when no family is published. */
+	/** The model's declared family. NOT a transport identity. */
+	family?: string;
+	/** The model's id. NOT a transport identity. */
 	modelId?: string;
-	/** The provider id, used only as a fallback when no family is published. */
+	/** The provider id. NOT a transport identity. */
 	providerId?: string;
 }): boolean {
-	const family = normalizeCapabilityValue(input.family);
-	if (family) {
-		return family.includes("anthropic") || family.includes("claude");
+	// ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (AMENDMENT-01, A1).
+	//
+	// The RESOLVED TRANSPORT is the authority. It is consulted FIRST and it
+	// is decisive when it is established.
+	const transportClient = normalizeCapabilityValue(input.transportClient);
+	if (transportClient) {
+		return transportClient === ANTHROPIC_TRANSPORT_CLIENT;
 	}
+	// The PER-MODEL wire protocol override, when the provider is a
+	// multi-format gateway. This is a transport fact, not a lineage fact.
+	const apiProtocol = normalizeCapabilityValue(input.apiProtocol);
+	if (apiProtocol) {
+		return apiProtocol === ANTHROPIC_TRANSPORT_CLIENT;
+	}
+	// The declared API format, when the catalog publishes one.
 	const apiFormat = normalizeCapabilityValue(input.apiFormat);
 	if (apiFormat) {
-		return apiFormat === "anthropic";
+		return apiFormat === ANTHROPIC_TRANSPORT_CLIENT;
 	}
-	const modelId = normalizeCapabilityValue(input.modelId);
-	return modelId
-		? modelId.includes("anthropic") || modelId.includes("claude")
-		: false;
+	// NO ESTABLISHED TRANSPORT -> NO REQUIREMENT.
+	//
+	// The previous implementation fell back to the model FAMILY and then to
+	// the model ID substring. Both are lineage guesses, and a lineage guess
+	// CANNOT establish a serializer behavior: the MiniMax route proves it
+	// ("minimax" family, Anthropic transport). Failing closed here keeps
+	// the pre-existing behavior for every transport whose identity the
+	// repository does not publish, and it never silently excludes a block
+	// the provider would have received.
+	return false;
 }
+
+/**
+ * The transport client whose serializer requires provider-origin
+ * authorization for a reasoning block.
+ *
+ * It is the ONLY Anthropic AI SDK module in the repository. The Bedrock
+ * transport uses its own module (`vendors/bedrock`) and does NOT drop an
+ * unsigned reasoning block, so it is deliberately NOT included here.
+ */
+const ANTHROPIC_TRANSPORT_CLIENT = "anthropic";
 
 function normalizeCapabilityValue(
 	value: string | undefined,

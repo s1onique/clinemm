@@ -236,6 +236,14 @@ export {
 	type ReasoningLevel,
 	ReasoningLevelSchema,
 } from "./llms/reasoning-options";
+// ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (AMENDMENT-01, A2): the
+// SINGLE destination-specific replay-eligibility authority. The wire gate
+// and the request-budget authority consume this one decision.
+export {
+	extractReasoningOriginAuthority,
+	mayReplayOpaqueReasoning,
+	REASONING_ORIGIN_AUTHORITY_KEY,
+} from "./llms/reasoning-replay-eligibility";
 export {
 	assertProviderRequestWithinBudget,
 	estimateProviderRequestInputTokens,

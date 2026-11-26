@@ -5,6 +5,58 @@ import {
 	isRetryableProviderError,
 	recordPrefixForensicsRuntimeProjection,
 } from "@cline/llms";
+
+/**
+ * ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (AMENDMENT-01, A1/A2/A3).
+ *
+ * The transport authority and the destination origin authority live in
+ * `@cline/llms`.
+ *
+ * They are reached through a LAZY, DEFENSIVE accessor rather than a
+ * module-scope binding, because the runtime is imported by hosts and
+ * witnesses that substitute `@cline/llms` wholesale. A module-scope named
+ * import would make every such substitute fail at the FIRST CALL, because a
+ * substituted module does not carry these exports.
+ *
+ * The accessor degrades to "NOT ESTABLISHED", which is the SAFE direction:
+ * an unestablished transport grants no reasoning-authorization requirement
+ * (every reasoning block is measured, exactly as before this repair) and an
+ * unestablished destination grants no opaque replay authority (the reasoning
+ * the wire would also drop is not measured). Neither can silently exclude
+ * content the provider receives.
+ */
+type LlmTransportAuthority = {
+	buildReasoningOriginAuthority?: (input: {
+		providerId: string;
+		baseUrl: string | undefined;
+	}) => string | undefined;
+	resolveEffectiveBaseUrl?: (input: {
+		providerId: string;
+		baseUrl?: string | undefined;
+		apiLine?: string | undefined;
+	}) => string | undefined;
+	resolveTransportFacts?: (input: { providerId: string; model?: unknown }) => {
+		client?: string;
+		apiProtocol?: string;
+	};
+};
+
+let llmTransportAuthority: LlmTransportAuthority | undefined;
+let llmTransportAuthorityResolved = false;
+
+function getLlmTransportAuthority(): LlmTransportAuthority {
+	if (!llmTransportAuthorityResolved) {
+		llmTransportAuthorityResolved = true;
+		try {
+			llmTransportAuthority =
+				require("@cline/llms") as Partial<LlmTransportAuthority>;
+		} catch {
+			llmTransportAuthority = undefined;
+		}
+	}
+	return llmTransportAuthority ?? {};
+}
+
 import type {
 	AgentAfterToolResult,
 	AgentBeforeModelResult,
@@ -84,11 +136,11 @@ import {
 	normalizeJsonLikeStringsForSchema,
 	omitUnauthorizedReasoningBlocks,
 	omitUndefinedValues,
-	requiresSignedReasoningCapability,
 	// ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01: the runtime-owned
 	// parent-obligation reference vocabulary.
 	type ParentObligationReference,
 	renderBoundedObjectiveInstruction,
+	requiresSignedReasoningCapability,
 	resolveBoundedObjectiveVerification,
 	sanitizeTraceErrorMessage,
 	TASK_CANCELLED_EVENT,
@@ -1494,6 +1546,21 @@ export class AgentRuntime {
 	 */
 	private requestBudgetCeilingTokens: number | undefined;
 	/**
+	 * ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (AMENDMENT-01, A2/A3).
+	 *
+	 * The RESOLVED base URL of the provider the final request is dispatched
+	 * through.
+	 *
+	 * The final request guard applies the SAME destination-specific replay
+	 * eligibility the WIRE gate applies, so it needs the SAME destination
+	 * origin authority, and the authority is built from the EFFECTIVE
+	 * endpoint.
+	 *
+	 * `undefined` means the endpoint is unresolved, which produces NO
+	 * authority — exactly as the wire treats it.
+	 */
+	private providerBaseUrl: string | undefined;
+	/**
 	 * C1.4 snapshot of `recoverySecondStage.kind` taken BEFORE
 	 * the per-execution `applyRecoveryPostClassification` work
 	 * mutates it. Lets the post-record failure branch distinguish
@@ -1576,6 +1643,12 @@ export class AgentRuntime {
 			...resolved,
 			toolExecution: resolved.toolExecution ?? "sequential",
 		};
+		// ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (AMENDMENT-01, A2/A3).
+		//
+		// The EFFECTIVE endpoint of the provider the request is dispatched
+		// through. It is what the destination origin authority is built
+		// from, and it is what the wire gate uses.
+		this.providerBaseUrl = "baseUrl" in config ? config.baseUrl : undefined;
 		this.state.agentId = resolved.agentId ?? createUID("agent");
 		this.state.agentRole = resolved.agentRole;
 		this.state.parentAgentId = resolved.parentAgentId;
@@ -5179,16 +5252,43 @@ export class AgentRuntime {
 			// The exclusion is the SAME one the serializer performs, applied
 			// to the SAME provider-visible projection, so the guard and the
 			// wire cannot disagree.
+			const transportFacts = getLlmTransportAuthority().resolveTransportFacts?.(
+				{
+					providerId: this.config.messageModelInfo?.provider ?? "",
+					model: this.config.messageModelInfo,
+				},
+			);
 			const requiresSignedReasoning = requiresSignedReasoningCapability({
+				transportClient: transportFacts?.client,
+				apiProtocol: transportFacts?.apiProtocol,
 				family: this.config.messageModelInfo?.family,
 				modelId: this.config.messageModelInfo?.id,
 				providerId: this.config.messageModelInfo?.provider,
 			});
+			// ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (AMENDMENT-01,
+			// A2/A3).
+			//
+			// The DESTINATION ORIGIN AUTHORITY, built by the repository's
+			// SINGLE resolver — the SAME one the wire gate uses, so the guard
+			// and the wire compare the recorded origin against the IDENTICAL
+			// destination authority.
+			const transportAuthority = getLlmTransportAuthority();
+			const destinationAuthority =
+				transportAuthority.buildReasoningOriginAuthority?.({
+					providerId: this.config.messageModelInfo?.provider ?? "",
+					baseUrl: transportAuthority.resolveEffectiveBaseUrl?.({
+						providerId: this.config.messageModelInfo?.provider ?? "",
+						baseUrl: this.providerBaseUrl,
+					}),
+				});
 			assertProviderRequestWithinBudget({
 				systemPrompt: request.systemPrompt ?? "",
 				messages: omitUnauthorizedReasoningBlocks(
-					toProviderVisibleMessages(request.messages),
-					{ requiresSignedReasoning },
+					toProviderVisibleMessages(request.messages, {
+						requiresSignedReasoning,
+						destinationAuthority,
+					}),
+					{ requiresSignedReasoning, destinationAuthority },
 				),
 				tools: request.tools,
 				maxRequestTokens: this.requestBudgetCeilingTokens,

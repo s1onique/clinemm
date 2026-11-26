@@ -60,7 +60,13 @@ import { createContextCompactionPrepareTurn } from "./compaction";
 
 const createHandlerMock = vi.fn();
 
-vi.mock("@cline/llms", () => ({
+// ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (AMENDMENT-01, A1).
+//
+// The compaction trigger resolves the TRANSPORT the request is dispatched
+// through. The mock supplies the REAL resolver so the witness exercises the
+// production transport authority rather than a family guess.
+vi.mock("@cline/llms", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@cline/llms")>()),
 	createHandlerAsync: (config: unknown) => createHandlerMock(config),
 }));
 
@@ -85,11 +91,16 @@ const MODEL = {
 	info: {
 		maxInputTokens: 1_048_576,
 		contextWindow: 1_048_576,
-		// The historical witness's model family. The Anthropic family is the
-		// transport that REQUIRES provider-origin authorization for a
-		// reasoning block, so an unsigned reasoning block is not
-		// provider-visible content on it.
-		family: "anthropic",
+		// ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (AMENDMENT-01, A1).
+		//
+		// The REAL model family of the historical witness's model is
+		// "minimax", NOT "anthropic": the MiniMax provider resolves to the
+		// Anthropic TRANSPORT, but the model lineage is MiniMax's own.
+		//
+		// The transport is what decides the capability, so the witness keeps
+		// the real family and lets the production transport resolver supply
+		// the transport identity.
+		family: "minimax",
 	},
 } as unknown as CompactionModel;
 
@@ -118,29 +129,63 @@ function createRecordingSink() {
 }
 
 /**
- * A transcript whose assistant turn carries reasoning. The reasoning block is
- * either SIGNED (provider-authorized) or UNSIGNED (provider-excluded: the
- * output-exhaustion shape, where the provider never returned a signature).
+ * A transcript whose assistant turn carries reasoning.
+ *
+ * The reasoning block's authorization shape is the CALLER'S choice:
+ *
+ *   - `unsigned` — provider-excluded: the output-exhaustion shape, where
+ *     the provider never returned a signature;
+ *   - `signed` — provider-authorized, with the origin authority that
+ *     matches the destination;
+ *   - `signed-incompatible-origin` — the signature is present, but the
+ *     opaque payload was issued by a DIFFERENT endpoint, so the fail-closed
+ *     wire policy withholds it and the serializer drops the block.
+ *
+ * ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (AMENDMENT-01, A2/A5).
  */
 function makeAssistantReasoningMessage(input: {
 	signed: boolean;
 	reasoningChars: number;
+	/**
+	 * ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (AMENDMENT-01, A2).
+	 * The recorded ORIGIN AUTHORITY of the opaque payload. `undefined`
+	 * means NO origin was recorded, which grants no replay authority.
+	 */
+	originAuthority?: string;
 }): MessageWithMetadata {
+	const thinking = "R".repeat(input.reasoningChars);
 	const part = input.signed
 		? {
 				type: "thinking",
-				thinking: "R".repeat(input.reasoningChars),
+				thinking,
 				signature: "a".repeat(64),
+				...(input.originAuthority === undefined
+					? {}
+					: { originAuthority: input.originAuthority }),
 			}
 		: {
 				type: "thinking",
-				thinking: "R".repeat(input.reasoningChars),
+				thinking,
 			};
 	return {
 		role: "assistant",
 		content: [part],
 	} as unknown as MessageWithMetadata;
 }
+
+/**
+ * The origin authority of the MiniMax destination the trigger measures for.
+ *
+ * It is the value the production code computes for the PUBLISHED MiniMax
+ * route, and the value the fail-closed wire policy compares the recorded
+ * origin against.
+ */
+const MINIMAX_DESTINATION_AUTHORITY =
+	"minimax\u0000https://api.minimax.io\u0000/anthropic/v1";
+
+/** An origin authority for a DIFFERENT (incompatible) established route. */
+const FOREIGN_ORIGIN_AUTHORITY =
+	"anthropic\u0000https://api.anthropic.com\u0000/v1";
 
 function makeUserMessage(text: string): MessageWithMetadata {
 	return {
@@ -202,6 +247,7 @@ describe("ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 — trigger consequence"
 				makeAssistantReasoningMessage({
 					signed: true,
 					reasoningChars: 1_000,
+					originAuthority: MINIMAX_DESTINATION_AUTHORITY,
 				}),
 			],
 		});
@@ -221,6 +267,7 @@ describe("ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 — trigger consequence"
 				makeAssistantReasoningMessage({
 					signed: true,
 					reasoningChars: 1_000,
+					originAuthority: MINIMAX_DESTINATION_AUTHORITY,
 				}),
 				makeAssistantReasoningMessage({
 					signed: false,
@@ -261,6 +308,7 @@ describe("ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 — trigger consequence"
 				makeAssistantReasoningMessage({
 					signed: true,
 					reasoningChars: 1_000,
+					originAuthority: MINIMAX_DESTINATION_AUTHORITY,
 				}),
 			],
 		});
@@ -270,6 +318,7 @@ describe("ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 — trigger consequence"
 				makeAssistantReasoningMessage({
 					signed: true,
 					reasoningChars: 1_000,
+					originAuthority: MINIMAX_DESTINATION_AUTHORITY,
 				}),
 				makeAssistantReasoningMessage({
 					signed: false,
@@ -292,5 +341,94 @@ describe("ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 — trigger consequence"
 		expect(adversarialDecision.requestTriggerTokens).toBe(
 			controlDecision.requestTriggerTokens,
 		);
+	});
+
+	it("CMP09-TRIG-05: incompatible-origin opaque reasoning cannot inflate the trigger measurement", async () => {
+		// ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (AMENDMENT-01, A2/A5).
+		//
+		// A SIGNED reasoning block whose recorded origin belongs to a
+		// DIFFERENT endpoint is NOT provider-visible: the fail-closed wire
+		// policy withholds the opaque payload and the Anthropic serializer
+		// drops the whole block.
+		//
+		// Signature presence ALONE must therefore not inflate the trigger's
+		// measurement. The discriminator is the COMPATIBLE case: the SAME
+		// transcript with the origin MATCHING the destination IS measured,
+		// because the provider receives it.
+		const shared = [makeUserMessage("A".repeat(1_500_000))];
+		const control = await driveProductionSeam({
+			messages: [
+				...shared,
+				makeAssistantReasoningMessage({
+					signed: true,
+					reasoningChars: 1_000,
+					originAuthority: MINIMAX_DESTINATION_AUTHORITY,
+				}),
+			],
+		});
+		const incompatible = await driveProductionSeam({
+			messages: [
+				...shared,
+				makeAssistantReasoningMessage({
+					signed: true,
+					reasoningChars: 1_000,
+					originAuthority: MINIMAX_DESTINATION_AUTHORITY,
+				}),
+				makeAssistantReasoningMessage({
+					signed: true,
+					reasoningChars: 2_600_000,
+					originAuthority: FOREIGN_ORIGIN_AUTHORITY,
+				}),
+			],
+		});
+		const controlDecision = control[0]!;
+		const incompatibleDecision = incompatible[0]!;
+		// The incompatible-origin material is NOT measured: the growth is
+		// bounded by the envelope of the one extra assistant message, not by
+		// the opaque reasoning the provider never receives.
+		const excludedTokens = Math.ceil(2_600_000 / 3);
+		const growth =
+			incompatibleDecision.requestInputTokens! -
+			controlDecision.requestInputTokens!;
+		expect(growth).toBeGreaterThanOrEqual(0);
+		expect(growth).toBeLessThan(100);
+		expect(growth).toBeLessThan(excludedTokens / 100);
+		// ... and the production VERDICT is unchanged.
+		expect(incompatibleDecision.shouldCompact).toBe(false);
+		expect(incompatibleDecision.compactionInitiated).toBe(false);
+		expect(incompatibleDecision.requestTriggerTokens).toBe(
+			controlDecision.requestTriggerTokens,
+		);
+	});
+
+	it("CMP09-TRIG-06: a same-route AUTHORIZED reasoning block IS measured (necessity)", async () => {
+		// ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (AMENDMENT-01, A5).
+		//
+		// The NECESSITY discriminator: the exclusion must not be so broad
+		// that it also drops the reasoning the provider ACTUALLY receives.
+		// The SAME transcript, with the origin MATCHING the destination, is
+		// measured — because the wire carries it.
+		const shared = [makeUserMessage("A".repeat(1_500_000))];
+		const control = await driveProductionSeam({
+			messages: [...shared],
+		});
+		const authorized = await driveProductionSeam({
+			messages: [
+				...shared,
+				makeAssistantReasoningMessage({
+					signed: true,
+					reasoningChars: 600_000,
+					originAuthority: MINIMAX_DESTINATION_AUTHORITY,
+				}),
+			],
+		});
+		const controlDecision = control[0]!;
+		const authorizedDecision = authorized[0]!;
+		const growth =
+			authorizedDecision.requestInputTokens! -
+			controlDecision.requestInputTokens!;
+		// The authorized reasoning IS measured: its contribution is the bulk
+		// of its own text, not an envelope.
+		expect(growth).toBeGreaterThan(100_000);
 	});
 });

@@ -214,6 +214,23 @@ export interface RedactedThinkingContent {
 	type: "redacted_thinking";
 	/** Encrypted/redacted data */
 	data: string;
+	/**
+	 * ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (AMENDMENT-01, A2).
+	 *
+	 * The ORIGIN AUTHORITY of the route that issued this block's opaque
+	 * redacted payload.
+	 *
+	 * The redacted payload is a provider-owned opaque payload exactly like
+	 * the thinking signature: it authenticates the block to the ENDPOINT
+	 * that issued it. The wire gate withholds it unless the recorded origin
+	 * EXACTLY equals the destination's own origin authority, and the
+	 * Anthropic serializer then DROPS the whole block.
+	 *
+	 * It is the SAME field the `thinking` block carries and it is NEVER sent
+	 * to a provider: it is consumed by the outbound projection and the
+	 * request-budget authority.
+	 */
+	originAuthority?: string;
 	/** Provider-native call ID for this reasoning block (if available) */
 	call_id?: string;
 }

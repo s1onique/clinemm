@@ -408,7 +408,33 @@ export function toGatewayRequestMessages(
 							case "file":
 								return [{ type: "text" as const, text: part.content }];
 							case "redacted_thinking":
-								return [];
+								// ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01
+								// (AMENDMENT-01, A2/A3).
+								//
+								// The redacted-thinking payload is an OPAQUE
+								// provider-owned payload exactly like the thinking
+								// signature, and the OUTBOUND conversion reads it
+								// under `metadata.redactedData`. The compat dispatch
+								// DROPPED the block entirely, so a redacted reasoning
+								// block never reached the provider through this path.
+								//
+								// It is now carried with the SAME shape the thinking
+								// block uses: the opaque payload under the key the
+								// outbound conversion reads, and the ORIGIN AUTHORITY
+								// alongside it, so the fail-closed destination-
+								// specific replay eligibility applies to it too.
+								return [
+									{
+										type: "reasoning" as const,
+										text: "",
+										metadata: {
+											redactedData: part.data,
+											...(part.originAuthority === undefined
+												? {}
+												: { originAuthority: part.originAuthority }),
+										},
+									},
+								];
 							default:
 								return [];
 						}
