@@ -67,6 +67,7 @@
 //     an unwrapped one does today, leaving the reporting path unchanged.
 
 import type {
+	JSONValue,
 	LanguageModelV4Middleware,
 	LanguageModelV4StreamPart,
 	LanguageModelV4StreamResult,
@@ -198,11 +199,111 @@ function addCounts(
 	return (a ?? 0) + (b ?? 0);
 }
 
+/**
+ * ACT-CLINEMM-PROVIDER-USAGE-NORMALIZATION-AUTHORITY-01.
+ *
+ * The REASONING BREAKDOWN of a single attempt's usage.
+ *
+ * The AI SDK's `LanguageModelV4Usage` contract states that
+ * `outputTokens.total` is "the total number of output (completion) tokens
+ * used" and that `outputTokens.text` and `outputTokens.reasoning` are its
+ * PARTS — so `total = text + reasoning`, and the reasoning is a SUBSET of
+ * the total.
+ *
+ * The structured `outputTokens.reasoning` is preferred. The raw provider
+ * payload is the fallback for the providers whose adapter does not populate
+ * the structured breakdown — the resolved `@ai-sdk/anthropic` adapter, for
+ * instance, only reads `output_tokens_details.thinking_tokens` from the
+ * FINAL (`message_delta`) usage frame and drops the OPENING
+ * (`message_start`) frame's breakdown, so an Anthropic-shaped provider that
+ * reports the breakdown in the opening frame leaves the structured field
+ * empty while the raw payload still carries it.
+ */
+function readAttemptReasoning(usage: LanguageModelV4Usage): number | undefined {
+	const structured = usage.outputTokens?.reasoning;
+	if (typeof structured === "number" && Number.isFinite(structured)) {
+		return structured;
+	}
+	const raw = usage.raw;
+	if (!raw || typeof raw !== "object") {
+		return undefined;
+	}
+	const rawRecord = raw as Record<string, unknown>;
+	const details = rawRecord.output_tokens_details;
+	if (details && typeof details === "object") {
+		const detailRecord = details as Record<string, unknown>;
+		for (const key of ["reasoning_tokens", "thinking_tokens"]) {
+			const value = detailRecord[key];
+			if (typeof value === "number" && Number.isFinite(value)) {
+				return value;
+			}
+		}
+	}
+	for (const key of ["reasoning_tokens", "reasoningTokens"]) {
+		const value = rawRecord[key];
+		if (typeof value === "number" && Number.isFinite(value)) {
+			return value;
+		}
+	}
+	return undefined;
+}
+
+/**
+ * ACT-CLINEMM-PROVIDER-USAGE-NORMALIZATION-AUTHORITY-01.
+ *
+ * The VISIBLE (text-only) output of a single attempt's usage.
+ *
+ * When the attempt's usage carries the SDK's structured remainder, that
+ * value IS the visible output. Otherwise the visible output is the total
+ * minus the reasoning — but only when the reasoning is known to be part of
+ * THAT attempt's total.
+ */
+function readAttemptVisibleOutput(
+	usage: LanguageModelV4Usage,
+): number | undefined {
+	const structured = usage.outputTokens?.text;
+	if (typeof structured === "number" && Number.isFinite(structured)) {
+		return structured;
+	}
+	const total = usage.outputTokens?.total;
+	if (typeof total !== "number" || !Number.isFinite(total)) {
+		return undefined;
+	}
+	const reasoning = readAttemptReasoning(usage);
+	if (reasoning === undefined) {
+		return undefined;
+	}
+	return Math.max(0, total - reasoning);
+}
+
 /** Sum two standardized v4 usage records field by field. */
 export function addUsage(
 	a: LanguageModelV4Usage,
 	b: LanguageModelV4Usage,
 ): LanguageModelV4Usage {
+	//
+	// ACT-CLINEMM-PROVIDER-USAGE-NORMALIZATION-AUTHORITY-01.
+	//
+	// Each record's breakdown is resolved INDEPENDENTLY and then summed.
+	//
+	// Resolving them independently is what keeps the aggregate's breakdown
+	// scoped to exactly the attempts the aggregate's total covers. A record
+	// whose adapter left the structured breakdown empty must not contribute
+	// a zero: its breakdown is recovered from its own raw payload, which
+	// describes that attempt alone. Summing the resolved values — rather
+	// than preferring one side's structured field — is what makes
+	// `visible + reasoning == total` hold for the aggregate.
+	//
+	// A record that reports NO breakdown at all (neither structured nor raw)
+	// contributes nothing to the aggregate's breakdown: its output is
+	// unknown, not zero, so the aggregate's breakdown stays incomplete
+	// rather than falsely complete.
+	const reasoning = addCounts(readAttemptReasoning(a), readAttemptReasoning(b));
+	const text = addCounts(
+		readAttemptVisibleOutput(a),
+		readAttemptVisibleOutput(b),
+	);
+	const total = addCounts(a.outputTokens?.total, b.outputTokens?.total);
 	return {
 		inputTokens: {
 			total: addCounts(a.inputTokens?.total, b.inputTokens?.total),
@@ -214,12 +315,9 @@ export function addUsage(
 			),
 		},
 		outputTokens: {
-			total: addCounts(a.outputTokens?.total, b.outputTokens?.total),
-			text: addCounts(a.outputTokens?.text, b.outputTokens?.text),
-			reasoning: addCounts(
-				a.outputTokens?.reasoning,
-				b.outputTokens?.reasoning,
-			),
+			total,
+			text,
+			reasoning,
 		},
 		// `raw` is provider-specific and cannot be summed generically; the
 		// emitted finish keeps the final attempt's raw payload.
@@ -228,22 +326,232 @@ export function addUsage(
 }
 
 /**
+ * ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (ADDENDUM-01 CORRECTION-01).
+ *
+ * THE PHYSICAL-REQUEST OCCUPANCY AUTHORITY.
+ *
+ * WHY IT EXISTS
+ * -------------
+ * The middleware AGGREGATES the discarded attempts' usage into the emitted
+ * finish part, so `usage.inputTokens.total` is the SUM over the physical
+ * attempts of the turn. That aggregate is the correct BILLING quantity: the
+ * provider charged for every attempt.
+ *
+ * It is NOT the correct CONTEXT-OCCUPANCY quantity. The provider's context
+ * window is occupied by ONE request's prompt; re-sending the same prompt
+ * three times costs three times as much but occupies the window exactly as
+ * much as sending it once.
+ *
+ * THE THREE STATES
+ * ---------------
+ * The authority is a THREE-VALUED fact, and collapsing it to two is what
+ * reintroduced the aggregate as an occupancy:
+ *
+ *   "single"  the turn made exactly ONE physical attempt, so the aggregate
+ *             IS that request's occupancy (the LEGACY shape);
+ *   "known"   the turn made several physical attempts and the SERVED
+ *             attempt's own prompt size is established, so THAT is the
+ *             occupancy;
+ *   "unknown" the turn made several physical attempts and the served
+ *             attempt's prompt size was NOT established. The aggregate
+ *             covers an UNKNOWN number of requests, so it describes NO
+ *             request's occupancy. The occupancy authority is DENIED, and
+ *             the consumer must NOT fall back to the aggregate.
+ *
+ * "unknown" is an EXPLICIT denial, not an absence: it says the measurement
+ * exists in principle but was not established, which is exactly what forbids
+ * the aggregate fallback.
+ *
+ * THE PROVENANCE
+ * --------------
+ * The authority travels in the finish part's `providerMetadata`, under the
+ * `cline` namespace. `providerMetadata` is `Record<string, JSONObject>` keyed
+ * by the OWNING provider's name (`anthropic`, `google`, `vertex`, ...), so a
+ * `cline` namespace is MIDDLEWARE-OWNED and a provider cannot forge it.
+ *
+ * It deliberately does NOT travel in `usage.raw`: the resolved
+ * `@ai-sdk/anthropic` adapter sets `raw` to the PROVIDER'S OWN raw usage
+ * payload (`raw: rawUsage ?? usage`), so a provider-supplied raw field could
+ * otherwise establish the occupancy authority.
+ */
+export const PHYSICAL_REQUEST_OCCUPANCY_METADATA_NAMESPACE = "cline";
+
+/** The key under which the occupancy authority travels. */
+export const PHYSICAL_REQUEST_OCCUPANCY_METADATA_KEY =
+	"physicalRequestOccupancy";
+
+/**
+ * The THREE-VALUED occupancy authority.
+ *
+ * `value` is the individual request's context occupancy, present only for
+ * the "known" state. `attemptCount` is the number of physical attempts the
+ * aggregate covers, which is what makes the "single" state distinguishable
+ * from the "unknown" one.
+ */
+export interface PhysicalRequestOccupancy {
+	readonly state: "single" | "known" | "unknown";
+	readonly value?: number;
+	readonly attemptCount: number;
+	/**
+	 * The authority travels inside the SDK's `providerMetadata`, whose value
+	 * type is `JSONObject` — a record whose index signature is
+	 * `JSONValue | undefined`. The index signature is declared so the
+	 * authority satisfies that contract structurally, without a cast at the
+	 * stamping site.
+	 */
+	readonly [key: string]: JSONValue | undefined;
+}
+
+/**
+ * Build the occupancy authority for a turn.
+ *
+ * `attemptCount` is the number of physical attempts the aggregate covers and
+ * `servedInputTokens` is the SERVED attempt's OWN prompt size (undefined
+ * when the provider did not report one).
+ *
+ * A served count that is absent, zero, negative or non-finite is NOT a
+ * measurement: it grants no occupancy authority.
+ */
+export function buildPhysicalRequestOccupancy(input: {
+	attemptCount: number;
+	servedInputTokens: number | undefined;
+}): PhysicalRequestOccupancy {
+	const attemptCount = Math.max(1, Math.floor(input.attemptCount));
+	const served = input.servedInputTokens;
+	const servedIsAMeasurement =
+		typeof served === "number" && Number.isFinite(served) && served > 0;
+	if (attemptCount === 1) {
+		// ONE physical attempt: the aggregate IS the request's occupancy,
+		// so the legacy single-request shape is preserved exactly.
+		return {
+			state: "single",
+			attemptCount,
+			...(servedIsAMeasurement ? { value: served } : {}),
+		};
+	}
+	if (servedIsAMeasurement) {
+		return { state: "known", value: served, attemptCount };
+	}
+	// SEVERAL attempts and no established served count: the aggregate
+	// covers an UNKNOWN number of requests' worth of expenditure, so it
+	// establishes NO request's occupancy. The authority is DENIED.
+	return { state: "unknown", attemptCount };
+}
+
+/**
+ * Read the occupancy authority out of a finish part's `providerMetadata`.
+ *
+ * The value is read ONLY from the middleware-owned `cline` namespace. A
+ * provider-supplied `usage.raw` field can never establish this authority.
+ *
+ * A malformed or absent authority yields `undefined`, which the consumer
+ * treats as "no occupancy authority" — never as "the aggregate is the
+ * occupancy".
+ */
+export function readPhysicalRequestOccupancy(
+	providerMetadata: unknown,
+): PhysicalRequestOccupancy | undefined {
+	if (!providerMetadata || typeof providerMetadata !== "object") {
+		return undefined;
+	}
+	const namespace = (providerMetadata as Record<string, unknown>)[
+		PHYSICAL_REQUEST_OCCUPANCY_METADATA_NAMESPACE
+	];
+	if (!namespace || typeof namespace !== "object") {
+		return undefined;
+	}
+	const raw = (namespace as Record<string, unknown>)[
+		PHYSICAL_REQUEST_OCCUPANCY_METADATA_KEY
+	];
+	if (!raw || typeof raw !== "object") {
+		return undefined;
+	}
+	const record = raw as Record<string, unknown>;
+	const state = record.state;
+	if (state !== "single" && state !== "known" && state !== "unknown") {
+		return undefined;
+	}
+	const attemptCount =
+		typeof record.attemptCount === "number" &&
+		Number.isFinite(record.attemptCount)
+			? Math.max(1, Math.floor(record.attemptCount))
+			: 1;
+	const value = record.value;
+	const valueIsAMeasurement =
+		typeof value === "number" && Number.isFinite(value) && value > 0;
+	return {
+		state,
+		attemptCount,
+		...(valueIsAMeasurement ? { value } : {}),
+	};
+}
+
+/**
+ * Stamp the occupancy authority onto a finish part's `providerMetadata`.
+ */
+function withOccupancyAuthority(
+	finish: FinishPart,
+	occupancy: PhysicalRequestOccupancy,
+): FinishPart {
+	const existing = finish.providerMetadata;
+	const existingRecord =
+		existing && typeof existing === "object"
+			? (existing as Record<string, unknown>)
+			: {};
+	const existingNamespace =
+		existingRecord[PHYSICAL_REQUEST_OCCUPANCY_METADATA_NAMESPACE];
+	const namespaceRecord =
+		existingNamespace && typeof existingNamespace === "object"
+			? (existingNamespace as Record<string, unknown>)
+			: {};
+	return {
+		...finish,
+		providerMetadata: {
+			...existingRecord,
+			[PHYSICAL_REQUEST_OCCUPANCY_METADATA_NAMESPACE]: {
+				...namespaceRecord,
+				[PHYSICAL_REQUEST_OCCUPANCY_METADATA_KEY]: occupancy,
+			},
+		},
+	};
+}
+
+/**
  * Fold the usage of discarded attempts into the finish part that is actually
  * emitted, so hosted-provider billing reflects every request the turn made
  * (including cache and reasoning detail), not just the accepted one.
+ *
+ * ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (ADDENDUM-01 CORRECTION-01):
+ * the CONTEXT-OCCUPANCY authority is stamped alongside the aggregate, so
+ * the compaction budget's calibration is bound to the INDIVIDUAL request
+ * while the BILLING authority keeps the aggregate.
  */
 function withAggregatedUsage(
 	finish: FinishPart,
 	discardedUsage: readonly LanguageModelV4Usage[],
 ): FinishPart {
 	if (discardedUsage.length === 0) {
-		return finish;
+		// ONE physical attempt: the aggregate IS the request's occupancy.
+		return withOccupancyAuthority(
+			finish,
+			buildPhysicalRequestOccupancy({
+				attemptCount: 1,
+				servedInputTokens: finish.usage.inputTokens?.total,
+			}),
+		);
 	}
 	let usage = finish.usage;
 	for (const discarded of discardedUsage) {
 		usage = addUsage(discarded, usage);
 	}
-	return { ...finish, usage };
+	const aggregated: FinishPart = { ...finish, usage };
+	return withOccupancyAuthority(
+		aggregated,
+		buildPhysicalRequestOccupancy({
+			attemptCount: discardedUsage.length + 1,
+			servedInputTokens: finish.usage.inputTokens?.total,
+		}),
+	);
 }
 
 /** Sleep that resolves early (without throwing) when the signal aborts. */

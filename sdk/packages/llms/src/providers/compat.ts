@@ -748,6 +748,17 @@ function toApiStreamChunk(
 				cacheWriteTokens: event.usage.cacheWriteTokens,
 				thoughtsTokenCount: event.usage.reasoningTokenCount,
 				totalCost: event.usage.totalCost,
+				// ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (ADDENDUM-01
+				// CORRECTION-01): the middleware-owned PHYSICAL-REQUEST
+				// OCCUPANCY authority, carried alongside the AGGREGATE
+				// expenditure above. The aggregate covers every PHYSICAL
+				// ATTEMPT of the turn (the provider billed each one); this
+				// is the CONTEXT OCCUPANCY of the ONE request whose prompt
+				// occupied the provider's context window. ABSENT when no
+				// authority was established at all.
+				...(event.usage.requestOccupancy !== undefined
+					? { requestOccupancy: event.usage.requestOccupancy }
+					: {}),
 			};
 		case "finish":
 			// ACT-CLINEMM-COMPACTION-ATOMIC-SUMMARY-INSTALLATION-REPAIR-01

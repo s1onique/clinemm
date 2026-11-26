@@ -140,6 +140,24 @@ export default defineConfig({
 			// causal ablation and the conservation controls, is
 			// `src/extensions/context/precompaction-knowledge-checkpoint/pck-physical-request-cardinality.test.ts`.
 			"src/extensions/context/precompaction-knowledge-checkpoint/pck-physical-request-cardinality.red01.test.ts",
+			// ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (ADDENDUM-01):
+			// the RED witness.
+			//
+			// This file asserts that the AGGREGATE EXPENDITURE over a turn's
+			// PHYSICAL ATTEMPTS reached the CONTEXT-OCCUPANCY authority. It
+			// FAILS against the repaired production behaviour — which is
+			// exactly the receipt of the observed defect — and it is
+			// deliberately EXCLUDED from the default suite so it never blocks
+			// the normal gate.
+			//
+			// It is runnable ON DEMAND through its dedicated config:
+			//
+			//   bun run test:red:cmp09-retry-expenditure
+			//
+			// The PASSING companion for the same mechanism, and for the
+			// conservation controls, is
+			// `compaction.retry-expenditure-vs-context-occupancy.cmp09.test.ts`.
+			"src/extensions/context/compaction.retry-expenditure-vs-context-occupancy.cmp09.red01.test.ts",
 		],
 		// Process, Git, and SQLite integration coverage shares this suite with
 		// pure unit tests. Windows hosted runners regularly exceed Vitest's 5s

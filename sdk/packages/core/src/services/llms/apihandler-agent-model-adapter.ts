@@ -74,6 +74,15 @@ function toAgentModelEvents(chunk: ApiStreamChunk): AgentModelEvent[] {
 						cacheWriteTokens: chunk.cacheWriteTokens,
 						reasoningTokenCount: chunk.thoughtsTokenCount,
 						totalCost: chunk.totalCost,
+						// ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01
+						// (ADDENDUM-01 CORRECTION-01): the middleware-owned
+						// PHYSICAL-REQUEST OCCUPANCY authority, carried
+						// alongside the AGGREGATE expenditure above. The
+						// "unknown" state DENIES the occupancy authority.
+						// ABSENT when no authority was established at all.
+						...(chunk.requestOccupancy !== undefined
+							? { requestOccupancy: chunk.requestOccupancy }
+							: {}),
 					},
 				},
 			];

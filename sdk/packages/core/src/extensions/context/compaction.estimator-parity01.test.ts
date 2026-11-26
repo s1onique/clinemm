@@ -61,6 +61,7 @@ import {
 } from "@cline/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createContextCompactionPrepareTurn } from "./compaction";
+import { MAX_INPUT_UNDERESTIMATE_FACTOR } from "./compaction-shared";
 
 const createHandlerMock = vi.fn();
 
@@ -399,6 +400,64 @@ describe("ACT-CLINEMM-COMPACTION-ESTIMATOR-PARITY-01 — same-input parity", () 
 			expect(decision.actualPreviousInputTokens).toBe(400_000);
 			expect(decision.underestimateFactor!).toBeGreaterThan(1);
 			expect(decision.requestTriggerTokens!).toBeLessThan(103_680);
+		});
+
+		it("CONSERVES the provider's COMPLETE prompt as the overflow-recovery usage authority", async () => {
+			// ACT-CLINEMM-PROVIDER-USAGE-NORMALIZATION-AUTHORITY-01.
+			//
+			// The overflow-recovery authority consumes the provider's
+			// REPORTED input count for the previous request
+			// (`previousRequestInputTokens` ->
+			// `actualPreviousInputTokens` -> `underestimateFactor`). That
+			// count is the COMPLETE prompt: the cached portion is a SUBSET
+			// of it, not a disjoint quantity.
+			//
+			// So the authority the budget consumes must be the SAME number
+			// the usage normalization reports as `inputTokens` — the
+			// complete prompt — and NOT the prompt minus the cached
+			// portion. A cached token is a token the provider actually
+			// received and counted: subtracting it from the context
+			// occupancy would under-state the request that is actually
+			// dispatched.
+			const messages = [makeUserMessage("A".repeat(100_000))];
+
+			// The complete prompt, and the cached SUBSET of it.
+			const completePrompt = 400_000;
+			const cachedSubset = 250_000;
+			expect(cachedSubset).toBeLessThan(completePrompt);
+
+			const { decisions } = await driveProductionSeam({
+				messages,
+				previousRequestInputTokens: completePrompt,
+			});
+			const decision = decisions[0];
+			expect(decision).toBeDefined();
+
+			// The authority consumed is the COMPLETE prompt, verbatim.
+			expect(decision.actualPreviousInputTokens).toBe(completePrompt);
+
+			// The cached portion is NOT subtracted from it: the value the
+			// authority consumes is the complete prompt, so the
+			// under-estimate factor is computed against the complete
+			// prompt. Had the cached subset been subtracted, the factor
+			// would have been computed against
+			// `completePrompt - cachedSubset` instead.
+			const estimated =
+				decision.apiMessageTokens! + decision.requestOverheadTokens!;
+			const factorFromCompletePrompt = completePrompt / estimated;
+			const factorFromUncachedOnly =
+				(completePrompt - cachedSubset) / estimated;
+			expect(factorFromCompletePrompt).toBeGreaterThan(factorFromUncachedOnly);
+			expect(decision.underestimateFactor!).toBeCloseTo(
+				Math.min(factorFromCompletePrompt, MAX_INPUT_UNDERESTIMATE_FACTOR),
+				6,
+			);
+			// The factor is capped, so the complete-prompt reading is the
+			// one that reaches the cap — the uncached-only reading would
+			// have produced a smaller factor and a LOOSER budget.
+			expect(decision.underestimateFactor!).toBe(
+				MAX_INPUT_UNDERESTIMATE_FACTOR,
+			);
 		});
 
 		it("never looses the trigger when the model limit is unknown (fail-closed)", async () => {

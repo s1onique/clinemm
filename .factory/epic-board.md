@@ -119,6 +119,104 @@ SDK BUILD:              shared, llms, agents, core all built
 INFERENCE REQUESTS:     0
 ```
 
+
+# ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (ADDENDUM-01 CORRECTION-01) — GO_CMP09_RETRY_EXPENDITURE_AUTHORITY — 2026-11-26
+
+```text
+ACT_ID:       ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (ADDENDUM-01
+              CORRECTION-01)
+TYPE:         bounded causal discrimination and repair (integrated amendment)
+VERDICT:      GO_CMP09_RETRY_EXPENDITURE_AUTHORITY
+EPIC:         CMP-09
+EVIDENCE:     docs/acts/ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01/ADDENDUM01.md
+SCOPE:        an ADDENDUM to the existing CMP-09 amendment. NOT a separate
+              ACT. No diagnostics framework.
+```
+
+**A BOUNDED CORRECTION OF THE ADDENDUM'S OWN REPAIR.** The reviewer
+independently executed the production stamping function, the reader and the
+runtime assignment and found two defects in the predecessor's repair.
+
+**A1 (P0) — THE MISSING PHYSICAL-REQUEST OCCUPANCY.** The predecessor's
+runtime read `requestInputTokens ?? event.usage.inputTokens`, so whenever the
+served attempt's measurement was unavailable the AGGREGATE EXPENDITURE
+re-entered as the CONTEXT OCCUPANCY (aggregate=4000 with served=undefined, 0
+or -1 all produced occupancy=4000). The root cause: the predecessor carried
+ONE number where the fact is THREE-VALUED. The correction replaces it with a
+THREE-VALUED PHYSICAL-REQUEST OCCUPANCY AUTHORITY — `single` (the aggregate IS
+the occupancy), `known` (the served attempt's count), `unknown` (the authority
+is EXPLICITLY DENIED). A denied authority CLEARS the previous occupancy, so a
+STALE occupancy is never silently attributed to the current request.
+
+**A2 (P1) — THE MEASUREMENT PROVENANCE.** The predecessor carried the marker
+inside `usage.raw`, which the resolved `@ai-sdk/anthropic@4.0.94` adapter sets
+to the PROVIDER'S OWN raw usage payload (`raw: rawUsage ?? usage`). The
+reviewer's shape (a raw marker of 1 with an aggregate of 4000) was therefore
+REACHABLE, and the provider's field established the middleware-owned
+occupancy authority. The correction moves the authority to the EXISTING
+metadata seam: the finish part's `providerMetadata`, under the `cline`
+namespace. `providerMetadata` is keyed by the OWNING provider's name
+(`anthropic`, `google`, `vertex`), so the `cline` namespace is
+middleware-owned and a provider cannot forge it.
+
+**THE SEAM REQUIRED ONE SMALL CORRECTION TO ACTUALLY CARRY IT.** The AI SDK's
+`streamText` emits its OWN `finish` part WITHOUT `providerMetadata`; the
+MODEL's metadata arrives on the `finish-step` part, which the predecessor
+discarded. It is now captured, and the `finish` handler MERGES rather than
+replaces, so the authority survives the `stream.usage` path.
+
+```text
+ACT-OWNED WITNESSES:   9 (all PASSED)
+  CMP09-RETRY-01      the aggregate session input consumption GROWS with the
+                      physical attempt count (the expenditure is conserved)
+  CMP09-RETRY-02/03   the occupancy stays on the INDIVIDUAL request; retries
+                      ALONE cannot manufacture an overflow
+  CMP09-RETRY-04      the aggregate expenditure is PRESERVED for billing while
+                      the context authority stays on the individual request
+  CMP09-RETRY-05      the estimator calibration is computed against the
+                      INDIVIDUAL request
+  CMP09-RETRY-06      an ESTABLISHED occupancy is the individual request's count
+  CMP09-RETRY-07      an EXPLICITLY UNREPORTED occupancy grants NO authority
+                      (five shapes: absent/zero/negative under `unknown` AND
+                      under `known`)
+  CMP09-RETRY-08      a LEGACY single-request usage keeps the aggregate as the
+                      occupancy (both the no-authority shape and `single`)
+  CMP09-RETRY-09      an UNTRUSTED raw marker cannot establish the authority —
+                      asserted against the PRODUCTION reader, including that a
+                      PROVIDER's own namespace cannot establish it
+  CMP09-RETRY-10      a SUBSEQUENT request after an unreported measurement gets
+                      NO stale occupancy
+RED receipts retained: R1.1 (the aggregate reached the occupancy) and R1.3 (a
+                      provider-supplied raw marker established the authority)
+                      fail against the repaired behaviour; R1.2 is a
+                      STRUCTURAL assertion that the predecessor's
+                      aggregate-fallback expression no longer exists in the
+                      production runtime source. The INDEPENDENT evidence for
+                      A1/A2 is the REVIEWER's own execution, preserved in the
+                      addendum — a historical-behaviour assertion alone is NOT
+                      sufficient to establish RED.
+                      `bun run test:red:cmp09-retry-expenditure`
+EXISTING SUITES:       core context 1290 passed | 2 skipped
+                       llms 136 passed | agents 152 passed
+TYPECHECK:              shared/llms/agents CLEAN; core 45 -> 45, ZERO DELTA
+BIOME:                  clean on every touched file
+SDK BUILD:              shared, llms, agents, core all built
+INFERENCE REQUESTS:     0
+```
+
+**THE CONSTRAINTS HOLD.** The aggregate billing/accounting is PRESERVED (the
+session input total still grows with the attempt count). NO cached tokens are
+subtracted. NO total is divided by an assumed retry count. NO threshold is
+modified. NO request registry, ledger or diagnostics framework was added, and
+no usage metadata implementation is duplicated: the authority uses the
+EXISTING `providerMetadata` seam.
+
+**THE HISTORICAL ITERATION-23 ATTRIBUTION REMAINS HYPOTHESIS_ONLY and is NOT
+reopened.** The addendum establishes that the aggregate COULD reach the
+context authority and that it DID in the reproduced trajectory. The actual
+historical retry cardinality and the usage scope of the recorded
+`inputTokens` remain unestablished.
+
 **AN INHERITED CROSS-WORKSTREAM DIVERGENCE IS RECORDED, NOT REPAIRED.** The
 integrated workstreams developed `portable-reasoning.ts` (destination line,
 commit `b7e9bafdc`) and `model-facts.ts` (source workstream, commit
@@ -43235,6 +43333,97 @@ INFERENCE REQUESTS:     0
 A02b-R14 Value-qualification pairing          CLOSE_COMPACTION_SELECTION_NOT_QUALIFIED — CLOSED
 A12    Sanitizer bounded complexity            CLOSED — GO_EVIDENCE_REFERENCE_TRUST_REPAIR
 A10    Evidence-continuity confidentiality     UNCHANGED
+```
+
+**A successor ACT is NOT started automatically.**
+
+---
+
+# ACT-CLINEMM-PROVIDER-USAGE-NORMALIZATION-AUTHORITY-01 — GO_PROVIDER_USAGE_NORMALIZATION_AUTHORITY — 2026-11-26
+
+```text
+ACT_ID:       ACT-CLINEMM-PROVIDER-USAGE-NORMALIZATION-AUTHORITY-01
+TYPE:         bounded reproduction and repair
+VERDICT:      GO_PROVIDER_USAGE_NORMALIZATION_AUTHORITY
+ENTRY_HEAD:   0d95d0dc2b0a78bcb3b64c9fbc42808af918bd5b
+MERGE_HEAD:   02274b4cd363fea42579fcb8fa304c2535084e85
+BRANCH:       main
+EPIC:         CMP-09
+```
+
+**THE OUTPUT NORMALIZATION DEFECT WAS REPRODUCED AND REPAIRED AT ITS FIRST
+LOSS BOUNDARY.** The AI SDK's own contract (`LanguageModelV4Usage`) states
+that `outputTokens.total` is the TOTAL output and that `text` and
+`reasoning` are its PARTS, so the visible output is the REMAINDER and never
+an addition. Two defects violated that:
+
+1. The production retry middleware sums `outputTokens.total` across the
+   physical attempts of a turn, but the ClineMM normalizer subtracted the
+   reasoning of ONE attempt from that MULTI-ATTEMPT total. Measured on a
+   3-attempt turn reporting `output_tokens: 900` / `reasoning_tokens: 800`
+   per attempt: the chain emitted `outputTokens 1900` and
+   `reasoningTokenCount 800` against a 2 700 total — 1900 + 800 != 2700.
+2. The Anthropic-native `thinking_tokens` breakdown — the very name the
+   resolved `@ai-sdk/anthropic` adapter reads — was DROPPED by the ClineMM
+   reasoning-path vocabulary, so those reasoning tokens were unaccounted
+   for.
+
+After the repair the same fixture emits `outputTokens 300` and
+`reasoningTokenCount 2400` against the same 2 700 total: 300 + 2400 == 2700.
+The single attempt conserves as 100 + 800 == 900. Reasoning counts are never
+manufactured from text lengths.
+
+**THE INPUT/CACHE NORMALIZATION IS CORRECT AND WAS PRESERVED UNCHANGED.** No
+layer adds cache-read or cache-write usage to a total that already includes
+those values, and no layer subtracts them from a total that excludes them.
+The cache counters are a PARTITION of the total input. The overflow-recovery
+authority consumes the provider's COMPLETE prompt
+(`usage.inputTokens` -> `lastRequestInputTokens` ->
+`previousRequestInputTokens` -> `actualPreviousInputTokens` ->
+`underestimateFactor`); cached tokens are NOT subtracted from the context
+occupancy.
+
+**THE HISTORICAL MINIMAX DISPOSITION IS UNCHANGED: CAPTURE_INSUFFICIENT.** No
+raw historical provider usage was recovered, so no historical provider
+accounting defect is concluded. The recorded CMP-09 shape
+(`inputTokens 1 728 403`, `cacheRead 1 562 316`, remainder `166 087`) is
+INTERNALLY CONSISTENT with the current cache-inclusive semantics and is
+reproducible from the CURRENT path under BOTH the Anthropic-style disjoint
+counters and the OpenAI-style total-inclusive counters. Whether the
+provider's actual prompt was 1 728 403 (over the 1 048 576 window) or
+166 087 (inside it) remains answered only by raw historical provider
+evidence, which does not exist in this capture.
+
+**THE LIVE OBSERVABILITY EXTENSION IS OPT-IN AND NUMERIC-ONLY.**
+`CLINEMM_USAGE_OBSERVABILITY=1` arms a capture that correlates the
+provider's RAW numeric usage fields, the AI SDK's normalized usage and
+ClineMM's final normalized usage under the physical request identity.
+DEFAULT OFF; numeric allowlist only; no transcript, no reasoning text, no
+response body, no credential, no signature; failure-isolated so a capture
+failure cannot change execution or accounting. No new diagnostics framework
+and no request registry.
+
+**A PRE-EXISTING BLOCKING DEFECT WAS FOUND AND CORRECTED.** The merge
+commit `02274b4cd` left a stray closing brace at
+`sdk/packages/shared/src/llms/request-budget.ts:437`; the file did not
+parse, so the ENTIRE `@cline/shared` package — and every suite importing
+it — failed to collect. The stray brace was removed.
+
+```text
+ACT-OWNED WITNESSES:   17 (all PASSED) — 11 llms forensic/conservation,
+                       6 llms usage-observability
+EXISTING SUITES:       llms ai-sdk 41 | retry-empty-response 37 |
+                       agents agent-runtime 152 |
+                       core estimator-parity 20 | runtime-event-adapter 43 |
+                       agent-events 5 | token-evidence-capture 5 |
+                       cmp08 summarization-usage-conservation 24
+                       (CMP-08 NOT reopened)
+TYPECHECK:              @cline/llms CLEAN; @cline/core 45 -> 45, ZERO DELTA
+                         (pre-existing), 0 ACT-OWNED diagnostics
+BIOME:                  clean
+SDK REBUILD:            bun run build:sdk, before cross-package verification
+VSIX PACKAGING:         NOT EXECUTED
+INFERENCE REQUESTS:     0
 ```
 
 **A successor ACT is NOT started automatically.**

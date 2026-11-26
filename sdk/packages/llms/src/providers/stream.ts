@@ -69,6 +69,30 @@ export interface ApiStreamUsageChunk {
 	type: "usage";
 	/** Total number of input tokens reported by the provider */
 	inputTokens: number;
+	/**
+	 * ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (ADDENDUM-01 CORRECTION-01).
+	 *
+	 * The middleware-owned PHYSICAL-REQUEST OCCUPANCY AUTHORITY — the
+	 * CONTEXT OCCUPANCY of the ONE request whose prompt occupied the
+	 * provider's context window.
+	 *
+	 * `inputTokens` above is the AGGREGATE EXPENDITURE: the production retry
+	 * middleware sums the usage of every PHYSICAL ATTEMPT of the turn, because
+	 * the provider billed every one of them. That is the correct BILLING
+	 * quantity and it is preserved unchanged.
+	 *
+	 * The authority is THREE-VALUED ("single" | "known" | "unknown"); the
+	 * "unknown" state DENIES the occupancy authority and forbids the
+	 * consumer from falling back to the aggregate.
+	 *
+	 * It is ABSENT when no authority was established at all. It is NEVER
+	 * synthesized from the aggregate.
+	 */
+	requestOccupancy?: {
+		readonly state: "single" | "known" | "unknown";
+		readonly value?: number;
+		readonly attemptCount: number;
+	};
 	/** Number of output tokens */
 	outputTokens: number;
 	/** Number of tokens written to cache */

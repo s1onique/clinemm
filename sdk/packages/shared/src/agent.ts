@@ -171,6 +171,36 @@ export interface AgentTokenUsage {
  */
 export interface AgentUsage extends AgentTokenUsage {
 	totalCost?: number;
+	/**
+	 * ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (ADDENDUM-01 CORRECTION-01).
+	 *
+	 * The middleware-owned PHYSICAL-REQUEST OCCUPANCY AUTHORITY — the
+	 * CONTEXT OCCUPANCY of the ONE request whose prompt occupied the
+	 * provider's context window.
+	 *
+	 * `inputTokens` is the AGGREGATE EXPENDITURE: the production retry
+	 * middleware sums the usage of every PHYSICAL ATTEMPT of the turn, because
+	 * the provider billed every one of them. That is the correct BILLING
+	 * quantity and it is preserved unchanged.
+	 *
+	 * The authority is THREE-VALUED:
+	 *
+	 *   "single"  ONE physical attempt — the aggregate IS the occupancy;
+	 *   "known"   the SERVED attempt's own prompt size is the occupancy;
+	 *   "unknown" the aggregate covers an UNKNOWN number of requests, so it
+	 *             establishes NO request's occupancy. The authority is
+	 *             DENIED and the consumer must NOT fall back to the
+	 *             aggregate.
+	 *
+	 * It is ABSENT when no authority was established at all. It is NEVER
+	 * synthesized from the aggregate and NEVER derived by dividing the
+	 * aggregate by an assumed attempt count.
+	 */
+	requestOccupancy?: {
+		readonly state: "single" | "known" | "unknown";
+		readonly value?: number;
+		readonly attemptCount: number;
+	};
 }
 
 export interface AgentMessage {

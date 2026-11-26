@@ -120,6 +120,19 @@ export {
 export { buildClineClientHeaders } from "./providers/cline-client-headers";
 export type * from "./providers/gateway";
 export { createGateway, DefaultGateway } from "./providers/gateway";
+// ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (ADDENDUM-01 CORRECTION-01):
+// the MIDDLEWARE-OWNED PHYSICAL-REQUEST OCCUPANCY AUTHORITY and its reader.
+//
+// They are exported so a cross-package consumer can assert the authority's
+// PROVENANCE against the PRODUCTION reader, without reaching into the
+// package's internal paths.
+export {
+	buildPhysicalRequestOccupancy,
+	PHYSICAL_REQUEST_OCCUPANCY_METADATA_KEY,
+	PHYSICAL_REQUEST_OCCUPANCY_METADATA_NAMESPACE,
+	type PhysicalRequestOccupancy,
+	readPhysicalRequestOccupancy,
+} from "./providers/middleware/retry-empty-response";
 export { toGatewayModelCapabilities } from "./providers/model-capabilities";
 export {
 	BUILTIN_MODEL_OPERATION_CAPABILITIES,
