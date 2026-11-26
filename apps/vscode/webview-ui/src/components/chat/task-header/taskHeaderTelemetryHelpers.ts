@@ -468,7 +468,7 @@ export function durationDisplayProjection(duration: TaskDurationSnapshot | undef
 }
 
 /**
- * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01 / W4):
+ * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-02 / W4):
  * the PRESENTATION-ONLY forward projection of the host's snapshot.
  *
  * WHY A FORWARD PROJECTION IS NEEDED
@@ -502,6 +502,29 @@ export function durationDisplayProjection(duration: TaskDurationSnapshot | undef
  *   published values are shown verbatim), which keeps a stale snapshot
  *   from being turned into an unbounded extrapolation.
  *
+ * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-02 / W4)
+ * — the FRESHNESS BOUNDARY DEFECT.
+ *
+ *   The pre-repair projection STOPPED at the bound and returned the
+ *   host's ORIGINAL snapshot verbatim. The displayed value therefore
+ *   JUMPED BACKWARDS: at `bound - 1ms` the header showed
+ *   `snapshot.elapsed + bound`, and one millisecond later it showed
+ *   `snapshot.elapsed` again. A user watching a quiet human gate saw
+ *   the wait counter run up and then snap back to zero.
+ *
+ *   The repair makes the projection MONOTONE across the boundary:
+ *
+ *   - inside the bound, the projection advances normally;
+ *   - AT the bound, the projection is CLAMPED to the bound (the value
+ *     keeps the last projected magnitude instead of snapping back);
+ *   - BEYOND the bound, the projection is STOPS but the caller is told
+ *     the snapshot is STALE, so the value can be presented as
+ *     explicitly estimated rather than silently presented as current.
+ *
+ *   The `stale` flag is the "explicitly identify the value as estimated
+ *   or stale" contract: the caller renders the value with a stale
+ *   marker instead of pretending it is a fresh measurement.
+ *
  * @param duration the host's snapshot
  * @param nowMs the CURRENT wall-clock reading
  * @param publishedAtMs the wall-clock time the snapshot was published
@@ -512,25 +535,38 @@ export function projectDurationForward(
 	nowMs: number,
 	publishedAtMs: number | undefined,
 	maxProjectionMs: number,
-): TaskDurationSnapshot | undefined {
+): DurationProjection | undefined {
 	if (!duration) {
 		return undefined
 	}
 	// A terminal phase is FROZEN: the host's totals are the final word
 	// and the projection adds nothing.
 	if (duration.phase === "terminal") {
-		return duration
+		return { snapshot: duration, stale: false }
 	}
 	if (publishedAtMs === undefined || !Number.isFinite(publishedAtMs) || !Number.isFinite(nowMs)) {
-		return duration
+		return { snapshot: duration, stale: false }
 	}
 	const delta = nowMs - publishedAtMs
-	// A snapshot from the future, or an age beyond the bound, is NOT
-	// extrapolated.
-	if (delta <= 0 || delta > maxProjectionMs) {
-		return duration
+	// A snapshot from the FUTURE is not projected.
+	if (delta <= 0) {
+		return { snapshot: duration, stale: false }
 	}
-	const deltaMs = Math.floor(delta)
+	// AMENDMENT-02 (W4): the projection is CLAMPED to the bound, so the
+	// displayed value never jumps BACKWARDS at the freshness boundary.
+	// Beyond the bound the snapshot is explicitly STALE: the caller
+	// presents the value as estimated rather than as a current
+	// measurement.
+	const stale = delta > maxProjectionMs
+	const deltaMs = Math.floor(stale ? maxProjectionMs : delta)
+	const projected = applyOpenBucket(duration, deltaMs)
+	return { snapshot: projected, stale }
+}
+
+/**
+ * Apply `deltaMs` to the ONE bucket the host says is open.
+ */
+function applyOpenBucket(duration: TaskDurationSnapshot, deltaMs: number): TaskDurationSnapshot {
 	switch (duration.phase) {
 		case "active":
 			return { ...duration, elapsedMs: duration.elapsedMs + deltaMs, activeMs: duration.activeMs + deltaMs }
@@ -540,4 +576,20 @@ export function projectDurationForward(
 		default:
 			return { ...duration, elapsedMs: duration.elapsedMs + deltaMs, unknownMs: duration.unknownMs + deltaMs }
 	}
+}
+
+/**
+ * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-02 / W4):
+ * the result of the presentation-only forward projection.
+ *
+ * `stale` is true when the host's snapshot is OLDER than the projection
+ * bound: the projected value is an EXTRAPOLATION that has stopped
+ * advancing, so the caller must present it as estimated rather than as
+ * a current measurement.
+ */
+export interface DurationProjection {
+	/** The projected snapshot to present. */
+	snapshot: TaskDurationSnapshot
+	/** True when the projection has stopped advancing (the snapshot is stale). */
+	stale: boolean
 }

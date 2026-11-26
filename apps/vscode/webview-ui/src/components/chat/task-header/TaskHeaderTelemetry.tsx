@@ -167,6 +167,19 @@ const EPOCH_TOOLTIP =
 	"Terminal tasks freeze these totals. A later continuation of the same task opens a new interval; time spent paused between a terminal state and that continuation is excluded from active and waiting totals."
 
 /**
+ * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-02 / W4):
+ * the disclosure for a STALE (expired) duration projection.
+ *
+ * When the host's snapshot is older than the projection bound, the
+ * displayed split is an EXTRAPOLATION that has stopped advancing. The
+ * value is presented with an explicit "estimated" marker so it is
+ * never mistaken for a current measurement — and so the displayed value
+ * never silently jumps back to the host's original snapshot.
+ */
+const STALE_TOOLTIP =
+	"Estimated: this snapshot is older than the refresh window, so the split is a forward estimate that has stopped advancing. It will be replaced when the host publishes a fresh snapshot."
+
+/**
  * ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-IMPLEMENTATION01 (TES-IMPL-01):
  *
  * Per-mechanism visual / a11y descriptor table. The order is the
@@ -436,12 +449,25 @@ const TaskHeaderTelemetry: React.FC<TaskHeaderTelemetryProps> = ({
 	// `DURATION_PROJECTION_BOUND_MS`, and never across a terminal
 	// boundary. The host's next publication replaces the projection
 	// entirely.
-	const projectedDuration = projectDurationForward(telemetry.duration, now, durationPublishedAt, DURATION_PROJECTION_BOUND_MS)
+	//
+	// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-02 / W4):
+	// the projection is MONOTONE across the freshness boundary and
+	// reports whether the snapshot has gone STALE. A stale projection is
+	// presented with an explicit "estimated" marker, so the displayed
+	// value never silently jumps back to the host's original snapshot.
+	const durationProjectionResult = projectDurationForward(
+		telemetry.duration,
+		now,
+		durationPublishedAt,
+		DURATION_PROJECTION_BOUND_MS,
+	)
+	const projectedDuration = durationProjectionResult?.snapshot
+	const durationIsStale = durationProjectionResult?.stale === true
 	const durationProjection = durationDisplayProjection(projectedDuration)
 	const durationTooltip = durationProjection
 		? `${EPOCH_TOOLTIP}\n\n${ACTIVE_TOOLTIP}\n${WAITING_TOOLTIP}${
 				durationProjection.unknownText ? `\n${UNKNOWN_TOOLTIP}` : ""
-			}`
+			}${durationIsStale ? `\n\n${STALE_TOOLTIP}` : ""}`
 		: UNAVAILABLE_TOOLTIP
 	const showRecovery = telemetry.recoveryBudgetFailures > 0
 	// ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-IMPLEMENTATION01:
@@ -577,6 +603,26 @@ const TaskHeaderTelemetry: React.FC<TaskHeaderTelemetryProps> = ({
 							data-testid="task-header-duration-partial"
 							title={PARTIAL_TOOLTIP}>
 							partial
+						</span>
+					) : null}
+					{/*
+					  ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01
+					  (AMENDMENT-02 / W4): the STALE marker.
+
+					  The host's snapshot is older than the projection bound, so
+					  the displayed split is an EXTRAPOLATION that has stopped
+					  advancing. It is marked explicitly so it is never
+					  mistaken for a current measurement, and so the displayed
+					  value never silently jumps back to the host's original
+					  snapshot.
+					*/}
+					{durationIsStale ? (
+						<span
+							aria-label="Task duration is estimated: the host snapshot is older than the refresh window"
+							className="text-[0.7rem] opacity-80"
+							data-testid="task-header-duration-estimated"
+							title={STALE_TOOLTIP}>
+							estimated
 						</span>
 					) : null}
 				</span>

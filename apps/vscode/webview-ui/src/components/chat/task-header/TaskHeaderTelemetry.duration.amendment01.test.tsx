@@ -51,31 +51,37 @@ describe("ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01) / W4 h
 	it("W4-PROJ-1: the WAITING bucket projects forward while the host says the task is waiting", () => {
 		const base = snapshot({ phase: "waiting", elapsedMs: 10_000, activeMs: 0, waitingMs: 10_000 })
 		const projected = projectDurationForward(base, 1_700_000_030_000, 1_700_000_000_000, BOUND)
-		expect(projected?.waitingMs).toBe(40_000)
-		expect(projected?.activeMs).toBe(0)
-		expect(projected?.elapsedMs).toBe(40_000)
+		expect(projected?.snapshot?.waitingMs).toBe(40_000)
+		expect(projected?.snapshot?.activeMs).toBe(0)
+		expect(projected?.snapshot?.elapsedMs).toBe(40_000)
 	})
 
 	it("W4-PROJ-2: the ACTIVE bucket projects forward while the host says the task is active", () => {
 		const base = snapshot({ phase: "active" })
 		const projected = projectDurationForward(base, 1_700_000_005_000, 1_700_000_000_000, BOUND)
-		expect(projected?.activeMs).toBe(15_000)
-		expect(projected?.waitingMs).toBe(0)
+		expect(projected?.snapshot?.activeMs).toBe(15_000)
+		expect(projected?.snapshot?.waitingMs).toBe(0)
 	})
 
 	it("W4-PROJ-3: a TERMINAL phase is FROZEN - nothing is projected", () => {
 		const base = snapshot({ phase: "terminal", elapsedMs: 10_000, activeMs: 10_000 })
 		const projected = projectDurationForward(base, 1_700_000_600_000, 1_700_000_000_000, BOUND)
-		expect(projected?.elapsedMs).toBe(10_000)
-		expect(projected?.activeMs).toBe(10_000)
+		expect(projected?.snapshot?.elapsedMs).toBe(10_000)
+		expect(projected?.snapshot?.activeMs).toBe(10_000)
 	})
 
 	it("W4-PROJ-4: a snapshot older than the BOUND is NOT extrapolated", () => {
 		const base = snapshot({ phase: "waiting", elapsedMs: 10_000, activeMs: 0, waitingMs: 10_000 })
 		// One hour old - beyond the 5-minute bound.
+		//
+		// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-02 /
+		// W4): the projection is CLAMPED to the bound, so the displayed
+		// value never jumps BACKWARDS at the freshness boundary, and the
+		// result is explicitly marked STALE.
 		const projected = projectDurationForward(base, 1_700_003_600_000, 1_700_000_000_000, BOUND)
-		expect(projected?.waitingMs).toBe(10_000)
-		expect(projected?.elapsedMs).toBe(10_000)
+		expect(projected?.snapshot?.waitingMs).toBe(10_000 + BOUND)
+		expect(projected?.snapshot?.elapsedMs).toBe(10_000 + BOUND)
+		expect(projected?.stale).toBe(true)
 	})
 
 	it("W4-PROJ-5: the projection NEVER changes the host's phase, reason or coverage", () => {
@@ -88,9 +94,9 @@ describe("ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01) / W4 h
 			coverage: "partial",
 		})
 		const projected = projectDurationForward(base, 1_700_000_030_000, 1_700_000_000_000, BOUND)
-		expect(projected?.phase).toBe("waiting")
-		expect(projected?.waitingReason).toBe("USER_INPUT")
-		expect(projected?.coverage).toBe("partial")
+		expect(projected?.snapshot?.phase).toBe("waiting")
+		expect(projected?.snapshot?.waitingReason).toBe("USER_INPUT")
+		expect(projected?.snapshot?.coverage).toBe("partial")
 	})
 
 	it("W4-PROJ-6: an ABSENT snapshot stays absent (a legacy task is never given a fabricated zero)", () => {
@@ -100,7 +106,7 @@ describe("ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01) / W4 h
 	it("W4-PROJ-7: a snapshot from the FUTURE is not projected", () => {
 		const base = snapshot({ phase: "waiting", elapsedMs: 10_000, activeMs: 0, waitingMs: 10_000 })
 		const projected = projectDurationForward(base, 1_699_999_000_000, 1_700_000_000_000, BOUND)
-		expect(projected?.waitingMs).toBe(10_000)
+		expect(projected?.snapshot?.waitingMs).toBe(10_000)
 	})
 
 	it("W4-RENDER: the component renders the host's split and the unavailable placeholder", () => {

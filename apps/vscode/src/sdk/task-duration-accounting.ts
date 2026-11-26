@@ -239,6 +239,27 @@ interface TaskDurationAccumulatorState {
 	accountingAvailable: boolean
 	/** The phase of the currently-committed lifecycle state. */
 	currentPhase: TurnPhase | undefined
+	/**
+	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-02 / W2):
+	 * true once an authoritative phase transition has been observed.
+	 *
+	 * This is the RESTORE AUTHORITY: the live accounting begins at the
+	 * first authoritative transition, and a persisted record can only be
+	 * applied BEFORE that point. After it, every record is an
+	 * observation of the past and is explicitly REJECTED.
+	 */
+	liveAccountingStarted: boolean
+	/**
+	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-02 / W2):
+	 * true once a persisted record has been applied to this task's
+	 * accounting.
+	 *
+	 * The restore authorization is CONSUMED by the first restore: a
+	 * second restore is rejected even when no phase transition has been
+	 * observed yet, because it would re-establish the open interval's
+	 * anchor and lose the time accrued since the first restore.
+	 */
+	restoreConsumed: boolean
 	/** True once a terminal write has closed the last interval. */
 	frozen: boolean
 	/** True when at least one interval could not be measured reliably. */
@@ -262,11 +283,46 @@ export class TaskDurationAccountant {
 		restoredWaitingReason: undefined,
 		accountingAvailable: false,
 		currentPhase: undefined,
+		liveAccountingStarted: false,
+		restoreConsumed: false,
 		frozen: false,
 		partial: false,
 	}
 
 	constructor(private readonly clock: MonotonicClock = defaultMonotonicClock()) {}
+
+	/**
+	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-02 / W2):
+	 * has an authoritative lifecycle transition been observed for this
+	 * task?
+	 *
+	 * The LIVE accounting begins at the FIRST authoritative phase
+	 * transition. From that moment on, a persisted record is an
+	 * OBSERVATION OF THE PAST and can no longer be applied to the live
+	 * accounting: the live accounting already holds a NEWER lifecycle
+	 * phase and a NEWER interval anchor.
+	 *
+	 * This flag is the restore authority. It replaces the old
+	 * per-bucket `Math.max` merge, which could not distinguish "a
+	 * record that is older but equal" from "a record that is newer".
+	 */
+	get liveAccountingStarted(): boolean {
+		return this.state.liveAccountingStarted
+	}
+
+	/**
+	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-02 / W2):
+	 * would a restore of a persisted record be REJECTED?
+	 *
+	 * True when the restore authorization has been consumed (a record was
+	 * already applied) OR when the live accounting has already begun (an
+	 * authoritative phase transition was observed). In both cases the
+	 * persisted record is an observation of the past and must not be
+	 * applied to the live accounting.
+	 */
+	get restoreRejected(): boolean {
+		return this.state.restoreConsumed || this.state.liveAccountingStarted
+	}
 
 	/**
 	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01 / W2
@@ -313,6 +369,8 @@ export class TaskDurationAccountant {
 			restoredWaitingReason: undefined,
 			accountingAvailable: false,
 			currentPhase: undefined,
+			liveAccountingStarted: false,
+			restoreConsumed: false,
 			frozen: false,
 			partial: false,
 		}
@@ -360,6 +418,56 @@ export class TaskDurationAccountant {
 	 *   R4 (legacy task). A task WITHOUT a persisted record has NO
 	 *       accounting at all — the caller must not restore anything
 	 *       (see `TaskTelemetryTracker.restoreDurationAccounting`).
+	 *
+	 * AMENDMENT-02 (W2) — the RESTORE OWNERSHIP SIMPLIFICATION.
+	 *
+	 *   The per-bucket `Math.max` merge above did NOT establish temporal
+	 *   conservation: it could not tell an OLDER record from a NEWER one
+	 *   that happens to have the same or a larger total. A merge of two
+	 *   incoherent observations is not a restore — it is an average of
+	 *   two timelines, and it silently produced the three reproduced
+	 *   defects (a stale record during a human gate, a live record
+	 *   duplicating the open interval, and a stale terminal record
+	 *   re-freezing a live accounting).
+	 *
+	 *   The repair REMOVES the merge and replaces it with ONE
+	 *   authoritative rule:
+	 *
+	 *     THE RESTORE IS AUTHORIZED EXACTLY ONCE, AT TASK ACTIVATION,
+	 *     BEFORE THE LIVE ACCOUNTING BEGINS.
+	 *
+	 *   The live accounting begins at the FIRST authoritative phase
+	 *   transition (`observePhase`). From that moment on the live
+	 *   accounting owns a NEWER lifecycle phase, a NEWER interval anchor
+	 *   and NEWER accumulated totals than any persisted record can
+	 *   carry, so a record applied then is an OBSERVATION OF THE PAST
+	 *   and is explicitly REJECTED.
+	 *
+	 *   The authorization is CONSUMED BY THE FIRST RESTORE: a second
+	 *   restore is rejected even when no phase transition has been
+	 *   observed yet, because a second restore would re-establish the
+	 *   open interval's anchor and lose the time accrued since the first
+	 *   restore.
+	 *
+	 *   Consequences (each one is a reproduced defect, now closed):
+	 *
+	 *     - A stale record during a human gate cannot rewrite the live
+	 *       phase, cannot roll the waiting bucket back and cannot reset
+	 *       the open interval's anchor.
+	 *     - Restoring the CURRENT live projection cannot duplicate the
+	 *       open interval (there is no second reopening).
+	 *     - A stale terminal record cannot re-freeze a live accounting
+	 *       that has already been continued.
+	 *
+	 *   What a rejected restore does: NOTHING. It is not an error and
+	 *   it does not degrade the accounting — the live accounting is
+	 *   simply left exactly as it is.
+	 *
+	 *   The restore is applied AS A WHOLE: the three accumulated totals,
+	 *   the phase, the waiting reason and the coverage of the record
+	 *   become the accounting's state together. No overlapping interval
+	 *   is merged, and no open anchor is reset through an obsolete
+	 *   restore.
 	 */
 	restore(record: {
 		activeMs: number
@@ -370,21 +478,34 @@ export class TaskDurationAccountant {
 		coverage: "complete" | "partial"
 	}): void {
 		const s = this.state
+		// AMENDMENT-02 (W2): the RESTORE AUTHORITY.
+		//
+		// The restore is authorized EXACTLY ONCE, at task activation,
+		// BEFORE the live accounting has begun:
+		//
+		//   - `restoreConsumed` — the authorization is consumed by the
+		//     FIRST restore. A second restore is rejected even when no
+		//     phase transition has been observed yet, because it would
+		//     re-establish the open interval's anchor and lose the time
+		//     accrued since the first restore.
+		//   - `liveAccountingStarted` — after the first authoritative
+		//     phase transition the live accounting is strictly newer
+		//     than any persisted record, so the record is REJECTED.
+		//
+		// A rejected restore touches NOTHING: it does not alter an
+		// accumulated total, does not change the lifecycle phase, does
+		// not reset an open interval's anchor and does not freeze a live
+		// accounting.
+		if (s.restoreConsumed || s.liveAccountingStarted) {
+			return
+		}
+		s.restoreConsumed = true
 		// A restored persisted record IS an authoritative accounting
 		// (AMENDMENT-01 / W2 R4): the availability flag is set.
 		s.accountingAvailable = true
-		const incomingActive = Math.max(0, Math.floor(record.activeMs))
-		const incomingWaiting = Math.max(0, Math.floor(record.waitingMs))
-		const incomingUnknown = Math.max(0, Math.floor(record.unknownMs))
-
-		// R2 (duplicate restore rollback): the KNOWN durations already
-		// accumulated in this process are never rolled back by a stale
-		// persisted record. The persisted record is merged in, and the
-		// LARGER of the two is kept per bucket, so a duplicate restore
-		// of the same record is a no-op on the totals.
-		s.activeMs = Math.max(s.activeMs, incomingActive)
-		s.waitingMs = Math.max(s.waitingMs, incomingWaiting)
-		s.unknownMs = Math.max(s.unknownMs, incomingUnknown)
+		s.activeMs = Math.max(0, Math.floor(record.activeMs))
+		s.waitingMs = Math.max(0, Math.floor(record.waitingMs))
+		s.unknownMs = Math.max(0, Math.floor(record.unknownMs))
 
 		// R3 (waiting reason conservation): the record's waiting reason
 		// is carried into the reopened interval. It remains correct
@@ -405,6 +526,7 @@ export class TaskDurationAccountant {
 			s.openPhase = undefined
 			s.openAnchorMs = undefined
 			s.openCategory = undefined
+			s.restoredWaitingReason = undefined
 			s.frozen = true
 			return
 		}
@@ -414,24 +536,6 @@ export class TaskDurationAccountant {
 		// No numeric gap is invented, and the gap is never silently
 		// classified as ACTIVE or WAITING.
 		s.partial = true
-
-		// R2 (no anchor reset through a duplicate restore): a restore
-		// that would NOT change the accumulated totals and reopens the
-		// SAME category does not re-establish the interval anchor — the
-		// open interval keeps accruing into the same bucket and no time
-		// is lost or duplicated.
-		const sameCategory = s.openCategory === record.phase
-		const totalsUnchanged =
-			s.activeMs === incomingActive && s.waitingMs === incomingWaiting && s.unknownMs === incomingUnknown
-		if (sameCategory && totalsUnchanged && s.openAnchorMs !== undefined) {
-			// A duplicate restore: keep the existing open interval and
-			// its anchor. Only the waiting reason is refreshed (it is
-			// conserved from the record).
-			if (restoredWaitingReason !== undefined) {
-				s.restoredWaitingReason = restoredWaitingReason
-			}
-			return
-		}
 
 		s.frozen = false
 		s.currentPhase = undefined
@@ -496,6 +600,10 @@ export class TaskDurationAccountant {
 		// IS an accounting measurement — the accounting exists from now
 		// on, even if its accumulated total is still zero.
 		s.accountingAvailable = true
+		// AMENDMENT-02 (W2): the FIRST authoritative transition starts
+		// the LIVE accounting. From here on a persisted record is an
+		// observation of the past and is rejected by `restore`.
+		s.liveAccountingStarted = true
 		if (s.currentPhase === phase && s.openCategory !== undefined) {
 			// Duplicate / no-op transition: the open interval keeps
 			// accruing into the same category. Nothing is closed and
@@ -524,6 +632,45 @@ export class TaskDurationAccountant {
 		s.openCategory = category
 		s.openAnchorMs = this.clock()
 		s.openPhase = phase
+	}
+
+	/**
+	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-02 / W5):
+	 * observe an UNRECOGNIZED authoritative phase.
+	 *
+	 * The pre-repair behaviour was to IGNORE an unknown phase string, so
+	 * the PREVIOUS classification silently continued: a task that was
+	 * waiting on a human would keep accruing WAITING time even though
+	 * the authoritative phase had become something the accounting does
+	 * not understand. That is a silent misclassification.
+	 *
+	 * The repair closes the current interval and opens an UNKNOWN one, so
+	 * the time after the unrecognized phase is reported as
+	 * UNCLASSIFIABLE rather than attributed to the previous category.
+	 * The existing "unknown" bucket is the explicit uncertainty
+	 * mechanism; no new category is introduced.
+	 *
+	 * The same-phase idempotence still holds: a repeated unrecognized
+	 * phase keeps the same UNKNOWN interval open.
+	 */
+	observeUnclassifiedPhase(): void {
+		const s = this.state
+		s.accountingAvailable = true
+		s.liveAccountingStarted = true
+		if (s.openCategory === "unknown" && s.openAnchorMs !== undefined) {
+			// A repeated unrecognized phase: the UNKNOWN interval keeps
+			// accruing. Nothing is closed and nothing is reopened.
+			return
+		}
+		if (s.openCategory !== undefined) {
+			this.closeInterval()
+		}
+		s.currentPhase = undefined
+		s.restoredWaitingReason = undefined
+		s.frozen = false
+		s.openCategory = "unknown"
+		s.openAnchorMs = this.clock()
+		s.openPhase = undefined
 	}
 
 	/**

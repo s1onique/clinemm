@@ -313,30 +313,27 @@ function dateStringToTimestamp(value: string | null | undefined): number {
 }
 
 /**
- * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01 / W1
- * ordering): is `candidate` a STRICTLY NEWER accounting checkpoint than
- * `written`?
+ * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-02 / W3):
+ * the CAPTURE ORDER is the checkpoint freshness authority.
  *
- * The accumulated totals of a task's accounting are MONOTONICALLY
- * NON-DECREASING over the task's lifetime: every closed interval adds
- * to exactly one bucket and no bucket is ever subtracted. So the sum of
- * the three buckets is a faithful "how far along is this task's
- * accounting" measure, and it is immune to a wall-clock adjustment (a
- * timestamp comparison would not be).
+ * The ACCUMULATED TOTALS are NOT an ordering token. A lifecycle change
+ * that does not accrue any measurable time — an `active` -> `terminal`
+ * transition, a `complete` -> `partial` coverage downgrade, or a
+ * waiting-reason transition — produces an EQUAL total, so a totals
+ * comparison silently DROPS a legitimate newer checkpoint.
  *
- * A candidate that is NOT strictly newer (an equal or a smaller total)
- * is an out-of-order or duplicate checkpoint and MUST NOT replace the
- * newer accounting already on disk.
+ * The capture order is the authority that actually orders the
+ * observations: it is minted at the moment the projection is READ, so
+ * it orders the checkpoints in the order the host observed them. It
+ * reuses the EXISTING `MessageIdMinter.nextSeq()` counter — no parallel
+ * counter is introduced.
  *
- * The comparison is on the SUM of the buckets, not per-bucket, because a
- * legitimate newer checkpoint can have the same total only if no time
- * was accounted in between — in which case writing it is harmless but
- * unnecessary, and dropping it is safe.
+ * A checkpoint whose capture order is NOT strictly newer than the order
+ * of the last DURABLY written checkpoint is an out-of-order or duplicate
+ * observation and MUST NOT replace the newer accounting already on disk.
  */
-function isDurationRecordNewerThan(candidate: TaskDurationPersistence, written: TaskDurationPersistence): boolean {
-	const candidateTotal = candidate.activeMs + candidate.waitingMs + candidate.unknownMs
-	const writtenTotal = written.activeMs + written.waitingMs + written.unknownMs
-	return candidateTotal > writtenTotal
+function isDurationCaptureNewerThan(candidateSeq: number, writtenSeq: number): boolean {
+	return candidateSeq > writtenSeq
 }
 
 function historyItemToTaskResponse(item: HistoryItem): TaskResponse {
@@ -1256,15 +1253,21 @@ export class Controller {
 	 */
 	private durationPersistChains: Map<string, Promise<unknown>> | undefined
 	/**
-	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01 / W1
-	 * ordering): the accounting checkpoint LAST WRITTEN for each task.
+	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-02 / W3
+	 * ordering): the CAPTURE ORDER of the last DURABLY written accounting
+	 * checkpoint for each task.
 	 *
 	 * Used to drop an out-of-order (older) checkpoint so it cannot roll
-	 * the persisted accounting back. Bounded the same way as the chain:
-	 * the entry is removed when the task's accounting is reset (a NEW
-	 * task identity) and when the controller is disposed.
+	 * the persisted accounting back. The stored value is the ORDER, not
+	 * the accounting: the accumulated totals are not an ordering token,
+	 * and an equal-duration lifecycle change must still persist.
+	 *
+	 * BOUNDED: the map holds only a NUMBER per task that has an
+	 * outstanding write. It is pruned when a task's accounting is reset
+	 * (a NEW task identity) and when the controller is disposed, so no
+	 * unbounded per-task accounting cache exists.
 	 */
-	private durationPersistedTotals: Map<string, TaskDurationPersistence> | undefined
+	private durationPersistedTotals: Map<string, number> | undefined
 
 	/**
 	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01):
@@ -1284,15 +1287,42 @@ export class Controller {
 	}
 
 	/**
-	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01):
-	 * the last-written accounting checkpoint per task, created on FIRST
-	 * USE. See `durationChains` for why the creation is lazy.
+	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-02 / W3):
+	 * the CAPTURE ORDER of the last DURABLY written accounting checkpoint
+	 * per task, created on FIRST USE. See `durationChains` for why the
+	 * creation is lazy.
+	 *
+	 * AMENDMENT-02: this replaces the old "last written totals" map. The
+	 * totals were never an ordering token, and the map held a full
+	 * accounting record per task for no benefit. Only the ORDER is
+	 * needed, and only for tasks whose write is still in flight.
 	 */
-	private get durationWritten(): Map<string, TaskDurationPersistence> {
+	private get durationWrittenSeq(): Map<string, number> {
 		if (!this.durationPersistedTotals) {
-			this.durationPersistedTotals = new Map<string, TaskDurationPersistence>()
+			this.durationPersistedTotals = new Map<string, number>()
 		}
 		return this.durationPersistedTotals
+	}
+	/**
+	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-02 / W3):
+	 * the LOCAL capture-order fallback, used only when a caller does not
+	 * supply the process-wide capture order.
+	 *
+	 * It is declared as `number | undefined` rather than a class-field
+	 * initializer because the host test harnesses build a controller
+	 * through the PROTOTYPE (without running the constructor), so a
+	 * field initializer would never run and the counter would be
+	 * `undefined`. The getter below initializes it lazily.
+	 */
+	private localDurationCaptureSeq: number | undefined
+	/**
+	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-02 / W3):
+	 * the next LOCAL capture order.
+	 */
+	private nextLocalDurationCaptureSeq(): number {
+		const next = (this.localDurationCaptureSeq ?? 0) + 1
+		this.localDurationCaptureSeq = next
+		return next
 	}
 	/**
 	 * ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01:
@@ -1743,7 +1773,15 @@ export class Controller {
 		// that belongs to a SUPERSEDED execution epoch. This is a READ of
 		// the authority the runtime already owns - no second epoch
 		// counter is introduced.
-		this.taskTelemetry = new TaskTelemetryTracker(undefined, () => this.messageTranslatorState.getMinter().epoch)
+		this.taskTelemetry = new TaskTelemetryTracker(
+			undefined,
+			() => this.messageTranslatorState.getMinter().epoch,
+			// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-02 /
+			// W3): the CAPTURE ORDER reuses the EXISTING process-wide
+			// `MessageIdMinter` sequence that already orders every other
+			// host-side observation. No parallel counter is introduced.
+			() => this.messageTranslatorState.getMinter().nextSeq(),
+		)
 		// ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01:
 		// construct the host-owned notify-on-terminal coordinator.
 		// The transport closure routes through
@@ -2980,7 +3018,7 @@ export class Controller {
 			// coordinator READS the tracker's persistence projection
 			// only — the accounting authority is the `TurnStateTracker`
 			// phase stream, and the coordinator never mutates it.
-			persistDurationAccounting: (taskId, record) => this.persistDurationAccounting(taskId, record),
+			persistDurationAccounting: (taskId, record, captureSeq) => this.persistDurationAccounting(taskId, record, captureSeq),
 			// ACT-CLINEMM-AUTOMATIC-INCIDENT-CAPTURE-AND-EXPORT01 (AICE01):
 			// make the captured incident DURABLE at the authoritative
 			// boundary that produced it — not only at a task switch or a
@@ -4792,6 +4830,12 @@ export class Controller {
 				sessionId,
 				typeof persistedTs === "number" && Number.isFinite(persistedTs) ? persistedTs : undefined,
 			)
+			// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-02 /
+			// W3): a NEW activation starts a NEW capture generation, so the
+			// task's freshness bookkeeping is dropped. Without this the map
+			// would keep one entry per task that ever persisted — an
+			// unbounded last-written cache.
+			this.forgetDurationCaptureGeneration?.(sessionId)
 			// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01: restore the
 			// persisted ACTIVE / WAITING / UNKNOWN accounting for this task
 			// identity, from the SAME `HistoryItem` slot that carries the
@@ -5015,6 +5059,10 @@ export class Controller {
 				sessionId,
 				typeof persistedTs === "number" && Number.isFinite(persistedTs) ? persistedTs : undefined,
 			)
+			// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-02 /
+			// W3): a RESUME starts a NEW capture generation too, so the
+			// task's freshness bookkeeping is dropped here as well.
+			this.forgetDurationCaptureGeneration?.(sessionId)
 			// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01: restore the
 			// persisted accounting on the RESUME seam too. A supported
 			// nonterminal recovery therefore preserves the known
@@ -6674,13 +6722,18 @@ export class Controller {
 	 *   `readDurationPersistence` callback invokes.
 	 *
 	 * IDENTITY BINDING:
-	 *   The task identity and the accounting record are returned
-	 *   TOGETHER, straight from the tracker that owns both. The
-	 *   destination identity is therefore NEVER derived independently of
-	 *   the record, which makes a cross-task misattribution
+	 *   The task identity, the accounting record AND the capture order
+	 *   are returned TOGETHER, straight from the tracker that owns them.
+	 *   The destination identity is therefore NEVER derived independently
+	 *   of the record, which makes a cross-task misattribution
 	 *   structurally impossible.
+	 *
+	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-02 / W3):
+	 *   The CAPTURE ORDER travels with the pair. It is the checkpoint
+	 *   freshness authority: the accumulated totals are not an ordering
+	 *   token, so an equal-duration lifecycle change must still persist.
 	 */
-	private readBoundDurationPersistence(): { taskId: string; record: TaskDurationPersistence } | undefined {
+	private readBoundDurationPersistence(): { taskId: string; record: TaskDurationPersistence; captureSeq: number } | undefined {
 		return this.taskTelemetry?.boundDurationPersistence
 	}
 
@@ -6701,17 +6754,25 @@ export class Controller {
 	 * rather than adding to them, so a repeated persist at the same
 	 * boundary cannot double-count.
 	 *
-	 * AMENDMENT-01 (W1 ordering): the writes for ONE task are SERIALIZED
+	 * AMENDMENT-02 (W3 ordering): the writes for ONE task are SERIALIZED
 	 * through a per-task promise chain, and a write is DROPPED when its
-	 * accounting is not newer than the accounting already written for
-	 * that task. Without this, two overlapping read-modify-write cycles
-	 * could complete out of order and an OLDER accounting checkpoint
-	 * could replace a NEWER one.
+	 * CAPTURE ORDER is not strictly newer than the order of the last
+	 * DURABLY written checkpoint for that task. Without this, two
+	 * overlapping read-modify-write cycles could complete out of order
+	 * and an OLDER accounting checkpoint could replace a NEWER one.
 	 *
-	 * The guard compares the ACCUMULATED TOTALS (the accounting is
-	 * monotonically non-decreasing within a task's lifetime), not a
-	 * wall-clock timestamp, so a clock adjustment cannot suppress a
-	 * legitimate newer checkpoint.
+	 * The guard compares the CAPTURE ORDER (the existing process-wide
+	 * `MessageIdMinter` sequence minted when the projection was read),
+	 * NOT the accumulated totals: the totals are NOT an ordering token.
+	 * A lifecycle change that does not accrue measurable time (an
+	 * `active` -> `terminal` transition, a `complete` -> `partial`
+	 * coverage downgrade, a waiting-reason transition) has an EQUAL
+	 * total, and a totals comparison silently drops it.
+	 *
+	 * AMENDMENT-02 (W3 durability): a write whose `HistoryItem` does not
+	 * exist yet is NOT marked durable — the checkpoint stays eligible for
+	 * a later retry. The bookkeeping records the order of the last
+	 * DURABLE write only.
 	 *
 	 * The chain is bounded: one pending write per task id, and the map
 	 * entry is removed once the chain drains.
@@ -6719,29 +6780,41 @@ export class Controller {
 	private async persistDurationAccounting(
 		taskId: string | undefined,
 		record: TaskDurationPersistence | undefined,
+		captureSeq?: number,
 	): Promise<void> {
 		if (!taskId || !record) {
 			return
 		}
-		// AMENDMENT-01 (W1 ordering): serialize the writes for this task
-		// and drop a checkpoint that is not newer than the one already
-		// written.
+		// AMENDMENT-02 (W3): the capture order is minted at the READ
+		// boundary, so it orders the checkpoints in the order the host
+		// observed them. When the caller did not supply one (a partial
+		// harness), fall back to a LOCAL monotonic counter on the
+		// controller so the ordering authority is always present.
+		const seq = captureSeq ?? this.nextLocalDurationCaptureSeq()
+		// AMENDMENT-02 (W3 ordering): serialize the writes for this task
+		// and drop a checkpoint whose capture order is not newer than the
+		// one already durably written.
 		const previous = this.durationChains.get(taskId)
 		const next = (previous ?? Promise.resolve()).then(async () => {
-			const written = this.durationWritten.get(taskId)
-			if (written && !isDurationRecordNewerThan(record, written)) {
-				// An OLDER (or equal) accounting checkpoint — the
+			const writtenSeq = this.durationWrittenSeq.get(taskId)
+			if (writtenSeq !== undefined && !isDurationCaptureNewerThan(seq, writtenSeq)) {
+				// An OLDER (or duplicate) accounting checkpoint — the
 				// out-of-order completion case. Writing it would roll
 				// the persisted accounting BACK to a stale value.
 				return
 			}
-			await this.writeDurationAccountingRecord(taskId, record)
-			this.durationWritten.set(taskId, record)
+			const durable = await this.writeDurationAccountingRecord(taskId, record)
+			if (durable) {
+				// Only a DURABLE write advances the freshness bookkeeping.
+				// A skipped write (the `HistoryItem` does not exist yet)
+				// leaves the checkpoint eligible for a later retry.
+				this.durationWrittenSeq.set(taskId, seq)
+			}
 		})
-		this.durationChains.set(
-			taskId,
-			next.catch(() => undefined),
-		)
+		// The chain's TAIL is the CATCHED promise that is stored in the
+		// map. The cleanup check below compares against THIS promise.
+		const chainTail = next.catch(() => undefined)
+		this.durationChains.set(taskId, chainTail)
 		try {
 			await next
 		} catch (error) {
@@ -6753,7 +6826,15 @@ export class Controller {
 		} finally {
 			// Drop the chain entry once THIS write is the tail, so the
 			// map does not grow without bound.
-			if (this.durationChains.get(taskId) === next) {
+			//
+			// AMENDMENT-02 (W3): the map stores the CATCHED promise
+			// (`next.catch(...)`), so the tail check must compare against
+			// THAT promise — comparing against `next` never matched and
+			// the chain entry LEAKED for every task that ever persisted.
+			const tail = this.durationChains.get(taskId)
+			if (tail === undefined || tail === chainTail) {
+				// This write IS the tail of the chain: drop the entry so
+				// the map does not grow without bound.
 				this.durationChains.delete(taskId)
 			}
 		}
@@ -6766,14 +6847,27 @@ export class Controller {
 	 * The task identity and the accounting record travel together: the
 	 * record is written into the history slot of EXACTLY the task it is
 	 * bound to. A record is never written into a different task's slot.
+	 *
+	 * AMENDMENT-02 (W3): returns whether the write was DURABLE. A
+	 * missing `HistoryItem` is NOT durable — the caller must not mark
+	 * the checkpoint as written, so a later retry can still write it.
+	 *
+	 * AMENDMENT-02 (W3): the write REPLACES the stored record rather
+	 * than merging it, so a concurrent writer of OTHER `HistoryItem`
+	 * fields is not silently overwritten beyond the duration slot that
+	 * this seam owns.
 	 */
-	private async writeDurationAccountingRecord(taskId: string, record: TaskDurationPersistence): Promise<void> {
+	private async writeDurationAccountingRecord(taskId: string, record: TaskDurationPersistence): Promise<boolean> {
 		const historyItem = await this.taskHistory.findHistoryItem(taskId)
 		if (!historyItem) {
-			return
+			// The `HistoryItem` does not exist yet (the task's first turn
+			// boundary can precede the history write). The checkpoint is
+			// NOT durable and stays eligible for a later retry.
+			return false
 		}
 		historyItem.duration = record
 		await this.taskHistory.updateTaskHistoryItem(historyItem)
+		return true
 	}
 
 	/**
@@ -6784,6 +6878,24 @@ export class Controller {
 	 * idempotent (the record REPLACES the totals), so a repeated
 	 * activation cannot double-count.
 	 */
+	/**
+	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-02 / W3):
+	 * drop a task's checkpoint-freshness bookkeeping.
+	 *
+	 * A NEW activation starts a NEW capture generation, so the previous
+	 * generation's order must not suppress the new one. Without this the
+	 * map would keep one entry per task that ever persisted — an
+	 * unbounded last-written cache.
+	 *
+	 * It is an arrow-function class field (and the call sites use `?.`)
+	 * for the same reason as `restoreDurationAccountingSafely`: the host
+	 * test harnesses invoke the production methods through a partial
+	 * controller object, and the pruning must not break task startup.
+	 */
+	private forgetDurationCaptureGeneration = (taskId: string): void => {
+		this.durationPersistedTotals?.delete(taskId)
+	}
+
 	/**
 	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01: the guarded
 	 * restore entry point.

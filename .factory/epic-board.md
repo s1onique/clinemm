@@ -1,3 +1,93 @@
+# ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-02) — PASS_STRUCTURAL_ONLY — 2026-11-27
+
+```text
+ACT_ID:       ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-02)
+TYPE:         bounded implementation correction cycle
+VERDICT:      PASS_STRUCTURAL_ONLY
+EPIC:         OBS-05
+WORK_ITEM:    OBS-05 — Active execution and waiting-time accounting
+ENTRY_HEAD:   23af44c205696f1563f9f4bc922b998639ee6ef9
+BRANCH:       main
+```
+
+**OBS-05 — Active execution and waiting-time accounting. STATUS: PENDING LIVE
+QUALIFICATION (bounded checkpoint-conservation repair complete, executable gates GREEN,
+installed-runtime qualification not executed).**
+
+**WHY THIS AMENDMENT EXISTS.** The reviewer's verdict was
+`HALT_OBS05_CHECKPOINT_CONSERVATION`. Three restore counterexamples and one
+checkpoint-ordering defect were reproduced against the REAL production seams. This
+AMENDMENT closes them WITHOUT changing the architecture: the `TurnStateTracker` lifecycle
+authority, the `TaskTelemetryTracker` host ownership, the interval accumulator, the
+existing `HistoryItem` persistence and the existing runtime-to-webview publication are all
+RETAINED. No checkpoint reconciliation subsystem, no second lifecycle state machine, no
+generic timing service and no speculative telemetry infrastructure was introduced. The
+repair REMOVES logic rather than adding guards around it.
+
+**THE THREE REPRODUCED RESTORE COUNTEREXAMPLES (W1).** With the REAL accumulator and the
+REAL tracker driven by an injected clock: (1) a stale active checkpoint restored during a
+human gate ROLLED the waiting bucket back to 0, rewrote the live phase and reset the
+interval anchor; (2) restoring the live persistence projection DUPLICATED the open
+interval (elapsed 1000 → 2000); (3) a stale terminal checkpoint restored after an
+authorized continuation ROLLED the active total back (12000 → 10000) and re-froze the
+live phase. All three are closed.
+
+**THE RESTORE-OWNERSHIP SIMPLIFICATION (W2).** The per-bucket `Math.max` merge did not
+establish temporal conservation — it could not tell an OLDER record from a NEWER one, and
+a merge of two observations taken at different times is an average of two timelines. The
+merge is REMOVED and replaced by ONE rule: THE RESTORE IS AUTHORIZED EXACTLY ONCE, AT
+TASK ACTIVATION, BEFORE THE LIVE ACCOUNTING BEGINS. A stale or duplicate restore is
+EXPLICITLY REJECTED and touches nothing. The authorization is carried by two facts in the
+accumulator's own state (`restoreConsumed`, `liveAccountingStarted`) — not by a new
+subsystem. A restored record is applied AS A WHOLE: no overlapping interval is merged, no
+open anchor is reset through an obsolete restore, and no additional independently
+maintained execution-epoch counter was introduced (the EXISTING `MessageIdMinter.epoch`
+fence remains the epoch authority).
+
+**THE CHECKPOINT-ORDERING REPAIR (W3).** The persistence guard compared the ACCUMULATED
+TOTALS (`candidateTotal > writtenTotal`). The totals are NOT an ordering token: an
+`active` → `terminal` transition, a `complete` → `partial` coverage downgrade and a
+waiting-reason transition all produce an EQUAL total, so the totals comparison silently
+DROPPED legitimate newer checkpoints. The CAPTURE ORDER is now the freshness authority:
+it is minted when the projection is READ and reuses the EXISTING process-wide
+`MessageIdMinter.nextSeq()` counter — no parallel counter is introduced. The order
+travels WITH the identity and the record, so it can never be derived independently of the
+record it orders. Additionally: a write whose `HistoryItem` does not exist is no longer
+marked DURABLE (so a later retry succeeds), the persistence chain no longer LEAKS its map
+entry (the cleanup compared the wrong promise), and the last-written cache holds only a
+NUMBER and is pruned on re-activation — no unbounded last-written accounting cache.
+
+**THE PRESENTATION CORRECTION (W4).** The forward projection STOPPED at the five-minute
+bound and returned the host's ORIGINAL snapshot verbatim, so the displayed wait counter
+ran up and then SNAPPED BACK. The projection is now MONOTONE across the freshness
+boundary (clamped at the bound) and reports a `stale` flag; the component renders an
+explicit `estimated` marker. No bounded host-refresh mechanism exists in this codebase
+and the ACT forbids a high-frequency publication loop, so the explicit uncertainty route
+was taken.
+
+**THE UNKNOWN-PHASE HANDLING (W5).** An unrecognized authoritative phase no longer
+silently continues the previous classification: it closes the current interval and opens
+an explicit UNKNOWN one (the existing uncertainty mechanism). The `F5-EPOCH-c` witness
+was updated from the pre-repair assertion to the corrected one; the change is recorded in
+the evidence rather than hidden.
+
+**THE LIVE-QUALIFICATION MATRIX WAS NOT NARROWED.** The original requirements are
+RETAINED (real execution and human waiting, webview recreation, resume and completion,
+terminal stability, task switching and restoration, extension-host recovery,
+conservation, actual background-job and provider lifecycle classification, and the
+machine-suspend observation limitation). Every one of them is still an EXPLICIT
+qualification requirement, not a passed claim.
+
+**LIVE QUALIFICATION: NOT EXECUTED.** The operator directed that no VSIX be built, no
+artifact be installed and no live qualification be performed. The exact-head artifact
+identity and the installed-runtime observations were therefore not taken. The verdict is
+PASS_STRUCTURAL_ONLY and OBS-05 remains pending live qualification. The reopen
+condition, the residual risk and the open live-qualification requirements are recorded in
+`.factory/evidence/ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01/14-amendment02-exit-report.md`
+and `13-amendment02-repair-evidence.md` §6.
+
+---
+
 # ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01) — PASS_STRUCTURAL_ONLY — 2026-11-27
 
 ```text

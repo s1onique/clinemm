@@ -128,7 +128,11 @@ function makeController(tracker: TaskTelemetryTracker, taskHistory: unknown): Sd
 function persistOf(controller: SdkController) {
 	return (
 		controller as unknown as {
-			persistDurationAccounting: (taskId: string | undefined, record: TaskDurationPersistence | undefined) => Promise<void>
+			persistDurationAccounting: (
+				taskId: string | undefined,
+				record: TaskDurationPersistence | undefined,
+				captureSeq?: number,
+			) => Promise<void>
 		}
 	).persistDurationAccounting.bind(controller)
 }
@@ -136,9 +140,32 @@ function persistOf(controller: SdkController) {
 function readBoundOf(controller: SdkController) {
 	return (
 		controller as unknown as {
-			readBoundDurationPersistence: () => { taskId: string; record: TaskDurationPersistence } | undefined
+			readBoundDurationPersistence: () =>
+				| { taskId: string; record: TaskDurationPersistence; captureSeq: number }
+				| undefined
 		}
 	).readBoundDurationPersistence.bind(controller)
+}
+
+/**
+ * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-02 / W3):
+ * persist the bound pair AS A WHOLE — the identity, the record AND the
+ * capture order travel together.
+ *
+ * The capture order is the checkpoint freshness authority. The
+ * accumulated totals are NOT an ordering token: an equal-duration
+ * lifecycle change (an `active` -> `terminal` transition, a
+ * `complete` -> `partial` coverage downgrade, a waiting-reason
+ * transition) must still persist.
+ */
+async function persistBound(controller: SdkController): Promise<void> {
+	const readBound = readBoundOf(controller)
+	const persist = persistOf(controller)
+	const bound = readBound()
+	if (!bound) {
+		return
+	}
+	await persist(bound.taskId, bound.record, bound.captureSeq)
 }
 
 /** A recording history store: it holds what was written, per task id. */
@@ -255,7 +282,7 @@ describe("ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01) / F1 p
 		expect(bound?.record.waitingMs).toBe(5_000)
 
 		// (4) Trigger the REAL persistence boundary.
-		await persist(bound?.taskId, bound?.record)
+		await persistBound(controller)
 
 		// (5) The persisted HistoryItem carries the current totals, in
 		// the slot of EXACTLY the task the record is bound to.
@@ -277,12 +304,12 @@ describe("ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01) / F1 p
 		tracker.startTask("task-f1-green-b", 1_700_000_000_000)
 		turnState.set("streaming")
 		clock.advance(4_000)
-		await persist(readBound()?.taskId, readBound()?.record)
+		await persistBound(controller)
 		expect(persisted.get("task-f1-green-b")?.activeMs).toBe(4_000)
 
 		// The task keeps working.
 		clock.advance(6_000)
-		await persist(readBound()?.taskId, readBound()?.record)
+		await persistBound(controller)
 		expect(persisted.get("task-f1-green-b")?.activeMs).toBe(10_000)
 	})
 
@@ -314,7 +341,7 @@ describe("ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01) / F1 p
 		tracker.startTask("task-switch-a", 1_700_000_000_000)
 		turnState.set("streaming")
 		clock.advance(7_000)
-		await persist(readBound()?.taskId, readBound()?.record)
+		await persistBound(controller)
 		expect(persisted.get("task-switch-a")?.activeMs).toBe(7_000)
 
 		// Switch to B: the accounting is reset for the NEW identity.
@@ -323,7 +350,7 @@ describe("ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01) / F1 p
 		clock.advance(3_000)
 		const boundB = readBound()
 		expect(boundB?.taskId).toBe("task-switch-b")
-		await persist(boundB?.taskId, boundB?.record)
+		await persist(boundB?.taskId, boundB?.record, boundB?.captureSeq)
 
 		// B's slot holds B's accounting; A's slot still holds A's.
 		expect(persisted.get("task-switch-b")?.activeMs).toBe(3_000)
@@ -342,25 +369,42 @@ describe("ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01) / F8 p
 		const controller = makeController(tracker, taskHistory)
 		const persist = persistOf(controller)
 
-		// A newer checkpoint lands first.
-		await persist("task-order", {
-			activeMs: 10_000,
-			waitingMs: 5_000,
-			unknownMs: 0,
-			phase: "waiting",
-			coverage: "complete",
-		})
+		// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-02 /
+		// W3): the CAPTURE ORDER is the freshness authority, not the
+		// accumulated totals. The capture order is minted when the
+		// projection is READ, so it orders the checkpoints in the order
+		// the host OBSERVED them — which is what the out-of-order
+		// completion case is about.
+		//
+		// The newer checkpoint is OBSERVED first (capture order 10) and
+		// lands first; the older checkpoint was OBSERVED earlier
+		// (capture order 5) and completes afterwards.
+		await persist(
+			"task-order",
+			{
+				activeMs: 10_000,
+				waitingMs: 5_000,
+				unknownMs: 0,
+				phase: "waiting",
+				coverage: "complete",
+			},
+			10,
+		)
 		expect(persisted.get("task-order")?.activeMs).toBe(10_000)
 
 		// An OLDER checkpoint completes afterwards (the out-of-order
 		// completion case). It MUST NOT replace the newer accounting.
-		await persist("task-order", {
-			activeMs: 2_000,
-			waitingMs: 0,
-			unknownMs: 0,
-			phase: "active",
-			coverage: "complete",
-		})
+		await persist(
+			"task-order",
+			{
+				activeMs: 2_000,
+				waitingMs: 0,
+				unknownMs: 0,
+				phase: "active",
+				coverage: "complete",
+			},
+			5,
+		)
 		expect(persisted.get("task-order")?.activeMs).toBe(10_000)
 		expect(persisted.get("task-order")?.waitingMs).toBe(5_000)
 	})
@@ -389,20 +433,28 @@ describe("ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01) / F8 p
 		const controller = makeController(tracker, taskHistory)
 		const persist = persistOf(controller)
 
-		const first = persist("task-serialized", {
-			activeMs: 1_000,
-			waitingMs: 0,
-			unknownMs: 0,
-			phase: "active",
-			coverage: "complete",
-		})
-		const second = persist("task-serialized", {
-			activeMs: 9_000,
-			waitingMs: 0,
-			unknownMs: 0,
-			phase: "active",
-			coverage: "complete",
-		})
+		const first = persist(
+			"task-serialized",
+			{
+				activeMs: 1_000,
+				waitingMs: 0,
+				unknownMs: 0,
+				phase: "active",
+				coverage: "complete",
+			},
+			1,
+		)
+		const second = persist(
+			"task-serialized",
+			{
+				activeMs: 9_000,
+				waitingMs: 0,
+				unknownMs: 0,
+				phase: "active",
+				coverage: "complete",
+			},
+			2,
+		)
 		// Release the blocked first write so the chain drains.
 		releaseFirst?.()
 		await Promise.all([first, second])
@@ -425,7 +477,7 @@ describe("ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01) / F8 p
 		// the one the record is bound to - never derived separately.
 		const bound = readBound()
 		expect(bound?.taskId).toBe("task-bound-a")
-		await persist(bound?.taskId, bound?.record)
+		await persistBound(controller)
 		expect(persisted.has("task-bound-a")).toBe(true)
 		expect(persisted.has("task-bound-b")).toBe(false)
 	})
@@ -837,10 +889,23 @@ describe("ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01) / F5 e
 		const before = durationOf(tracker.get())
 		expect(before?.phase).toBe("active")
 
-		// A phase the tracker does not recognise is IGNORED entirely.
+		// A phase the tracker does not recognise.
+		//
+		// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-02 /
+		// W5): the unknown phase does NOT silently continue the previous
+		// classification. The accounting moves to the explicit
+		// UNCERTAINTY mechanism (the "unknown" bucket), so the time after
+		// it is reported as unclassifiable rather than attributed to the
+		// previous ACTIVE category.
+		//
+		// The pre-repair behaviour (ignoring the phase entirely, so the
+		// ACTIVE classification continued) was exactly the silent
+		// misclassification this closes.
 		tracker.observeTurnPhase("some_future_phase")
 		const after = durationOf(tracker.get())
-		expect(after?.phase).toBe("active")
+		expect(after?.phase).toBe("unknown")
+		// The ACTIVE bucket did not grow: the time is not attributed to
+		// the previous classification.
 		expect(after?.activeMs).toBe(before?.activeMs)
 	})
 })
@@ -909,7 +974,12 @@ describe("ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01) / coor
 		expect(source).not.toMatch(/durationPersistence:\s*this\.taskTelemetry\.durationPersistence/)
 		// (3) The task identity and the record MUST be taken from the
 		// SAME bound pair.
-		expect(source).toMatch(/persistDurationAccounting\(bound\.taskId,\s*bound\.record\)/)
+		//
+		// AMENDMENT-02 (W3): the call also passes the bound pair's
+		// CAPTURE ORDER. The order travels with the pair, so the
+		// assertion accepts an optional third argument that is also
+		// read from the bound pair.
+		expect(source).toMatch(/persistDurationAccounting\(bound\.taskId,\s*bound\.record(,\s*bound\.captureSeq)?\)/)
 		// (4) The identity MUST NOT be derived independently of the
 		// record.
 		expect(source).not.toMatch(/persistDurationAccounting\(durationTaskId/)
@@ -957,7 +1027,7 @@ describe("ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01) / coor
 		if (options.persistDurationAccounting && options.readDurationPersistence) {
 			const bound = options.readDurationPersistence()
 			if (bound) {
-				await options.persistDurationAccounting(bound.taskId, bound.record)
+				await options.persistDurationAccounting(bound.taskId, bound.record, bound.captureSeq)
 			}
 		}
 

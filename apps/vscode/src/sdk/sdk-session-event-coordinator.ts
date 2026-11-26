@@ -178,7 +178,11 @@ export interface SdkSessionEventCoordinatorOptions {
 	 * not transferable across processes and would fabricate continuity
 	 * across a restart.
 	 */
-	persistDurationAccounting?: (taskId: string | undefined, record: TaskDurationPersistence) => Promise<void> | void
+	persistDurationAccounting?: (
+		taskId: string | undefined,
+		record: TaskDurationPersistence,
+		captureSeq?: number,
+	) => Promise<void> | void
 	/**
 	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01 / F1):
 	 * the LAZY read of the host-owned duration accounting.
@@ -199,8 +203,17 @@ export interface SdkSessionEventCoordinatorOptions {
 	 *   the destination identity independently of the record — an
 	 *   unbound record must never be written to a different task's
 	 *   history slot.
+	 *
+	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-02 / W3):
+	 *   The pair ALSO carries the CAPTURE ORDER — the process-wide
+	 *   monotonic sequence minted at the moment the projection was read.
+	 *   The capture order is the checkpoint freshness authority: the
+	 *   accumulated totals are not an ordering token, so an
+	 *   equal-duration lifecycle change must still persist. The order
+	 *   travels with the pair so it can never be derived independently
+	 *   of the record it orders.
 	 */
-	readDurationPersistence?: () => { taskId: string; record: TaskDurationPersistence } | undefined
+	readDurationPersistence?: () => { taskId: string; record: TaskDurationPersistence; captureSeq: number } | undefined
 	postStateToWebview: () => Promise<void>
 	stateManager?: StateManager
 	/**
@@ -5949,7 +5962,9 @@ export class SdkSessionEventCoordinator {
 				if (this.options.persistDurationAccounting && this.options.readDurationPersistence) {
 					const bound = this.options.readDurationPersistence()
 					if (bound) {
-						Promise.resolve(this.options.persistDurationAccounting(bound.taskId, bound.record)).catch((error) => {
+						Promise.resolve(
+							this.options.persistDurationAccounting(bound.taskId, bound.record, bound.captureSeq),
+						).catch((error) => {
 							Logger.error("[SdkController] Failed to persist task duration accounting:", error)
 						})
 					}

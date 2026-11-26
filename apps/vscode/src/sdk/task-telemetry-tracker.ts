@@ -296,6 +296,39 @@ export class TaskTelemetryTracker {
 	 * and every write is accepted — the legacy behaviour.
 	 */
 	private readonly readCurrentEpoch: (() => number | undefined) | undefined
+	/**
+	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-02 / W3):
+	 * the CAPTURE ORDER reader.
+	 *
+	 * It mints the process-wide monotonic sequence that stamps every
+	 * persistence capture. It reuses the EXISTING `MessageIdMinter`
+	 * counter that already orders every other host-side observation —
+	 * no parallel counter is introduced.
+	 *
+	 * When it is absent (the test harnesses and partial controllers) the
+	 * capture order falls back to a LOCAL counter on the tracker, so the
+	 * ordering authority is always present and always monotonic.
+	 */
+	private readonly readCaptureSeq: () => number
+	/**
+	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-02 / W3):
+	 * the LOCAL capture-order fallback. It is used only when no
+	 * process-wide reader is supplied (the partial test harnesses).
+	 *
+	 * It is declared as `number | undefined` and initialized lazily so
+	 * the counter is correct even for a tracker built without running
+	 * the constructor.
+	 */
+	private localCaptureSeq: number | undefined
+	/**
+	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-02 / W3):
+	 * the next LOCAL capture order.
+	 */
+	private nextLocalCaptureSeq(): number {
+		const next = (this.localCaptureSeq ?? 0) + 1
+		this.localCaptureSeq = next
+		return next
+	}
 	private toolCalls = 0
 	private recoveryBudgetFailures = 0
 	private prevEpisodeFailures = 0
@@ -372,9 +405,14 @@ export class TaskTelemetryTracker {
 	 * monotonic time source (`performance.now()`), which is immune to
 	 * wall-clock adjustments.
 	 */
-	constructor(clock?: MonotonicClock, readCurrentEpoch?: () => number | undefined) {
+	constructor(clock?: MonotonicClock, readCurrentEpoch?: () => number | undefined, readCaptureSeq?: () => number) {
 		this.durationAccountant = new TaskDurationAccountant(clock)
 		this.readCurrentEpoch = readCurrentEpoch
+		// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-02 /
+		// W3): the capture order. The process-wide reader is preferred;
+		// the local fallback keeps the ordering authority present and
+		// monotonic even in the partial test harnesses.
+		this.readCaptureSeq = readCaptureSeq ?? (() => this.nextLocalCaptureSeq())
 	}
 
 	/**
@@ -395,6 +433,20 @@ export class TaskTelemetryTracker {
 	 *
 	 * A task identity that does not match the current one is ignored —
 	 * the accounting is bound to the task identity.
+	 *
+	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-02 / W2)
+	 * — the RESTORE OWNERSHIP.
+	 *
+	 *   The restore is authorized EXACTLY ONCE, at task activation,
+	 *   BEFORE the live accounting has begun. The live accounting starts
+	 *   at the first authoritative phase transition; from that moment on
+	 *   the live accounting holds a NEWER phase, a NEWER interval anchor
+	 *   and NEWER totals than any persisted record, so a record applied
+	 *   then is an OBSERVATION OF THE PAST and is explicitly REJECTED.
+	 *
+	 *   A rejected restore is a no-op: it does not alter any accumulated
+	 *   total, does not change the lifecycle phase, does not reset an
+	 *   open interval's anchor and does not freeze a live accounting.
 	 */
 	restoreDurationAccounting(taskId: string, record: TaskDurationPersistence | undefined): TaskHeaderTelemetryStrip | undefined {
 		if (this.currentTaskId !== taskId) {
@@ -406,6 +458,15 @@ export class TaskTelemetryTracker {
 			// accounting stays absent. The UI renders "unavailable" —
 			// never a fabricated zero.
 			Logger.debug(`[TaskTelemetryTracker] restoreDurationAccounting with no persisted record; ignored (taskId=${taskId})`)
+			return this.get()
+		}
+		if (this.durationAccountant.restoreRejected) {
+			// The live accounting already began (or a record was already
+			// applied). The record is an observation of the past and is
+			// REJECTED as a whole.
+			Logger.debug(
+				`[TaskTelemetryTracker] rejecting a stale duration checkpoint for a task whose live accounting has already begun (taskId=${taskId})`,
+			)
 			return this.get()
 		}
 		this.durationAccountant.restore(record)
@@ -462,9 +523,23 @@ export class TaskTelemetryTracker {
 	 * slot — a cross-task misattribution. Returning the pair makes that
 	 * structurally impossible.
 	 *
+	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-02 / W3):
+	 * the pair also carries the CAPTURE ORDER — the process-wide
+	 * monotonic sequence minted at the moment the projection was read.
+	 *
+	 * The accumulated TOTALS are NOT an ordering token: a lifecycle
+	 * change that does not accrue any time (active -> terminal, a
+	 * complete -> partial coverage downgrade, a waiting-reason
+	 * transition) produces an EQUAL total, so a totals comparison
+	 * silently drops a legitimate newer checkpoint. The capture order is
+	 * the authority that actually orders the observations, and it reuses
+	 * the EXISTING `MessageIdMinter.nextSeq()` counter that already
+	 * orders every other host-side observation. No parallel counter is
+	 * introduced.
+	 *
 	 * Returns `undefined` when no task is active (nothing to persist).
 	 */
-	get boundDurationPersistence(): { taskId: string; record: TaskDurationPersistence } | undefined {
+	get boundDurationPersistence(): { taskId: string; record: TaskDurationPersistence; captureSeq: number } | undefined {
 		if (this.currentTaskId === undefined) {
 			return undefined
 		}
@@ -476,7 +551,7 @@ export class TaskTelemetryTracker {
 			// slot.
 			return undefined
 		}
-		return { taskId: this.currentTaskId, record }
+		return { taskId: this.currentTaskId, record, captureSeq: this.readCaptureSeq() }
 	}
 
 	/**
@@ -642,8 +717,19 @@ export class TaskTelemetryTracker {
 		// accumulator is phase-driven, so it introduces no second
 		// lifecycle state machine and never infers a human wait from UI
 		// state.
+		//
+		// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-02 /
+		// W5): an UNRECOGNIZED phase does NOT silently continue the
+		// previous classification. It closes the current interval and
+		// opens an UNKNOWN one, so the time after it is reported as
+		// unclassifiable rather than attributed to the previous category.
 		if (isTurnPhase(phase)) {
 			this.durationAccountant.observePhase(phase)
+		} else {
+			Logger.debug(
+				`[TaskTelemetryTracker] unrecognized authoritative phase; the accounting continues as UNKNOWN (phase=${phase})`,
+			)
+			this.durationAccountant.observeUnclassifiedPhase()
 		}
 		if (TERMINAL_PHASES.has(phase)) {
 			if (this.endedAt === undefined) {
