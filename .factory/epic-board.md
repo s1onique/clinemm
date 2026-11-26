@@ -43668,3 +43668,121 @@ INFERENCE REQUESTS:     0
 ```
 
 **A successor ACT is NOT started automatically.**
+
+# ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01 — GO_OUTPUT_EXHAUSTION_RECOVERY_DOGFOOD — 2026-11-26
+
+```text
+ACT_ID:       ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01
+TYPE:         bounded recovery lifecycle correction (one bounded cycle)
+VERDICT:      GO_OUTPUT_EXHAUSTION_RECOVERY_DOGFOOD
+EPIC:         OUTPUT-EXHAUSTION RECOVERY LIFECYCLE
+ENTRY_HEAD:   a47349f816317a6b47c65ae92e79c64f85518fe8
+FINAL_HEAD:   83307aaa6
+BRANCH:       main
+```
+
+**D1 — ORDINARY RECOVERY ALLOWANCE REPLENISHMENT (REPRODUCED, REPAIRED).**
+The predecessor reset the ordinary conciseness-reminder counter on the
+PRESENCE of a tool call, so a read-only INSPECTION re-armed the allowance.
+The RED receipt observed **11 conciseness reminders in ONE run** against a
+nominal allowance of 3, and **7** across a productive-edit trajectory. The
+allowance is now a CONSUMABLE RUN-SCOPED resource, and the CONSECUTIVE
+exhaustion streak is a SEPARATE counter cleared only by a genuinely
+PRODUCTIVE round (successful edit / successful execution / legitimate wait)
+as classified by the EXISTING production classifier. A read-only inspection,
+a failed experiment, an unknown observation, compaction, a provider retry,
+an R1/R2 activation, a recovery-only override and the internal continuation
+of the same recovery episode replenish NOTHING.
+
+**D2 — TOOL-LESS EXHAUSTION IS INVISIBLE TO R1 (REPRODUCED, REPAIRED).**
+The max-tokens branch continued the loop BEFORE the iteration boundary that
+folds a round into the execution-stagnation accounting, so a tool-less
+exhausted response contributed NOTHING to R1 — and R2 is reachable ONLY
+through R1's `allowance_exhausted` branch. The RED receipt observed **ZERO**
+R1 notices from a tool-less trajectory. The exhausted round now reaches the
+EXISTING stagnation authority through the SAME fold mechanism that consumes
+executed tool results: **ONE logical round per completed logical agent
+response**. No independent stagnation detector is introduced. Terminal
+conservation is preserved: normal STOP, cancellation, provider error,
+content filter and unknown terminal outcomes are NOT relabelled as output
+exhaustion, and a max-tokens response carrying a COMPLETE valid tool call
+still executes that call.
+
+**D3 — PREMATURE TERMINATION (REPRODUCED, REPAIRED).** The ordinary
+allowance (3) was exhausted BEFORE the ordinary R1 threshold (5), so the run
+FAILED on the fourth consecutive exhaustion and R1/R2 never intervened. The
+RED receipt observed **ZERO** R1 notices on a continuously exhausted
+trajectory. The coordination lives INSIDE the existing lifecycle method: when
+the ordinary allowance is spent but a still-eligible bounded R1/R2
+intervention remains, the run continues within a finite run-scoped ceiling
+of **20 exhaustion-driven continuations**. No independent R0/R1/R2
+supervisor; no duplicated reminder class.
+
+**D4 — RECOVERY-ONLY GENERATION OVERRIDE (QUALIFIED, DEFAULT_OFF).** One
+request-local output allowance attaches to the next authorized R1 recovery
+request through the EXISTING per-request generation seam. The WIRE WITNESS
+drives the ACTUAL gateway with the resolved provider serializer and the
+external fetch substituted: ordinary LOW `max_tokens` **8192**, authorized
+recovery **16384**, subsequent ordinary request back to **8192**, effort
+**LOW** preserved, provider/model/endpoint unchanged, explicit cap and
+context clamps authoritative, DEFAULT_OFF producing no override.
+
+**RECOVERY BOUND DERIVATION (actual production constants).** Ordinary R1
+threshold 5; R1 instruction allowance 2; R2 activation allowance 2; R2
+selection-inference allowance 1; R2 objective-round allowance 8. Reaching
+R1's `allowance_exhausted` branch requires 5 + 5 + 1 = **11** logical rounds
+of pure stagnation (each injection resets the streak). The ceiling of **20**
+is strictly larger than 11, so every AUTHORIZED intervention remains
+reachable; it is an UPPER BOUND, never a target, and the runtime terminates
+truthfully as soon as no useful authorized intervention remains.
+
+**THE BEHAVIOURAL WITNESS IS SYNTHETIC AT THE MODEL, REAL AT THE SEAM.**
+Trajectory A recovered ACTUAL workspace bytes on disk and an ACTUAL
+executable verification through the real R1 intervention, with no operator
+intervention. Trajectory B reached the R1 allowance-exhausted branch and
+issued EXACTLY ONE R2 selection inference. Trajectory C reached a truthful
+`failed` terminal outcome with every resource bounded. Evidence
+classification: `SYNTHETIC_REAL_PRODUCTION_SEAM`. This is NOT evidence that
+MiniMax itself will behave identically, and it is NOT live behavioural
+effectiveness.
+
+**R2 REMAINS EXPERIMENTAL AND DEFAULT_OFF.** The host composition is
+unchanged: the R2 policy key is ABSENT unless the existing environment
+opt-in is selected, and PLAN mode carries no stagnation policy at all.
+
+**CMP-09 SUCCESSOR PREFLIGHT RESIDUE IS ALREADY CORRECTED.** The usage
+observability scope is an explicit four-valued authority (`physical-attempt`
+/ `turn-aggregate` / `served-occupancy` / `normalized`) and the observed
+attempt count is an OBSERVED fact that stays ABSENT when the cardinality is
+unknown — never synthesized. CMP-09 accounting is NOT reopened.
+
+```text
+ACT-OWNED WITNESSES:   28 (all PASSED) — 12 lifecycle RED/GREEN + C4
+                       production reachability, 9 principal behavioural
+                       witness + C7 conservation controls, 7 recovery-only
+                       output override wire witness
+HISTORICAL WITNESS:    5 (forensics, INVERTED with the predecessor
+                       expectations quoted verbatim)
+EXISTING SUITES:       agents focused 98 PASSED (output-exhaustion,
+                       execution-stagnation, R1, R2 conservation) |
+                       shared 717 PASSED | llms cmp09 27 PASSED |
+                       core cmp08 24 + cmp09 20 PASSED
+NO_NEW_FAILURES:       agents 43 pre-existing failures, IDENTICAL identities
+                       (diff-verified against the ENTRY_HEAD baseline);
+                       llms 6 pre-existing (diff-verified); core 28
+                       pre-existing files (diff-verified)
+TYPECHECK:             @cline/shared CLEAN; @cline/llms CLEAN;
+                       @cline/agents CLEAN; apps/vscode CLEAN (exit 0)
+BIOME:                 clean on all changed files
+SDK REBUILD:           bun run build:sdk, before cross-package verification
+VSIX PACKAGING:        NOT EXECUTED
+INFERENCE REQUESTS:    0 (synthetic SSE only; no paid inference)
+ACT-OWNED DIAGNOSTICS: 0 (the override use rides the EXISTING status-notice
+                       metadata bag; the disabled posture emits nothing)
+```
+
+**THE NEXT MEANINGFUL LEARNING EVENT IS THE ISOLATED LIVE BEHAVIOURAL
+EXPERIMENT.** This ACT authorizes exact-head artifact packaging and an
+isolated live experiment only. It does NOT authorize unrestricted R2
+rollout, permanent activation of the recovery-only generation override, or
+any claim that MiniMax will recover successfully.
