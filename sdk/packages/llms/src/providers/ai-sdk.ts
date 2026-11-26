@@ -1557,6 +1557,47 @@ export function normalizeUsage(
 				"cache_creation_input_tokens",
 			),
 	};
+	// ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A3.1).
+	//
+	// THE RAW PAYLOAD'S SCOPE IS THE ATTEMPT COUNT'S SCOPE.
+	//
+	// The `raw` payload describes ONE physical attempt. The SDK's structured
+	// fields describe exactly the attempts the reported output total covers.
+	//
+	// For a MULTI-ATTEMPT aggregate those two scopes DIFFER: the production
+	// retry middleware aggregates the discarded attempts' usage into the
+	// emitted finish part and keeps the SERVED attempt's raw payload, so
+	// reading a reasoning count out of that raw payload attributes ONE
+	// attempt's reasoning to the WHOLE aggregate:
+	//
+	//   attempt 1: total 900, reasoning 800
+	//   attempt 2: total 900, reasoning UNREPORTED
+	//   served:    total 900, reasoning 700
+	//
+	// The aggregate's reasoning was NEVER established (attempt 2 reported
+	// none), but the raw payload made the normalizer report 700 as the
+	// aggregate's reasoning — and the visible output as the remainder, which
+	// claims the whole aggregate's output was visible.
+	//
+	// So the raw payload is consulted ONLY when the usage covers a SINGLE
+	// physical attempt. For a multi-attempt aggregate the raw payload is
+	// EXCLUDED from the breakdown resolution, and the aggregate's own
+	// structured breakdown — which the middleware established or omitted —
+	// is the authority.
+	//
+	// The PROVIDER'S NESTED USAGE METADATA is excluded for the same reason:
+	// `providerMetadata.<provider>.usage` is the SERVED attempt's own usage
+	// payload, so it carries the same one-attempt scope as `usage.raw`.
+	//
+	// The attempt count is an OBSERVED fact (the middleware-owned occupancy
+	// authority), never an assumption.
+	const occupancyAuthority = readPhysicalRequestOccupancy(providerMetadata);
+	const observedAttemptCount = occupancyAuthority?.attemptCount;
+	const usageCoversManyAttempts =
+		observedAttemptCount !== undefined && observedAttemptCount > 1;
+	const breakdownSources = usageCoversManyAttempts
+		? [usage]
+		: [usage, rawUsage, providerUsage ?? {}];
 	// ACT-CLINEMM-PROVIDER-USAGE-NORMALIZATION-AUTHORITY-01.
 	//
 	// The reasoning breakdown is resolved from the SDK's STRUCTURED fields
@@ -1565,7 +1606,7 @@ export function normalizeUsage(
 	// SDK's structured fields describe exactly the attempts the reported
 	// output total covers.
 	const reasoningResolution = resolveUsageValue(
-		[usage, rawUsage, providerUsage ?? {}],
+		breakdownSources,
 		REASONING_TOKEN_PATHS,
 	);
 	const reasoningTokenCount = reasoningResolution.value;
@@ -1576,7 +1617,7 @@ export function normalizeUsage(
 	// what keeps a MULTI-ATTEMPT total from being reduced by a single
 	// attempt's reasoning.
 	const visibleOutputResolution = resolveUsageValue(
-		[usage, rawUsage, providerUsage ?? {}],
+		breakdownSources,
 		VISIBLE_OUTPUT_TOKEN_PATHS,
 	);
 	const pricing = pricingValue as Record<string, unknown> | undefined;
@@ -1663,12 +1704,27 @@ export function normalizeUsage(
 	//   "unknown" the aggregate covers an UNKNOWN number of requests, so it
 	//             establishes NO request's occupancy. The authority is
 	//             DENIED.
-	const occupancyAuthority = readPhysicalRequestOccupancy(providerMetadata);
+	//
+	// The authority was read ABOVE, where the breakdown's scope needed it.
 
+	//
+	// ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A3.2).
+	//
+	// AN EXPLICIT ZERO IS PUBLISHED; AN ABSENT VALUE IS NOT.
+	//
+	// The predecessor published the reasoning count only when it was
+	// POSITIVE, so an explicitly reported ZERO — the provider stating "this
+	// response carried no reasoning tokens" — was indistinguishable from a
+	// provider that does not report the metric at all.
+	//
+	// `resolveUsageValue` already distinguishes the two (it reports PRESENCE
+	// separately from the value, and an explicit zero IS present), so the
+	// publication uses the validated presence rather than the value's
+	// magnitude. The absence stays absent, and the explicit zero survives.
 	return {
 		...normalizedUsage,
 		outputTokens: visibleOutput,
-		...(reasoningTokenCount > 0 ? { reasoningTokenCount } : {}),
+		...(reasoningResolution.present ? { reasoningTokenCount } : {}),
 		...(typeof resolvedTotalCost === "number"
 			? { totalCost: resolvedTotalCost }
 			: {}),
@@ -2789,11 +2845,38 @@ async function* emitAiSdkEvents(
 				: observedAttemptCount === 1
 					? ("physical-attempt" as const)
 					: ("turn-aggregate" as const);
+		//
+		// ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A4).
+		//
+		// THE IDENTITY IS THE LOGICAL MODEL REQUEST, NOT A PHYSICAL
+		// ATTEMPT.
+		//
+		// `request.metadata.modelRequestId` is the runtime's LOGICAL model
+		// request identity. The production retry middleware re-dials that
+		// SAME request internally, so every physical attempt of the turn
+		// shares ONE `modelRequestId`. Presenting it as a physical attempt
+		// identity asserts a correlation that does not exist.
+		//
+		// The PHYSICAL attempt count IS established (the middleware-owned
+		// occupancy authority), so it is recorded as the observed
+		// cardinality — and it is left UNKNOWN when the authority
+		// established none.
+		//
+		// The SERVED OCCUPANCY is independently distinguishable: it is the
+		// occupancy authority's established measurement, published under its
+		// own scope so a reader can tell it apart from both the aggregate
+		// expenditure and the individual attempt's usage.
+		const observedOccupancy = readPhysicalRequestOccupancy(metadataToUse);
+		const servedOccupancy =
+			observedOccupancy?.state === "known" &&
+			typeof observedOccupancy.value === "number"
+				? observedOccupancy.value
+				: undefined;
 		recordUsageObservability({
 			providerId: request.providerId,
 			modelId: request.modelId,
 			sessionId: request.metadata?.sessionId as string | undefined,
-			providerAttemptId: request.metadata?.modelRequestId as string | undefined,
+			modelRequestId: request.metadata?.modelRequestId as string | undefined,
 			iteration: request.metadata?.iteration as number | undefined,
 			raw:
 				usageToEmit && typeof usageToEmit === "object"
@@ -2802,6 +2885,8 @@ async function* emitAiSdkEvents(
 			sdkUsage: usageToEmit,
 			clineUsage: normalizedUsage,
 			usageScope: observedUsageScope,
+			...(observedAttemptCount !== undefined ? { observedAttemptCount } : {}),
+			...(servedOccupancy !== undefined ? { servedOccupancy } : {}),
 		});
 		yield {
 			type: "usage",

@@ -185,6 +185,30 @@ function sse(inputTokens: number, empty: boolean, toolCall = false): Response {
  * re-dials twice per turn, so each turn costs three physical requests and
  * the runtime reaches iteration 2.
  */
+/**
+ * ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A2).
+ *
+ * A HETEROGENEOUS physical-request fixture: every attempt reports a
+ * DIFFERENT input-token count, so the aggregate expenditure and the
+ * individual occupancy are distinguishable.
+ */
+function createHeterogeneousFetch(input: { inputTokensPerAttempt: number[] }) {
+	const state = { attempts: 0 };
+	const fetchImpl = (async () => {
+		const within = state.attempts % input.inputTokensPerAttempt.length;
+		state.attempts += 1;
+		const inputTokens =
+			input.inputTokensPerAttempt[within] ??
+			input.inputTokensPerAttempt[input.inputTokensPerAttempt.length - 1]!;
+		// The leading attempts are EMPTY (the retry trigger); each still
+		// reports its OWN input count, because the provider billed it.
+		const isEmpty = within < input.inputTokensPerAttempt.length - 1;
+		const isToolCall = state.attempts === input.inputTokensPerAttempt.length;
+		return sse(inputTokens, isEmpty, isToolCall);
+	}) as unknown as typeof fetch;
+	return { fetchImpl, state };
+}
+
 function createCountingFetch(input: { attemptsPerRequest: number }) {
 	const state = { attempts: 0 };
 	const fetchImpl = (async () => {
@@ -958,5 +982,145 @@ describe("ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (ADDENDUM-01 CORRECTION-
 			usage: { inputTokens: Number.POSITIVE_INFINITY },
 		});
 		expect(infinite.previousRequestInputTokens).toBeUndefined();
+	});
+
+	it("CMP09-RETRY-14: the HETEROGENEOUS producer yields the served attempt's occupancy, not the aggregate", async () => {
+		// ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A2).
+		//
+		// The heterogeneous physical-request fixture:
+		//
+		//   discarded attempt 1: 2000 input tokens
+		//   discarded attempt 2: 3000 input tokens
+		//   served attempt:      1500 input tokens
+		//
+		// The AGGREGATE EXPENDITURE is 6,500 and the physical OCCUPANCY is
+		// 1,500. The occupancy is the SERVED attempt's OWN count — it is NOT
+		// the aggregate, and it is NOT the aggregate divided by the attempt
+		// count (6,500 / 3 = 2,166.67).
+		//
+		// Both quantities are asserted at their ACTUAL DOWNSTREAM
+		// BOUNDARIES: the expenditure at the runtime's session usage (the
+		// billing authority) and the occupancy at the runtime's published
+		// `previousRequestInputTokens` (the context authority).
+		const { fetchImpl, state } = createHeterogeneousFetch({
+			inputTokensPerAttempt: [2_000, 3_000, 1_500],
+		});
+		const gateway = makeGateway(fetchImpl);
+		const model = {
+			stream: async function* (
+				request: AgentModelRequest,
+			): AsyncIterable<AgentModelEvent> {
+				const stream = await gateway.stream({
+					providerId: "minimax",
+					modelId: EXACT_M31_MODEL_ID,
+					systemPrompt: request.systemPrompt,
+					messages: request.messages,
+					tools: request.tools,
+					requestPolicy: {
+						retryPolicy: {
+							maxRetries: 0,
+							streamRetries: 0,
+							emptyResponseAttempts: 3,
+						},
+					},
+					metadata: {
+						sessionId: "session-retry-heterogeneous",
+						runId: "run-retry-heterogeneous",
+						iteration: 1,
+					},
+				});
+				for await (const event of stream) {
+					yield event as AgentModelEvent;
+				}
+			},
+		};
+
+		let previousRequestInputTokens: number | undefined;
+		const runtime = new AgentRuntime({
+			model,
+			tools: [
+				{
+					name: "echo",
+					description: "Echoes input back",
+					inputSchema: { type: "object" },
+					async execute(input: { text?: string }) {
+						return { echoed: input.text ?? "" };
+					},
+				} as never,
+			],
+			prepareTurn: async (context) => {
+				if (context.previousRequestInputTokens !== undefined) {
+					previousRequestInputTokens = context.previousRequestInputTokens;
+				}
+				return { messages: context.messages, tools: context.tools };
+			},
+		});
+		await runtime.run("A".repeat(3_000));
+		const snapshot = runtime.snapshot();
+
+		// The PHYSICAL attempts really happened.
+		expect(state.attempts).toBeGreaterThanOrEqual(3);
+
+		// THE EXPENDITURE: the aggregate over the turn's attempts, billed.
+		// The first request made three physical attempts (2000 + 3000 +
+		// 1500 = 6500); the closing text turn adds its own attempt.
+		expect(snapshot.usage.inputTokens).toBeGreaterThanOrEqual(6_500);
+
+		// THE OCCUPANCY: the SERVED attempt's own count, exactly.
+		expect(previousRequestInputTokens).toBe(1_500);
+		// Explicitly NOT the aggregate, and NOT a derived value.
+		expect(previousRequestInputTokens).not.toBe(6_500);
+		expect(previousRequestInputTokens).not.toBe(6_500 / 3);
+	});
+
+	it("CMP09-RETRY-15: a PRESENT-but-INVALID occupancy marker grants NO occupancy authority", async () => {
+		// ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A1).
+		//
+		// The reader used to erase a PRESENT-but-INVALID marker into the
+		// ABSENT legacy shape, whose input count IS the occupancy — so the
+		// AGGREGATE EXPENDITURE became the occupancy.
+		//
+		// The runtime's own defensive validation must deny such a record
+		// too: the occupancy is published as NONE, and the aggregate is
+		// still billed.
+		//
+		// The `single` state's occupancy is the USAGE's own input count, so
+		// the record's `value` field is irrelevant to it; what makes a
+		// `single` record invalid is a cardinality that contradicts it.
+		for (const invalid of [
+			{ state: "single", attemptCount: 3 },
+			{ state: "known", attemptCount: 3, value: 0 },
+			{ state: "known", attemptCount: 3, value: -1 },
+			{ state: "known", attemptCount: 1, value: 1_500 },
+		]) {
+			const denied = await driveRuntimeWithUsage({
+				usage: {
+					inputTokens: 4_000,
+					requestOccupancy: invalid,
+				},
+			});
+			// The aggregate is still billed.
+			expect(denied.sessionInputTokens).toBe(4_000);
+			// The occupancy is published as NONE — NOT the aggregate.
+			expect(denied.previousRequestInputTokens).toBeUndefined();
+		}
+	});
+
+	it("CMP09-RETRY-16: a single state with NO established cardinality grants NO occupancy authority", async () => {
+		// ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A1).
+		//
+		// The "single" state means "the aggregate IS this request's
+		// occupancy", which is only meaningful when the turn really made ONE
+		// attempt. A record that establishes NO cardinality does not
+		// establish that, and the runtime must not read the aggregate as the
+		// occupancy on its word.
+		const denied = await driveRuntimeWithUsage({
+			usage: {
+				inputTokens: 4_000,
+				requestOccupancy: { state: "single" },
+			},
+		});
+		expect(denied.sessionInputTokens).toBe(4_000);
+		expect(denied.previousRequestInputTokens).toBeUndefined();
 	});
 });

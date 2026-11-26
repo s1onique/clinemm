@@ -5864,9 +5864,34 @@ export class AgentRuntime {
 								// previous request's occupancy must not linger.
 								this.state.lastRequestInputTokens = 0;
 							} else {
+								// ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01
+								// (A1).
+								//
+								// THE "single" STATE REQUIRES AN ESTABLISHED
+								// CARDINALITY OF EXACTLY ONE.
+								//
+								// The cardinality is OPTIONAL, because it is a fact
+								// INDEPENDENT of the occupancy: a record can
+								// establish that the turn made ONE attempt while
+								// failing to establish a measurement, and it can
+								// fail to establish a cardinality at all.
+								//
+								// A "single" state with NO established cardinality
+								// is NOT the legacy single-request shape: the
+								// reader returns `undefined` only for a TRULY
+								// absent marker, so a present record is an
+								// explicit statement. Reading the aggregate as
+								// the occupancy here would re-enable the
+								// aggregate fallback the three-state
+								// architecture forbids.
+								//
+								// The cardinality is NEVER synthesized to satisfy
+								// the type.
 								const established =
 									occupancy.state === "single"
-										? event.usage.inputTokens
+										? occupancy.attemptCount === 1
+											? event.usage.inputTokens
+											: undefined
 										: occupancy.value;
 								if (
 									typeof established === "number" &&

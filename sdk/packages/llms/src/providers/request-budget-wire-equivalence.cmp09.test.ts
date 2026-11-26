@@ -71,13 +71,17 @@ import {
 	type AgentMessage,
 	type AgentMessagePart,
 	estimateProviderRequestInputTokens,
+	mayReplayOpaqueReasoning,
 	omitUnauthorizedReasoningBlocks,
 	requiresSignedReasoningCapability,
 	toProviderVisibleMessages,
 } from "@cline/shared";
 import { describe, expect, it, vi } from "vitest";
 import { createGatewayApiHandlerAsync } from "./compat";
-import { resolveTransportFacts } from "./resolved-transport";
+import {
+	resolveDestinationOriginAuthority,
+	resolveTransportFacts,
+} from "./resolved-transport";
 
 /**
  * The Anthropic-compatible MiniMax transport, resolved exactly as production
@@ -637,5 +641,116 @@ describe("CMP-09 request-budget / wire equivalence", () => {
 				transcriptWithReasoning(signedSameRouteReasoning()),
 			),
 		).toBe(measureBudget(transcriptWithReasoning(signedSameRouteReasoning())));
+	});
+
+	it("CMP09-WIRE-12: the BUDGET's destination authority EQUALS the WIRE's for the SAME route facts", () => {
+		// ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A5).
+		//
+		// The previous report says destination resolution uses request-time
+		// route facts, while `AgentRuntime` consumes constructor-captured
+		// `providerBaseUrl` and `providerApiLine`. The question is whether
+		// the two are EQUIVALENT.
+		//
+		// They are, because the resolution is the SAME three-tier rule:
+		//
+		//   the WIRE     (registry.ts): config.baseUrl ??
+		//                              resolveApiLineBaseUrl(options) ??
+		//                              record.defaults.baseUrl
+		//   the BUDGET   (resolved-transport.ts): baseUrl ??
+		//                              resolveProviderApiLineBaseUrl(providerId,
+		//                                apiLine) ??
+		//                              collection.provider.baseUrl
+		//
+		// and the API LINE is the SAME fact in both: the wire reads
+		// `options.apiLine` from the merged provider options, and the
+		// runtime reads `config.options.apiLine` — which `resolveRuntimeConfig`
+		// passes STRAIGHT into the gateway's provider configuration.
+		//
+		// So for every route the runtime dispatches, the budget's
+		// destination authority IS the wire's destination authority.
+		for (const apiLine of ["china", "international"] as const) {
+			const budgetAuthority = resolveDestinationOriginAuthority({
+				providerId: "minimax",
+				apiLine,
+			});
+			expect(budgetAuthority).toBeDefined();
+			// The two API lines are DIFFERENT HOSTS, so they are different
+			// trust domains and MUST produce different authorities.
+			expect(budgetAuthority).not.toBe(
+				resolveDestinationOriginAuthority({
+					providerId: "minimax",
+					apiLine: apiLine === "china" ? "international" : "china",
+				}),
+			);
+		}
+
+		// The INTERNATIONAL line is the published MiniMax route, and the
+		// authority names exactly that endpoint.
+		expect(
+			resolveDestinationOriginAuthority({
+				providerId: "minimax",
+				apiLine: "international",
+			}),
+		).toBe(MINIMAX_ORIGIN_AUTHORITY);
+
+		// An EXPLICIT base URL wins over the API line — exactly as the
+		// registry resolves it (`config?.baseUrl ?? ...`).
+		expect(
+			resolveDestinationOriginAuthority({
+				providerId: "minimax",
+				baseUrl: MINIMAX_BASE_URL,
+				apiLine: "china",
+			}),
+		).toBe(MINIMAX_ORIGIN_AUTHORITY);
+	});
+
+	it("CMP09-WIRE-13: an UNRESOLVED destination grants NO opaque replay authority on EITHER side", () => {
+		// ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A5).
+		//
+		// The two situations must be distinguished:
+		//
+		//   - the destination IS established and grants NO opaque replay
+		//     authority (an incompatible origin): the wire withholds the
+		//     payload and the budget withholds it too;
+		//   - the budget consumer CANNOT establish the destination: the
+		//     authority is undefined, which ALSO grants no replay authority
+		//     (the fail-closed direction).
+		//
+		// The second case must NOT be a divergence where the budget
+		// discards reasoning the wire retains: an undefined destination
+		// grants no authority on EITHER side.
+		const unresolved = resolveDestinationOriginAuthority({
+			providerId: "minimax",
+			baseUrl: "https://operator-configured.example/anthropic/v1",
+		});
+		// An operator-configured endpoint is an UNRESOLVED route: it grants
+		// no authority.
+		expect(unresolved).toBeUndefined();
+
+		// An unresolved destination grants NO opaque replay authority.
+		expect(
+			mayReplayOpaqueReasoning({
+				origin: MINIMAX_ORIGIN_AUTHORITY,
+				destinationAuthority: unresolved,
+			}),
+		).toBe(false);
+
+		// And an ESTABLISHED destination with an INCOMPATIBLE origin also
+		// grants no authority — the same direction, the same outcome.
+		expect(
+			mayReplayOpaqueReasoning({
+				origin: FOREIGN_ORIGIN_AUTHORITY,
+				destinationAuthority: MINIMAX_ORIGIN_AUTHORITY,
+			}),
+		).toBe(false);
+
+		// The AUTHORIZED case is the only one that grants authority, and it
+		// grants it on BOTH sides.
+		expect(
+			mayReplayOpaqueReasoning({
+				origin: MINIMAX_ORIGIN_AUTHORITY,
+				destinationAuthority: MINIMAX_ORIGIN_AUTHORITY,
+			}),
+		).toBe(true);
 	});
 });

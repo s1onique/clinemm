@@ -200,6 +200,80 @@ function addCounts(
 }
 
 /**
+ * ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A3).
+ *
+ * Whether a resolved output breakdown is a VALID PARTITION.
+ *
+ * ## THE DEFECT THIS REPAIRS
+ * --------------------------
+ * The predecessor's `isCompleteBreakdown()` asked only whether the reasoning
+ * and the visible output were PRESENT. It never asked whether they were
+ * CONSISTENT with the attempt's own output total, so an internally
+ * impossible partition was accepted as complete:
+ *
+ *   total 900, text 100, reasoning 700   100 + 700 = 800 != 900
+ *   total 900, reasoning 1000             1000 > 900 (reasoning exceeds it)
+ *   total 900, reasoning -1               negative
+ *
+ * Each of those then flowed into the AGGREGATE breakdown, so the aggregate
+ * published a partition that does not describe the aggregate.
+ *
+ * ## THE CONTRACT
+ * ---------------
+ * The AI SDK's `LanguageModelV4Usage` contract states that
+ * `outputTokens.total` is the total output and that `outputTokens.text` and
+ * `outputTokens.reasoning` are its PARTS, so:
+ *
+ *     total = text + reasoning
+ *
+ * A partition is VALID only when:
+ *
+ *     the total is finite and nonnegative;
+ *     the visible output is finite and nonnegative;
+ *     the reasoning is finite and nonnegative;
+ *     visible + reasoning == total.
+ *
+ * An invalid partition is NOT a partition: the breakdown is INCOMPLETE, the
+ * aggregate's breakdown is OMITTED, and the aggregate's TOTAL is conserved
+ * exactly. The authoritative total is never altered and no reasoning count is
+ * ever invented.
+ */
+function isValidOutputPartition(
+	usage: LanguageModelV4Usage,
+	scope: UsageBreakdownScope,
+): boolean {
+	const total = usage.outputTokens?.total;
+	if (typeof total !== "number" || !Number.isFinite(total) || total < 0) {
+		return false;
+	}
+	// ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A3.1).
+	//
+	// The partition is resolved from the record's OWN SCOPE. A single
+	// attempt's scope includes its own raw payload (the authority for an
+	// attempt whose adapter left the structured breakdown empty). An
+	// AGGREGATE's scope does NOT: the aggregate retains the last attempt's
+	// raw payload, which describes ONE attempt, so reading it as the
+	// aggregate's own breakdown re-establishes a partition that was never
+	// established.
+	const reasoning = readScopedReasoning(usage, scope);
+	if (reasoning === undefined) {
+		return false;
+	}
+	if (!Number.isFinite(reasoning) || reasoning < 0) {
+		return false;
+	}
+	const visible = readScopedVisibleOutput(usage, scope);
+	if (visible === undefined) {
+		return false;
+	}
+	if (!Number.isFinite(visible) || visible < 0) {
+		return false;
+	}
+	// THE PARTITION IDENTITY: the two parts must reconstruct the total.
+	return visible + reasoning === total;
+}
+
+/**
  * ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A4.2).
  *
  * Whether an aggregate's output breakdown is COMPLETE.
@@ -236,11 +310,67 @@ function addCounts(
  * breakdown is not established", which is the truth. It never reads a
  * fabricated partition.
  */
-function isCompleteBreakdown(usage: LanguageModelV4Usage): boolean {
-	return (
-		readAttemptReasoning(usage) !== undefined &&
-		readAttemptVisibleOutput(usage) !== undefined
-	);
+function isCompleteBreakdown(
+	usage: LanguageModelV4Usage,
+	scope: UsageBreakdownScope,
+): boolean {
+	return isValidOutputPartition(usage, scope);
+}
+
+/**
+ * ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A3.1).
+ *
+ * The SCOPE of a usage record's breakdown.
+ *
+ *   "attempt"   the record describes ONE physical attempt, so its `raw`
+ *               payload is the authority for its own breakdown;
+ *   "aggregate" the record describes the SUM over several attempts, so its
+ *               `raw` payload (the retained last attempt's) must NOT be
+ *               read as the aggregate's own breakdown.
+ *
+ * The scope is PASSED, never INFERRED from the record's shape: the AI SDK's
+ * own single-attempt usage carries the `text` and `reasoning` KEYS of its
+ * `outputTokens` (with `undefined` values), so the key presence does not
+ * distinguish an attempt from an aggregate.
+ */
+type UsageBreakdownScope = "attempt" | "aggregate";
+
+/**
+ * ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A3.1).
+ *
+ * The reasoning of a usage record, resolved within the record's OWN SCOPE.
+ *
+ * A SINGLE ATTEMPT's scope includes its own raw payload — the authority for
+ * an attempt whose adapter left the structured breakdown empty (the resolved
+ * `@ai-sdk/anthropic` adapter drops the OPENING frame's breakdown).
+ *
+ * An AGGREGATE's scope does NOT: the aggregate retains the last attempt's
+ * raw payload, which describes ONE attempt, so reading it as the aggregate's
+ * own breakdown re-establishes a partition whose reasoning was never
+ * established.
+ */
+function readScopedReasoning(
+	usage: LanguageModelV4Usage,
+	scope: UsageBreakdownScope,
+): number | undefined {
+	return scope === "aggregate"
+		? readStructuredReasoning(usage)
+		: readAttemptReasoning(usage);
+}
+
+/**
+ * ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A3.1).
+ *
+ * The visible output of a usage record, resolved within the record's OWN
+ * SCOPE. Mirrors `readScopedReasoning`.
+ */
+function readScopedVisibleOutput(
+	usage: LanguageModelV4Usage,
+	scope: UsageBreakdownScope,
+): number | undefined {
+	return scope === "aggregate"
+		? readStructuredVisibleOutput(usage)
+		: readAttemptVisibleOutput(usage);
 }
 
 /**
@@ -320,10 +450,109 @@ function readAttemptVisibleOutput(
 	return Math.max(0, total - reasoning);
 }
 
-/** Sum two standardized v4 usage records field by field. */
+/**
+ * ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A3.1).
+ *
+ * The STRUCTURED-ONLY reasoning of a usage record.
+ *
+ * The AI SDK's structured fields are scoped to EXACTLY the attempts the
+ * record's total covers: a single attempt's structured fields describe that
+ * attempt, and an aggregate's structured fields describe the aggregate. The
+ * `raw` payload does NOT have that property — an aggregate retains the last
+ * attempt's raw payload, which describes ONE attempt.
+ */
+function readStructuredReasoning(
+	usage: LanguageModelV4Usage,
+): number | undefined {
+	const structured = usage.outputTokens?.reasoning;
+	if (typeof structured === "number" && Number.isFinite(structured)) {
+		return structured;
+	}
+	// The structured VISIBLE output is present but the structured reasoning is
+	// not: the reasoning is the remainder of the total, and both parts come
+	// from the record's own structured scope.
+	const text = usage.outputTokens?.text;
+	const total = usage.outputTokens?.total;
+	if (
+		typeof text === "number" &&
+		Number.isFinite(text) &&
+		typeof total === "number" &&
+		Number.isFinite(total)
+	) {
+		return total - text;
+	}
+	return undefined;
+}
+
+/**
+ * ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A3.1).
+ *
+ * The STRUCTURED-ONLY visible output of a usage record.
+ *
+ * Mirrors `readStructuredReasoning`: the visible output is the record's own
+ * structured remainder, or the remainder of its own structured total.
+ */
+function readStructuredVisibleOutput(
+	usage: LanguageModelV4Usage,
+): number | undefined {
+	const structured = usage.outputTokens?.text;
+	if (typeof structured === "number" && Number.isFinite(structured)) {
+		return structured;
+	}
+	const total = usage.outputTokens?.total;
+	const reasoning = readStructuredReasoning(usage);
+	if (
+		typeof total !== "number" ||
+		!Number.isFinite(total) ||
+		reasoning === undefined
+	) {
+		return undefined;
+	}
+	return total - reasoning;
+}
+
+/**
+ * Sum two standardized v4 usage records field by field.
+ *
+ * ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A3.1): the SCOPE of
+ * each side is declared, never inferred from the record's shape. The AI
+ * SDK's own single-attempt usage carries the `text` and `reasoning` KEYS of
+ * its `outputTokens` (with `undefined` values), so the key presence cannot
+ * distinguish an attempt from an aggregate — only the CALLER knows, because
+ * the caller is the code that aggregated.
+ *
+ * The two-argument form treats BOTH sides as single attempts, which is the
+ * legacy shape: two attempts whose raw payloads each describe their own
+ * attempt.
+ */
 export function addUsage(
 	a: LanguageModelV4Usage,
 	b: LanguageModelV4Usage,
+	scopes?: { a?: UsageBreakdownScope; b?: UsageBreakdownScope },
+): LanguageModelV4Usage {
+	return addUsageWithScopes(
+		a,
+		b,
+		scopes?.a ?? "attempt",
+		scopes?.b ?? "attempt",
+	);
+}
+
+/**
+ * ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A3.1).
+ *
+ * Sum two usage records whose SCOPES are declared.
+ *
+ * The middleware's fold knows the scope of each side: the first fold's right
+ * side is the SERVED ATTEMPT, and every later fold's right side is the
+ * AGGREGATE built so far. Declaring the scope is what keeps the aggregate
+ * from re-acquiring a breakdown from the raw payload it retains.
+ */
+function addUsageWithScopes(
+	a: LanguageModelV4Usage,
+	b: LanguageModelV4Usage,
+	aScope: UsageBreakdownScope,
+	bScope: UsageBreakdownScope,
 ): LanguageModelV4Usage {
 	//
 	// ACT-CLINEMM-PROVIDER-USAGE-NORMALIZATION-AUTHORITY-01.
@@ -363,12 +592,16 @@ export function addUsage(
 	// aggregate reports a complete one. Otherwise it is OMITTED, and the
 	// TOTAL is conserved exactly. The aggregate then reads as "the
 	// expenditure is established; the breakdown is not", which is the truth.
-	const breakdownComplete = isCompleteBreakdown(a) && isCompleteBreakdown(b);
+	const breakdownComplete =
+		isCompleteBreakdown(a, aScope) && isCompleteBreakdown(b, bScope);
 	const reasoning = breakdownComplete
-		? addCounts(readAttemptReasoning(a), readAttemptReasoning(b))
+		? addCounts(readScopedReasoning(a, aScope), readScopedReasoning(b, bScope))
 		: undefined;
 	const text = breakdownComplete
-		? addCounts(readAttemptVisibleOutput(a), readAttemptVisibleOutput(b))
+		? addCounts(
+				readScopedVisibleOutput(a, aScope),
+				readScopedVisibleOutput(b, bScope),
+			)
 		: undefined;
 	const total = addCounts(a.outputTokens?.total, b.outputTokens?.total);
 	return {
@@ -463,7 +696,13 @@ export const PHYSICAL_REQUEST_OCCUPANCY_METADATA_KEY =
 export interface PhysicalRequestOccupancy {
 	readonly state: "single" | "known" | "unknown";
 	readonly value?: number;
-	readonly attemptCount: number;
+	/**
+	 * ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A1): OPTIONAL.
+	 * The cardinality is a fact INDEPENDENT of the occupancy, and an unknown
+	 * cardinality must remain UNKNOWN. It is never synthesized to satisfy
+	 * the type: a record that established no cardinality carries none.
+	 */
+	readonly attemptCount?: number;
 	/**
 	 * The authority travels inside the SDK's `providerMetadata`, whose value
 	 * type is `JSONObject` — a record whose index signature is
@@ -552,11 +791,39 @@ export function readPhysicalRequestOccupancy(
 	if (!namespace || typeof namespace !== "object") {
 		return undefined;
 	}
+	// ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A1).
+	//
+	// THE MARKER'S PRESENCE IS DISTINGUISHED FROM ITS VALIDITY.
+	//
+	// The predecessor's early return treated a PRESENT-but-INVALID marker
+	// (`null`, `false`, `42`, `"x"`, an array) as if the marker were ABSENT.
+	// An absence means the LEGACY single-request shape, whose input count IS
+	// that request's occupancy — and for a multi-attempt turn that count is
+	// the AGGREGATE EXPENDITURE. So a malformed marker silently re-enabled
+	// exactly the aggregate fallback the three-state architecture exists to
+	// forbid.
+	//
+	// The contract is now:
+	//
+	//   the `cline` namespace is ABSENT          -> undefined (LEGACY)
+	//   the key is ABSENT within the namespace   -> undefined (LEGACY)
+	//   the key is PRESENT                       -> an explicit denial when
+	//                                                the marker is not a
+	//                                                valid record
+	//
+	// A present marker is never erased into the legacy shape.
 	const raw = (namespace as Record<string, unknown>)[
 		PHYSICAL_REQUEST_OCCUPANCY_METADATA_KEY
 	];
-	if (!raw || typeof raw !== "object") {
+	if (raw === undefined) {
 		return undefined;
+	}
+	if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+		// PRESENT but not a record: an EXPLICIT denial, never an absence.
+		// No cardinality was established, so none is reported.
+		return {
+			state: "unknown",
+		};
 	}
 	const record = raw as Record<string, unknown>;
 	// ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A5.1).
@@ -566,9 +833,45 @@ export function readPhysicalRequestOccupancy(
 	// single-request shape, whose input count IS the occupancy — and for a
 	// multi-attempt turn that count is the AGGREGATE EXPENDITURE. An
 	// explicit denial forbids that fallback.
+	// ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A1).
+	//
+	// THE CARDINALITY IS INDEPENDENT OF THE OCCUPANCY.
+	//
+	// The attempt count and the occupancy measurement are TWO facts, and a
+	// denial of the occupancy does not retract the cardinality. The
+	// predecessor's denial path hardcoded `attemptCount: 1`, which
+	// FABRICATED a cardinality: a contradictory record that independently
+	// established THREE attempts was reported as ONE. A consumer that
+	// interprets the count as "the number of physical attempts observed"
+	// then reads one observed attempt where three were established — and a
+	// downstream producer counts that as an observed physical attempt.
+	//
+	// The contract is now:
+	//
+	//   the cardinality is VALID (a finite integer >= 1)  -> preserved, even
+	//                                                              when the
+	//                                                              occupancy
+	//                                                              is denied
+	//   the cardinality is absent or INVALID              -> UNKNOWN, never
+	//                                                              fabricated
+	//
+	// A cardinality is never synthesized to satisfy the type.
+	const rawAttemptCount = record.attemptCount;
+	const establishedAttemptCount: number | undefined =
+		typeof rawAttemptCount === "number" &&
+		Number.isFinite(rawAttemptCount) &&
+		Number.isInteger(rawAttemptCount) &&
+		rawAttemptCount >= 1
+			? rawAttemptCount
+			: undefined;
+	//
+	// The denial carries the INDEPENDENTLY ESTABLISHED cardinality when there
+	// is one, and NO cardinality when the record established none.
 	const denied: PhysicalRequestOccupancy = {
 		state: "unknown",
-		attemptCount: 1,
+		...(establishedAttemptCount !== undefined
+			? { attemptCount: establishedAttemptCount }
+			: {}),
 	};
 	const state = record.state;
 	if (state !== "single" && state !== "known" && state !== "unknown") {
@@ -599,16 +902,10 @@ export function readPhysicalRequestOccupancy(
 	// returns NO authority, so the consumer falls into its legacy
 	// single-request branch — which uses THAT request's own usage, never an
 	// aggregate — and clears any stale occupancy.
-	const rawAttemptCount = record.attemptCount;
-	const attemptCountIsValid =
-		typeof rawAttemptCount === "number" &&
-		Number.isFinite(rawAttemptCount) &&
-		Number.isInteger(rawAttemptCount) &&
-		rawAttemptCount >= 1;
-	if (!attemptCountIsValid) {
+	if (establishedAttemptCount === undefined) {
 		return denied;
 	}
-	const attemptCount: number = rawAttemptCount;
+	const attemptCount: number = establishedAttemptCount;
 	if (state === "single" && attemptCount !== 1) {
 		// A "single" request cannot have made three attempts.
 		return denied;
@@ -674,30 +971,62 @@ function withOccupancyAuthority(
  * the CONTEXT-OCCUPANCY authority is stamped alongside the aggregate, so
  * the compaction budget's calibration is bound to the INDIVIDUAL request
  * while the BILLING authority keeps the aggregate.
+ *
+ * ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A2).
+ *
+ * THE CARDINALITY IS THE PHYSICAL ATTEMPT COUNT, NOT THE USAGE-BEARING
+ * ATTEMPT COUNT.
+ *
+ * The predecessor computed the cardinality as `discardedUsage.length + 1`.
+ * `discardedUsage` accumulates the usage of the DISCARDED attempts that
+ * produced a FINISH PART, so it counts the USAGE-BEARING attempts — not
+ * the physical attempts. A transient network interruption that kills the
+ * stream before the model produced anything is a physical attempt that
+ * carries no finish part, so it is not represented in `discardedUsage` and
+ * the cardinality UNDERCOUNTED the physical attempts.
+ *
+ * The middleware KNOWS the physical attempt count: its own attempt counter
+ * is the number of `doStream()` calls it made. That is the count the
+ * authority reports, so the cardinality is the OBSERVED physical attempt
+ * count and never a derived proxy.
+ *
+ * The AGGREGATE EXPENDITURE is unchanged: it is the sum over the
+ * usage-bearing attempts, which is exactly what the provider billed.
  */
 function withAggregatedUsage(
 	finish: FinishPart,
 	discardedUsage: readonly LanguageModelV4Usage[],
+	physicalAttemptCount: number,
 ): FinishPart {
 	if (discardedUsage.length === 0) {
 		// ONE physical attempt: the aggregate IS the request's occupancy.
 		return withOccupancyAuthority(
 			finish,
 			buildPhysicalRequestOccupancy({
-				attemptCount: 1,
+				attemptCount: physicalAttemptCount,
 				servedInputTokens: finish.usage.inputTokens?.total,
 			}),
 		);
 	}
 	let usage = finish.usage;
+	// ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A3.1).
+	//
+	// The fold's SCOPES are declared. The discarded attempt's usage
+	// describes THAT attempt (its raw payload is its own authority). The
+	// right-hand side is the SERVED ATTEMPT on the first fold and the
+	// AGGREGATE built so far on every later fold — and an aggregate's raw
+	// payload is the retained last attempt's, which must never be read as
+	// the aggregate's own breakdown.
+	let rightScope: UsageBreakdownScope = "attempt";
 	for (const discarded of discardedUsage) {
-		usage = addUsage(discarded, usage);
+		usage = addUsageWithScopes(discarded, usage, "attempt", rightScope);
+		rightScope = "aggregate";
 	}
 	const aggregated: FinishPart = { ...finish, usage };
 	return withOccupancyAuthority(
 		aggregated,
 		buildPhysicalRequestOccupancy({
-			attemptCount: discardedUsage.length + 1,
+			attemptCount: physicalAttemptCount,
 			servedInputTokens: finish.usage.inputTokens?.total,
 		}),
 	);
@@ -868,7 +1197,7 @@ export function createRetryEmptyResponseMiddleware(
 						if (accepted) {
 							if (pendingFinish) {
 								controller.enqueue(
-									withAggregatedUsage(pendingFinish, discardedUsage),
+									withAggregatedUsage(pendingFinish, discardedUsage, attempt),
 								);
 							}
 							controller.close();
@@ -891,7 +1220,7 @@ export function createRetryEmptyResponseMiddleware(
 							}
 							if (pendingFinish) {
 								controller.enqueue(
-									withAggregatedUsage(pendingFinish, discardedUsage),
+									withAggregatedUsage(pendingFinish, discardedUsage, attempt),
 								);
 							}
 							controller.close();

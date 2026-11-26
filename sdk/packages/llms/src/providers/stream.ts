@@ -91,7 +91,12 @@ export interface ApiStreamUsageChunk {
 	requestOccupancy?: {
 		readonly state: "single" | "known" | "unknown";
 		readonly value?: number;
-		readonly attemptCount: number;
+		/**
+		 * ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A1): OPTIONAL.
+		 * The cardinality is independent of the occupancy, and an unknown
+		 * cardinality stays unknown — it is never synthesized.
+		 */
+		readonly attemptCount?: number;
 	};
 	/** Number of output tokens */
 	outputTokens: number;

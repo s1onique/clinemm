@@ -180,12 +180,54 @@ export interface UsageObservabilityRecord {
 	readonly modelId?: string;
 	/** The session id. */
 	readonly sessionId?: string;
-	/** The physical request identity. */
-	readonly providerAttemptId?: string;
+	/**
+	 * The LOGICAL MODEL REQUEST identity.
+	 *
+	 * ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A4).
+	 *
+	 * The predecessor called this `providerAttemptId`, which asserted a
+	 * PHYSICAL ATTEMPT identity the value does not carry. The value is the
+	 * runtime's `modelRequestId` — the identity of the LOGICAL model
+	 * request. The production retry middleware re-dials that SAME request
+	 * internally, so all of a turn's physical attempts share ONE
+	 * `modelRequestId`.
+	 *
+	 * The record therefore states the identity it actually has, and the
+	 * PHYSICAL correlation is reported separately (and only when it is
+	 * established).
+	 */
+	readonly modelRequestId?: string;
+	/**
+	 * The PHYSICAL ATTEMPT identity, when one is ESTABLISHED.
+	 *
+	 * ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A4): the physical
+	 * attempt count is an OBSERVED fact (the middleware-owned occupancy
+	 * authority), but the per-attempt IDENTITIES are not observable at this
+	 * boundary — the middleware aggregates the attempts and does not mint
+	 * per-attempt ids. So this is ABSENT unless a real per-attempt identity
+	 * is available, and never the logical request id.
+	 */
+	readonly physicalAttemptId?: string;
 	/** The iteration. */
 	readonly iteration?: number;
-	/** The provider's own numeric usage fields. */
+	/**
+	 * The provider's own numeric usage fields.
+	 *
+	 * ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A4): the SCOPE of
+	 * these fields is the SERVED ATTEMPT, always. The production retry
+	 * middleware keeps the served attempt's raw payload on the aggregate, so
+	 * the raw numbers describe ONE attempt even when the recorded usage is
+	 * the turn's aggregate. `rawUsageScope` states that explicitly.
+	 */
 	readonly rawProviderUsage: readonly RawNumericUsage[];
+	/**
+	 * The SCOPE of `rawProviderUsage`.
+	 *
+	 * ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A4): the raw
+	 * payload is ALWAYS the served attempt's, so this is
+	 * "served-attempt" — never the aggregate's.
+	 */
+	readonly rawUsageScope?: "served-attempt";
 	/** The AI SDK's normalized numeric usage. */
 	readonly sdkUsage?: Record<string, number | undefined>;
 	/** ClineMM's final normalized numeric usage. */
@@ -211,6 +253,25 @@ export interface UsageObservabilityRecord {
 	 * count), never invented.
 	 */
 	readonly usageScope?: UsageObservabilityScope;
+	/**
+	 * The OBSERVED number of physical attempts the recorded usage covers.
+	 *
+	 * ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A4): this is an
+	 * OBSERVED fact (the middleware-owned occupancy authority). It is
+	 * ABSENT when the authority established no cardinality — an unknown
+	 * cardinality stays unknown and is never synthesized.
+	 */
+	readonly observedAttemptCount?: number;
+	/**
+	 * The CONTEXT OCCUPANCY of the served physical request, when it is
+	 * ESTABLISHED.
+	 *
+	 * ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A4): it is
+	 * distinguishable from both the aggregate expenditure and the
+	 * individual attempt's usage, because it is a DIFFERENT quantity — the
+	 * window the served request occupied.
+	 */
+	readonly servedOccupancy?: number;
 }
 
 /**
@@ -272,7 +333,7 @@ function writeObservabilityRecord(record: UsageObservabilityRecord): void {
 			safeFilePart(record.providerId ?? "noprovider"),
 			safeFilePart(record.modelId ?? "nomodel"),
 			safeFilePart(record.sessionId ?? "nosession"),
-			safeFilePart(record.providerAttemptId ?? "noreq"),
+			safeFilePart(record.modelRequestId ?? "noreq"),
 			String(record.iteration ?? 0),
 			String(record.observedAt.replace(/[^0-9]/g, "")),
 		].join("_");
@@ -339,7 +400,19 @@ export function recordUsageObservability(input: {
 	providerId?: string;
 	modelId?: string;
 	sessionId?: string;
-	providerAttemptId?: string;
+	/**
+	 * ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A4): the LOGICAL
+	 * MODEL REQUEST identity. It is NOT a physical attempt identity: the
+	 * production retry middleware re-dials the same logical request, so all
+	 * of a turn's physical attempts share it.
+	 */
+	modelRequestId?: string;
+	/**
+	 * ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A4): a PHYSICAL
+	 * ATTEMPT identity, when one is ESTABLISHED. Absent otherwise — the
+	 * logical request id is never passed here.
+	 */
+	physicalAttemptId?: string;
 	iteration?: number;
 	/** The provider's raw usage payload. */
 	raw?: unknown;
@@ -355,6 +428,17 @@ export function recordUsageObservability(input: {
 	 * infers one.
 	 */
 	usageScope?: UsageObservabilityScope;
+	/**
+	 * ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A4): the OBSERVED
+	 * physical attempt count. ABSENT when it is unknown — an unknown
+	 * cardinality is never synthesized.
+	 */
+	observedAttemptCount?: number;
+	/**
+	 * ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A4): the ESTABLISHED
+	 * context occupancy of the served physical request.
+	 */
+	servedOccupancy?: number;
 }): void {
 	if (!isUsageObservabilityEnabled()) {
 		return;
@@ -368,16 +452,27 @@ export function recordUsageObservability(input: {
 			...(input.providerId ? { providerId: input.providerId } : {}),
 			...(input.modelId ? { modelId: input.modelId } : {}),
 			...(input.sessionId ? { sessionId: input.sessionId } : {}),
-			...(input.providerAttemptId
-				? { providerAttemptId: input.providerAttemptId }
+			...(input.modelRequestId ? { modelRequestId: input.modelRequestId } : {}),
+			...(input.physicalAttemptId
+				? { physicalAttemptId: input.physicalAttemptId }
 				: {}),
 			...(typeof input.iteration === "number"
 				? { iteration: input.iteration }
 				: {}),
 			rawProviderUsage: readRawNumericUsage(input.raw),
+			// ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A4): the raw
+			// payload is ALWAYS the served attempt's, whatever the scope of
+			// the recorded usage is.
+			rawUsageScope: "served-attempt",
 			...(sdkUsage ? { sdkUsage } : {}),
 			...(clineUsage ? { clineUsage } : {}),
 			...(input.usageScope ? { usageScope: input.usageScope } : {}),
+			...(input.observedAttemptCount !== undefined
+				? { observedAttemptCount: input.observedAttemptCount }
+				: {}),
+			...(input.servedOccupancy !== undefined
+				? { servedOccupancy: input.servedOccupancy }
+				: {}),
 		};
 		writeObservabilityRecord(record);
 	} catch {

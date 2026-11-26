@@ -1,3 +1,111 @@
+# ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (AMENDMENT-01) — GO_CMP09_INTEGRATED_AUTHORITY_CLOSURE — 2026-11-26
+
+```text
+ACT_ID:       ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (AMENDMENT-01)
+TYPE:         bounded correction cycle (one bounded amendment)
+VERDICT:      GO_CMP09_INTEGRATED_AUTHORITY_CLOSURE
+EPIC:         CMP-09
+ENTRY_HEAD:   5953e38b356c61ec4d231d96b5e9ec7d0b977f72
+BRANCH:       main
+```
+
+**A1 — PHYSICAL-REQUEST OCCUPANCY (REPRODUCED, REPAIRED).** The
+reviewer's observation was exact: a PRESENT-but-INVALID marker (`null`,
+`false`, `42`, `"x"`) was erased into the ABSENT legacy shape, whose input
+count IS the occupancy — re-enabling the AGGREGATE EXPENDITURE as the
+CONTEXT OCCUPANCY. The reader now distinguishes PRESENCE from VALIDITY: a
+present marker is never erased into the legacy shape. Separately, the denial
+path FABRICATED a cardinality (`attemptCount: 1`), erasing an independently
+established three-attempt count; the cardinality is now OPTIONAL and is
+preserved across a denial, while an invalid cardinality stays UNKNOWN and is
+never synthesized. The runtime's defensive validation matches: a `single`
+state with no established cardinality grants no occupancy authority.
+
+**THE MALFORMED MARKER IS NOT REACHABLE THROUGH THE ORDINARY PRODUCER.**
+The production middleware always emits a valid record (verified through the
+REAL gateway: one attempt -> `{single, 1, value}`; three attempts ->
+`{known, 3, value}`). The malformed-marker path is therefore a DEFENSIVE
+CONTRACT defect, not an observed production defect.
+
+**A2 — HETEROGENEOUS PHYSICAL-REQUEST PRODUCER (REPRODUCED, REPAIRED).**
+`discardedUsage.length + 1` counted the USAGE-BEARING attempts, not the
+PHYSICAL attempts: a transient network interruption that kills the stream
+before any output carries no finish part and was therefore uncounted. The
+producer now reports the middleware's own OBSERVED physical attempt count.
+The heterogeneous fixture (2000 / 3000 discarded, 1500 served) is qualified
+through the REAL gateway and the REAL runtime: expenditure 6500, occupancy
+1500 — at their actual downstream boundaries.
+
+**A3 — OUTPUT PARTITION VALIDITY (REPRODUCED, REPAIRED).** The predecessor
+asked only whether the parts were PRESENT, so an internally impossible
+partition was accepted as complete (`100 + 700 != 900`; reasoning 1000 over a
+total of 900; reasoning -1). A partition is now VALID only when the total,
+the visible output and the reasoning are finite, nonnegative, and the two
+parts RECONSTRUCT the total. An invalid partition is denied, the breakdown is
+omitted, and the authoritative total is conserved exactly.
+
+**A3.1 — INCOMPLETE AGGREGATE (REPRODUCED, REPAIRED).** An incomplete
+aggregate REGAINED a complete breakdown: the fold retained the served
+attempt's raw payload, and the next fold's completeness test read that
+ONE-attempt payload as the AGGREGATE's own breakdown (reasoning 1500, text
+1200 for an aggregate whose reasoning was never established). The provenance
+is repaired at the FIRST boundary where it is lost — the fold's SCOPE is
+declared, so an aggregate never reads its retained raw payload. The
+downstream normalizer applies the same scope: the raw payload and the
+provider's nested usage metadata are excluded from a MULTI-attempt
+aggregate's breakdown resolution, so the aggregate no longer claims the
+served attempt's reasoning, and it no longer claims that all of its output
+was visible.
+
+**A3.2 — EXPLICIT ZERO (REPAIRED).** The normalizer published the reasoning
+count only when it was POSITIVE, so an explicitly reported ZERO was
+indistinguishable from an absent metric. The publication now uses the
+validated PRESENCE the resolver already computes.
+
+**A4 — USAGE OBSERVABILITY (REPAIRED).** The record used the LOGICAL model
+request id (`modelRequestId`) as a PHYSICAL attempt id; the production retry
+middleware re-dials the same logical request, so every physical attempt of a
+turn shares ONE id. The record now states the identity it has, and the
+PHYSICAL correlation is reported separately and only when established. The
+raw payload's scope is stated explicitly (`served-attempt`), the observed
+attempt count is recorded, and the served occupancy is independently
+distinguishable. DEFAULT-OFF, exact opt-in, numeric allowlist and failure
+isolation are conserved; no additional capture framework was introduced.
+
+**A5 — DESTINATION AUTHORITY EQUIVALENCE (DISCRIMINATOR PASSES; NO
+PRODUCTION CHANGE).** The route facts are IMMUTABLE for the runtime's
+lifetime and EQUIVALENT to the dispatched route: the wire resolves
+`config.baseUrl ?? resolveApiLineBaseUrl(options) ?? defaults.baseUrl` and
+the budget resolves `baseUrl ?? resolveProviderApiLineBaseUrl(providerId,
+apiLine) ?? collection.provider.baseUrl`, and the API LINE is the SAME fact
+in both (`config.options.apiLine`, passed straight into the gateway's
+provider configuration). No route switching is invented. The two situations
+the report conflated are DISTINGUISHED: an established destination that
+grants no opaque replay authority (incompatible origin) and a destination
+the budget consumer cannot establish (unresolved route) BOTH grant no
+authority, so the budget never discards reasoning the wire retains.
+
+**A6 — WIRE GATE NECESSITY (ABLATION EXECUTED).** The shared replay gate
+was neutralized in isolation: the incompatible-origin negative witness
+(CMP09-WIRE-04) FAILED, together with WIRE-03, 05, 09 and 10. The gate was
+RESTORED immediately and every wire test passes again. The wire's fail-closed
+replay policy is UNCHANGED.
+
+```text
+ACT-OWNED CORRECTIONS:   1 commit, 9 files changed + 1 new test file
+FOCUSED TESTS:           llms 1300 passed | shared 717 passed
+                           CMP-09 occupancy+retry 15 | CMP-09 wire 13
+                           usage observability 8 | output-exhaustion 11
+                           CMP-07/CMP-08 32
+BASELINE FAILURES:       agents 43 (identical identities, NOT owned)
+                           core context-budget 3 (identical identities, NOT owned)
+TYPECHECK:               shared/llms/agents CLEAN; core 45 -> 45, ZERO DELTA
+SDK BUILD:               PASS
+BIOME:                   clean on every changed file
+INFERENCE REQUESTS:      0
+VSIX PACKAGED:           no
+```
+
 # ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 — GO_CMP09_INTEGRATED_AUTHORITY_CLOSURE — 2026-11-26
 
 ```text
