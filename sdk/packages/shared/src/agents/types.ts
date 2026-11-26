@@ -16,8 +16,6 @@ import type {
 	AgentTool,
 	ProviderErrorClass,
 } from "../agent";
-import type { BoundedObjectivePolicy } from "./bounded-objective";
-import type { ExecutionStagnationPolicy } from "./execution-stagnation";
 import type { ExtensionContext } from "../extensions/context";
 import type {
 	AgentExtensionApi,
@@ -37,6 +35,11 @@ import {
 	type ReasoningEffort,
 	ReasoningEffortSchema,
 } from "../llms/reasoning-options";
+import type { BoundedObjectivePolicy } from "./bounded-objective";
+import type {
+	ExecutionStagnationPolicy,
+	RecoveryOutputOverridePolicy,
+} from "./execution-stagnation";
 
 export {
 	REASONING_LEVELS,
@@ -1057,6 +1060,42 @@ export interface AgentConfig {
 	 */
 	boundedObjectivePolicy?: BoundedObjectivePolicy;
 
+	/**
+	 * ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01.
+	 *
+	 * The RECOVERY-ONLY GENERATION OVERRIDE policy.
+	 *
+	 * WHAT IT IS
+	 * -----------
+	 * A BOUNDED BEHAVIORAL EXPERIMENT, not an established remedy. It
+	 * attaches ONE request-local output-budget increase to the next
+	 * authorized recovery request, so that a model which repeatedly
+	 * exhausts its output allowance gets exactly one attempt with a larger
+	 * allowance.
+	 *
+	 * WHAT IT IS NOT
+	 * ---------------
+	 * It is NOT a global generation-limit increase, NOT a compaction
+	 * threshold change, NOT a provider or model switch, and NOT a new
+	 * generation-control architecture. The global default (8192 for
+	 * MiniMax-M3.1-Flash at LOW reasoning effort) is untouched.
+	 *
+	 * SCOPE
+	 * -----
+	 * The override applies to the ONE logical agent request the runtime
+	 * dispatches next. It never leaks into a subsequent normal parent
+	 * request, summary generation, PCK inference, R2 objective selection,
+	 * another agent, another task, another provider, or persisted model
+	 * settings.
+	 *
+	 * DEFAULT
+	 * -------
+	 * ABSENT or `enabled: false` means the runtime behaves exactly as
+	 * before. This is the DEFAULT_OFF posture: the experiment must be
+	 * deliberately enabled for dogfood.
+	 */
+	recoveryOutputOverridePolicy?: RecoveryOutputOverridePolicy;
+
 	// -------------------------------------------------------------------------
 	// Pending User Messages
 	// -------------------------------------------------------------------------
@@ -1084,26 +1123,24 @@ export interface AgentConfig {
 	 */
 	adjudication?: {
 		readonly revisionResolver?: {
-			resolve(input: {
-				sourcePath: string;
-				toolName: string;
-			}): Promise<
+			resolve(input: { sourcePath: string; toolName: string }):
+				| Promise<
+						| {
+								repositoryIdentity: string;
+								workspaceRootIdentity: string;
+								revision: string;
+								contentIdentity: string;
+								clean: boolean;
+						  }
+						| undefined
+				  >
 				| {
 						repositoryIdentity: string;
 						workspaceRootIdentity: string;
 						revision: string;
 						contentIdentity: string;
 						clean: boolean;
-					}
-				| undefined
-			>
-			| {
-					repositoryIdentity: string;
-					workspaceRootIdentity: string;
-					revision: string;
-					contentIdentity: string;
-					clean: boolean;
-				}
+				  }
 				| undefined;
 		};
 	};

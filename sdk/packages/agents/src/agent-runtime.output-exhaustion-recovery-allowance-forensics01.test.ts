@@ -3,7 +3,30 @@
  *
  * PRIORITY 3 — RECOVERY ALLOWANCE AND LIFECYCLE discriminator.
  *
- * Questions:
+ * ===================================================================
+ * HISTORICAL WITNESS — SUPERSEDED BY THE SUCCESSOR CONTRACT.
+ * ===================================================================
+ *
+ * This suite is the ORIGINAL forensic receipt for the output-exhaustion
+ * recovery defects. Its assertions described the DEFECTIVE behaviour of the
+ * predecessor at commit `a47349f816317a6b47c65ae92e79c64f85518fe8`:
+ *
+ *   - the ordinary recovery allowance was REPLENISHED by a read-only
+ *     inspection (11 reminders injected into ONE run against a nominal
+ *     allowance of 3), and
+ *   - a tool-less output-exhausted response contributed NOTHING to the R1
+ *     execution-stagnation accounting.
+ *
+ * ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01 CORRECTION-01 closed
+ * both defects. The defect-asserting arms below were therefore INVERTED to
+ * the successor contract, with the historical expectation quoted verbatim in
+ * each comment so the receipt stays auditable.
+ *
+ * The RED receipt for the successor contract lives in
+ * `agent-runtime.output-exhaustion-recovery-lifecycle01.test.ts`, and the
+ * comprehensive qualification lives there too.
+ *
+ * Questions (historical):
  *
  *   1. Does a successful INSPECTION replenish the output-limit recovery
  *      allowance?
@@ -134,10 +157,20 @@ describe("ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-FORENSICS-01 — recovery allow
 		expect(model.requests).toHaveLength(4);
 	});
 
-	it("REPLENISHES the allowance on a successful inspection between exhaustions", async () => {
-		// The trajectory: exhaust -> inspect -> exhaust -> inspect -> ...
-		// A tool-calling turn resets the consecutive cut-off streak, so the
-		// allowance is replenished and the run continues indefinitely.
+	it("does NOT replenish the allowance on a successful inspection between exhaustions", async () => {
+		// ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01 CORRECTION-01.
+		//
+		// HISTORICAL WITNESS, INVERTED.
+		//
+		// The predecessor asserted the DEFECT: "REPLENISHES the allowance on
+		// a successful inspection between exhaustions", with
+		// `expect(countConcisenessReminders(...)).toBeGreaterThan(3)` and
+		// `expect(model.requests.length).toBeGreaterThan(4)`.
+		//
+		// The successor contract is the OPPOSITE: the ordinary recovery
+		// allowance is a CONSUMABLE RUN-SCOPED resource. A read-only
+		// inspection does not re-arm it, so the run injects AT MOST the
+		// advertised three reminders however many inspections occur.
 		const steps: Array<
 			(request: AgentModelRequest) => Iterable<AgentModelEvent>
 		> = [];
@@ -152,23 +185,21 @@ describe("ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-FORENSICS-01 — recovery allow
 		const model = new ScriptedModel(steps);
 		const runtime = new AgentRuntime({ model, tools: [createInspectTool()] });
 
-		const result = await runtime.run("Hi");
+		await runtime.run("Hi");
 
-		// The run reached the END of the scripted trajectory, so the script
-		// ran out of steps — but only AFTER the allowance had been
-		// replenished by each inspection. Without the replenishment the run
-		// would have failed at the FOURTH consecutive exhaustion.
-		expect(model.requests.length).toBeGreaterThan(4);
-		// MORE than the advertised three reminders were injected: the
-		// allowance was replenished by each inspection.
-		expect(countConcisenessReminders(model.requests)).toBeGreaterThan(3);
+		// AT MOST the advertised three reminders were injected.
+		expect(countConcisenessReminders(model.requests)).toBeLessThanOrEqual(3);
 	});
 
-	it("counts a successful inspection as a replenishment, not as progress", async () => {
-		// The decisive distinction: the inspection produced NO engineering
-		// progress (no edit, no executed command), yet it replenished the
-		// output-limit recovery allowance. The reset is keyed on the
-		// PRESENCE of a tool call, not on its productivity.
+	it("counts a successful inspection as NOT a replenishment, not as progress", async () => {
+		// ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01 CORRECTION-01.
+		//
+		// HISTORICAL WITNESS, INVERTED.
+		//
+		// The predecessor's decisive observation was that EIGHT inspections
+		// produced EIGHT replenishments. The successor contract: the
+		// allowance is run-scoped, so the inspections do not re-arm it and
+		// the reminder count stays within the advertised bound.
 		const steps: Array<
 			(request: AgentModelRequest) => Iterable<AgentModelEvent>
 		> = [];
@@ -185,26 +216,24 @@ describe("ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-FORENSICS-01 — recovery allow
 
 		await runtime.run("Hi");
 
-		// The decisive observation: EIGHT inspections produced EIGHT
-		// replenishments, so the allowance was re-armed far beyond its
-		// advertised bound of three.
-		expect(countConcisenessReminders(model.requests)).toBeGreaterThan(3);
-		// And the run consumed MORE requests than the advertised allowance
-		// would ever permit.
-		expect(model.requests.length).toBeGreaterThan(4);
+		// The allowance was NOT re-armed by the inspections.
+		expect(countConcisenessReminders(model.requests)).toBeLessThanOrEqual(3);
 	});
 });
 
 describe("ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-FORENSICS-01 — tool-less exhaustion accounting", () => {
-	it("does NOT fold a tool-less output-exhausted turn into the R1 stagnation accounting", async () => {
-		// The R1 execution-stagnation accounting is folded at the ITERATION
-		// BOUNDARY, after the round's tool calls have executed. A turn that
-		// is cut off at the output limit WITHOUT a tool call never reaches
-		// that boundary: the runtime injects the conciseness reminder and
-		// continues.
+	it("folds a tool-less output-exhausted turn into the R1 stagnation accounting", async () => {
+		// ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01 CORRECTION-01.
 		//
-		// So a trajectory of tool-less exhaustions produces R1 stagnation
-		// notices for a PRODUCTIVE round, not for the exhaustions.
+		// HISTORICAL WITNESS, INVERTED.
+		//
+		// The predecessor asserted the DEFECT: "does NOT fold a tool-less
+		// output-exhausted turn into the R1 stagnation accounting", with
+		// `expect(notices).toHaveLength(0)`.
+		//
+		// The successor contract: the tool-less exhausted round reaches the
+		// EXISTING execution-stagnation authority, so the stall the R1
+		// mechanism exists to detect is no longer INVISIBLE to it.
 		const notices: string[] = [];
 		const model = new ScriptedModel([
 			exhaustedTurn,
@@ -231,11 +260,9 @@ describe("ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-FORENSICS-01 — tool-less exha
 
 		await runtime.run("Hi");
 
-		// The R1 stagnation recovery NEVER fired: a tool-less exhausted
-		// response contributes NOTHING to the stagnation accounting, so the
-		// stall is INVISIBLE to the recovery mechanism that exists to
-		// detect it.
-		expect(notices).toHaveLength(0);
+		// The R1 stagnation recovery FIRED: the tool-less exhausted response
+		// is now accounted by the existing stagnation authority.
+		expect(notices.length).toBeGreaterThan(0);
 	});
 
 	it("folds a TOOL-CALLING round into the R1 stagnation accounting", async () => {

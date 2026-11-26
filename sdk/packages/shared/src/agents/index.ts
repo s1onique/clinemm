@@ -77,10 +77,14 @@ export {
 	buildExecutionStagnationNoticeMessage,
 	createExecutionStagnationAccounting,
 	DEFAULT_EXECUTION_STAGNATION_POLICY,
+	// ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01: the
+	// recovery-only generation override policy. DEFAULT_OFF.
+	DEFAULT_RECOVERY_OUTPUT_OVERRIDE_POLICY,
 	decideExecutionStagnation,
 	foldExecutionRound,
 	isExecutionStagnationNoticeMessage,
 	parseExecutionStagnationNoticeMessage,
+	type RecoveryOutputOverridePolicy,
 } from "./execution-stagnation";
 // ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01: the FROZEN FAILURE
 // WITNESS for the stall session. It records only aggregate, non-content

@@ -187,6 +187,123 @@ export interface ExecutionStagnationPolicy {
 }
 
 /**
+ * ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01.
+ *
+ * The RECOVERY-ONLY GENERATION OVERRIDE policy.
+ *
+ * WHAT IT IS
+ * -----------
+ * A BOUNDED BEHAVIORAL EXPERIMENT. It attaches ONE request-local
+ * output-budget increase to the next authorized recovery request, so that a
+ * model which repeatedly exhausts its output allowance gets exactly ONE
+ * attempt with a larger allowance.
+ *
+ * WHAT IT IS NOT
+ * ---------------
+ * It is NOT a global generation-limit increase, NOT a compaction-threshold
+ * change, NOT a provider or model switch, and NOT a new generation-control
+ * architecture. The global default (8192 for MiniMax-M3.1-Flash at LOW
+ * reasoning effort) is untouched, and every other model, provider and
+ * reasoning effort retains its existing configuration.
+ *
+ * ELIGIBILITY
+ * -----------
+ * The override may be consumed only when ALL of the following hold:
+ *
+ *   - the policy is explicitly ENABLED (the DEFAULT is off),
+ *   - the exact authorized model and effective reasoning effort are
+ *     ESTABLISHED by the host,
+ *   - repeated output exhaustion is ESTABLISHED,
+ *   - the current recovery decision AUTHORIZES the intervention,
+ *   - the run still has recovery resources, and
+ *   - no explicit user/request output cap would be exceeded, and the
+ *     context reservation and model output constraints permit it.
+ *
+ * AUTHORITY
+ * ---------
+ * The override passes through the EXISTING per-request generation override
+ * seam and the ACTUAL gateway max-output resolution. An explicit
+ * user/request cap, the model capability maximum and the remaining-context
+ * clamp all REMAIN AUTHORITATIVE: an infeasible override is never a reason
+ * to weaken them, and it is never a reason to block ordinary R1/R2 recovery.
+ *
+ * LIFETIME
+ * --------
+ * AT MOST ONE override-bearing logical agent request per run. The allowance
+ * is consumed when the intervention is dispatched or committed to dispatch at
+ * the existing runtime boundary, and it is NOT replenished if the request
+ * fails, is cancelled, exhausts again, is followed by a compaction, or is
+ * followed by a productive round.
+ */
+export interface RecoveryOutputOverridePolicy {
+	/**
+	 * Whether the recovery-only generation override may be consumed at all.
+	 *
+	 * The DEFAULT is OFF: absent the policy, or with `enabled: false`, the
+	 * runtime behaves exactly as before and no override is ever attached.
+	 */
+	readonly enabled?: boolean;
+	/**
+	 * The request-local output allowance the authorized recovery request
+	 * receives, in tokens.
+	 *
+	 * This is a REQUEST-LOCAL value, not a global default. It is subject to
+	 * the existing gateway clamps (model capability maximum, remaining
+	 * context, explicit user/request cap), all of which remain authoritative.
+	 */
+	readonly recoveryMaxOutputTokens?: number;
+	/**
+	 * The EXACT authorized model id the override may be applied to.
+	 *
+	 * When absent, the host's own model identity applies and the override is
+	 * not applied to any model other than the one the run is already using.
+	 */
+	readonly modelId?: string;
+	/**
+	 * The EFFECTIVE reasoning effort the override may be applied at.
+	 *
+	 * When absent, the host's own effective effort applies.
+	 */
+	readonly reasoningEffort?: string;
+	/**
+	 * The host-supplied predicate that ESTABLISHES whether the current
+	 * request's model and effective reasoning effort are the authorized
+	 * ones.
+	 *
+	 * The runtime never infers model identity from a provider-specific
+	 * string comparison of its own: the host owns that judgement, exactly as
+	 * it owns the tool-call classification.
+	 */
+	readonly isAuthorizedTarget?: (context: {
+		readonly modelId: string | undefined;
+		readonly reasoningEffort: string | undefined;
+	}) => boolean;
+	/**
+	 * The host-supplied predicate that ESTABLISHES whether repeated output
+	 * exhaustion has been observed.
+	 *
+	 * The runtime owns the exhaustion accounting; the host may additionally
+	 * narrow the eligibility with its own authority.
+	 */
+	readonly isExhaustionEstablished?: (context: {
+		readonly exhaustionStreak: number;
+	}) => boolean;
+}
+
+/**
+ * ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01.
+ *
+ * The DEFAULT recovery-only generation override policy: DISABLED.
+ *
+ * The experiment must be deliberately enabled for dogfood. There is no
+ * persisted setting and no installed models.json modification.
+ */
+export const DEFAULT_RECOVERY_OUTPUT_OVERRIDE_POLICY: RecoveryOutputOverridePolicy =
+	{
+		enabled: false,
+	};
+
+/**
  * The DEFAULT policy.
  *
  * The threshold mirrors the Act-mode prompt's own reconnaissance-to-execution

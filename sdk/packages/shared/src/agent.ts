@@ -6,7 +6,10 @@
  */
 
 import type { BoundedObjectivePolicy } from "./agents/bounded-objective";
-import type { ExecutionStagnationPolicy } from "./agents/execution-stagnation";
+import type {
+	ExecutionStagnationPolicy,
+	RecoveryOutputOverridePolicy,
+} from "./agents/execution-stagnation";
 import type {
 	AgentRuntimeRecoverySnapshot,
 	ToolRuntimeOutcome,
@@ -1357,6 +1360,24 @@ export interface AgentRuntimeConfig {
 	 * never the runtime's canonical transcript or its counters).
 	 */
 	boundedObjectivePolicy?: BoundedObjectivePolicy;
+	/**
+	 * ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01.
+	 *
+	 * The RECOVERY-ONLY GENERATION OVERRIDE policy.
+	 *
+	 * A BOUNDED BEHAVIORAL EXPERIMENT: it attaches ONE request-local
+	 * output-budget increase to the next authorized recovery request. It is
+	 * NOT a global generation-limit increase, NOT a compaction-threshold
+	 * change and NOT a provider or model switch — the global default (8192
+	 * for MiniMax-M3.1-Flash at LOW reasoning effort) is untouched and every
+	 * other model, provider and reasoning effort retains its existing
+	 * configuration.
+	 *
+	 * The policy is OPT-IN and DEFAULT_OFF: when it is absent, or explicitly
+	 * disabled, the runtime behaves exactly as before. There is no persisted
+	 * setting and no installed models.json modification.
+	 */
+	recoveryOutputOverridePolicy?: RecoveryOutputOverridePolicy;
 	toolExecution?: "sequential" | "parallel";
 	toolPolicies?: Record<string, ToolPolicy>;
 	toolContextMetadata?: Record<string, unknown>;

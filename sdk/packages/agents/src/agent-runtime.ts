@@ -131,6 +131,9 @@ import {
 	computeFinalProjectionFingerprint,
 	createExecutionStagnationAccounting,
 	DEFAULT_BOUNDED_OBJECTIVE_POLICY,
+	// ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01: the
+	// recovery-only generation override policy. DEFAULT_OFF.
+	DEFAULT_RECOVERY_OUTPUT_OVERRIDE_POLICY,
 	decideExecutionStagnation,
 	// ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01: the rejection
 	// diagnosis that names the failing field or reference.
@@ -154,6 +157,9 @@ import {
 	// ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01: the runtime-owned
 	// parent-obligation reference vocabulary.
 	type ParentObligationReference,
+	// ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01: the
+	// recovery-only generation override policy. DEFAULT_OFF.
+	type RecoveryOutputOverridePolicy,
 	renderBoundedObjectiveInstruction,
 	requiresSignedReasoningCapability,
 	resolveBoundedObjectiveVerification,
@@ -217,14 +223,93 @@ const MAX_TOKENS_INCOMPLETE_TURN_MESSAGE =
 	"Model reached the maximum output token limit before completing the turn";
 
 /**
+ * ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01.
+ *
  * How many times a turn that ends at the model's output-token limit without a
- * usable tool call is retried before the run fails. Each retry nudges the model
- * to be more concise (see MAX_TOKENS_RECOVERY_NUDGE). The counter resets on any
- * turn that makes progress (produces a tool call), so this bounds only a *run*
- * of consecutive cut-off turns — a single over-long response recovers, while a
- * model that keeps overflowing still ends rather than looping forever.
+ * usable tool call is nudged for a more concise response (see
+ * MAX_TOKENS_RECOVERY_NUDGE) BEFORE the run is failed.
+ *
+ * ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01 CORRECTION-01:
+ * this allowance is RUN-SCOPED, not streak-scoped.
+ *
+ * The predecessor reset the counter on the PRESENCE of a tool call
+ * (`if (toolCalls.length > 0) this.maxTokensRecoveryCount = 0;`), so a
+ * read-only INSPECTION re-armed the allowance and the run could inject an
+ * unbounded number of conciseness reminders — the frozen session's 17
+ * reminders are exactly that shape. The allowance is now a CONSUMABLE
+ * RUN-SCOPED resource: it is spent by a nudge and is only replenished by a
+ * genuinely NEW externally initiated run.
+ *
+ * A PRODUCTIVE round (a successful native edit, a successful execution, a
+ * legitimate wait) clears the CONSECUTIVE exhaustion/stagnation STREAK — that
+ * behaviour is preserved — but it does NOT replenish this allowance. Neither
+ * does a read-only inspection, a failed experiment, an unknown observation,
+ * compaction, a provider retry, an R1/R2 activation, or a recovery-only
+ * generation override.
  */
 const MAX_TOKENS_RECOVERY_LIMIT = 3;
+/**
+ * ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01 CORRECTION-01.
+ *
+ * The CONSECUTIVE output-exhaustion streak, SEPARATED from the run-scoped
+ * consumable allowance above.
+ *
+ * The predecessor conflated the two in one counter: the streak reset on any
+ * tool call, which simultaneously re-armed the allowance. The two are now
+ * distinct resources:
+ *
+ *   - the STREAK measures CONSECUTIVE unproductive exhaustion and may be
+ *     cleared by a productive round (existing contract preserved), and
+ *   - the ALLOWANCE is a consumable run-scoped resource that a productive
+ *     round never replenishes.
+ */
+const MAX_TOKENS_EXHAUSTION_STREAK_LIMIT = 3;
+/**
+ * ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01 CORRECTION-01.
+ *
+ * The finite run-scoped ceiling on ADDITIONAL logical agent requests that
+ * output-exhaustion recovery may drive.
+ *
+ * WHY A SEPARATE CEILING
+ * ----------------------
+ * The ordinary conciseness-reminder allowance (3) is exhausted BEFORE the
+ * ordinary R1 threshold (5) can be reached, so enforcing it alone would
+ * terminate the run before the R1/R2 recovery mechanisms can intervene — the
+ * "premature termination" defect this ACT corrects.
+ *
+ * DERIVATION (against the ACTUAL production constants)
+ * -----------------------------------------------------
+ *   - ordinary R1 threshold ..................... 5 unproductive rounds
+ *   - R1 corrective-instruction allowance ....... 2 per run
+ *   - R2 activation allowance ................... 2 per run
+ *   - R2 selection-inference allowance .......... 1 per run
+ *   - R2 objective-round allowance .............. 8 per activation
+ *
+ * To reach the R1 `allowance_exhausted` branch (and therefore the R2 entry
+ * point) the runtime must observe 5 unproductive rounds, spend BOTH R1
+ * instructions (which each require a FRESH 5-round streak, because
+ * `applyExecutionStagnationDecision` resets the streak after an injection),
+ * and then observe one further unproductive round to reach the exhausted
+ * branch. That is 5 + 5 + 1 = 11 logical rounds of pure stagnation before
+ * R2 is even eligible.
+ *
+ * Each R2 objective may then run for up to 8 objective rounds before it is
+ * closed out. The parent then continues, and the parent may itself stall
+ * again — at which point the SAME bounded escalation applies.
+ *
+ * The ceiling below is therefore a DEFENSIVE ENGINEERING CEILING, strictly
+ * larger than the 11 rounds needed to reach R1's exhausted branch and larger
+ * than the R2 objective allowance, so every AUTHORIZED intervention remains
+ * reachable inside it. It is an UPPER BOUND, never a target: the runtime
+ * terminates truthfully as soon as no useful authorized intervention remains,
+ * and it does not consume the ceiling merely because the ceiling exists.
+ *
+ * The counter is spent ONLY by an exhaustion-driven continuation. It is never
+ * replenished by an inspection, by compaction, by a provider retry, by an
+ * ordinary recovery escalation, or by the internal continuation of the same
+ * recovery episode.
+ */
+const MAX_EXHAUSTION_RECOVERY_CONTINUATIONS = 20;
 /** Nudge appended after an output-limit cut-off, asking for more concise output. */
 const MAX_TOKENS_RECOVERY_NUDGE =
 	"Your previous response was cut off because it reached the model's output-token limit before finishing. Keep responses concise: take one small step at a time, avoid long explanations, and write large files or command output in smaller chunks across multiple tool calls.";
@@ -1452,6 +1537,47 @@ export class AgentRuntime {
 				readonly objective?: BoundedObjective;
 		  }
 		| undefined;
+	/**
+	 * ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01 CORRECTION-01.
+	 *
+	 * The CONSECUTIVE output-exhaustion streak.
+	 *
+	 * SEPARATED from {@link maxTokensRecoveryCount}: the streak measures
+	 * CONSECUTIVE unproductive exhaustion and may be cleared by a genuinely
+	 * PRODUCTIVE round (a successful native edit, a successful execution, a
+	 * legitimate wait). It may NOT be cleared by a read-only inspection, by a
+	 * failed experiment, or by an unknown observation.
+	 */
+	private maxTokensExhaustionStreak = 0;
+	/**
+	 * ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01 CORRECTION-01.
+	 *
+	 * How many ADDITIONAL logical agent requests output-exhaustion recovery
+	 * has driven in this run. Spent ONLY by an exhaustion-driven continuation
+	 * and never replenished by an inspection, a compaction, a provider retry,
+	 * an ordinary recovery escalation, or the internal continuation of the
+	 * same recovery episode.
+	 */
+	private exhaustionRecoveryContinuations = 0;
+	/**
+	 * ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01 CORRECTION-01.
+	 *
+	 * Whether the ONE-SHOT recovery-only generation override has already been
+	 * consumed by this run. See
+	 * {@link recoveryOutputOverridePolicy}.
+	 */
+	private recoveryOutputOverrideConsumed = false;
+	/**
+	 * ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01 CORRECTION-01.
+	 *
+	 * The pending recovery-only generation override, ATTACHED to the NEXT
+	 * logical agent request.
+	 *
+	 * It is a REQUEST-LOCAL property: it never touches the global default,
+	 * the persisted model settings, the summary generation, the PCK
+	 * inference, the R2 objective selection, or any other agent or task.
+	 */
+	private pendingRecoveryOutputOverride: number | undefined;
 	/** Consecutive output-limit cut-offs recovered this run; see MAX_TOKENS_RECOVERY_LIMIT. */
 	private maxTokensRecoveryCount = 0;
 	/** One automatic recovery attempt per run for max-tokens-truncated turns. */
@@ -2748,6 +2874,17 @@ export class AgentRuntime {
 			displayRole: "system",
 			runtimeAuthority: "execution_stagnation_recovery",
 		});
+		// ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01.
+		//
+		// The ONE-SHOT recovery-only generation override is attached to the
+		// NEXT established R1 recovery request — the request this corrective
+		// instruction authorises. It is NOT granted to every ordinary
+		// exhausted response.
+		//
+		// Arming it here does NOT block or alter the R1 instruction: the
+		// corrective instruction is already injected, and an INFEASIBLE
+		// override simply arms nothing.
+		this.armRecoveryOutputOverride();
 	}
 
 	// -------------------------------------------------------------------------
@@ -4189,6 +4326,16 @@ export class AgentRuntime {
 		this.pendingHookContexts = [];
 		this.maxTokensRecoveryCount = 0;
 		this.maxTokensRecoveryAttempted = false;
+		// ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01 CORRECTION-01:
+		// the CONSECUTIVE exhaustion streak, the finite exhaustion-driven
+		// continuation ceiling and the one-shot recovery-only generation
+		// override allowance are all RUN-SCOPED. A genuinely NEW externally
+		// initiated run initialises its own resources; an internal
+		// continuation of the same recovery episode never does.
+		this.maxTokensExhaustionStreak = 0;
+		this.exhaustionRecoveryContinuations = 0;
+		this.recoveryOutputOverrideConsumed = false;
+		this.pendingRecoveryOutputOverride = undefined;
 		// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01 (R1): the
 		// execution-stagnation accounting is RUN-SCOPED. A fresh run starts
 		// from a clean streak AND a clean instruction allowance, so a prior
@@ -4350,6 +4497,44 @@ export class AgentRuntime {
 				}
 
 				if (finishReason === "max-tokens" && toolCalls.length === 0) {
+					// ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01
+					// CORRECTION-01.
+					//
+					// The TOOL-LESS OUTPUT-EXHAUSTED ROUND reaches the EXISTING
+					// execution-stagnation authority.
+					//
+					// The predecessor `continue`d the loop here, BEFORE the
+					// iteration boundary that folds a round into the
+					// execution-stagnation accounting. A tool-less exhausted
+					// response therefore contributed NOTHING to R1, and — since
+					// R2 is reachable ONLY through R1's `allowance_exhausted`
+					// branch — a tool-less exhaustion streak could never reach
+					// R2 at all.
+					//
+					// The correction folds the exhausted round into the SAME
+					// round-accounting mechanism that consumes executed tool
+					// results. It introduces NO independent stagnation detector:
+					// the classification comes from the EXISTING
+					// `classifyExecutionRound()` (which reports `idle` for a
+					// round with no tool call), and the decision comes from the
+					// EXISTING `evaluateExecutionStagnation()`.
+					//
+					// LOGICAL ROUND CARDINALITY: exactly ONE logical round per
+					// completed logical agent response. Multiple stream events,
+					// multiple content blocks, usage updates, physical provider
+					// retries, multiple tool results of one round, repeated
+					// terminal notification and compaction never manufacture an
+					// additional round — the fold happens exactly once, on the
+					// terminal path of this response.
+					//
+					// TERMINAL CONSERVATION: only the established
+					// output-exhaustion terminal class (`"max-tokens"`) reaches
+					// this branch. A normal STOP, a cancellation, a provider
+					// error, a content filter and an unknown terminal outcome
+					// are NOT relabelled as output exhaustion.
+					this.maxTokensExhaustionStreak += 1;
+					await this.evaluateExecutionStagnation();
+
 					if (await this.recoverFromIncompleteMaxTokensTurn()) {
 						await this.emit({
 							type: "turn-finished",
@@ -4367,9 +4552,44 @@ export class AgentRuntime {
 					this.state.lastFinishReason = finishReason;
 					throw new Error(this.state.lastError ?? "Model stream failed");
 				}
-				// A turn that yields tool calls is progress: reset the cut-off streak.
+				// ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01
+				// CORRECTION-01.
+				//
+				// The CONSECUTIVE exhaustion streak is cleared by a genuinely
+				// PRODUCTIVE round, NOT by the mere PRESENCE of a tool call.
+				//
+				// The predecessor reset on `toolCalls.length > 0`, so a
+				// read-only INSPECTION re-armed the ordinary recovery
+				// allowance — the defect that produced the frozen session's 17
+				// conciseness reminders against a nominal allowance of 3.
+				//
+				// The classification comes from the EXISTING production
+				// classifier: `classifyExecutionRound()` consults the
+				// host's authoritative verdict (the SAME
+				// `executionStagnationPolicy.classifyToolCall` seam the R1
+				// accounting uses) and falls back to the runtime's own
+				// structural classification. No new classifier and no command
+				// parser is introduced.
+				//
+				// CONSERVATION:
+				//   - a successful native edit / successful execution /
+				//     legitimate wait clears the streak (existing contract),
+				//   - a read-only inspection does NOT clear it,
+				//   - a failed experiment does NOT clear it,
+				//   - an unknown outcome does NOT clear it.
+				//
+				// The RUN-SCOPED consumable allowance
+				// ({@link maxTokensRecoveryCount}) is NOT touched here at all:
+				// no productive round ever replenishes it.
 				if (toolCalls.length > 0) {
-					this.maxTokensRecoveryCount = 0;
+					const productivity = this.classifyExecutionRound();
+					if (
+						productivity === "edited" ||
+						productivity === "executed" ||
+						productivity === "awaiting"
+					) {
+						this.maxTokensExhaustionStreak = 0;
+					}
 				}
 				this.state.pendingToolCalls = toolCalls.map((part) => part.toolCallId);
 
@@ -4667,30 +4887,269 @@ export class AgentRuntime {
 	}
 
 	/**
+	 * ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01.
+	 *
+	 * The effective recovery-only generation override policy, or `undefined`
+	 * when the experiment is DISABLED.
+	 *
+	 * The experiment is DEFAULT_OFF: absent the policy, or with
+	 * `enabled: false`, every recovery code path and every request is
+	 * byte-identical to the predecessor.
+	 */
+	private getRecoveryOutputOverridePolicy():
+		| RecoveryOutputOverridePolicy
+		| undefined {
+		const policy = this.config.recoveryOutputOverridePolicy;
+		if (!policy) {
+			// ABSENT means the canonical DEFAULT: the experiment is OFF.
+			return DEFAULT_RECOVERY_OUTPUT_OVERRIDE_POLICY.enabled === true
+				? DEFAULT_RECOVERY_OUTPUT_OVERRIDE_POLICY
+				: undefined;
+		}
+		if (policy.enabled === false) {
+			return undefined;
+		}
+		return policy;
+	}
+
+	/**
+	 * ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01.
+	 *
+	 * Consume the ONE-SHOT recovery-only generation override, if one is
+	 * pending.
+	 *
+	 * The override is REQUEST-LOCAL: it applies to exactly ONE logical agent
+	 * request. The allowance is consumed at the existing runtime boundary
+	 * where the request is committed to dispatch, so it is NEVER replenished
+	 * if the request fails, is cancelled, exhausts again, is followed by a
+	 * compaction, or is followed by a productive round.
+	 */
+	private consumeRecoveryOutputOverride(): number | undefined {
+		const pending = this.pendingRecoveryOutputOverride;
+		if (pending === undefined) {
+			return undefined;
+		}
+		// The allowance is spent exactly once per run.
+		this.pendingRecoveryOutputOverride = undefined;
+		this.recoveryOutputOverrideConsumed = true;
+		return pending;
+	}
+
+	/**
+	 * ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01.
+	 *
+	 * ARM the one-shot recovery-only generation override for the NEXT
+	 * logical agent request, if every eligibility condition holds.
+	 *
+	 * ELIGIBILITY (all required):
+	 *   - the policy is explicitly ENABLED (DEFAULT_OFF otherwise),
+	 *   - the run still has recovery resources,
+	 *   - the one-shot allowance has not been consumed in this run,
+	 *   - repeated output exhaustion is ESTABLISHED,
+	 *   - the exact authorized model and effective reasoning effort are
+	 *     ESTABLISHED,
+	 *   - no explicit user/request output cap would be exceeded, and
+	 *   - the configured recovery allowance is a positive finite number.
+	 *
+	 * The override is attached to the NEXT established R1 recovery request,
+	 * so a larger budget is NOT granted to every ordinary exhausted response.
+	 *
+	 * An infeasible override is never a reason to block ordinary R1/R2
+	 * recovery: the method simply arms nothing.
+	 */
+	private armRecoveryOutputOverride(): void {
+		const policy = this.getRecoveryOutputOverridePolicy();
+		if (!policy) {
+			return;
+		}
+		if (this.recoveryOutputOverrideConsumed) {
+			return;
+		}
+		if (this.pendingRecoveryOutputOverride !== undefined) {
+			return;
+		}
+		// The run still has recovery resources.
+		if (
+			this.exhaustionRecoveryContinuations >=
+			MAX_EXHAUSTION_RECOVERY_CONTINUATIONS
+		) {
+			return;
+		}
+		// Repeated output exhaustion must be ESTABLISHED. The default
+		// threshold is the CONSECUTIVE exhaustion streak limit: a SINGLE
+		// cut-off is not "repeated" exhaustion.
+		const exhaustionEstablished =
+			policy.isExhaustionEstablished?.({
+				exhaustionStreak: this.maxTokensExhaustionStreak,
+			}) ??
+			this.maxTokensExhaustionStreak >= MAX_TOKENS_EXHAUSTION_STREAK_LIMIT;
+		if (!exhaustionEstablished) {
+			return;
+		}
+		// The exact authorized model and effective reasoning effort must be
+		// ESTABLISHED. The host owns that judgement; the runtime never
+		// infers model identity from a provider-specific string comparison
+		// of its own.
+		//
+		// The model identity comes from the EXISTING runtime model-identity
+		// resolution (`messageModelInfo.id`, then the configured `modelId`),
+		// so the override can never be applied to a model the run is not
+		// actually using.
+		const modelId = this.telemetryModelId;
+		const reasoningEffort = this.effectiveReasoningEffort();
+		if (policy.isAuthorizedTarget?.({ modelId, reasoningEffort }) === false) {
+			return;
+		}
+		if (policy.modelId !== undefined && policy.modelId !== modelId) {
+			return;
+		}
+		if (
+			policy.reasoningEffort !== undefined &&
+			policy.reasoningEffort !== reasoningEffort
+		) {
+			return;
+		}
+		const recoveryMaxOutputTokens = policy.recoveryMaxOutputTokens;
+		if (
+			typeof recoveryMaxOutputTokens !== "number" ||
+			!Number.isFinite(recoveryMaxOutputTokens) ||
+			recoveryMaxOutputTokens <= 0
+		) {
+			return;
+		}
+		// EXPLICIT USER/REQUEST OUTPUT CAP PRECEDENCE: the runtime never
+		// overrides an explicit cap the host already established on the
+		// request options.
+		const explicitCap = this.config.modelOptions?.maxTokens;
+		if (
+			typeof explicitCap === "number" &&
+			Number.isFinite(explicitCap) &&
+			explicitCap > 0 &&
+			explicitCap < recoveryMaxOutputTokens
+		) {
+			// The explicit cap wins. The override is not applied — and the
+			// ordinary R1/R2 recovery is NOT blocked by that fact.
+			return;
+		}
+		this.pendingRecoveryOutputOverride = Math.floor(recoveryMaxOutputTokens);
+	}
+
+	/**
+	 * ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01.
+	 *
+	 * The EFFECTIVE reasoning effort of the run's model requests.
+	 *
+	 * It is read from the EXISTING request options (the same field the
+	 * gateway reads), so the override can never change the effort: the
+	 * override travels on an INDEPENDENT field.
+	 */
+	private effectiveReasoningEffort(): string | undefined {
+		const effort = this.config.modelOptions?.reasoningEffort;
+		return typeof effort === "string" ? effort : undefined;
+	}
+
+	/**
+	 * ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01 CORRECTION-01.
+	 *
 	 * Recover from a turn that ended at the model's output-token limit without a
-	 * usable tool call: nudge the model to be concise and let the caller retry,
-	 * up to MAX_TOKENS_RECOVERY_LIMIT consecutive times. Returns false once the
-	 * limit is exhausted so the run fails instead of looping.
+	 * usable tool call: nudge the model to be concise and let the caller retry.
+	 *
+	 * Returns `false` once NO useful authorized intervention remains, so the
+	 * run fails truthfully instead of looping.
+	 *
+	 * ORDINARY RECOVERY POLICY
+	 * -------------------------
+	 * The ordinary conciseness-reminder mechanism is RETAINED and its
+	 * run-scoped allowance remains FINITE
+	 * ({@link MAX_TOKENS_RECOVERY_LIMIT}). The allowance is a CONSUMABLE
+	 * run-scoped resource: it is spent here and is never replenished by a
+	 * read-only inspection, by a repeated tool invocation, by a failed or
+	 * unestablished command execution, by compaction, by retry middleware, by
+	 * an R1/R2 activation, by a recovery-only generation override, or by the
+	 * automatic internal continuation of the same recovery episode. Only a
+	 * genuinely NEW externally initiated run initialises its own allowance.
+	 *
+	 * COORDINATION WITH R1/R2 (the premature-termination correction)
+	 * --------------------------------------------------------------
+	 * The ordinary allowance (3) is exhausted BEFORE the ordinary R1
+	 * threshold (5) can be reached. Enforcing the ordinary allowance alone
+	 * therefore terminated the run before the R1/R2 recovery mechanisms could
+	 * intervene — the "premature termination" defect.
+	 *
+	 * The coordination is implemented INSIDE this existing lifecycle method;
+	 * no independent R0/R1/R2 supervisor is introduced and the ordinary
+	 * conciseness reminder is NOT duplicated as a different message class.
+	 *
+	 * When the ordinary allowance is spent but the run still has recovery
+	 * resources and a still-eligible bounded R1/R2 intervention remains, the
+	 * runtime continues the run WITHOUT another ordinary reminder (the
+	 * reminder class is exhausted for this run) so that the existing R1
+	 * decision — which now observes tool-less exhausted rounds — can fire.
+	 *
+	 * The continuation is counted against the finite run-scoped ceiling
+	 * {@link MAX_EXHAUSTION_RECOVERY_CONTINUATIONS}, which is spent exactly
+	 * once per exhaustion-driven continuation and is never replenished.
 	 */
 	private async recoverFromIncompleteMaxTokensTurn(): Promise<boolean> {
-		if (this.maxTokensRecoveryCount >= MAX_TOKENS_RECOVERY_LIMIT) {
+		// The ORDINARY conciseness reminder. Its allowance is finite and
+		// run-scoped.
+		if (this.maxTokensRecoveryCount < MAX_TOKENS_RECOVERY_LIMIT) {
+			this.maxTokensRecoveryCount += 1;
+			await this.emit({
+				type: "status-notice",
+				snapshot: this.snapshot(),
+				message: `output-token limit reached before a tool call — nudging for a more concise response (attempt ${this.maxTokensRecoveryCount}/${MAX_TOKENS_RECOVERY_LIMIT})`,
+				metadata: {
+					kind: "max_tokens_recovery",
+					reason: "max_tokens_recovery",
+					phase: "started",
+					iteration: this.state.iteration,
+					attempt: this.maxTokensRecoveryCount,
+					maxRetries: MAX_TOKENS_RECOVERY_LIMIT,
+				},
+			});
+			await this.addUserReminderMessage(MAX_TOKENS_RECOVERY_NUDGE);
+			return true;
+		}
+
+		// ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01 CORRECTION-01.
+		//
+		// The ordinary allowance is spent. A still-eligible bounded R1/R2
+		// intervention must remain REACHABLE, so the run continues WITHOUT
+		// another ordinary reminder — but ONLY within the finite run-scoped
+		// continuation ceiling.
+		if (
+			this.exhaustionRecoveryContinuations >=
+			MAX_EXHAUSTION_RECOVERY_CONTINUATIONS
+		) {
 			return false;
 		}
-		this.maxTokensRecoveryCount += 1;
+		// CANCELLATION PRECEDENCE: a cancelled run never dispatches another
+		// recovery continuation.
+		if (this.abortController?.signal.aborted) {
+			return false;
+		}
+		// A still-eligible R1/R2 intervention must remain. The R1 policy is
+		// disabled when absent, so with no policy there is nothing to
+		// escalate to and the run terminates truthfully.
+		const policy = this.config.executionStagnationPolicy;
+		if (!policy || policy.enabled === false) {
+			return false;
+		}
+		this.exhaustionRecoveryContinuations += 1;
 		await this.emit({
 			type: "status-notice",
 			snapshot: this.snapshot(),
-			message: `output-token limit reached before a tool call — nudging for a more concise response (attempt ${this.maxTokensRecoveryCount}/${MAX_TOKENS_RECOVERY_LIMIT})`,
+			message: `ordinary output-limit recovery allowance exhausted — continuing the bounded autonomous recovery escalation (${this.exhaustionRecoveryContinuations}/${MAX_EXHAUSTION_RECOVERY_CONTINUATIONS})`,
 			metadata: {
 				kind: "max_tokens_recovery",
-				reason: "max_tokens_recovery",
-				phase: "started",
+				reason: "max_tokens_recovery_escalation",
+				phase: "escalated",
 				iteration: this.state.iteration,
-				attempt: this.maxTokensRecoveryCount,
-				maxRetries: MAX_TOKENS_RECOVERY_LIMIT,
+				attempt: this.exhaustionRecoveryContinuations,
+				maxRetries: MAX_EXHAUSTION_RECOVERY_CONTINUATIONS,
 			},
 		});
-		await this.addUserReminderMessage(MAX_TOKENS_RECOVERY_NUDGE);
 		return true;
 	}
 
@@ -5201,6 +5660,13 @@ export class AgentRuntime {
 			iteration: this.state.iteration,
 			[MODEL_BEHAVIOR_WIRE_REASONING_REQUEST_ID_METADATA_KEY]: modelRequestId,
 		});
+		// ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01: consume the
+		// ONE-SHOT recovery-only generation override, if one is pending and
+		// still eligible. The consumption happens HERE, at the existing
+		// runtime boundary where the request is committed to dispatch, so the
+		// allowance is spent exactly once per run even if the request fails,
+		// is cancelled, or exhausts again.
+		const recoveryOutputOverride = this.consumeRecoveryOutputOverride();
 		let request: AgentModelRequest = {
 			// ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01 (R2): the
 			// R2 DISPATCH PROJECTION.
@@ -5227,6 +5693,21 @@ export class AgentRuntime {
 			signal: this.abortController?.signal,
 			options: mergeModelOptions(this.config.modelOptions, {
 				metadata: modelRequestMetadata,
+				// ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01:
+				// the ONE-SHOT recovery-only generation override.
+				//
+				// It is attached HERE — the ONE place where a model request is
+				// created — so it applies to exactly ONE logical agent
+				// request and never leaks anywhere else.
+				//
+				// The value is a REQUEST-LOCAL `maxTokens`, which the ACTUAL
+				// gateway max-output resolution then subjects to the existing
+				// clamps: an explicit user/request cap, the model capability
+				// maximum and the remaining-context clamp all remain
+				// AUTHORITATIVE. The global default is untouched.
+				...(recoveryOutputOverride !== undefined
+					? { maxTokens: recoveryOutputOverride }
+					: {}),
 			}),
 		};
 
