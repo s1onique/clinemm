@@ -16,6 +16,7 @@ import {
 	isLikelyAuthError,
 	type LiveAgentRuntimeStateSnapshot,
 	normalizeUserInput,
+	type ToolDefinition,
 } from "@cline/shared";
 import { setHomeDirIfUnset } from "@cline/shared/storage";
 import { isOAuthProvider } from "../../auth/provider-auth-registry";
@@ -1161,7 +1162,13 @@ export class LocalRuntimeHost implements RuntimeHost {
 			// host has since refreshed or replaced, and it never introduces
 			// a second transport.
 			knowledgeCheckpoint: {
-				generate: async ({ systemPrompt, request, signal }) => {
+				generate: async ({
+					systemPrompt,
+					request,
+					signal,
+					messages,
+					tools,
+				}) => {
 					const checkpointProviderConfig = resolveSummarizerConfig({
 						activeProviderConfig: {
 							...resolveConnectionProviderConfig(configWithProvider),
@@ -1222,6 +1229,15 @@ export class LocalRuntimeHost implements RuntimeHost {
 						providerConfig: pckCheckpointProviderConfig,
 						systemPrompt,
 						request,
+						// ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01.
+						//
+						// The EXPLICIT message array and the visible tool
+						// schema are forwarded ONLY when the
+						// prefix-preserving route selected them. When they
+						// are ABSENT the request is byte-identical to the
+						// predecessor's.
+						...(messages ? { messages } : {}),
+						...(tools ? { tools: tools as ToolDefinition[] } : {}),
 						signal,
 					});
 				},

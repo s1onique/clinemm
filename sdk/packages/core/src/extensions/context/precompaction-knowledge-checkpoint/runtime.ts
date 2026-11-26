@@ -50,7 +50,11 @@
  * second checkpoint generation.
  */
 
-import type { MessageWithMetadata } from "@cline/shared";
+import type {
+	Message,
+	MessageWithMetadata,
+	ToolDefinition,
+} from "@cline/shared";
 import {
 	collectObservedCanonicalReferences,
 	interpretCanonicalEvidence,
@@ -62,6 +66,8 @@ import {
 	extractCheckpointJson,
 	extractCheckpointProposals,
 } from "./model-request";
+import { recordPckPrefixCapture } from "./pck-capture";
+import type { PrefixPreservingAuxiliaryRequest } from "./prefix-preserving-request";
 import {
 	type AdmittedCheckpointRecord,
 	gateClosedProposals,
@@ -195,11 +201,50 @@ export type PckGenerate = (input: {
 	readonly systemPrompt: string;
 	readonly request: string;
 	readonly signal: AbortSignal;
+	/**
+	 * ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01.
+	 *
+	 * The EXPLICIT message array for the request.
+	 *
+	 * When it is ABSENT the transport sends the single user message carrying
+	 * `request`, which is the LEGACY route's shape and stays byte-identical.
+	 *
+	 * When it is PRESENT the transport sends EXACTLY these messages. The
+	 * `request` string is then IGNORED, so the request body is the parent's
+	 * messages plus the appended extraction suffix.
+	 */
+	readonly messages?: readonly Message[];
+	/**
+	 * ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01.
+	 *
+	 * The VISIBLE tool schema for the request.
+	 *
+	 * It is advertised so the rendered request matches the parent's, but the
+	 * transport NEVER invokes an executor: a tool call in the response
+	 * stream is reported as `usedTools` and the attempt is REJECTED.
+	 */
+	readonly tools?: readonly ToolDefinition[];
 }) => Promise<{
 	readonly text: string;
 	readonly reasoningChars: number;
 	readonly usedTools: boolean;
 	readonly failed: boolean;
+	/**
+	 * ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 — C8.
+	 *
+	 * The PHYSICAL provider request identity, when the transport reported
+	 * one. It is the JOIN key with the provider's own capture.
+	 */
+	readonly providerRequestId?: string;
+	/**
+	 * ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 — C8.
+	 *
+	 * The provider-reported usage, when the transport observed it.
+	 */
+	readonly usage?: {
+		readonly inputTokens?: number;
+		readonly cacheReadTokens?: number;
+	};
 }>;
 
 /**
@@ -265,6 +310,31 @@ export function createPckAbortHandle(input: {
  * again for the same decision ONLY when the first attempt produced no
  * public response at all, which the ACT's budget bounds at two attempts.
  */
+/**
+ * RUN ONE checkpoint attempt for ONE compaction decision.
+ *
+ * The order of operations is load-bearing:
+ *
+ *   1. The controlled input is built from the CANONICAL history.
+ *   2. The MODEL CALL happens under the combined deadline/cancellation.
+ *   3. The response is parsed and the PROPOSALS are extracted. A response
+ *      with no public content, or that attempted a tool call, is rejected.
+ *   4. The source prefix is RE-VERIFIED after the model call: a checkpoint
+ *      generated from a prefix that has since changed is STALE and is
+ *      rejected rather than published against a newer prefix.
+ *   5. The PUBLICATION GATE runs BEFORE any destination receives the
+ *      candidate.
+ *
+ * There is NO retry loop inside this function. The caller may invoke it
+ * again for the same decision ONLY when the first attempt produced no
+ * public response at all, which the ACT's budget bounds at two attempts.
+ *
+ * ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 — C8.
+ *
+ * The function is a thin WRAPPER around the attempt itself, so the capture
+ * observes EVERY outcome — the accepted one and every failure — through a
+ * single call site. The capture is DEFAULT-OFF and has NO semantic effect.
+ */
 export async function runPckAttempt(input: {
 	readonly generate: PckGenerate;
 	readonly canonicalMessages: readonly MessageWithMetadata[];
@@ -278,7 +348,94 @@ export async function runPckAttempt(input: {
 	 * earlier than it actually was.
 	 */
 	readonly currentSourcePrefixKey: () => string;
+	/**
+	 * ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 — C8.
+	 *
+	 * The ROUTE the attempt took, for the capture.
+	 */
+	readonly route?: "b_prime" | "legacy";
+	/**
+	 * ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 — C8.
+	 *
+	 * The identities the host holds for the capture.
+	 */
+	readonly captureContext?: {
+		readonly sessionId?: string;
+		readonly parentRequestId?: string;
+		readonly providerId?: string;
+		readonly modelId?: string;
+		readonly inferencePolicyId?: string;
+	};
+	/**
+	 * ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 — C2.
+	 *
+	 * The PREFIX-PRESERVING route's request, when it was selected.
+	 *
+	 * When it is ABSENT the LEGACY independent request is dispatched, byte
+	 * for byte as before. When it is PRESENT the transport receives the
+	 * parent's provider-visible messages plus the appended extraction
+	 * suffix, and the `request` string is not sent.
+	 */
+	readonly prefixPreservingRequest?: PrefixPreservingAuxiliaryRequest;
 }): Promise<PckAttemptOutcome> {
+	const startedAt = Date.now();
+	const observed: {
+		providerRequestId?: string;
+		inputTokens?: number;
+		cacheReadTokens?: number;
+	} = {};
+	const outcome = await executePckAttempt(input, observed);
+	recordPckPrefixCapture({
+		cohortId: input.identity.decisionId,
+		capturedAt: new Date(startedAt).toISOString(),
+		sessionId: input.captureContext?.sessionId,
+		decisionId: input.identity.decisionId,
+		sourcePrefixKey: input.identity.sourcePrefixKey,
+		parentRequestId: input.captureContext?.parentRequestId,
+		providerRequestId: observed.providerRequestId ?? outcome.providerRequestId,
+		route: input.route ?? "legacy",
+		providerId: input.captureContext?.providerId,
+		modelId: input.captureContext?.modelId,
+		purpose: "pck",
+		inferencePolicyId: input.captureContext?.inferencePolicyId,
+		inputTokens: observed.inputTokens,
+		cacheReadTokens: observed.cacheReadTokens,
+		durationMs: Date.now() - startedAt,
+		extractionOutcome: outcome.accepted
+			? "accepted"
+			: outcome.failureReason === undefined
+				? "failed"
+				: "rejected",
+		failureReason: outcome.failureReason,
+		publishedRecordCount: outcome.records.length,
+	});
+	return outcome;
+}
+
+/**
+ * The attempt itself. It is separated from the wrapper so the capture
+ * observes EVERY outcome through ONE call site.
+ */
+async function executePckAttempt(
+	input: {
+		readonly generate: PckGenerate;
+		readonly canonicalMessages: readonly MessageWithMetadata[];
+		readonly identity: PckAttemptIdentity;
+		readonly taskSignal: AbortSignal;
+		readonly deadlineMs: number;
+		readonly currentSourcePrefixKey: () => string;
+		readonly prefixPreservingRequest?: PrefixPreservingAuxiliaryRequest;
+	},
+	observed: {
+		providerRequestId?: string;
+		inputTokens?: number;
+		cacheReadTokens?: number;
+	},
+): Promise<
+	PckAttemptOutcome & {
+		readonly providerRequestId?: string;
+	}
+> {
 	const observedReferences = collectObservedCanonicalReferences(
 		input.canonicalMessages,
 	);
@@ -288,33 +445,65 @@ export async function runPckAttempt(input: {
 		taskSignal: input.taskSignal,
 		deadlineMs: input.deadlineMs,
 	});
-	let response: {
-		text: string;
-		reasoningChars: number;
-		usedTools: boolean;
-		failed: boolean;
-	};
+	let response:
+		| {
+				text: string;
+				reasoningChars: number;
+				usedTools: boolean;
+				failed: boolean;
+				providerRequestId?: string;
+				usage?: { inputTokens?: number; cacheReadTokens?: number };
+		  }
+		| undefined;
 	try {
 		response = await input.generate({
-			systemPrompt: CHECKPOINT_SYSTEM_PROMPT,
+			systemPrompt: input.prefixPreservingRequest
+				? input.prefixPreservingRequest.systemPrompt
+				: CHECKPOINT_SYSTEM_PROMPT,
 			request,
+			...(input.prefixPreservingRequest
+				? {
+						messages: input.prefixPreservingRequest
+							.messages as readonly Message[],
+						tools: input.prefixPreservingRequest
+							.tools as readonly ToolDefinition[],
+					}
+				: {}),
 			signal: handle.signal,
 		});
+		observed.providerRequestId = response.providerRequestId;
+		observed.inputTokens = response.usage?.inputTokens;
+		observed.cacheReadTokens = response.usage?.cacheReadTokens;
 	} catch {
 		const failureReason = handle.timedOut()
 			? "timeout"
 			: input.taskSignal.aborted
 				? "cancelled"
 				: "provider_failure";
-		return { records: [], failureReason, accepted: false };
+		return {
+			records: [],
+			failureReason,
+			accepted: false,
+			providerRequestId: response?.providerRequestId,
+		};
 	} finally {
 		handle.dispose();
 	}
 	if (handle.timedOut()) {
-		return { records: [], failureReason: "timeout", accepted: false };
+		return {
+			records: [],
+			failureReason: "timeout",
+			accepted: false,
+			providerRequestId: response?.providerRequestId,
+		};
 	}
 	if (input.taskSignal.aborted) {
-		return { records: [], failureReason: "cancelled", accepted: false };
+		return {
+			records: [],
+			failureReason: "cancelled",
+			accepted: false,
+			providerRequestId: response?.providerRequestId,
+		};
 	}
 	// A model request that attempts a tool call is NOT an accepted
 	// checkpoint: the checkpoint request has no execution tools at all.
@@ -323,13 +512,24 @@ export async function runPckAttempt(input: {
 			records: [],
 			failureReason: "tool_call_attempted",
 			accepted: false,
+			providerRequestId: response.providerRequestId,
 		};
 	}
 	if (response.failed) {
-		return { records: [], failureReason: "provider_failure", accepted: false };
+		return {
+			records: [],
+			failureReason: "provider_failure",
+			accepted: false,
+			providerRequestId: response.providerRequestId,
+		};
 	}
 	if (response.text.length > MAX_PCK_RESPONSE_CHARS) {
-		return { records: [], failureReason: "oversized_output", accepted: false };
+		return {
+			records: [],
+			failureReason: "oversized_output",
+			accepted: false,
+			providerRequestId: response.providerRequestId,
+		};
 	}
 	const publicText = response.text.trim();
 	if (publicText.length === 0) {
@@ -339,11 +539,17 @@ export async function runPckAttempt(input: {
 			records: [],
 			failureReason: "no_public_response",
 			accepted: false,
+			providerRequestId: response.providerRequestId,
 		};
 	}
 	const parsed = extractCheckpointJson(publicText);
 	if (parsed === undefined) {
-		return { records: [], failureReason: "invalid_json", accepted: false };
+		return {
+			records: [],
+			failureReason: "invalid_json",
+			accepted: false,
+			providerRequestId: response.providerRequestId,
+		};
 	}
 	const proposals = extractCheckpointProposals(parsed);
 	// The source prefix is RE-VERIFIED here: a checkpoint generated from a
@@ -353,6 +559,7 @@ export async function runPckAttempt(input: {
 			records: [],
 			failureReason: "stale_source_prefix",
 			accepted: false,
+			providerRequestId: response.providerRequestId,
 		};
 	}
 	const gate = gateClosedProposals({
@@ -380,7 +587,12 @@ export async function runPckAttempt(input: {
 			failureReason: "gate_rejected",
 			gateCodes: gate.codes,
 			accepted: false,
+			providerRequestId: response.providerRequestId,
 		};
 	}
-	return { records: gate.records, accepted: true };
+	return {
+		records: gate.records,
+		accepted: true,
+		providerRequestId: response.providerRequestId,
+	};
 }

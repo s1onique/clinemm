@@ -89,6 +89,7 @@ import {
 	type TelemetryCompactionStrategy,
 } from "../../services/telemetry/core-events";
 import {
+	canonicalSourceMessages,
 	canonicalSourcePrefixKey,
 	countCanonicalSourceMessages,
 	createSessionCompactionState,
@@ -126,6 +127,12 @@ import {
 	resolveEffectiveMaxInputTokens,
 } from "./compaction-shared";
 import { applyVerifiedEvidenceToCompactedMessages } from "./evidence-continuity";
+import type { PrefixPreservingParentAuthority } from "./precompaction-knowledge-checkpoint/prefix-preserving-request";
+import { selectPrefixPreservingRoute } from "./precompaction-knowledge-checkpoint/prefix-preserving-request";
+import {
+	assembleParentRequestAuthority,
+	isPckPrefixPreservingEnabled,
+} from "./precompaction-knowledge-checkpoint/prefix-preserving-route";
 import {
 	applyCheckpointToCompactedMessages,
 	type ProjectableCheckpointRecord,
@@ -1563,6 +1570,42 @@ export function createContextCompactionPrepareTurn(
 					canonicalMessages: context.messages,
 					abortSignal: context.abortSignal,
 					logger: config.logger,
+					// ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 —
+					// C8. The capture identities. They are the REAL ones.
+					captureContext: {
+						sessionId: config.sessionId,
+						parentRequestId: context.preparationRequestId,
+						providerId: config.providerId,
+						modelId: config.modelId,
+					},
+					// ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 —
+					// the PARENT REQUEST AUTHORITY.
+					//
+					// `context.apiMessages` IS the real provider-visible
+					// projection of `context.messages` (the runtime's
+					// extension message builders plus
+					// `MessageBuilder.buildForApi`), and
+					// `context.systemPrompt` / `context.tools` are the real
+					// system prompt and visible tool schema of the ordinary
+					// request this decision belongs to. Nothing is
+					// reconstructed.
+					//
+					// The authority is assembled ONLY when the feature is
+					// enabled, so the disabled path does not read the parent
+					// request at all.
+					...(isPckPrefixPreservingEnabled()
+						? {
+								parentAuthority: assembleParentRequestAuthority({
+									systemPrompt: context.systemPrompt,
+									providerMessages: context.apiMessages,
+									tools: context.tools,
+									canonicalMessages: canonicalSourceMessages(context.messages),
+									authorizedMessageCount: countCanonicalSourceMessages(
+										context.messages,
+									),
+								}),
+							}
+						: {}),
 				});
 			checkpointRecords = checkpointRecordsForDecision;
 		}
@@ -2213,6 +2256,31 @@ async function generatePreCompactionKnowledgeCheckpoint(input: {
 	readonly canonicalMessages: readonly MessageWithMetadata[];
 	readonly abortSignal: AbortSignal;
 	readonly logger: Pick<CoreSessionConfig, "logger">["logger"];
+	/**
+	 * ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 — C0.
+	 *
+	 * The PARENT REQUEST AUTHORITY, as the ordinary request boundary holds
+	 * it.
+	 *
+	 * It is the REAL provider-visible projection, the REAL system prompt and
+	 * the REAL visible tool schema of the ordinary request this compaction
+	 * decision belongs to. It is ABSENT when the host did not supply it, in
+	 * which case the LEGACY route is selected.
+	 */
+	readonly parentAuthority?: PrefixPreservingParentAuthority;
+	/**
+	 * ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 — C8.
+	 *
+	 * The identities the capture records. They are READ ONLY when the
+	 * capture is enabled and they have NO semantic effect.
+	 */
+	readonly captureContext?: {
+		readonly sessionId?: string;
+		readonly parentRequestId?: string;
+		readonly providerId?: string;
+		readonly modelId?: string;
+		readonly inferencePolicyId?: string;
+	};
 }): Promise<readonly ProjectableCheckpointRecord[]> {
 	// DEFAULT-OFF: with the feature disabled, the seam returns immediately
 	// and NOTHING downstream changes.
@@ -2229,6 +2297,24 @@ async function generatePreCompactionKnowledgeCheckpoint(input: {
 		sourcePrefixKey,
 	};
 	const deadlineMs = input.seam.deadlineMs?.() ?? resolvePckDeadlineMs();
+	// ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 — the ROUTE.
+	//
+	// The route is selected BEFORE the dispatch, so an ineligible B' never
+	// reaches the provider and a failed B' never triggers a second
+	// inference.
+	const prefixPreservingRoute = selectPrefixPreservingRoute({
+		featureEnabled: isPckPrefixPreservingEnabled(),
+		authority: input.parentAuthority,
+	});
+	if (prefixPreservingRoute.selected === "legacy") {
+		input.logger?.debug(
+			"Pre-compaction knowledge checkpoint selected the legacy route",
+			{
+				decisionId: identity.decisionId,
+				reason: prefixPreservingRoute.reason,
+			},
+		);
+	}
 	input.logger?.debug("Pre-compaction knowledge checkpoint attempt", {
 		decisionId: identity.decisionId,
 		sourcePrefixKey,
@@ -2240,6 +2326,35 @@ async function generatePreCompactionKnowledgeCheckpoint(input: {
 		identity,
 		taskSignal: input.abortSignal,
 		deadlineMs,
+		// ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 — C8.
+		//
+		// The capture context. It is READ ONLY when the capture is enabled
+		// and it has NO semantic effect on the attempt.
+		route: prefixPreservingRoute.selected === "b_prime" ? "b_prime" : "legacy",
+		captureContext: {
+			...(input.captureContext?.sessionId !== undefined
+				? { sessionId: input.captureContext.sessionId }
+				: {}),
+			...(input.captureContext?.parentRequestId !== undefined
+				? { parentRequestId: input.captureContext.parentRequestId }
+				: {}),
+			...(input.captureContext?.providerId !== undefined
+				? { providerId: input.captureContext.providerId }
+				: {}),
+			...(input.captureContext?.modelId !== undefined
+				? { modelId: input.captureContext.modelId }
+				: {}),
+			...(input.captureContext?.inferencePolicyId !== undefined
+				? { inferencePolicyId: input.captureContext.inferencePolicyId }
+				: {}),
+		},
+		// ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 — the ROUTE.
+		//
+		// The route is selected BEFORE dispatch, so a fallback never
+		// launches a second inference after a failed B' attempt.
+		...(prefixPreservingRoute?.selected === "b_prime"
+			? { prefixPreservingRequest: prefixPreservingRoute.request }
+			: {}),
 		// ACT-CLINEMM-PCK-GENERATION-ELIGIBILITY-REPAIR-01 — the SOURCE
 		// PREFIX OWNERSHIP QUALIFICATION.
 		//

@@ -158,6 +158,24 @@ export default defineConfig({
 			// conservation controls, is
 			// `compaction.retry-expenditure-vs-context-occupancy.cmp09.test.ts`.
 			"src/extensions/context/compaction.retry-expenditure-vs-context-occupancy.cmp09.red01.test.ts",
+			// ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01: the RED
+			// witness.
+			//
+			// This file asserts the B' COMPOSITION at the REAL production
+			// compaction-to-PCK dispatch seam. Its R1.4 assertion FAILS
+			// against the predecessor behaviour — which is exactly the
+			// receipt of the observed defect — and it is deliberately
+			// EXCLUDED from the default suite so it never blocks the normal
+			// gate.
+			//
+			// It is runnable ON DEMAND through its dedicated config:
+			//
+			//   bun run test:red:pck-prefix-preserving
+			//
+			// The PASSING companion for the same mechanism, and for the
+			// conservation, authority and lifecycle controls, is
+			// `src/extensions/context/precompaction-knowledge-checkpoint/pck-prefix-preserving.test.ts`.
+			"src/extensions/context/precompaction-knowledge-checkpoint/pck-prefix-preserving.red01.test.ts",
 		],
 		// Process, Git, and SQLite integration coverage shares this suite with
 		// pure unit tests. Windows hosted runners regularly exceed Vitest's 5s

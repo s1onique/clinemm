@@ -1,5 +1,10 @@
 import { createHandlerAsync } from "@cline/llms";
-import type { AgentModelFinishReason, BasicLogger } from "@cline/shared";
+import type {
+	AgentModelFinishReason,
+	BasicLogger,
+	Message,
+	ToolDefinition,
+} from "@cline/shared";
 import type { ProviderConfig } from "../../types/provider-settings";
 
 /**
@@ -178,6 +183,34 @@ export async function generateSummary(options: {
 	providerConfig: ProviderConfig;
 	systemPrompt: string;
 	request: string;
+	/**
+	 * ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01.
+	 *
+	 * The EXPLICIT message array for the request.
+	 *
+	 * When it is ABSENT — which is the case for every request that did not
+	 * opt in — the transport sends the pre-existing single user message
+	 * containing `request`, byte for byte.
+	 *
+	 * When it is PRESENT, the transport sends EXACTLY these messages and
+	 * the `request` string is not sent. It exists so the prefix-preserving
+	 * PCK route can dispatch the PARENT's provider-visible messages plus one
+	 * appended extraction suffix, so the leading serialized messages are
+	 * byte-identical to the parent's.
+	 */
+	messages?: readonly Message[];
+	/**
+	 * ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01.
+	 *
+	 * The VISIBLE tool schema for the request.
+	 *
+	 * When it is ABSENT, no tools are sent, exactly as before. When it is
+	 * PRESENT the tools are advertised to the provider — so the rendered
+	 * request matches the parent's — but the transport NEVER invokes an
+	 * executor: a tool call in the response stream is reported as
+	 * `usedTools`, and the caller rejects it.
+	 */
+	tools?: readonly ToolDefinition[];
 	maxOutputChars?: number;
 	signal?: AbortSignal;
 	/**
@@ -426,9 +459,18 @@ export async function generateSummary(options: {
 		options.signal.throwIfAborted();
 	};
 	try {
-		const stream = handler.createMessage(options.systemPrompt, [
-			{ role: "user", content: options.request },
-		]);
+		// ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01.
+		//
+		// The EXPLICIT message array is used when it is present. When it is
+		// ABSENT the pre-existing single user message is sent, so every
+		// request that did not opt in keeps its byte-identical body.
+		const stream = handler.createMessage(
+			options.systemPrompt,
+			options.messages
+				? [...options.messages]
+				: [{ role: "user", content: options.request }],
+			options.tools ? [...options.tools] : undefined,
+		);
 		// ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01
 		// (AMENDMENT-02 §4): the transport's own per-request identity.
 		requestId = stream.id;
@@ -487,6 +529,11 @@ export async function generateSummary(options: {
 		usedTools,
 		incompleteReason,
 		completed,
+		// ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 — C8.
+		//
+		// The PHYSICAL provider request identity, so a capture can JOIN
+		// this attempt with the provider's own request record.
+		providerRequestId: requestId,
 		finishReason,
 		cancelled,
 		// ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01: the

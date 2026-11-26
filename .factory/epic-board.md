@@ -1,3 +1,98 @@
+# ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 — READY_FOR_EXPERIMENTAL_LIVE_QUALIFICATION_PENDING_SOURCE_ACCEPTANCE — 2026-11-26
+
+```text
+ACT_ID:       ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01
+TYPE:         bounded production implementation
+VERDICT:      READY_FOR_EXPERIMENTAL_LIVE_QUALIFICATION_PENDING_SOURCE_ACCEPTANCE
+EPIC:         EPIC-CLINEMM-IECR
+WORK_ITEM:    CPA-02
+ENTRY_HEAD:   cc733df911a1776708c9131f8a37fcc555ae5f61
+BRANCH:       main
+```
+
+**CPA-02 IS IMPLEMENTED, QUALIFIED AND AWAITING OPERATOR ACCEPTANCE.** The B′ route is
+a DEFAULT-OFF, request-local branch at the Pre-Compaction Knowledge Checkpoint's
+activation boundary. The auxiliary request is the ordinary parent's REAL
+provider-visible projection (verbatim, in order) plus ONE appended extraction suffix
+carrying the complete extraction contract, the extraction objective, the authorized
+source interval, the canonical source bindings and the runtime-owned observation
+metadata. The parent's system prompt and visible tool schema are carried verbatim. The
+conversation is NOT duplicated, the suffix is request-local and is never persisted, and
+the ordinary agent's tool availability is unchanged.
+
+**THE CONFIGURATION KEY IS `CLINEMM_PCK_PREFIX_PRESERVING_ENABLED=1`** (default-off;
+exactly `1` or `true`). The sibling live capture is `CLINEMM_PCK_PREFIX_CAPTURE=1`
+(default-off, bounded, removable, no disabled-mode semantic change).
+
+**THE MISSING SEAM IS NOW CLOSED.** The recon's "precise missing seam" — the
+canonical-id <-> provider-visible-position binding — is carried: a new request-local
+binding resolves every canonical reference to a provider-visible position, and a
+reference resolves ONLY when it is simultaneously inside the authorized source
+interval, visible, unambiguous and not reasoning-only. Every other case is
+non-authorizing with a distinct, observable reason (`out_of_interval`, `absent`,
+`ambiguous`, `private_reasoning`, `truncated`). A canonical reference's mere existence
+no longer grants publication authority.
+
+**A NEW EMPIRICAL FINDING.** The production `MessageBuilder.buildForApi` MERGES a user
+message that follows a tool-result-only user message into that predecessor and DROPS
+the merged message's canonical id. So a canonical reference can exist in the canonical
+history and have NO provider-visible position the model can resolve. The binding
+detects it (`absent`) and refuses to authorize it.
+
+**THE REMAINING SOURCE-ACCEPTANCE DECISION.** B′ carries the parent's PRIVATE
+REASONING to the provider, because preserving the parent's prefix requires carrying the
+parent's messages unchanged. The reasoning is WIRE-VISIBLE but is NOT an authorized
+extraction source: a reasoning-only reference resolves to `private_reasoning` and can
+never be cited. The operator must accept that wire exposure before live qualification.
+This is why the verdict is not the unconditional READY.
+
+**THE TOOL-EXECUTION BOUNDARY IS ESTABLISHED AT THE PRODUCTION PATH.** A
+syntactically valid checkpoint JSON injected ALONGSIDE a tool call, with the parent's
+mutation-tool schema advertised, yields `failureReason = tool_call_attempted`,
+`acceptedRecords = 0`, and NO tool-driven additional inference (the transport
+invocation count is MEASURED at 1) and NO workspace mutation (the fixture directory is
+MEASURED unchanged). The executor/approval facts are additionally established
+structurally by an import-closure scan of the new modules.
+
+**THE DEADLINE AND THE CANCELLATION AUTHORITY ARE UNCHANGED** (180 000 ms; the same
+`createPckAbortHandle`). The route is selected BEFORE dispatch, so an ineligible B′
+never reaches the provider and a failed B′ never launches a second inference. The
+configured PCK inference policy (`qwen-strata-v1`) is NOT silently disabled: it still
+applies to B′ exactly as it applies to the legacy request, and all four of its
+parameters are generation-side, so none can change the rendered prompt tokens.
+
+**NO LIVE INFERENCE WAS EXECUTED.** The rendered-token prefix is established at the
+request-construction and provider-boundary levels; the ACTUAL cache residency and the
+ACTUAL engine prefill duration are live observations reserved to the successor. The
+successor must distinguish time-to-first-token from engine prefill duration: only the
+former is observable from this repository. The W1 knowledge benchmark remains the
+semantic acceptance oracle and was NOT executed here.
+
+```text
+REQUIRED_RED:               REPRODUCED (fails against the predecessor by stashing the
+                            load-bearing change; passes with it restored)
+BOUNDED_GREEN:              PASS (19/19 focused)
+LEGACY_CONSERVATION:        PASS
+PARENT_HISTORY_CONSERVATION: PASS
+PRODUCTION_TOOL_EXECUTION_DENIAL: PASS
+ACT-OWNED_TYPECHECK_DIAGNOSTICS: 0 (baseline 90 == baseline 90)
+ACT-OWNED_LINT_DIAGNOSTICS: 0
+AFFECTED_TESTS:             171/171 (PCK directory); 1499/1501 (extensions/context +
+                            runtime/host), 2 skipped
+INFERENCE REQUESTS:          0 (injected transport only)
+VSIX PACKAGED:               NO
+FROZEN EVIDENCE:             CONSERVED
+PROTECTED STASHES:           CONSERVED
+PRODUCTION SOURCE DELTA:     4 NEW PCK modules; runtime/compaction/transport/host
+                             wiring; the RED config. No ordinary-agent semantic change.
+SUCCESSOR:                   ACT-CLINEMM-PCK-PREFIX-PRESERVING-LIVE-QUALIFICATION-01
+                             (not started)
+```
+
+Evidence: `.factory/evidence/ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01/01-terminal-report.md`.
+
+---
+
 # ACT-CLINEMM-CACHE-PRESERVING-AUXILIARY-INFERENCE-RECON-01 (AMENDMENT-01) — GO_PCK_PREFIX_PRESERVING_IMPLEMENTATION — 2026-11-26
 
 ```text
