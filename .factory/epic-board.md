@@ -1,3 +1,108 @@
+# ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 — GO_CMP09_CONTEXT_BUDGET_AUTHORITY + MEASUREMENT_DIVERGENCE_NOT_CAUSAL — 2026-11-26
+
+```text
+ACT_ID:       ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01
+TYPE:         bounded causal discrimination and repair
+VERDICT:      GO_CMP09_CONTEXT_BUDGET_AUTHORITY
+              MEASUREMENT_DIVERGENCE_NOT_CAUSAL (for the historical
+              iteration-23 compaction)
+ENTRY_HEAD:   e740e3dd92e9091cf9c6d5d54627abb11c72fbbd
+SUBJECT_HEAD: 16c67824e
+BRANCH:       main
+EPIC:         CMP-09
+```
+
+**THE HISTORICAL PREMATURE COMPACTION WAS NOT CAUSED BY THE BUDGET
+MEASUREMENT.** The iteration-23 compaction was an **OVERFLOW RECOVERY**, not
+the proactive budget trigger. The frozen witness's own compaction sidecar
+records `"reason": "overflow_recovery_compaction"` (session
+`1795639776267_j3nki`, run `run_kR2y9UwW`, archived
+`clinemm-terminal-failure.0d3jQd.tar.gz`). The provider REPORTED the
+overflow: `usageBefore.inputTokens = 1,728,403` against MiniMax-M3.1-Flash's
+1,048,576-token window, because the provider's `inputTokens` INCLUDES the
+1,562,316 cache-read tokens. The proactive trigger could not have fired: the
+iteration-23 candidate measured ~198,547 estimated tokens, with a trigger at
+943,718, and it carried **ZERO** unsigned reasoning (all 212,472 reasoning
+characters were signed).
+
+**THE TWO DISCRIMINATORS ARE INDEPENDENT, AS THE ACT REQUIRED.** The first
+unsigned reasoning appears at **iteration 48**, strictly AFTER the
+iteration-23 compaction, so the post-47 accumulation cannot explain it.
+Only ONE compaction transition occurred in the whole run.
+
+**THE DEFECT THAT WAS REPAIRED IS A REAL AUTHORITY LOSS, AND IT IS
+CAUSAL.** The request-budget authority measured the provider-visible
+projection, and the compaction trigger consumed that measurement. But the
+projection carried EVERY reasoning block, signed or not, while the resolved
+Anthropic serializer **OMITS** an unsigned reasoning block from the
+serialized body (it warns "unsupported reasoning metadata"). The budget
+therefore counted text the provider never received:
+
+```text
+unsigned reasoning accumulated:      659,674 chars across 18 blocks
+share of a later measured request:    30.1% (223,039 of 740,566 tokens)
+```
+
+Because the trigger consumes that measurement, the divergence could flip
+the compaction verdict for a request the provider would have accepted.
+
+**THE REPAIR REUSES THE SERIALIZER'S OWN EXCLUSION.** The shared capability
+authority (`requiresSignedReasoningCapability`) classifies the transport
+from the model metadata the catalog already publishes — never from a
+provider-id string comparison. `toProviderVisibleMessages` omits an UNSIGNED
+reasoning block only when the transport declares the requirement; the
+DEFAULT is unchanged, so every other transport and every existing caller is
+bit-for-bit identical. `omitUnauthorizedReasoningBlocks` applies the same
+exclusion to an already-projected list. The compaction trigger, the
+task-contract budget guard and the final request guard measure the
+authorized request.
+
+```text
+ACT-OWNED WITNESSES:   20 (all PASSED)
+  CMP09-PROJ-01..07    7 shared projection controls
+  CMP09-WIRE-01..07    6 wire-equivalence controls (real Anthropic serializer,
+                       injected fetch, no paid inference)
+  CMP09-TRIG-01..04    4 compaction-trigger consequence controls
+  CMP09-TRIG-04        the divergence is bounded by the excluded material
+RED (defective predecessor): 2 CMP09-TRIG rows FAILED (866,689 estimated
+                           tokens of provider-excluded content inflating the
+                           trigger's measurement and flipping its verdict)
+GREEN (after the correction):  all CMP09 rows PASSED
+EXISTING SUITES:       core context 89 files passed | 1275 tests passed
+                       CMP-07 8 passed | CMP-08 24 passed
+                       llms/agents failure sets IDENTICAL to the baseline
+TYPECHECK:              shared/llms/agents CLEAN; core 45 -> 45, ZERO DELTA
+BIOME:                  clean
+SDK BUILD:              shared, llms, agents, core all built
+COMMIT HOOKS:           gitleaks no leaks; lint-staged no staged matches
+INFERENCE REQUESTS:     0
+```
+
+**THE PRESERVATIONS HOLD.** The canonical transcript is untouched (the
+projection is a pure, non-mutating view); valid signed reasoning continuity
+is conserved (text, signature and details); redacted reasoning is
+conserved; tool-call/result identity and order are conserved; the
+context-window and generation-limit authority is unchanged; and every
+compaction cancellation, terminal acceptance, durability and
+usage-accounting contract is untouched.
+
+```text
+HISTORICAL_COMPACTION_TRIGGER:      overflow_recovery_compaction (provider-confirmed)
+CURRENT_COMPACTION_TRIGGER_AUTHORITY:createContextCompactionPrepareTurn (auto + overflow_recovery)
+EFFECTIVE_CONTEXT_WINDOW:           1,048,576 (catalog maxInputTokens = contextWindow)
+EFFECTIVE_OUTPUT_RESERVATION:       512,000 (catalog maxTokens; 8,192 requested)
+UNSIGNED_REASONING_WIRE_RETENTION:  NO (dropped by the Anthropic serializer)
+UNSIGNED_REASONING_BUDGET_CONTRIBUTION: YES before the repair; NO after
+REQUEST_BUDGET_WIRE_EQUIVALENCE:    ESTABLISHED (was BROKEN for unsigned reasoning)
+COMPACTION_DECISION_CAUSALITY:      ESTABLISHED (the trigger consumes the measurement)
+CANONICAL_HISTORY_CONSERVATION:     CONSERVED
+SIGNED_REASONING_CONSERVATION:      CONSERVED
+TOOL_IDENTITY_CONSERVATION:         CONSERVED
+CMP01_THROUGH_CMP08_CONSERVATION:   CONSERVED
+```
+
+**A SUCCESSOR ACT IS NOT STARTED AUTOMATICALLY.**
+
 # ACT-CLINEMM-CMP05-TERMINAL-NEGATIVE-SIGNAL-PRECEDENCE-01 — GO_CMP05_TERMINAL_NEGATIVE_SIGNAL_PRECEDENCE — 2026-11-25
 
 ```text
