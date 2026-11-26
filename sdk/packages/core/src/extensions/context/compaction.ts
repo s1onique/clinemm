@@ -492,7 +492,7 @@ export type CompactionInstallationRefusalReason =
  * assignable to the `saveState` signature.
  */
 export type CompactionInstallationReport =
-	| undefined
+	| void
 	| boolean
 	| CompactionInstallationOutcome;
 

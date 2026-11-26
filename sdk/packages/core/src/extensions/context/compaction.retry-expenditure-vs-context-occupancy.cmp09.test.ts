@@ -517,8 +517,8 @@ describe("ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (ADDENDUM-01) — retry 
 		// The AGGREGATE the middleware emits covers EVERY physical attempt.
 		expect(single.usages).toHaveLength(1);
 		expect(multi.usages).toHaveLength(1);
-		const singleInput = single.usages[0]?.inputTokens as number;
-		const multiInput = multi.usages[0]?.inputTokens as number;
+		const singleInput = single.usages[0]!.inputTokens as number;
+		const multiInput = multi.usages[0]!.inputTokens as number;
 
 		// CONSERVATION: the aggregate expenditure grows with the attempt
 		// count. This is the billing/accounting authority and it is
