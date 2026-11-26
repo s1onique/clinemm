@@ -84,11 +84,11 @@ import {
 	normalizeJsonLikeStringsForSchema,
 	omitUnauthorizedReasoningBlocks,
 	omitUndefinedValues,
-	requiresSignedReasoningCapability,
 	// ACT-CLINEMM-R2-SELECTION-CONTRACT-CORRECTION-01: the runtime-owned
 	// parent-obligation reference vocabulary.
 	type ParentObligationReference,
 	renderBoundedObjectiveInstruction,
+	requiresSignedReasoningCapability,
 	resolveBoundedObjectiveVerification,
 	sanitizeTraceErrorMessage,
 	TASK_CANCELLED_EVENT,
@@ -5617,11 +5617,89 @@ export class AgentRuntime {
 						// Record the provider's own input-token count for this request so
 						// the prepare-turn pipeline can trigger compaction on real usage
 						// rather than a character-based estimate.
-						if (
-							typeof event.usage.inputTokens === "number" &&
-							event.usage.inputTokens > 0
-						) {
-							this.state.lastRequestInputTokens = event.usage.inputTokens;
+						//
+						// ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (ADDENDUM-01):
+						// THE AUTHORITY BOUNDARY.
+						//
+						// `event.usage.inputTokens` is the AGGREGATE EXPENDITURE: the
+						// production retry middleware sums the usage of every PHYSICAL
+						// ATTEMPT of the turn, because the provider billed every one of
+						// them. It is the correct BILLING quantity, and `updateUsage`
+						// below keeps accumulating it unchanged.
+						//
+						// It is NOT the correct CONTEXT-OCCUPANCY quantity. The
+						// compaction budget's calibration compares the provider's count
+						// for the PREVIOUS request against the estimator's count for
+						// the CURRENT one, so both sides must describe ONE request's
+						// occupancy. Re-sending the same prompt three times costs
+						// three times as much but occupies the provider's window
+						// exactly as much as sending it once: presenting the
+						// aggregate as an occupancy lets retries ALONE manufacture a
+						// context-window overflow.
+						//
+						// ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (ADDENDUM-01
+						// CORRECTION-01): THE OCCUPANCY AUTHORITY.
+						//
+						// The authority is THREE-VALUED, and the distinction is what
+						// forbids the aggregate fallback:
+						//
+						//   "single"  ONE physical attempt — the aggregate IS the
+						//              request's occupancy (the LEGACY shape);
+						//   "known"   the SERVED attempt's own prompt size is the
+						//              occupancy;
+						//   "unknown" the aggregate covers an UNKNOWN number of
+						//              requests, so it establishes NO request's
+						//              occupancy. The authority is DENIED.
+						//
+						// An EXPLICITLY UNREPORTED occupancy must NOT fall back to the
+						// aggregate: the aggregate is EXPENDITURE over an unknown number
+						// of requests, so it describes no single request's occupancy at
+						// all. Substituting it re-introduces the very defect this
+						// authority was established to remove.
+						//
+						// When the authority is DENIED, the previous request's occupancy
+						// is CLEARED rather than left standing: a STALE occupancy must
+						// not be silently attributed to the current request.
+						//
+						// The aggregate is never divided by an assumed attempt count and
+						// cached tokens are never subtracted.
+						const occupancy = event.usage.requestOccupancy;
+						if (occupancy !== undefined) {
+							if (occupancy.state === "unknown") {
+								// The occupancy is UNKNOWN: no authority, and the
+								// previous request's occupancy must not linger.
+								this.state.lastRequestInputTokens = 0;
+							} else {
+								const established =
+									occupancy.state === "single"
+										? event.usage.inputTokens
+										: occupancy.value;
+								if (
+									typeof established === "number" &&
+									Number.isFinite(established) &&
+									established > 0
+								) {
+									this.state.lastRequestInputTokens = established;
+								} else {
+									// An INVALID measurement grants no occupancy
+									// authority, and no stale value may stand in for it.
+									this.state.lastRequestInputTokens = 0;
+								}
+							}
+						} else {
+							// NO AUTHORITY AT ALL: the usage did not carry the
+							// middleware's occupancy authority. This is the LEGACY
+							// single-request shape (the usage describes ONE request, so
+							// its input count IS that request's occupancy), which is
+							// preserved exactly. The stale value is NOT carried over,
+							// because the current request's occupancy is the fact being
+							// published.
+							const legacy =
+								typeof event.usage.inputTokens === "number" &&
+								event.usage.inputTokens > 0
+									? event.usage.inputTokens
+									: undefined;
+							this.state.lastRequestInputTokens = legacy ?? 0;
 						}
 						await this.updateUsage(event.usage);
 						break;

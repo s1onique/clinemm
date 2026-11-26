@@ -1,3 +1,101 @@
+# ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (ADDENDUM-01 CORRECTION-01) — GO_CMP09_RETRY_EXPENDITURE_AUTHORITY — 2026-11-26
+
+```text
+ACT_ID:       ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (ADDENDUM-01
+              CORRECTION-01)
+TYPE:         bounded causal discrimination and repair (integrated amendment)
+VERDICT:      GO_CMP09_RETRY_EXPENDITURE_AUTHORITY
+EPIC:         CMP-09
+EVIDENCE:     docs/acts/ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01/ADDENDUM01.md
+SCOPE:        an ADDENDUM to the existing CMP-09 amendment. NOT a separate
+              ACT. No diagnostics framework.
+```
+
+**A BOUNDED CORRECTION OF THE ADDENDUM'S OWN REPAIR.** The reviewer
+independently executed the production stamping function, the reader and the
+runtime assignment and found two defects in the predecessor's repair.
+
+**A1 (P0) — THE MISSING PHYSICAL-REQUEST OCCUPANCY.** The predecessor's
+runtime read `requestInputTokens ?? event.usage.inputTokens`, so whenever the
+served attempt's measurement was unavailable the AGGREGATE EXPENDITURE
+re-entered as the CONTEXT OCCUPANCY (aggregate=4000 with served=undefined, 0
+or -1 all produced occupancy=4000). The root cause: the predecessor carried
+ONE number where the fact is THREE-VALUED. The correction replaces it with a
+THREE-VALUED PHYSICAL-REQUEST OCCUPANCY AUTHORITY — `single` (the aggregate IS
+the occupancy), `known` (the served attempt's count), `unknown` (the authority
+is EXPLICITLY DENIED). A denied authority CLEARS the previous occupancy, so a
+STALE occupancy is never silently attributed to the current request.
+
+**A2 (P1) — THE MEASUREMENT PROVENANCE.** The predecessor carried the marker
+inside `usage.raw`, which the resolved `@ai-sdk/anthropic@4.0.94` adapter sets
+to the PROVIDER'S OWN raw usage payload (`raw: rawUsage ?? usage`). The
+reviewer's shape (a raw marker of 1 with an aggregate of 4000) was therefore
+REACHABLE, and the provider's field established the middleware-owned
+occupancy authority. The correction moves the authority to the EXISTING
+metadata seam: the finish part's `providerMetadata`, under the `cline`
+namespace. `providerMetadata` is keyed by the OWNING provider's name
+(`anthropic`, `google`, `vertex`), so the `cline` namespace is
+middleware-owned and a provider cannot forge it.
+
+**THE SEAM REQUIRED ONE SMALL CORRECTION TO ACTUALLY CARRY IT.** The AI SDK's
+`streamText` emits its OWN `finish` part WITHOUT `providerMetadata`; the
+MODEL's metadata arrives on the `finish-step` part, which the predecessor
+discarded. It is now captured, and the `finish` handler MERGES rather than
+replaces, so the authority survives the `stream.usage` path.
+
+```text
+ACT-OWNED WITNESSES:   9 (all PASSED)
+  CMP09-RETRY-01      the aggregate session input consumption GROWS with the
+                      physical attempt count (the expenditure is conserved)
+  CMP09-RETRY-02/03   the occupancy stays on the INDIVIDUAL request; retries
+                      ALONE cannot manufacture an overflow
+  CMP09-RETRY-04      the aggregate expenditure is PRESERVED for billing while
+                      the context authority stays on the individual request
+  CMP09-RETRY-05      the estimator calibration is computed against the
+                      INDIVIDUAL request
+  CMP09-RETRY-06      an ESTABLISHED occupancy is the individual request's count
+  CMP09-RETRY-07      an EXPLICITLY UNREPORTED occupancy grants NO authority
+                      (five shapes: absent/zero/negative under `unknown` AND
+                      under `known`)
+  CMP09-RETRY-08      a LEGACY single-request usage keeps the aggregate as the
+                      occupancy (both the no-authority shape and `single`)
+  CMP09-RETRY-09      an UNTRUSTED raw marker cannot establish the authority —
+                      asserted against the PRODUCTION reader, including that a
+                      PROVIDER's own namespace cannot establish it
+  CMP09-RETRY-10      a SUBSEQUENT request after an unreported measurement gets
+                      NO stale occupancy
+RED receipts retained: R1.1 (the aggregate reached the occupancy) and R1.3 (a
+                      provider-supplied raw marker established the authority)
+                      fail against the repaired behaviour; R1.2 is a
+                      STRUCTURAL assertion that the predecessor's
+                      aggregate-fallback expression no longer exists in the
+                      production runtime source. The INDEPENDENT evidence for
+                      A1/A2 is the REVIEWER's own execution, preserved in the
+                      addendum — a historical-behaviour assertion alone is NOT
+                      sufficient to establish RED.
+                      `bun run test:red:cmp09-retry-expenditure`
+EXISTING SUITES:       core context 1290 passed | 2 skipped
+                       llms 136 passed | agents 152 passed
+TYPECHECK:              shared/llms/agents CLEAN; core 45 -> 45, ZERO DELTA
+BIOME:                  clean on every touched file
+SDK BUILD:              shared, llms, agents, core all built
+INFERENCE REQUESTS:     0
+```
+
+**THE CONSTRAINTS HOLD.** The aggregate billing/accounting is PRESERVED (the
+session input total still grows with the attempt count). NO cached tokens are
+subtracted. NO total is divided by an assumed retry count. NO threshold is
+modified. NO request registry, ledger or diagnostics framework was added, and
+no usage metadata implementation is duplicated: the authority uses the
+EXISTING `providerMetadata` seam.
+
+**THE HISTORICAL ITERATION-23 ATTRIBUTION REMAINS HYPOTHESIS_ONLY and is NOT
+reopened.** The addendum establishes that the aggregate COULD reach the
+context authority and that it DID in the reproduced trajectory. The actual
+historical retry cardinality and the usage scope of the recorded
+`inputTokens` remain unestablished.
+
+
 # ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 — GO_CMP09_CONTEXT_BUDGET_AUTHORITY + MEASUREMENT_DIVERGENCE_NOT_CAUSAL — 2026-11-26
 
 ```text

@@ -59,7 +59,13 @@ import {
 	isRetryableBeyondSdkRetries,
 } from "./error-classification";
 import { extractErrorMessage } from "./format";
-import { createRetryEmptyResponseMiddleware } from "./middleware/retry-empty-response";
+// ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (ADDENDUM-01 CORRECTION-01):
+// the reader for the middleware-owned PHYSICAL-REQUEST OCCUPANCY authority.
+import {
+	createRetryEmptyResponseMiddleware,
+	type PhysicalRequestOccupancy,
+	readPhysicalRequestOccupancy,
+} from "./middleware/retry-empty-response";
 import {
 	isAnthropicCompatibleModel,
 	isCerebrasProvider,
@@ -118,6 +124,34 @@ interface GatewayNormalizedUsage {
 	cacheWriteTokens: number;
 	reasoningTokenCount?: number;
 	totalCost?: number;
+	/**
+	 * ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (ADDENDUM-01 CORRECTION-01).
+	 *
+	 * The PHYSICAL-REQUEST OCCUPANCY AUTHORITY — the middleware-owned fact
+	 * about the CONTEXT OCCUPANCY of the ONE request whose prompt occupied
+	 * the provider's context window.
+	 *
+	 * `inputTokens` above is the AGGREGATE EXPENDITURE: the production retry
+	 * middleware sums the usage of every PHYSICAL ATTEMPT of the turn, because
+	 * the provider billed every one of them. That is the correct BILLING
+	 * quantity and it is preserved unchanged.
+	 *
+	 * This field is the CONTEXT-BUDGET authority's quantity, and it is
+	 * THREE-VALUED:
+	 *
+	 *   "single"  ONE physical attempt — the aggregate IS the occupancy;
+	 *   "known"   the SERVED attempt's own prompt size is the occupancy;
+	 *   "unknown" the aggregate covers an UNKNOWN number of requests, so it
+	 *             establishes NO request's occupancy. The authority is
+	 *             DENIED and the consumer must NOT fall back to the
+	 *             aggregate.
+	 *
+	 * It is ABSENT when no authority was established at all (for example a
+	 * usage record that did not pass through the retry middleware). It is
+	 * NEVER synthesized from the aggregate and NEVER derived by dividing the
+	 * aggregate by an assumed attempt count.
+	 */
+	requestOccupancy?: PhysicalRequestOccupancy;
 }
 type ProviderModuleKind = AiSdkProviderOptionsTarget;
 type ImageGenerationInput = string | Uint8Array | ArrayBuffer;
@@ -1304,6 +1338,43 @@ function extractProviderNestedUsage(
 	return undefined;
 }
 
+/**
+ * ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (ADDENDUM-01 CORRECTION-01).
+ *
+ * Merge two provider-metadata records, with the SECOND taking precedence
+ * within each provider's namespace.
+ *
+ * `providerMetadata` is `Record<string, JSONObject>` keyed by the OWNING
+ * provider's name, so the namespaces are independent: merging them keeps
+ * every namespace intact and never lets one provider's namespace overwrite
+ * another's.
+ */
+function mergeProviderMetadata(base: unknown, overlay: unknown): unknown {
+	if (!base || typeof base !== "object") {
+		return overlay;
+	}
+	if (!overlay || typeof overlay !== "object") {
+		return base;
+	}
+	const baseRecord = base as Record<string, unknown>;
+	const overlayRecord = overlay as Record<string, unknown>;
+	const merged: Record<string, unknown> = { ...baseRecord };
+	for (const [namespace, value] of Object.entries(overlayRecord)) {
+		const existing = baseRecord[namespace];
+		merged[namespace] =
+			existing &&
+			typeof existing === "object" &&
+			value &&
+			typeof value === "object"
+				? {
+						...(existing as Record<string, unknown>),
+						...(value as Record<string, unknown>),
+					}
+				: value;
+	}
+	return merged;
+}
+
 function calculateUsageCostFromPricing(
 	usage: Omit<GatewayNormalizedUsage, "totalCost">,
 	pricingValue: unknown,
@@ -1560,12 +1631,41 @@ export function normalizeUsage(
 		? visibleOutputResolution.value
 		: Math.max(0, outputTotal - reasoningTokenCount);
 
+	//
+	// ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (ADDENDUM-01 CORRECTION-01).
+	//
+	// The PHYSICAL-REQUEST OCCUPANCY AUTHORITY, carried by the production
+	// retry middleware alongside the aggregate.
+	//
+	// It is read from the finish part's `providerMetadata`, under the
+	// middleware-owned `cline` namespace. It is NEVER read from the usage
+	// record's `raw` payload: the resolved `@ai-sdk/anthropic` adapter sets
+	// `raw` to the PROVIDER'S OWN raw usage payload, so a provider-supplied
+	// field could otherwise establish the occupancy authority.
+	//
+	// It is NEVER derived from the aggregate: no division by an assumed
+	// attempt count, no subtraction of cached tokens, no inference from the
+	// output side.
+	//
+	// The authority is THREE-VALUED, and the distinction is what forbids the
+	// aggregate fallback:
+	//
+	//   "single"  ONE physical attempt — the aggregate IS the occupancy;
+	//   "known"   the SERVED attempt's own prompt size is the occupancy;
+	//   "unknown" the aggregate covers an UNKNOWN number of requests, so it
+	//             establishes NO request's occupancy. The authority is
+	//             DENIED.
+	const occupancyAuthority = readPhysicalRequestOccupancy(providerMetadata);
+
 	return {
 		...normalizedUsage,
 		outputTokens: visibleOutput,
 		...(reasoningTokenCount > 0 ? { reasoningTokenCount } : {}),
 		...(typeof resolvedTotalCost === "number"
 			? { totalCost: resolvedTotalCost }
+			: {}),
+		...(occupancyAuthority !== undefined
+			? { requestOccupancy: occupancyAuthority }
 			: {}),
 	};
 }
@@ -2067,6 +2167,26 @@ async function* emitAiSdkEvents(
 				}
 				if (part.type === "finish-step") {
 					requestId = findRequestIdHeader(part.response?.headers);
+					//
+					// ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (ADDENDUM-01
+					// CORRECTION-01).
+					//
+					// The `finish-step` part is the ONE part that carries the MODEL's
+					// own `providerMetadata` — the AI SDK's own `finish` part does not
+					// carry it at all.
+					//
+					// That matters because the production retry middleware stamps the
+					// MIDDLEWARE-OWNED PHYSICAL-REQUEST OCCUPANCY AUTHORITY into the
+					// model's finish part's `providerMetadata` (under the `cline`
+					// namespace), and that stamp is what distinguishes the AGGREGATE
+					// expenditure from the CONTEXT OCCUPANCY. It must be captured here
+					// or the authority is silently lost.
+					if (part.providerMetadata !== undefined) {
+						finishProviderMetadata = mergeProviderMetadata(
+							finishProviderMetadata,
+							part.providerMetadata,
+						);
+					}
 					continue;
 				}
 				if (part.type === "text-delta") {
@@ -2434,7 +2554,20 @@ async function* emitAiSdkEvents(
 
 				if (part.type === "finish") {
 					finishUsage = part.usage ?? part.totalUsage;
-					finishProviderMetadata = part.providerMetadata;
+					//
+					// ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (ADDENDUM-01
+					// CORRECTION-01): the metadata is MERGED, not replaced.
+					//
+					// The `finish-step` part already contributed the MODEL's own
+					// `providerMetadata` — which is where the middleware-owned
+					// PHYSICAL-REQUEST OCCUPANCY AUTHORITY travels. Replacing it
+					// here would drop that authority on the floor.
+					if (part.providerMetadata !== undefined) {
+						finishProviderMetadata = mergeProviderMetadata(
+							finishProviderMetadata,
+							part.providerMetadata,
+						);
+					}
 					finishReason = part.finishReason;
 				}
 
@@ -2584,6 +2717,26 @@ async function* emitAiSdkEvents(
 	} else {
 		usageToEmit = finishUsage;
 		metadataToUse = finishProviderMetadata;
+	}
+
+	//
+	// ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (ADDENDUM-01 CORRECTION-01).
+	//
+	// The finish part's `providerMetadata` carries the MIDDLEWARE-OWNED
+	// PHYSICAL-REQUEST OCCUPANCY AUTHORITY. It must reach the normalizer on
+	// EVERY path, including the `stream.usage` path where the usage is
+	// preferred over the finish part's own usage: the two carry DIFFERENT
+	// facts (the aggregate expenditure versus the occupancy authority), and
+	// dropping the metadata would silently drop the occupancy authority.
+	//
+	// The finish part's metadata is MERGED with whatever the usage path
+	// supplied, so the provider's own metadata (used for cost extraction) is
+	// preserved exactly.
+	if (finishProviderMetadata !== undefined) {
+		metadataToUse = mergeProviderMetadata(
+			metadataToUse,
+			finishProviderMetadata,
+		);
 	}
 
 	if (usageToEmit) {

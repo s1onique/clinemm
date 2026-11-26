@@ -72,6 +72,7 @@
     "test:red:pck-observation-assurance": "vitest run --config vitest.red.pck-observation-assurance.config.ts",
     "test:red:pck-same-class-assurance": "vitest run --config vitest.red.pck-same-class-assurance.config.ts",
     "test:red:pck-physical-request-cardinality": "vitest run --config vitest.red.pck-physical-request-cardinality.config.ts",
+    "test:red:cmp09-retry-expenditure": "vitest run --config vitest.red.cmp09-retry-expenditure.config.ts",
     "test:live:pck-qwen-inference-policy": "bun scripts/pck-qwen-inference-policy.live-qualification.ts",
     "test:model-gate:pck-closed-contract": "bun scripts/pck-closed-contract.model-gate.ts",
     "verify:routines": "zsh -lc 'bunx vitest run src/cron/schedule-service.test.ts --config vitest.config.ts'",
