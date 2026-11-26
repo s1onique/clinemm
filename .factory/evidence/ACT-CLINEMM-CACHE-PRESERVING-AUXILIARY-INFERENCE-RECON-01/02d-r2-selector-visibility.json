@@ -1,25 +1,31 @@
 {
   "actId": "ACT-CLINEMM-CACHE-PRESERVING-AUXILIARY-INFERENCE-RECON-01",
-  "c5": "C5 R2 selector source visibility",
+  "amendment": "AMENDMENT-01",
   "evidenceClass": "REAL_PRODUCTION_SEAM",
+  "boundary": {
+    "preSelectionCapture": "cap_run__Jq4WUpj_79_3befdd8362098a61.ai_sdk_prompt.1.provider-request.json",
+    "preSelectionIteration": 79,
+    "preSelectionMessageCount": 160,
+    "postSelectionObservationsUsed": false
+  },
   "selector": {
     "systemChars": 1722,
     "promptChars": 20256,
     "messageCount": 1,
     "toolCount": 0
   },
-  "parent": {
-    "systemPromptChars": 4607,
-    "messageCount": 488,
-    "toolCallCount": 239,
-    "toolResultCount": 205
+  "preSelectionActivity": {
+    "parentTaskShingleCount": 280,
+    "parentTaskShinglesVisibleInSelectorPrompt": 86,
+    "engineeringActivityShingleCount": 8414,
+    "engineeringActivityShinglesVisibleInSelectorPrompt": 4,
+    "taskBoilerplateShinglesVisibleInSelectorPrompt": 17
   },
-  "establishedObservationsVerbatim": "(cite these verbatim):\n- The last 5 consecutive execution round(s) produced no productive step\n- The unproductive round(s) used only these tools: run_commands\n- No edit was attempted in the unproductive round(s)\n- The runtime's corrective-instruction allowance is exhausted (2 instruction(s) were already delivered and produced no productive step)\n- The working directory is available and the editor is enabled",
-  "obligationReferencesVerbatim": "(cite these ids EXACTLY in obligationReferences):\n- parent-task:original — The original authorized parent task (user authority)\n- parent-task:ACT-INFRA-BASALT-LIFECYCLE-CORR03 — ACT-INFRA-BASALT-LIFECYCLE-CORR03",
+  "establishedObservationsVerbatim": "Established observations (cite these verbatim):\n- The last 5 consecutive execution round(s) produced no productive step\n- The unproductive round(s) used only these tools: run_commands\n- No edit was attempted in the unproductive round(s)\n- The runtime's corrective-instruction allowance is exhausted (2 instruction(s) were already delivered and produced no productive step)\n- The working directory is available and the editor is enabled",
   "visibilityCategories": {
     "previously_attempted_changes": {
-      "visible": false,
-      "evidence": "0 of 1427 parent activity shingles appear verbatim in the selector prompt"
+      "visible": true,
+      "evidence": "4 of 8414 PRE-SELECTION engineering-activity shingles appear verbatim in the selector prompt (the parent TASK shingles that do appear are the parent task text the selector is entitled to see)"
     },
     "successful_changes": {
       "visible": false,
@@ -54,36 +60,13 @@
       "evidence": "the selector prompt cites no canonical message references, because the existing projection carries no canonical reference ids"
     }
   },
-  "projections": {
-    "S0": {
-      "name": "existing selector context",
-      "seesCompletedWork": false,
-      "seesVerificationOutcomes": false,
-      "seesTranscriptTail": false,
-      "note": "the historical stale-objective witness: the objective proposed implementing rpCommitted recovery behaviour that the parent had already implemented and verified"
-    },
-    "S1": {
-      "name": "existing selector context plus a bounded projection of established engineering evidence",
-      "seesCompletedWork": "FEASIBLE — the parent history already carries tool-level activity; a bounded projection of successful edits and verification outcomes could be derived from it",
-      "seesVerificationOutcomes": "FEASIBLE — the tool results carry the command output, but no trustworthy success classification exists yet and must not be inferred from command execution alone",
-      "seesTranscriptTail": false,
-      "note": "the smallest evidence projection; it does not preserve a parent request prefix, because the selector is an INDEPENDENT request"
-    },
-    "S2": {
-      "name": "cache-compatible parent-context projection with a selection activation suffix",
-      "seesCompletedWork": true,
-      "seesVerificationOutcomes": true,
-      "seesTranscriptTail": true,
-      "note": "structurally feasible against the parent request, but it would broaden the selector's authority beyond the bounded-objective contract and is NOT proposed for the PCK successor"
-    }
-  },
   "claims": {
-    "STALE_OBJECTIVE_WITNESS": "CONFIRMED — the selector prompt asks for an objective advancing an outstanding obligation and cites only stagnation facts; the parent history shows the rpCommitted work was already implemented and tested, and no projection of that work reached the selector prompt",
+    "STALE_OBJECTIVE_WITNESS": "CONFIRMED — the selector cites only stagnation facts; the parent history shows the rpCommitted work was already implemented and tested, and no projection of that work reached the selector prompt",
     "SELECTOR_SOURCE_VISIBILITY": "the selector sees the parent task text, the obligation reference ids, the available tools, the remaining allowance and a stagnation-only observation list; it does NOT see the parent's tool activity, verification outcomes or transcript tail",
-    "COMPLETED_WORK_EVIDENCE_AVAILABLE": "YES in the parent history (tool calls and tool results exist in the frozen transcript)",
-    "COMPLETED_WORK_EVIDENCE_PROJECTED": "NO — none of the parent activity shingles appears verbatim in the selector prompt",
+    "COMPLETED_WORK_EVIDENCE_AVAILABLE": "YES in the pre-selection parent request",
+    "COMPLETED_WORK_EVIDENCE_PROJECTED": "NO — no pre-selection activity shingle appears in the selector prompt",
     "OUTSTANDING_WORK_AUTHORITY": "the parent obligation reference ids and the parent task text; the selector cannot infer completion from them",
     "SMALLEST_EVIDENCE_PROJECTION": "a bounded list of completed/verified engineering observations, derived from the parent's own recorded activity, added to the selector prompt",
-    "FULL_CONTEXT_CANDIDATE_FEASIBILITY": "structurally feasible (see S2) but out of scope for the PCK successor and it would weaken the bounded-objective authority boundary"
+    "FULL_CONTEXT_CANDIDATE_FEASIBILITY": "structurally feasible but out of scope for the PCK successor and it would weaken the bounded-objective authority boundary"
   }
 }

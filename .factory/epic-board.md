@@ -1,3 +1,53 @@
+# ACT-CLINEMM-CACHE-PRESERVING-AUXILIARY-INFERENCE-RECON-01 (AMENDMENT-01) — GO_PCK_PREFIX_PRESERVING_IMPLEMENTATION — 2026-11-26
+
+```text
+ACT_ID:       ACT-CLINEMM-CACHE-PRESERVING-AUXILIARY-INFERENCE-RECON-01 (AMENDMENT-01)
+TYPE:         bounded correction cycle (one cycle; no new reconnaissance campaign)
+VERDICT:      GO_PCK_PREFIX_PRESERVING_IMPLEMENTATION
+ENTRY_HEAD:   9e20409e6fdd65fc36e5ed672ce000f508ed1b32
+BRANCH:       main
+```
+
+**A1 — THE COMPARISON IS NOW BETWEEN EQUAL CONTRACTS.** The recon compared an
+unequal pair and ranked candidates by JSON character ratios. The corrected
+comparison is A (the existing independent PCK request), B' (the COMPLETE
+existing extraction contract appended at the TAIL of an UNCHANGED parent
+projection) and C' (the complete equivalent contract partitioned between a
+session-initialized persistent protocol and a dynamic activation suffix). B' and
+C' are MEASURED contract-equivalent: 33 of 33 required extraction elements each
+(closed vocabulary, output shape, prohibitions, attribution, canonical
+references, source interval, objective) and identical element sets. The
+conversation is NOT duplicated by B'/C'. A carries only 31 of 33: the legacy
+request has no explicit authorized source interval and no explicit objective.
+
+**A4 — THE PREFIX METRIC IS CORRECTED.** `systemEqualToParent` read an absent
+top-level `system` field; it now reads the route-specific representation
+(`messages[0].role=system`). The character ratios are REMOVED from every
+eligibility and ranking claim; byte sizes, the protocol overhead (2 717 bytes)
+and the suffix sizes (B' 2 458, C' 472) are reported instead. Rendered tokens
+stay UNKNOWN; cache residency stays NOT_EXECUTED. The PCK inference-policy
+claim is bound to the ACTUAL resolved policy: `qwen-strata-v1` puts
+`reasoning_effort: none`, `temperature: 0.1`, `max_tokens: 1024` and
+`response_format: json_object` on the PCK wire and NOTHING on the ordinary wire
+— an open successor decision for a prefix-preserving path.
+
+**A2/A3 — SOURCE VISIBILITY IS NOT CONSERVED, AND THAT IS NOW THE FINDING.**
+The parent-derived candidates EXPOSE material the legacy controlled view
+excluded: private reasoning (the projection carries thinking blocks to the wire
+as `reasoning_content`), the loss of the normalized `status=succeeded` /
+`status=failed` observation status, and the loss of the inline
+reference-to-content binding (the projection DROPS the canonical ids). The
+precise missing seam: the canonical-id <-> provider-visible-position binding is
+not carried on the wire. Enforcement measured: the gate REJECTS an unobserved
+reference (REFERENCE_NOT_CANONICAL) and DOWNGRADES a reasoning-only or
+user-text-only citation to `model_reported`; it does not reject that citation.
+The executor boundary is established structurally: the PCK transport chain's
+63-file import closure contains zero executor, MCP and approval modules and
+zero executor identifiers; a REAL gateway round trip carrying the parent's
+visible mutation tool and a syntactically valid tool call is rejected with
+`tool_call_attempted`, zero executor invocations. The production composition
+remains NOT_EXECUTED.
+
 # ACT-CLINEMM-CACHE-PRESERVING-AUXILIARY-INFERENCE-RECON-01 — GO_PCK_PREFIX_PRESERVING_IMPLEMENTATION — 2026-11-26
 
 ```text
@@ -11,6 +61,56 @@ BRANCH:       main
 
 **THE DECISIVE STRUCTURAL FACT.** A system-prompt modification sits UPSTREAM of the
 whole conversation on both production wire shapes: the Anthropic-style body renders
+
+**A5 — THE PROBES ARE GATES.** 20 asserted invariants, exit 0 when they hold;
+a failed required invariant exits NON-ZERO (demonstrated by the `--failure-path`
+run, exit 1). The negative control (a deliberately broken prefix component) is
+DETECTED. The imported provider artifact is SOURCE
+(`sdk/packages/llms/src/index.ts`), bound to the entry head, and the probes are
+typechecked with `tsconfig.probes.json`.
+
+**A6 — THE R2 COMPARISON IS BOUNDED.** The selector comparison uses the
+PRE-SELECTION parent request 79; parent-task shingles and engineering-activity
+shingles are counted separately: only 4 of 8 414 engineering-activity shingles
+appear (incidental boilerplate) and the selector's observation list still
+carries no completed-work fact. The stale-objective witness is preserved.
+
+**A7 — THE SELECTION IS B', NOT C'.** Nothing measured offline makes the
+persistent protocol necessary; C' would add 2 717 bytes to every ordinary
+request and require a fresh session, while B' changes nothing in the ordinary
+request. B' is selected as the smaller implementation; C' is retained as a
+HYPOTHESIS, not as a second permanent architecture; A remains the legacy
+fallback.
+
+**A8 — THE HISTORICAL PERFORMANCE CLAIMS ARE CORRECTED.** Historical PCK
+cold-prefill duration: UNESTABLISHED. Historical PCK cache reuse:
+UNESTABLISHED. PCK deadline: 180 000 ms, from source. Historical knowledge
+loss: independently established. The >=95% reuse and <15 s prefill figures stay
+PROPOSED targets, and the successor's live experiment must acquire positively
+correlated parent and PCK request evidence.
+
+```text
+EVIDENCE:               .factory/evidence/ACT-CLINEMM-CACHE-PRESERVING-AUXILIARY-INFERENCE-RECON-01/
+                        01 ownership (+ AMENDMENT-01 corrections), 02 W2 prefix
+                        discriminator, 02b contract equivalence, 02c source visibility
+                        and execution, 02d selector visibility (pre-selection), 02e
+                        executable gates, 03 candidate disposition, 04 successor
+                        contract, 05 knowledge benchmark (+ attribution), 06 amendment
+                        record, replay/ (5 probes + tsconfig.probes.json)
+PRODUCTION SOURCE DELTA: NONE
+ACT-OWNED DIAGNOSTICS:   0
+INFERENCE REQUESTS:      0 (injected fetch + frozen captures only)
+VSIX PACKAGED:           NO
+FROZEN EVIDENCE:         CONSERVED (archive read-only; sha256 verified)
+PROTECTED STASHES:       CONSERVED
+GATES:                   20 PASS, exit 0; negative control DETECTED; failure path
+                        exits 1
+TYPECHECK:               probe code CLEAN (tsc -p replay/tsconfig.probes.json)
+BIOME:                   clean on the probe files (8 noNonNullAssertion warnings)
+SUCCESSOR:               ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01
+```
+
+
 `system` before `messages`, and the OpenAI-compatible body renders the system prompt as
 `messages[0]`. The frozen MiniMax Arm A evidence proves the consequence: the R2 objective
 projection appends +1426 chars to the END of the system prompt, the first divergent

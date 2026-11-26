@@ -1,0 +1,117 @@
+{
+  "actId": "ACT-CLINEMM-CACHE-PRESERVING-AUXILIARY-INFERENCE-RECON-01",
+  "amendment": "AMENDMENT-01",
+  "evidenceClass": "SYNTHETIC_REAL_PRODUCTION_SEAM",
+  "legacyControlledView": {
+    "carriesCanonicalIdsInline": true,
+    "carriesSuccessfulObservation": true,
+    "carriesFailedObservation": true,
+    "normalizesSuccessStatus": true,
+    "carriesRetractedConclusion": true,
+    "excludesUnsignedReasoning": true,
+    "excludesSignedReasoning": true,
+    "carriesReasoningSignature": true,
+    "longBodyRetained": true,
+    "longBodyTruncated": false
+  },
+  "candidateAuxiliaryRequest": {
+    "carriesCanonicalIdsInline": false,
+    "referenceLabelsVisibleInSuffix": true,
+    "carriesSuccessfulObservation": true,
+    "carriesFailedObservation": true,
+    "normalizesFailureStatus": false,
+    "carriesRetractedConclusion": true,
+    "excludesUnsignedReasoning": false,
+    "excludesSignedReasoning": false,
+    "longBodyRetained": true,
+    "longBodyTruncated": true,
+    "toolSchemaPresent": true
+  },
+  "deltas": [
+    "private reasoning: the legacy controlled view EXCLUDES it, the parent-derived candidate EXPOSES it",
+    "observation status: the legacy controlled view NORMALIZES success/failure, the parent-derived candidate carries the raw payload only",
+    "evidence-reference binding: the legacy controlled view BINDS each reference to its content inline, the candidate lists references WITHOUT their content",
+    "bounded source material: the two surfaces truncate differently"
+  ],
+  "evidenceReferenceBinding": {
+    "legacyBindsReferenceToContent": true,
+    "candidateBindsReferenceToContent": false,
+    "candidateReferenceLabelsVisible": true,
+    "missingSeam": "the canonical id <-> provider-visible message position binding is NOT carried on the wire: the ids are dropped by the projection and the reference list alone cannot resolve which content a reference denotes"
+  },
+  "publicationGateProbes": [
+    {
+      "label": "successful-observation",
+      "reference": "id:msg-3",
+      "observedAssurance": "model_reported",
+      "acceptedRecordCount": 1,
+      "acceptedAssurances": [
+        "model_reported"
+      ],
+      "codes": []
+    },
+    {
+      "label": "user-text-only",
+      "reference": "id:msg-1",
+      "observedAssurance": "model_reported",
+      "acceptedRecordCount": 1,
+      "acceptedAssurances": [
+        "model_reported"
+      ],
+      "codes": []
+    },
+    {
+      "label": "signed-reasoning-message",
+      "reference": "id:msg-4",
+      "observedAssurance": "model_reported",
+      "acceptedRecordCount": 1,
+      "acceptedAssurances": [
+        "model_reported"
+      ],
+      "codes": []
+    },
+    {
+      "label": "unsupported-reference",
+      "reference": "id:msg-does-not-exist",
+      "observedAssurance": "unverified",
+      "acceptedRecordCount": 0,
+      "acceptedAssurances": [],
+      "codes": [
+        "REFERENCE_NOT_CANONICAL"
+      ]
+    }
+  ],
+  "inferencePolicyConservation": {
+    "resolvedPolicy": "qwen-strata-v1",
+    "pckRequestOnTheWire": {
+      "reasoning_effort": "none",
+      "temperature": 0.1,
+      "max_tokens": 1024,
+      "response_format": {
+        "type": "json_object"
+      }
+    },
+    "ordinaryRequestOnTheWire": {
+      "reasoning_effort": null,
+      "response_format": null,
+      "max_tokens": 16384
+    }
+  },
+  "visibleToolExecution": {
+    "toolSchemaPresentOnTheWire": true,
+    "streamChunkTypes": [
+      "tool_calls",
+      "usage",
+      "done"
+    ],
+    "toolCallObservedByTheTransport": true,
+    "auxiliaryResultRejected": true,
+    "acceptedRecordCount": 0,
+    "executorInvocationCount": 0,
+    "executorBoundary": "the PCK transport chain (runtime.ts -> summary-generation.ts -> the llms provider) contains NO tool executor: the import closure carries no executor, MCP or approval module, and the transport only PRODUCES stream chunks",
+    "importClosureFileCount": 63,
+    "executorPathsInImportClosure": [],
+    "executorIdentifierMatches": [],
+    "productionComposition": "NOT_EXECUTED — the production composition that would carry the parent's VISIBLE tool schema on the auxiliary request does not exist yet; the seam qualified here is the isolated inference path"
+  }
+}

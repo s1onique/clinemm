@@ -1,67 +1,88 @@
-# ACT-CLINEMM-CACHE-PRESERVING-AUXILIARY-INFERENCE-RECON-01 — 03 candidate disposition
+# ACT-CLINEMM-CACHE-PRESERVING-AUXILIARY-INFERENCE-RECON-01 (AMENDMENT-01) — 03 candidate disposition
 
-## The decisive structural fact
+This document SUPERSEDES the recon's first candidate disposition. The earlier comparison compared
+UNEQUAL contracts and ranked candidates by JSON character-prefix ratios; both are corrected here.
 
-On the OpenAI-compatible route the **system prompt is rendered as `messages[0]` (role `system`)**, and on the Anthropic-style route it is a
-**separate `system` field rendered BEFORE the messages**. In BOTH cases a system-prompt modification therefore sits **upstream of the entire
-conversation**.
+## The decisive structural fact (unchanged, still established)
 
-This is exactly what the frozen MiniMax Arm A evidence shows (`02-prefix-discriminators.json`):
+On the OpenAI-compatible route the system prompt is rendered as `messages[0]` (role `system`); on the
+Anthropic-shaped route it is a separate `system` field rendered BEFORE the messages. In both cases a
+system-prompt modification sits upstream of the whole conversation. The frozen MiniMax Arm A evidence
+(`02-prefix-discriminators.json`) shows the consequence: the R2 objective appends +1426 chars to the
+END of the system prompt, the first divergent system char is 4612, the tools and the leading messages
+are byte-identical, and the cache read collapses from 151 552 to 128 tokens at exactly that transition
+(79 -> 80), recovering to 157 568 at 81.
 
-| Transition | System chars | System equal | First divergent system char | Tools | Leading identical messages | Cache read (frozen usage) |
-|---|---:|---|---:|---|---:|---:|
-| 78 → 79 | 4612 → 4612 | yes | none | identical (9) | 155 / 157 | 150016 → 151552 (preserved) |
-| 79 → 80 | 4612 → 6038 | no | **4612** (the +1426 R2 objective is appended to the END of the system prompt) | identical (9) | 157 / 159 | 151552 → **128** (discontinuity) |
-| 80 → 81 | 6038 → 6038 | yes | none | identical (9) | 159 / 161 | 128 → 157568 (restored) |
+## The corrected candidates (executable, `02b-pck-contract-equivalence.json`)
 
-So the R2 objective projection is **append-only and stable while it is active**, yet it still destroyed the cache at activation, because the
-append happened in the **system** channel, which is rendered before the conversation. The divergence was at system char 4612 — i.e. **before every
-message**.
+| | A (legacy) | B' | C' |
+|---|---|---|---|
+| Construction | the existing independent PCK request: `CHECKPOINT_SYSTEM_PROMPT` + ONE user message with the whole rendered controlled transcript, no tools | the COMPLETE existing extraction contract appended at the TAIL of an UNCHANGED parent projection | the COMPLETE equivalent contract PARTITIONED between a session-initialized persistent protocol (ordinary system prompt) and a dynamic activation suffix (message tail) |
+| System representation (route-specific) | `messages[0].role=system` | `messages[0].role=system` | `messages[0].role=system` |
+| System equal to its parent reference | false | true | true (against its OWN protocol-bearing parent) |
+| Tool schema equal to its parent reference | false | true | true |
+| Leading identical messages / first divergent message | 0 / 0 | 5 / 5 | 5 / 5 |
+| Contract elements present (of 33 required) | 31 | 33 | 33 |
+| B' equals C' (element sets) | — | yes | yes |
+| Conversation duplicated in the suffix | yes (by design: the legacy request carries the transcript) | no | no |
+| Suffix bytes / protocol overhead bytes | 476 / 0 | 2 458 / 0 | 472 / 2 717 |
+| Parent return (parent before == parent after; candidate minus suffix == parent) | n/a | true / true | true / true (against its own parent) |
+| Generation + tool settings equal to the parent | n/a | true | true |
+| Rendered-token prefix | UNKNOWN | UNKNOWN | UNKNOWN |
+| Actual cache residency | NOT_EXECUTED | NOT_EXECUTED | NOT_EXECUTED |
 
-The selector request itself (`sel_jxe8l1tr`) is a wholly independent request: 1722-char system, 1 message, 0 tools, and only **9** system characters
-shared with the parent. It therefore has no reusable prefix at all.
+The two candidates are **contract-equivalent**: the same 33 required extraction elements (every closed
+vocabulary value, the output shape, the prohibitions, the attribution rule, the canonical references,
+the authorized source interval and the objective) are model-visible in both.
 
-## Candidate comparison (executable, `02b-pck-prefix-equivalence.json`)
+The legacy A request is missing two of them — it carries no explicit **authorized source interval** and
+no explicit **objective** — which is itself a finding about the current contract.
 
-| | A — existing | B — full contract as suffix | C — persistent protocol + activation suffix | D — provider privileged suffix | E — engine cache branch |
-|---|---|---|---|---|---|
-| Production feasibility | yes (today) | yes | yes | **NOT established** | recon only |
-| Shared-prefix potential | **0%** (divergence at message 0) | parent messages preserved, divergence at the appended message | parent messages preserved, divergence at the appended message | unknown | unknown |
-| Instruction authority | full (independent system prompt) | full | full (protocol in the system channel, activation in the tail) | depends on the provider | n/a |
-| Source-visibility conservation | preserved (whole canonical history) | preserved | preserved | unknown | n/a |
-| Ordinary execution overhead | none | none | **the persistent protocol's text on every ordinary request** | unknown | unknown |
-| Tool/schema compatibility | auxiliary carries NO tools (isolation by absence) | parent's visible tools retained, execution isolated by the runtime | same as B | unknown | n/a |
-| Parent-return compatibility | n/a (independent) | branch-local: removing the suffix reproduces the parent body byte-for-byte | branch-local | unknown | unknown |
-| Provider portability | high | high | high | depends | n/a |
-| Behavioural qualification required | none (today's behaviour) | auxiliary-mode behaviour only | ordinary-mode behaviour (dormant protocol) | full | full |
+## The candidate trade-off that the character ratios obscured
 
-**Candidate D is rejected for now.** The resolved transport is the AI SDK's OpenAI-compatible adapter and the Anthropic-shaped wire; there is no
-production path that places a late-position privileged instruction in a provider-recognized privileged role. A user-message marker is **not** an
-equivalent of a system/operator role, and undocumented fields must not be used to fake one.
+* **B'** re-sends the whole extraction contract on every activation (2 458 bytes here) and requires NO
+  change to the ordinary request: it is the smaller implementation and the smaller behavioural risk.
+* **C'** sends only 472 bytes on activation but adds 2 717 bytes of protocol to EVERY ordinary request
+  of every session, and requires a fresh session to establish the prefix (a live session's prefix must
+  never be migrated opportunistically).
 
-**Candidate E is reconnaissance only.** No serving-engine configuration was inspected or modified; the local engine's prefix-cache branching and
-slot-state preservation remain **LIVE_UNOBSERVABLE** from this repository.
+Both preserve the parent prefix. Nothing measured offline makes C' necessary: the offline evidence does
+NOT discriminate between them on correctness. **B' is therefore selected as the smaller implementation**
+for the first isolated behavioural experiment; C' is retained as a hypothesis, not as a second permanent
+architecture. A (the legacy independent request) remains the fallback.
 
-## Selection
+## Candidate D — provider-supported privileged suffix
 
-* **Primary (PCK): Candidate C**, with the persistent protocol established **once at session initialization** and the dynamic activation appended
-  at the message tail.
-* **Fallback (PCK): Candidate B** — the same tail placement without a persistent protocol, for operators who cannot accept the ordinary-prompt
-  overhead; it preserves the parent prefix but re-sends the whole auxiliary contract on every activation.
-* Candidate A stays the **legacy fallback** for a fresh session that has not yet established the protocol: the protocol must never be inserted for
-  the first time immediately before an activation, because that would invalidate the prefix it exists to preserve.
+Not established. The resolved transport is the AI SDK's OpenAI-compatible adapter and the Anthropic-shaped
+wire; no production path places a late-position privileged instruction in a provider-recognized privileged
+role. A user-message marker is not an equivalent of a system/operator role, and undocumented fields must
+not be used to fake one.
 
-### Measured facts behind the selection
+## Candidate E — existing dedicated inference cache branch
 
-* Candidate A: `identicalLeadingMessageCount = 0`, `firstDivergentMessageIndex = 0`, `eligiblePrefixReuseRatio = 0`.
-* Candidate B: `identicalLeadingMessageCount = 5` (all parent messages), `firstDivergentMessageIndex = 5`, serialized-prefix ratio 0.719 on a small
-  fixture.
-* Candidate C: `identicalLeadingMessageCount = 5`, `firstDivergentMessageIndex = 5`, serialized-prefix ratio 0.758 on the same fixture.
-* Token-level quantities are **UNKNOWN**: no tokenizer is reachable offline and no estimate was substituted.
+Reconnaissance only. No serving-engine configuration was inspected or modified; prefix-cache branching
+and slot-state preservation remain LIVE_UNOBSERVABLE from this repository.
 
-### Evidence classes
+## Source-visibility cost of the candidates (`02c-source-visibility-and-execution.json`)
 
-* W2 comparisons: **REAL_PRODUCTION_SEAM** (frozen wire captures).
-* C3 candidate comparison: **SYNTHETIC_REAL_PRODUCTION_SEAM** (real request builder + real serializer, representative frozen-shaped fixture).
-* Engine cache residency: **NOT_EXECUTED** (`CACHE_RESIDENCY_NOT_EXECUTED`).
-* Server-side cache causality: **LIVE_UNOBSERVABLE**.
+The parent-derived candidates EXPOSE material the legacy controlled view excluded. The deltas are
+measured, not asserted:
+
+1. **Private reasoning.** The legacy view excludes thinking blocks; the parent projection carries them to
+   the wire as `reasoning_content`, so the candidate's auxiliary request contains the parent's private
+   reasoning (signed and unsigned).
+2. **Observation status.** The legacy view NORMALIZES `status=succeeded` / `status=failed`; the candidate
+   carries the raw tool payload only.
+3. **Evidence-reference binding.** The legacy view binds each reference to its content inline
+   (`[id:msg-3] <rendered text>`); the candidate lists the reference LABELS in the suffix without their
+   content, and the canonical ids are dropped by the projection, so the model cannot resolve which content a
+   reference denotes. **This is the precise missing seam**: the canonical-id <-> provider-visible-position
+   binding is not carried on the wire.
+4. **Bounded source material.** The two surfaces truncate differently (the parent projection truncates,
+   the legacy controlled view does not).
+
+The available enforcement is bounded but real: the publication gate rejects an UNOBSERVED reference
+(`REFERENCE_NOT_CANONICAL`) and DOWNGRADES the claimed assurance to the interpreter's bound
+(`model_reported` for a user-text-only or reasoning-only citation) — it does not reject such a citation.
+Source-visibility conservation is therefore NOT claimed for the candidates as they stand; it is an
+explicit successor gate with the three deltas above as acceptance criteria.

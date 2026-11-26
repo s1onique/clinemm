@@ -1,0 +1,30 @@
+{
+	"compilerOptions": {
+		"target": "ES2022",
+		"module": "ESNext",
+		"moduleResolution": "bundler",
+		"allowImportingTsExtensions": true,
+		"noEmit": true,
+		"skipLibCheck": true,
+		"strict": true,
+		"types": ["bun", "node"],
+		"baseUrl": ".",
+		"paths": {
+			"@cline/agents": ["../../../../sdk/packages/agents/src/index.ts"],
+			"@cline/agents/*": [
+				"../../../../sdk/packages/agents/src/*",
+				"../../../../sdk/packages/agents/src/*/index.ts"
+			],
+			"@cline/llms": ["../../../../sdk/packages/llms/src/index.ts"],
+			"@cline/llms/browser": [
+				"../../../../sdk/packages/llms/src/index.browser.ts"
+			],
+			"@cline/shared": ["../../../../sdk/packages/shared/src/index.ts"],
+			"@cline/shared/*": [
+				"../../../../sdk/packages/shared/src/*",
+				"../../../../sdk/packages/shared/src/*/index.ts"
+			]
+		}
+	},
+	"include": ["*.ts"]
+}

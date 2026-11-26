@@ -1,0 +1,136 @@
+{
+  "actId": "ACT-CLINEMM-CACHE-PRESERVING-AUXILIARY-INFERENCE-RECON-01",
+  "amendment": "AMENDMENT-01",
+  "checks": [
+    {
+      "area": "contract",
+      "name": "A_is_the_legacy_baseline",
+      "ok": true,
+      "detail": "A diverges at message 0"
+    },
+    {
+      "area": "contract",
+      "name": "B_prefix_preserved",
+      "ok": true,
+      "detail": "B' leading identical messages 5/5, first divergence 5"
+    },
+    {
+      "area": "contract",
+      "name": "C_prefix_preserved",
+      "ok": true,
+      "detail": "C' leading identical messages 5/5, first divergence 5"
+    },
+    {
+      "area": "contract",
+      "name": "B_system_equal_to_its_parent",
+      "ok": true,
+      "detail": "B' system representation messages[0].role=system, equal=true"
+    },
+    {
+      "area": "contract",
+      "name": "C_system_equal_to_its_own_parent",
+      "ok": true,
+      "detail": "C' system representation messages[0].role=system, equal=true"
+    },
+    {
+      "area": "contract",
+      "name": "B_tool_schema_equal",
+      "ok": true,
+      "detail": "B' tool schema equal=true"
+    },
+    {
+      "area": "contract",
+      "name": "C_tool_schema_equal",
+      "ok": true,
+      "detail": "C' tool schema equal=true"
+    },
+    {
+      "area": "contract",
+      "name": "B_and_C_contract_equivalent",
+      "ok": true,
+      "detail": "required elements 33, missing in B' 0, missing in C' 0"
+    },
+    {
+      "area": "contract",
+      "name": "no_conversation_duplication",
+      "ok": true,
+      "detail": "B' suffix 2458 bytes, C' suffix 472 bytes, C' protocol overhead 2717 bytes"
+    },
+    {
+      "area": "contract",
+      "name": "parent_return_conserved",
+      "ok": true,
+      "detail": "{\"parentBeforeEqualsParentAfter\":true,\"bWithoutSuffixEqualsParent\":true,\"cWithoutSuffixEqualsParent\":true}"
+    },
+    {
+      "area": "contract",
+      "name": "generation_and_tool_settings_conserved",
+      "ok": true,
+      "detail": "parent {\"model\":\"qwen3.8-flash-next-q2_0\",\"max_tokens\":4096,\"tool_choice\":\"auto\",\"response_format\":null,\"reasoning_effort\":null,\"temperature\":null,\"stream\":true}"
+    },
+    {
+      "area": "contract",
+      "name": "token_and_cache_claims_are_not_asserted",
+      "ok": true,
+      "detail": "UNKNOWN — no tokenizer is reachable offline / NOT_EXECUTED — no live inference is permitted in this ACT"
+    },
+    {
+      "area": "visibility",
+      "name": "legacy_view_excludes_private_reasoning",
+      "ok": true,
+      "detail": "unsigned excluded=true, signed excluded=true"
+    },
+    {
+      "area": "visibility",
+      "name": "candidate_private_reasoning_exposure_is_detected",
+      "ok": true,
+      "detail": "the probe DETECTS the parent-derived candidate's private-reasoning exposure: private reasoning: the legacy controlled view EXCLUDES it, the parent-derived candidate EXPOSES it | observation status: the legacy controlled view NORMALIZES success/failure, the parent-derived candidate carries the raw payload only | evidence-reference binding: the legacy controlled view BINDS each reference to its content inline, the candidate lists references WITHOUT their content | bounded source material: the two surfaces truncate differently"
+    },
+    {
+      "area": "visibility",
+      "name": "evidence_references_are_model_visible",
+      "ok": true,
+      "detail": "reference labels visible=true"
+    },
+    {
+      "area": "visibility",
+      "name": "unauthorized_evidence_reference_is_rejected",
+      "ok": true,
+      "detail": "unsupported reference accepted=0, codes=[\"REFERENCE_NOT_CANONICAL\"]"
+    },
+    {
+      "area": "visibility",
+      "name": "visible_tool_is_not_executable",
+      "ok": true,
+      "detail": "tool schema on the wire=true, tool call observed=true, result rejected=true, executor invocations=0, closure files=63"
+    },
+    {
+      "area": "visibility",
+      "name": "inference_policy_bound_to_the_resolved_policy",
+      "ok": true,
+      "detail": "resolved qwen-strata-v1; PCK wire {\"reasoning_effort\":\"none\",\"temperature\":0.1,\"max_tokens\":1024,\"response_format\":{\"type\":\"json_object\"}}; ordinary wire {\"reasoning_effort\":null,\"response_format\":null,\"max_tokens\":16384}"
+    },
+    {
+      "area": "selector",
+      "name": "preselection_boundary_is_used",
+      "ok": true,
+      "detail": "boundary iteration 79, messages 160"
+    },
+    {
+      "area": "selector",
+      "name": "completed_work_is_not_projected_to_the_selector",
+      "ok": true,
+      "detail": "engineering-activity shingles visible 4/8414"
+    }
+  ],
+  "failures": [],
+  "negativeControl": {
+    "description": "the B' prefix component is deliberately broken (first divergence moved to message 0) in an in-memory copy; the control state is restored by construction",
+    "detected": true,
+    "detectedBy": [
+      "B_prefix_preserved"
+    ],
+    "unauthorizedReferenceControl": "the real publication-gate probe with an unsupported reference must be REJECTED (see checks/visibility/unauthorized_evidence_reference_is_rejected)"
+  },
+  "verdict": "PASS"
+}

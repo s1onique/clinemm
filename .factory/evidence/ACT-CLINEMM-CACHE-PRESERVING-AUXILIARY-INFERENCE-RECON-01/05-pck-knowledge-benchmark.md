@@ -33,3 +33,21 @@ atom / argument / qualificationClasses / evidenceRefs). It does not invent a rep
 
 `PCK_KNOWLEDGE_QUALITY = NOT_EXECUTED` — the actual extraction quality remains the successor's live inference experiment. The matrix above is the
 minimum evidence a successful implementation must preserve, and it is derived from the frozen historical artifacts, not from a new inference.
+
+---
+
+# AMENDMENT-01 — historical performance attribution (A8)
+
+The historical transcript investigation is CLOSED and is not reopened:
+
+* **Historical PCK request identity:** CAPTURE_INSUFFICIENT. The frozen transcript carries no 74 446-token
+  zero-reuse request; the nearest zero-reuse request (22 714 tokens) occurs AFTER the compaction.
+* **Historical PCK cold-prefill duration:** UNESTABLISHED. The 180.8 s observation cannot be attributed to
+  PCK.
+* **Historical PCK cache reuse:** UNESTABLISHED.
+* **PCK deadline:** 180 000 ms, established from production source (`DEFAULT_PCK_DEADLINE_MS`).
+* **Historical knowledge loss:** independently established (the benchmark matrix above).
+
+The `>= 95%` reuse and `< 15 s` prefill figures remain PROPOSED experimental targets, not measured
+improvements. The successor's live experiment must acquire POSITIVELY CORRELATED parent and PCK request
+evidence (same run, same session, distinct request identities) before any performance claim is made.
