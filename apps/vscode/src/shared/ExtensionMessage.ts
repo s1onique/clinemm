@@ -1123,8 +1123,38 @@ export type TaskDurationWaitingReason =
  * `coverage`:
  *   "complete" — every observed interval was measured and classified.
  *   "partial"  — at least one interval could NOT be measured
- *                 reliably (e.g. a discontinuous clock). The known
- *                 totals are still reported; the gap is NOT invented.
+ *                 reliably (e.g. a discontinuous clock, or a restored
+ *                 record whose restart interval is unobservable). The
+ *                 known totals are still reported; the gap is NOT
+ *                 invented.
+ *
+ * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01 / F6):
+ *
+ * OBSERVATION LIMITATION — MACHINE SUSPEND.
+ *   The interval arithmetic uses a MONOTONIC clock, so a wall-clock
+ *   adjustment (NTP step, DST, a manual clock change) can never
+ *   produce a negative duration. A monotonic clock, however, is NOT a
+ *   proof of CONTINUOUS OBSERVATION across a machine suspend: on most
+ *   platforms a monotonic clock either pauses during the suspend (so
+ *   the suspended wall time is silently NOT counted) or advances across
+ *   it (so the suspended wall time IS counted as if the task had been
+ *   running).
+ *
+ *   The host currently has NO authoritative evidence that
+ *   distinguishes these two cases, so this ACT does NOT claim
+ *   suspend-continuity. The honest statement of what the accounting
+ *   guarantees is:
+ *
+ *     "The accounting measures the time the process observed a
+ *      monotonic clock advancing across an interval that the
+ *      authoritative lifecycle classified as ACTIVE / WAITING."
+ *
+ *   A consumer MUST NOT read a "complete" coverage as "the machine was
+ *   never suspended". That claim is outside the observed evidence. If
+ *   suspend-discontinuity evidence becomes available (e.g. an OS
+ *   suspend/resume notification), the accounting can downgrade the
+ *   affected interval's coverage to "partial" at that point; until
+ *   then the limitation is disclosed rather than papered over.
  */
 export interface TaskDurationSnapshot {
 	/** The task identity the accounting record is bound to. */

@@ -266,6 +266,36 @@ export class TaskTelemetryTracker {
 	// state machine is introduced. The clock is injectable so the
 	// deterministic tests can drive an exact synthetic chronology.
 	private readonly durationAccountant: TaskDurationAccountant
+	// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01 /
+	// F5): the execution epoch of the LAST phase write the accounting
+	// accepted.
+	//
+	// The epoch is the EXISTING conversation/replica fence
+	// (`MessageIdMinter.epoch`) that every production phase writer
+	// already stamps. The accounting does not invent a parallel epoch
+	// counter: it binds to the authority the runtime already owns, so
+	// a phase write from a SUPERSEDED epoch cannot reopen the
+	// accounting.
+	//
+	// `undefined` means "no epoch constraint was supplied" - the
+	// legacy untagged writer path and the test harnesses. It is NOT
+	// epoch 0.
+	private lastAccountedEpoch: number | undefined
+	/**
+	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01 /
+	 * F5): the READ of the CURRENT conversation/replica epoch.
+	 *
+	 * The epoch fence (`MessageIdMinter.epoch`) is bumped by the host at
+	 * every conversation/turn boundary. The accounting reads the CURRENT
+	 * fence value so it can tell a write that belongs to a SUPERSEDED
+	 * epoch from a write that belongs to the live one.
+	 *
+	 * This is NOT a second epoch counter: it is a READ of the EXISTING
+	 * authority. When the provider is absent (the test harnesses and
+	 * the partial controllers), the accounting has no epoch constraint
+	 * and every write is accepted — the legacy behaviour.
+	 */
+	private readonly readCurrentEpoch: (() => number | undefined) | undefined
 	private toolCalls = 0
 	private recoveryBudgetFailures = 0
 	private prevEpisodeFailures = 0
@@ -342,8 +372,9 @@ export class TaskTelemetryTracker {
 	 * monotonic time source (`performance.now()`), which is immune to
 	 * wall-clock adjustments.
 	 */
-	constructor(clock?: MonotonicClock) {
+	constructor(clock?: MonotonicClock, readCurrentEpoch?: () => number | undefined) {
 		this.durationAccountant = new TaskDurationAccountant(clock)
+		this.readCurrentEpoch = readCurrentEpoch
 	}
 
 	/**
@@ -395,6 +426,60 @@ export class TaskTelemetryTracker {
 	}
 
 	/**
+	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01 / W2
+	 * R2): the CLOSED-interval totals of the current accounting.
+	 *
+	 * The live snapshot includes the currently-open interval, which would
+	 * MASK a rollback of the closed totals. This read-only accessor
+	 * exposes the closed totals directly.
+	 */
+	get durationClosedTotals(): { activeMs: number; waitingMs: number; unknownMs: number } {
+		return this.durationAccountant.closedTotals
+	}
+
+	/**
+	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01 / W2
+	 * R4): does an authoritative accounting EXIST for the current task?
+	 *
+	 * A legacy task (recorded before the accounting existed) has NO
+	 * accounting. The accumulator holds zeros for it, but those zeros are
+	 * the ABSENCE of a measurement. The tracker therefore withholds the
+	 * `duration` wire field for such a task and the webview renders
+	 * "unavailable" — never a fabricated complete zero.
+	 */
+	get hasDurationAccounting(): boolean {
+		return this.currentTaskId !== undefined && this.durationAccountant.accountingAvailable
+	}
+
+	/**
+	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01 / F1):
+	 * the persistence projection TOGETHER with the task identity it is
+	 * bound to.
+	 *
+	 * The identity and the record MUST travel together. A consumer that
+	 * derived the destination task id independently of the record could
+	 * write an unbound accounting record into a DIFFERENT task's history
+	 * slot — a cross-task misattribution. Returning the pair makes that
+	 * structurally impossible.
+	 *
+	 * Returns `undefined` when no task is active (nothing to persist).
+	 */
+	get boundDurationPersistence(): { taskId: string; record: TaskDurationPersistence } | undefined {
+		if (this.currentTaskId === undefined) {
+			return undefined
+		}
+		const record = this.durationAccountant.persistenceProjection()
+		if (!record) {
+			// AMENDMENT-01 (W2 / R4): no authoritative accounting exists
+			// for this task (a legacy task). Nothing is persisted, so a
+			// fabricated zero total is never written into the history
+			// slot.
+			return undefined
+		}
+		return { taskId: this.currentTaskId, record }
+	}
+
+	/**
 	 * Start (or re-start) a task's telemetry window.
 	 *
 	 * - First call ever: stamp `startedAt = Date.now()` for the new task.
@@ -418,6 +503,10 @@ export class TaskTelemetryTracker {
 		// identity resets the duration accounting too — a task never
 		// inherits another task's active / waiting totals.
 		this.durationAccountant.reset()
+		// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01 /
+		// F5): a NEW task identity starts a NEW execution context, so the
+		// epoch fence restarts with it.
+		this.lastAccountedEpoch = undefined
 		this.toolCalls = 0
 		this.recoveryBudgetFailures = 0
 		this.prevEpisodeFailures = 0
@@ -511,9 +600,41 @@ export class TaskTelemetryTracker {
 	 * active-task transition reopens the interval, and a further
 	 * terminal transition freezes again with the new anchorTs.
 	 */
-	observeTurnPhase(phase: string, anchorTs?: number): TaskHeaderTelemetryStrip | undefined {
+	observeTurnPhase(phase: string, anchorTs?: number, epoch?: number): TaskHeaderTelemetryStrip | undefined {
 		if (this.currentTaskId === undefined) {
 			return this.get()
+		}
+		// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01 /
+		// F5): the EXECUTION-EPOCH gate.
+		//
+		// A phase write that carries an epoch OLDER than the epoch the
+		// accounting already accepted belongs to a SUPERSEDED execution
+		// epoch. Such a write is a STALE event: it must not reopen the
+		// accounting of a frozen epoch, and it must not roll the
+		// accounting back.
+		//
+		// A write with NO epoch (`undefined`) carries no epoch
+		// constraint and is accepted - the legacy untagged writer path
+		// must keep working.
+		//
+		// The CURRENT fence value is the reference: a write whose epoch is
+		// OLDER than the live fence belongs to a superseded execution
+		// epoch, even if the accounting has not yet seen a newer write.
+		const currentEpoch = this.readCurrentEpoch?.()
+		if (epoch !== undefined && currentEpoch !== undefined && epoch < currentEpoch) {
+			Logger.debug(
+				`[TaskTelemetryTracker] ignoring a stale phase write for a superseded epoch (epoch=${epoch}, current=${currentEpoch}); the accounting is not reopened`,
+			)
+			return this.get()
+		}
+		if (epoch !== undefined && this.lastAccountedEpoch !== undefined && epoch < this.lastAccountedEpoch) {
+			Logger.debug(
+				`[TaskTelemetryTracker] ignoring a stale phase write for a superseded epoch (epoch=${epoch}, accounted=${this.lastAccountedEpoch}); the accounting is not reopened`,
+			)
+			return this.get()
+		}
+		if (epoch !== undefined) {
+			this.lastAccountedEpoch = epoch
 		}
 		// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01: the SAME
 		// authoritative transition that drives the wall-clock freeze also
@@ -546,6 +667,10 @@ export class TaskTelemetryTracker {
 		// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01: clearing the
 		// telemetry window clears the duration accounting with it.
 		this.durationAccountant.reset()
+		// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01 /
+		// F5): a NEW task identity starts a NEW execution context, so the
+		// epoch fence restarts with it.
+		this.lastAccountedEpoch = undefined
 		this.toolCalls = 0
 		this.recoveryBudgetFailures = 0
 		this.prevEpisodeFailures = 0

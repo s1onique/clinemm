@@ -164,6 +164,14 @@ export type MonotonicClock = () => number
 /**
  * The default monotonic clock. `performance.now()` is monotonic and
  * unaffected by wall-clock adjustments; `Date.now()` is NOT.
+ *
+ * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01 / F6):
+ * every fallback reads the clock EXACTLY ONCE per call. The previous
+ * `process.hrtime` fallback called `proc.hrtime()` TWICE (once for the
+ * seconds component, once for the nanoseconds component) — two separate
+ * readings that can straddle a tick boundary and produce a value that
+ * is not the reading the caller asked for. A single reading is the only
+ * correct form.
  */
 export function defaultMonotonicClock(): MonotonicClock {
 	if (typeof performance !== "undefined" && typeof performance.now === "function") {
@@ -176,7 +184,11 @@ export function defaultMonotonicClock(): MonotonicClock {
 	// "partial" instead of producing a negative duration).
 	const proc = globalThis.process
 	if (proc && typeof proc.hrtime === "function") {
-		return () => proc.hrtime()[0] * 1e3 + proc.hrtime()[1] / 1e6
+		// ONE reading, decomposed afterwards.
+		return () => {
+			const [seconds, nanoseconds] = proc.hrtime()
+			return seconds * 1e3 + nanoseconds / 1e6
+		}
 	}
 	return () => Date.now()
 }
@@ -198,6 +210,33 @@ interface TaskDurationAccumulatorState {
 	openAnchorMs: number | undefined
 	/** The phase that opened the currently-open interval (for the waiting reason). */
 	openPhase: TurnPhase | undefined
+	/**
+	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01 / W2
+	 * R3): the waiting reason CONSERVED from a restored record.
+	 *
+	 * A restored interval has no live `openPhase` (the phase that opened
+	 * it was in a previous process), so the reason is carried
+	 * explicitly. It remains correct until a new authoritative
+	 * lifecycle transition supersedes it.
+	 */
+	restoredWaitingReason: TaskDurationWaitingReason | undefined
+	/**
+	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01 / W2
+	 * R4): whether an authoritative accounting EXISTS for this task.
+	 *
+	 * A task that was recorded BEFORE the accounting existed (a legacy
+	 * task) has NO accounting. Its accumulator holds zeros, but those
+	 * zeros are NOT a measurement — they are the absence of a
+	 * measurement. Projecting them as a "complete" accounting with a
+	 * zero elapsed time would fabricate a historical total that was
+	 * never observed.
+	 *
+	 * The flag is therefore false until an authoritative phase
+	 * transition is observed or a persisted record is restored, and the
+	 * tracker uses it to withhold the `duration` field entirely (the
+	 * webview then renders "unavailable").
+	 */
+	accountingAvailable: boolean
 	/** The phase of the currently-committed lifecycle state. */
 	currentPhase: TurnPhase | undefined
 	/** True once a terminal write has closed the last interval. */
@@ -220,12 +259,43 @@ export class TaskDurationAccountant {
 		openCategory: undefined,
 		openAnchorMs: undefined,
 		openPhase: undefined,
+		restoredWaitingReason: undefined,
+		accountingAvailable: false,
 		currentPhase: undefined,
 		frozen: false,
 		partial: false,
 	}
 
 	constructor(private readonly clock: MonotonicClock = defaultMonotonicClock()) {}
+
+	/**
+	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01 / W2
+	 * R2): the CLOSED-interval totals.
+	 *
+	 * These are the accumulated totals of the CLOSED intervals only — the
+	 * currently-open interval is NOT included. They are the state a
+	 * restore must never roll back, and they are the state the
+	 * persistence seam would write once the open interval is closed.
+	 *
+	 * Read-only. Exposed so a witness can observe the conservation
+	 * property directly instead of inferring it from a snapshot that
+	 * includes the open interval (which would MASK a rollback).
+	 */
+	get closedTotals(): { activeMs: number; waitingMs: number; unknownMs: number } {
+		return { activeMs: this.state.activeMs, waitingMs: this.state.waitingMs, unknownMs: this.state.unknownMs }
+	}
+
+	/**
+	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01 / W2
+	 * R4): whether an authoritative accounting EXISTS.
+	 *
+	 * False for a task that has never been observed by an authoritative
+	 * lifecycle transition and has never had a persisted record restored
+	 * — i.e. a legacy task whose accounting was never measured.
+	 */
+	get accountingAvailable(): boolean {
+		return this.state.accountingAvailable
+	}
 
 	/**
 	 * Reset the accounting for a NEW task identity. The accumulated
@@ -240,6 +310,8 @@ export class TaskDurationAccountant {
 			openCategory: undefined,
 			openAnchorMs: undefined,
 			openPhase: undefined,
+			restoredWaitingReason: undefined,
+			accountingAvailable: false,
 			currentPhase: undefined,
 			frozen: false,
 			partial: false,
@@ -260,8 +332,34 @@ export class TaskDurationAccountant {
 	 * clock, which means the interval spanning the restart is NOT
 	 * claimed — an unobservable gap is never silently classified.
 	 *
-	 * The record's `coverage` is carried forward: a record that was
-	 * written with partial coverage stays partial.
+	 * AMENDMENT-01 (W2) — the four conservation rules:
+	 *
+	 *   R1 (restart coverage). A restored record re-opens an interval,
+	 *       so the interval spanning the restart is UNOBSERVABLE. The
+	 *       restored coverage is therefore downgraded to "partial"
+	 *       unless the record was TERMINAL (a terminal task opens no
+	 *       interval, so nothing is unobservable and the completed
+	 *       task's dormant interval remains legitimately excluded).
+	 *       The record's own "partial" coverage is carried forward.
+	 *       A numeric gap is NEVER invented and the gap is NEVER
+	 *       silently classified as ACTIVE or WAITING.
+	 *
+	 *   R2 (duplicate restore). The restore is MONOTONIC with respect
+	 *       to the accumulated totals: the known durations already
+	 *       accumulated are NEVER rolled back by a stale record, and
+	 *       a duplicate restore does not reset the interval anchor
+	 *       through a second reopening. Only the totals are merged;
+	 *       the anchor is re-established exactly once per restore
+	 *       "generation".
+	 *
+	 *   R3 (waiting reason). The waiting reason of a restored WAITING
+	 *       record is CONSERVED from the record itself, so it remains
+	 *       correct until a new authoritative lifecycle transition
+	 *       supersedes it.
+	 *
+	 *   R4 (legacy task). A task WITHOUT a persisted record has NO
+	 *       accounting at all — the caller must not restore anything
+	 *       (see `TaskTelemetryTracker.restoreDurationAccounting`).
 	 */
 	restore(record: {
 		activeMs: number
@@ -272,25 +370,75 @@ export class TaskDurationAccountant {
 		coverage: "complete" | "partial"
 	}): void {
 		const s = this.state
-		s.activeMs = Math.max(0, Math.floor(record.activeMs))
-		s.waitingMs = Math.max(0, Math.floor(record.waitingMs))
-		s.unknownMs = Math.max(0, Math.floor(record.unknownMs))
-		s.partial = record.coverage === "partial"
-		s.currentPhase = undefined
-		s.openPhase = undefined
-		s.openAnchorMs = undefined
+		// A restored persisted record IS an authoritative accounting
+		// (AMENDMENT-01 / W2 R4): the availability flag is set.
+		s.accountingAvailable = true
+		const incomingActive = Math.max(0, Math.floor(record.activeMs))
+		const incomingWaiting = Math.max(0, Math.floor(record.waitingMs))
+		const incomingUnknown = Math.max(0, Math.floor(record.unknownMs))
+
+		// R2 (duplicate restore rollback): the KNOWN durations already
+		// accumulated in this process are never rolled back by a stale
+		// persisted record. The persisted record is merged in, and the
+		// LARGER of the two is kept per bucket, so a duplicate restore
+		// of the same record is a no-op on the totals.
+		s.activeMs = Math.max(s.activeMs, incomingActive)
+		s.waitingMs = Math.max(s.waitingMs, incomingWaiting)
+		s.unknownMs = Math.max(s.unknownMs, incomingUnknown)
+
+		// R3 (waiting reason conservation): the record's waiting reason
+		// is carried into the reopened interval. It remains correct
+		// until a new authoritative lifecycle transition supersedes it.
+		const restoredWaitingReason = record.phase === "waiting" ? record.waitingReason : undefined
+
 		if (record.phase === "terminal") {
 			// The task was terminal when the record was written. No
 			// interval is open, so nothing accumulates until an explicit
 			// continuation reopens one.
+			//
+			// A terminal record opens NO interval, so there is no
+			// unobservable interval to report — the completed task's
+			// dormant interval remains legitimately excluded and the
+			// record's own coverage is carried forward verbatim.
+			s.partial = record.coverage === "partial"
+			s.currentPhase = undefined
+			s.openPhase = undefined
+			s.openAnchorMs = undefined
 			s.openCategory = undefined
 			s.frozen = true
 			return
 		}
+
+		// R1 (unobservable restart gap): the reopened interval spans an
+		// unobservable gap, so the coverage is downgraded to "partial".
+		// No numeric gap is invented, and the gap is never silently
+		// classified as ACTIVE or WAITING.
+		s.partial = true
+
+		// R2 (no anchor reset through a duplicate restore): a restore
+		// that would NOT change the accumulated totals and reopens the
+		// SAME category does not re-establish the interval anchor — the
+		// open interval keeps accruing into the same bucket and no time
+		// is lost or duplicated.
+		const sameCategory = s.openCategory === record.phase
+		const totalsUnchanged =
+			s.activeMs === incomingActive && s.waitingMs === incomingWaiting && s.unknownMs === incomingUnknown
+		if (sameCategory && totalsUnchanged && s.openAnchorMs !== undefined) {
+			// A duplicate restore: keep the existing open interval and
+			// its anchor. Only the waiting reason is refreshed (it is
+			// conserved from the record).
+			if (restoredWaitingReason !== undefined) {
+				s.restoredWaitingReason = restoredWaitingReason
+			}
+			return
+		}
+
 		s.frozen = false
+		s.currentPhase = undefined
 		s.openCategory = record.phase
 		s.openAnchorMs = this.clock()
 		s.openPhase = undefined
+		s.restoredWaitingReason = restoredWaitingReason
 	}
 
 	/**
@@ -300,23 +448,24 @@ export class TaskDurationAccountant {
 	 * plus the elapsed portion of the currently-open interval, so the
 	 * persisted record is coherent with the published snapshot.
 	 */
-	persistenceProjection(): {
-		activeMs: number
-		waitingMs: number
-		unknownMs: number
-		phase: "active" | "waiting" | "unknown" | "terminal"
-		waitingReason?: TaskDurationWaitingReason
-		coverage: "complete" | "partial"
-	} {
+	persistenceProjection():
+		| {
+				activeMs: number
+				waitingMs: number
+				unknownMs: number
+				phase: "active" | "waiting" | "unknown" | "terminal"
+				waitingReason?: TaskDurationWaitingReason
+				coverage: "complete" | "partial"
+		  }
+		| undefined {
 		const snapshot = this.snapshot("projection")
 		if (!snapshot) {
-			return {
-				activeMs: 0,
-				waitingMs: 0,
-				unknownMs: 0,
-				phase: "terminal",
-				coverage: "complete",
-			}
+			// AMENDMENT-01 (W2 / R4): NO authoritative accounting exists
+			// (a legacy task that was never observed). The projection is
+			// `undefined`, NOT a fabricated zero record — a zero total
+			// would claim "this task ran for no measurable time", which
+			// was never observed.
+			return undefined
 		}
 		return {
 			activeMs: snapshot.activeMs,
@@ -343,6 +492,10 @@ export class TaskDurationAccountant {
 	 */
 	observePhase(phase: TurnPhase): void {
 		const s = this.state
+		// AMENDMENT-01 (W2 / R4): an authoritative lifecycle transition
+		// IS an accounting measurement — the accounting exists from now
+		// on, even if its accumulated total is still zero.
+		s.accountingAvailable = true
 		if (s.currentPhase === phase && s.openCategory !== undefined) {
 			// Duplicate / no-op transition: the open interval keeps
 			// accruing into the same category. Nothing is closed and
@@ -353,6 +506,9 @@ export class TaskDurationAccountant {
 			this.closeInterval()
 		}
 		s.currentPhase = phase
+		// AMENDMENT-01 (W2 / R3): an authoritative lifecycle transition
+		// SUPERSEDES the conserved waiting reason of a restored record.
+		s.restoredWaitingReason = undefined
 		const category = classifyTurnPhase(phase)
 		if (category === "terminal") {
 			// The terminal write has closed the last interval. No
@@ -393,6 +549,7 @@ export class TaskDurationAccountant {
 		s.openCategory = undefined
 		s.openAnchorMs = undefined
 		s.openPhase = undefined
+		s.restoredWaitingReason = undefined
 		if (!Number.isFinite(delta) || delta < 0) {
 			// Unmeasurable / non-monotonic interval: mark coverage
 			// partial. The gap is NOT invented and NOT attributed.
@@ -426,6 +583,16 @@ export class TaskDurationAccountant {
 	snapshot(taskId: string | undefined): TaskDurationSnapshot | undefined {
 		const s = this.state
 		if (taskId === undefined) {
+			return undefined
+		}
+		// AMENDMENT-01 (W2 / R4): a task with NO authoritative accounting
+		// (a legacy task recorded before the accounting existed) projects
+		// NO snapshot at all. The zero totals the accumulator holds are
+		// the ABSENCE of a measurement, not a measurement of zero — so
+		// publishing them would fabricate a complete historical total
+		// that was never observed. The tracker withholds the `duration`
+		// wire field and the webview renders "unavailable".
+		if (!s.accountingAvailable) {
 			return undefined
 		}
 		let activeMs = s.activeMs
@@ -465,7 +632,14 @@ export class TaskDurationAccountant {
 			waitingMs,
 			unknownMs,
 			phase,
-			waitingReason: s.openCategory === "waiting" ? waitingReasonForPhase(s.openPhase as TurnPhase) : undefined,
+			// AMENDMENT-01 (W2 / R3): a restored interval has no live
+			// `openPhase`, so the conserved reason of the restored record
+			// is used. A live phase always wins over the conserved
+			// reason — the phase is the authoritative source.
+			waitingReason:
+				s.openCategory === "waiting"
+					? (waitingReasonForPhase(s.openPhase as TurnPhase) ?? s.restoredWaitingReason)
+					: undefined,
 			coverage,
 		}
 	}

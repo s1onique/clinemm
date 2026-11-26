@@ -350,11 +350,22 @@ describe("ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 / production seam", (
 		// A NEW task identity resets the accounting — the previous
 		// task's totals must not bleed into the new one.
 		tracker.startTask("task-next", 1_700_000_100_000)
+		//
+		// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01 /
+		// F3 / R4): a task that the runtime has NOT yet observed has NO
+		// authoritative accounting. The previous task's totals are not
+		// carried over AND a fabricated complete zero is not published
+		// either — the wire field is simply absent until the runtime
+		// observes this task.
+		expect(durationOf(tracker.get())).toBeUndefined()
+		// Once the runtime observes the new task, its accounting starts
+		// from zero — the previous task's totals never bleed in.
+		turnState.set("streaming")
+		clock.advance(1_000)
 		const d = durationOf(tracker.get())
 		expect(d?.taskId).toBe("task-next")
-		expect(d?.activeMs).toBe(0)
+		expect(d?.activeMs).toBe(1_000)
 		expect(d?.waitingMs).toBe(0)
-		expect(d?.elapsedMs).toBe(0)
 		expectConservation(tracker.get())
 	})
 
@@ -404,26 +415,44 @@ describe("ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 / production seam", (
 		expect(a?.activeMs).toBe(10_000)
 		// Switch to a different task.
 		tracker.startTask("task-b", 1_700_000_200_000)
+		//
+		// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01 /
+		// F3 / R4): the NEW task has no accounting until the runtime
+		// observes it. The previous task's totals are NOT carried over.
+		expect(durationOf(tracker.get())).toBeUndefined()
+		turnState.set("streaming")
+		clock.advance(1_000)
 		const b = durationOf(tracker.get())
 		expect(b?.taskId).toBe("task-b")
-		expect(b?.activeMs).toBe(0)
-		expect(b?.elapsedMs).toBe(0)
+		expect(b?.activeMs).toBe(1_000)
+		expect(b?.elapsedMs).toBe(1_000)
 		expectConservation(tracker.get())
 	})
 
-	it("T13b: returning to a previous task id starts its accounting fresh (no per-id cache)", () => {
+	it("T13b: returning to a previous task id restores its KNOWN durations (task-lifetime accounting, no per-id cache)", () => {
 		const { clock, tracker, turnState } = makeRig("task-a")
+		tracker.startTask("task-a", 1_700_000_000_000)
 		turnState.set("streaming")
 		clock.advance(10_000)
+		const aRecord = tracker.durationPersistence
+		expect(aRecord?.activeMs).toBe(10_000)
 		tracker.startTask("task-b", 1_700_000_200_000)
 		clock.advance(4_000)
-		// Returning to task-a does NOT restore task-a's old totals —
-		// the tracker owns ONE visible-task window (the same contract
-		// the other counters on this tracker follow).
+		// Returning to task-a restores the KNOWN durations from the
+		// task's persisted accounting record.
+		//
+		// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01 /
+		// W2 / R5): the earlier "fresh zero" expectation conflicted with
+		// TASK-LIFETIME accounting — a task's known durations are a fact
+		// about the task, not about which task happens to be visible.
+		// The tracker still keeps ONE visible-task window (no unbounded
+		// per-task in-memory cache): the known durations are conserved
+		// through the task's PERSISTED record, not through a cache.
 		tracker.startTask("task-a", 1_700_000_300_000)
+		tracker.restoreDurationAccounting("task-a", aRecord!)
 		const d = durationOf(tracker.get())
 		expect(d?.taskId).toBe("task-a")
-		expect(d?.activeMs).toBe(0)
+		expect(d?.activeMs).toBe(10_000)
 		expectConservation(tracker.get())
 	})
 
@@ -561,10 +590,18 @@ describe("ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 / production seam", (
 			recoveryBudgetFailures: 0,
 		}
 		expect(legacy.duration).toBeUndefined()
-		// A freshly-started host task DOES project accounting.
+		//
+		// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01 /
+		// F3 / R4): a freshly-started host task has NO accounting until
+		// the RUNTIME observes it. Publishing a complete zero total
+		// would fabricate a historical measurement that was never taken.
 		const fresh = tracker.startTask("legacy-shaped", 1_700_000_000_000)
-		expect(fresh?.duration).toBeDefined()
-		expect(fresh?.duration?.elapsedMs).toBe(0)
+		expect(fresh?.duration).toBeUndefined()
+		// Once the runtime observes the task, the accounting exists and
+		// its zero total is a REAL measurement ("no time accounted yet").
+		const observed = tracker.observeTurnPhase("streaming")
+		expect(observed?.duration).toBeDefined()
+		expect(observed?.duration?.elapsedMs).toBe(0)
 	})
 
 	// ------------------------------------------------------------------
@@ -628,7 +665,12 @@ describe("ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 / production seam", (
 			// The webview mounts and unmounts: it re-reads the canonical
 			// state payload and renders it. No host subscription is
 			// created or destroyed.
-			expect(tracker.get()?.duration).toBeDefined()
+			//
+			// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01
+			// (AMENDMENT-01 / F3 / R4): the accounting exists only once
+			// the runtime has observed the task, so the pre-observation
+			// snapshot legitimately carries NO duration field.
+			expect(tracker.get()?.duration).toBeUndefined()
 		}
 		turnState.set("streaming")
 		clock.advance(10_000)
@@ -786,8 +828,14 @@ describe("ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 / persistence", () =>
 		other.startTask("task-b", 1_700_000_000_000)
 		other.restoreDurationAccounting("task-a", record!)
 		// The accounting is bound to the task identity: nothing leaks.
-		expect(other.get()?.duration?.activeMs).toBe(0)
-		expect(other.get()?.duration?.elapsedMs).toBe(0)
+		//
+		// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01 /
+		// F3 / R4): the rejected restore left task-b with NO accounting
+		// at all (the runtime has not observed it), so there is no
+		// fabricated zero total either.
+		expect(other.get()?.duration).toBeUndefined()
+		// The rejected record's totals did not leak into task-b.
+		expect(other.durationPersistence).toBeUndefined()
 	})
 
 	it("OBS05-PERSIST-4: the interval spanning a restart is NOT claimed — the gap is not silently classified", () => {

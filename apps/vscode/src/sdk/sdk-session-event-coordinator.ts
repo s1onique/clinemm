@@ -179,6 +179,28 @@ export interface SdkSessionEventCoordinatorOptions {
 	 * across a restart.
 	 */
 	persistDurationAccounting?: (taskId: string | undefined, record: TaskDurationPersistence) => Promise<void> | void
+	/**
+	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01 / F1):
+	 * the LAZY read of the host-owned duration accounting.
+	 *
+	 * WHY A CALLBACK AND NOT A VALUE:
+	 *   The accounting only exists once a task is active. A coordinator
+	 *   that captured the projection EAGERLY at construction time would
+	 *   capture `undefined` forever (no task is active at construction),
+	 *   so the persistence seam would never fire and every persisted
+	 *   `HistoryItem` would be missing its accounting.
+	 *
+	 *   The callback is therefore invoked AT the persistence boundary,
+	 *   when the accounting exists and is current.
+	 *
+	 * IDENTITY BINDING:
+	 *   The callback returns the accounting record TOGETHER with the
+	 *   task identity it is bound to. The coordinator MUST NOT derive
+	 *   the destination identity independently of the record — an
+	 *   unbound record must never be written to a different task's
+	 *   history slot.
+	 */
+	readDurationPersistence?: () => { taskId: string; record: TaskDurationPersistence } | undefined
 	postStateToWebview: () => Promise<void>
 	stateManager?: StateManager
 	/**
@@ -764,14 +786,6 @@ export interface SdkSessionEventCoordinatorOptions {
 	 */
 	taskTelemetry?: {
 		readonly recordRuntimeError: (incident: RuntimeErrorIncident) => void
-		/**
-		 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01: the
-		 * persistence projection of the host-owned duration accounting.
-		 *
-		 * READ ONLY: the coordinator never mutates the accounting. The
-		 * accounting authority is the `TurnStateTracker` phase stream.
-		 */
-		readonly durationPersistence?: TaskDurationPersistence | undefined
 	}
 	/**
 	 * ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION01-REAL-ELM-PROVIDER:
@@ -5923,11 +5937,19 @@ export class SdkSessionEventCoordinator {
 				// duration accounting at the SAME authoritative turn boundary.
 				// The record is the accumulated totals + the phase — never a
 				// process-local monotonic timestamp.
-				if (this.options.persistDurationAccounting) {
-					const durationTaskId = this.options.getTask()?.taskId ?? this.options.sessions.getActiveSession()?.sessionId
-					const durationRecord = this.options.taskTelemetry?.durationPersistence
-					if (durationTaskId && durationRecord) {
-						Promise.resolve(this.options.persistDurationAccounting(durationTaskId, durationRecord)).catch((error) => {
+				//
+				// AMENDMENT-01 (F1): the accounting is read LAZILY at this
+				// boundary (not captured at coordinator construction, when no
+				// task was active and the projection was therefore
+				// permanently `undefined`).
+				//
+				// The record and the task identity it is bound to are
+				// captured TOGETHER, so an unbound record can never be
+				// written into a different task's history slot.
+				if (this.options.persistDurationAccounting && this.options.readDurationPersistence) {
+					const bound = this.options.readDurationPersistence()
+					if (bound) {
+						Promise.resolve(this.options.persistDurationAccounting(bound.taskId, bound.record)).catch((error) => {
 							Logger.error("[SdkController] Failed to persist task duration accounting:", error)
 						})
 					}

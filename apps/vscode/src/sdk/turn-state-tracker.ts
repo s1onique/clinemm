@@ -18,7 +18,21 @@ import type { MessageIdMinter } from "./message-id-minter"
 // newest TurnState and ignores stale/out-of-order ones (a late "streaming" can never overwrite
 // a newer "completed").
 
-export type TurnPhaseListener = (phase: TurnPhase, anchorTs: number | undefined) => void
+/**
+ * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01 / F5):
+ * the phase listener signature.
+ *
+ * The THIRD argument is the epoch of the committed write — the
+ * EXISTING conversation/replica fence (`MessageIdMinter.epoch`) that
+ * every production phase writer already stamps through
+ * `TurnStateWriterIdentity.epoch`. It is `undefined` when the
+ * committed writer supplied no epoch (the legacy untagged path).
+ *
+ * The parameter is APPENDED, so every existing listener that declares
+ * fewer parameters keeps working unchanged (TypeScript allows a
+ * listener with fewer parameters to satisfy a wider signature).
+ */
+export type TurnPhaseListener = (phase: TurnPhase, anchorTs: number | undefined, epoch: number | undefined) => void
 
 export class TurnStateTracker {
 	private phase: TurnPhase = "idle"
@@ -51,6 +65,25 @@ export class TurnStateTracker {
 	 *   classification can survive.
 	 */
 	private writerId: TurnStateWriterIdentity["writerId"] = "unknown-legacy-writer"
+
+	/**
+	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01 / F5):
+	 * the epoch of the CURRENTLY COMMITTED phase.
+	 *
+	 * The epoch is the EXISTING conversation/replica fence
+	 * (`MessageIdMinter.epoch`) that every production phase writer
+	 * already stamps through `TurnStateWriterIdentity.epoch`. This
+	 * tracker does not INVENT an epoch — it records the one its
+	 * writers supplied and exposes it so a consumer that must reject
+	 * a stale epoch can bind to the SAME authority instead of
+	 * maintaining a parallel counter.
+	 *
+	 * `undefined` means "the committed writer supplied no epoch"
+	 * (the legacy untagged `set()` path and the test harnesses). A
+	 * consumer MUST treat `undefined` as "no epoch constraint" rather
+	 * than as epoch 0.
+	 */
+	private committedEpoch: number | undefined
 
 	constructor(private readonly minter: MessageIdMinter) {
 		this.seq = minter.nextSeq()
@@ -135,6 +168,12 @@ export class TurnStateTracker {
 		// replaces the identity in the same mutation, so a consumer can
 		// never observe a phase paired with a STALE writer.
 		this.writerId = identity.writerId
+		// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01 /
+		// F5): record the committed epoch alongside the committed
+		// writer. The identity is replaced in the SAME mutation as the
+		// phase, so a consumer can never observe a phase paired with a
+		// STALE epoch.
+		this.committedEpoch = identity.epoch
 
 		// ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLOOP01:
 		// Record the EH2 discriminator witness BEFORE the diagnostic
@@ -176,7 +215,11 @@ export class TurnStateTracker {
 
 		for (const listener of [...this.listeners]) {
 			try {
-				listener(phase, anchorTs)
+				// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01
+				// (AMENDMENT-01 / F5): the committed epoch travels with
+				// the phase so a consumer can reject a stale-epoch
+				// write using the EXISTING fence authority.
+				listener(phase, anchorTs, this.committedEpoch)
 			} catch {
 				// Observation must not veto the authoritative transition.
 				// Subsequent listeners still run; the phase mutation has
@@ -234,5 +277,17 @@ export class TurnStateTracker {
 	 */
 	get currentWriterId(): TurnStateWriterIdentity["writerId"] {
 		return this.writerId
+	}
+
+	/**
+	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01 / F5):
+	 * the epoch of the CURRENTLY COMMITTED phase.
+	 *
+	 * See `committedEpoch`. `undefined` means the committed writer
+	 * supplied no epoch — a consumer MUST treat that as "no epoch
+	 * constraint", NOT as epoch 0.
+	 */
+	get currentEpoch(): number | undefined {
+		return this.committedEpoch
 	}
 }

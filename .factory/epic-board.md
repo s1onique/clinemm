@@ -1,3 +1,137 @@
+# ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01) — PASS_STRUCTURAL_ONLY — 2026-11-27
+
+```text
+ACT_ID:       ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01)
+TYPE:         bounded implementation correction cycle
+VERDICT:      PASS_STRUCTURAL_ONLY
+EPIC:         OBS-05
+WORK_ITEM:    OBS-05 — Active execution and waiting-time accounting
+ENTRY_HEAD:   91c14db72e7e3e5a9f05fd4ce329b93bd675b1f2
+BRANCH:       main
+```
+
+**OBS-05 — Active execution and waiting-time accounting. STATUS: PENDING LIVE
+QUALIFICATION (bounded correctness repair complete, executable gates GREEN,
+installed-runtime qualification not executed).**
+
+**WHY THIS AMENDMENT EXISTS.** The reviewer's verdict was `HALT_OBS05_ACCOUNTING_AUTHORITY`.
+The implementation diff contained concrete accounting and evidence defects. This AMENDMENT
+closes them WITHOUT changing the architecture: the `TurnStateTracker` lifecycle authority,
+the `TaskTelemetryTracker` host ownership, the interval accumulator, the existing
+`HistoryItem` persistence and the existing runtime-to-webview publication are all RETAINED.
+No new lifecycle state machine, timing service, database, telemetry framework or public SDK
+API was introduced.
+
+**THE PERSISTENCE AUTHORITY DEFECT (F1) — THE HEADLINE.** The coordinator captured the
+duration accounting EAGERLY at construction time
+(`durationPersistence: this.taskTelemetry.durationPersistence`). At that moment NO task was
+active, so the captured value was permanently `undefined` and the persistence seam NEVER
+FIRED: every persisted `HistoryItem` was missing its accounting, and the whole persistence
+story of the original ACT was inert in production. The accounting is now read LAZILY at the
+persistence boundary through a `readDurationPersistence()` callback, and the task identity
+and the accounting record travel TOGETHER (`boundDurationPersistence`) so a destination
+identity can never be derived independently of an unbound record.
+
+**THE PERSISTENCE ORDERING DEFECT (W1).** The pre-repair persistence was a bare
+read-modify-write, so two overlapping turn boundaries could complete out of order and an
+OLDER accounting checkpoint could replace a NEWER one. The writes for one task are now
+SERIALIZED through a per-task chain, and a checkpoint that is not strictly newer than the
+one already written (compared by the ACCUMULATED TOTALS, so a clock adjustment cannot
+suppress a legitimate newer checkpoint) is DROPPED. The history subsystem itself is not
+replaced.
+
+**THE RECOVERY CONSERVATION DEFECTS (F2, F3, F4, F8).** A restored nonterminal record
+reopened an interval across an UNOBSERVABLE gap but kept the record's "complete" coverage —
+the gap was silently classified; a restored record is now "partial" with no numeric gap
+invented. A legacy task published its accumulator zeros as a COMPLETE accounting with a zero
+elapsed time — a fabricated historical total; the accounting now carries an explicit
+availability flag and the wire field is withheld entirely. Returning to a previously-known
+task id discarded the known durations; they are now conserved through the task's PERSISTED
+record, with no unbounded per-task in-memory cache. A duplicate restore rolled back
+subsequently accumulated durations and reset the interval anchor, and the waiting reason of
+a restored record was lost; the restore is now monotonic with respect to the accumulated
+totals, a duplicate restore does not re-establish the anchor, and the waiting reason is
+conserved until an authoritative transition supersedes it.
+
+**THE EXECUTION-EPOCH AUTHORITY (F5).** Task identity alone does not establish epoch
+identity, and the original stale-event witness did not exercise a real discriminator. The
+accounting now binds to the EXISTING conversation/replica epoch fence
+(`MessageIdMinter.epoch`) that every production phase writer already stamps through
+`TurnStateWriterIdentity.epoch`: the `TurnStateTracker` exposes its committed epoch (it does
+not invent one), the epoch travels with the phase to the observer, and a write whose epoch is
+older than the live fence cannot reopen the accounting. NO parallel epoch counter was
+introduced. A write with no epoch carries no epoch constraint and is still accepted, so the
+legacy untagged writer path keeps working.
+
+**THE CLOCK AND THE HEADER FRESHNESS (F6).** The `process.hrtime` fallback read the clock
+TWICE (seconds then nanoseconds) — two separate readings that can straddle a tick boundary;
+every fallback now reads EXACTLY ONCE. The header's displayed split could FREEZE at its
+last published value while a task sat at a quiet human gate, because the host publishes only
+on state changes; a PRESENTATION-ONLY forward projection now lets the displayed split
+progress between two host publications. The webview owns no accumulated duration: it
+projects EXACTLY the one bucket the host says is open, only forward, only within a bounded
+window, and never across a terminal boundary.
+
+**THE MACHINE-SUSPEND LIMITATION IS DISCLOSED, NOT PAPERED OVER (F6/F8).** A monotonic clock
+is NOT a proof of continuous observation across a machine suspend: on most platforms it
+either pauses during the suspend (the suspended wall time is silently not counted) or
+advances across it (the suspended wall time is counted as if the task had been running). The
+host has NO authoritative suspend-discontinuity evidence, so this ACT does NOT claim
+suspend-continuity. The limitation is stated explicitly in the wire contract.
+
+**THE EVIDENCE IS NOW CLASSIFIED PRECISELY (F7).** The original package described manually
+supplied phase sequences in a way that overstated what they prove. Every witness now
+declares its class — `SYNTHETIC_REAL` (the real accumulator and the real phase tracker with
+a synthetic chronology), `REAL_PRODUCTION_SEAM` (the real controller/coordinator persistence
+or lifecycle entry path), `STRUCTURAL`, or `NOT_EXECUTED`. The provider-latency, required
+background-command, detached-background-job and human-gate rows are `SYNTHETIC_REAL`: they
+exercise the real accumulator but do NOT prove that a real provider, job or gate produces
+those transitions. Those remain an explicit live-qualification requirement; NO passing
+witness was manufactured for them.
+
+**THE EVIDENCE.** 28 host AMENDMENT witnesses (the F1 RED/GREEN pair, the persistence
+ordering witnesses, the coordinator-boundary witnesses including the REAL coordinator's
+turn-completion path, the recovery conservation witnesses, the epoch witnesses and the clock
+witnesses) plus 8 webview witnesses, on top of the existing 37 host + 8 webview OBS-05
+witnesses. The conservation identity
+`elapsedMs === activeMs + waitingMs + unknownMs` is asserted after EVERY observation. Six
+OBS-05 witnesses changed their ASSERTION (not their scenario) because the corrected
+semantics differ; T13b's fresh-zero expectation was REPLACED by the task-lifetime
+semantics as the ACT directed.
+
+**THE ABLATIONS WERE MEASURED, NOT ASSUMED.** Four bounded ablations were executed
+against the REAL production seams and each one turned its load-bearing witness RED: the
+coordinator's lazy read (`F1-COORD-4`), the execution-epoch gate (`F5-EPOCH`), the
+accounting-availability gate (`F3-R4`) and the monotonic restore (`F8-R2`). All four were
+reversed and the suites re-verified GREEN. One witness (`F8-R2`) was found NOT to be
+load-bearing on its first formulation — it observed the live snapshot, which includes the
+open interval and therefore MASKED a rollback of the closed totals — and was strengthened
+to observe the closed totals directly. That correction is recorded in the qualification
+results rather than hidden.
+
+**THE REGRESSION DELTA IS ZERO.** The full host vitest suite was run at the entry HEAD and
+again with the AMENDMENT applied through the JSON reporter: 247 failing tests before, 251
+after. The 6-entry per-test diff is entirely in UNRELATED timing-dependent suites and runs
+in BOTH directions (one baseline-only, five amendment-only) — the signature of a flake, not
+a regression; the checkpoint byte-bound suite PASSES 4/4 in isolation across three
+consecutive runs. The full webview suite's failing set is byte-IDENTICAL before and after.
+The directly affected coordinator suite reports the SAME 2 pre-existing failures at the
+entry HEAD. ZERO ACT-owned failures or diagnostics.
+
+**LIVE QUALIFICATION: NOT EXECUTED.** The operator directed that no VSIX be built, no
+artifact be installed and no live qualification be performed. The exact-head artifact
+identity and the installed-runtime L1..L6 observations were therefore not taken. The verdict
+is PASS_STRUCTURAL_ONLY and OBS-05 remains pending live qualification. The reopen
+condition, the residual risk and the open live-qualification requirements are recorded in
+`.factory/evidence/ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01/11-amendment01-exit-report.md`
+and `06-amendment01-repair-evidence.md` §5.
+
+**RELATED PRIOR WORK.** `EPIC-CLINEMM-TASKHEADER-OWNER-AWARE-TIMING01` was
+`CLOSED_NOT_REPRODUCED` with the re-open trigger "new live evidence that distinguishes
+agent-active elapsed from wall-clock elapsed"; the original OBS-05 ACT is the successor of
+that row and this AMENDMENT is its bounded correctness repair.
+
+---
 # ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 — PASS_STRUCTURAL_ONLY — 2026-11-27
 
 ```text

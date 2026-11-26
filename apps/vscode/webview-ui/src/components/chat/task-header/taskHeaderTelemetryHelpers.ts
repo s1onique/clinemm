@@ -436,6 +436,11 @@ export interface DurationDisplayProjection {
  *
  * The webview NEVER owns accumulated duration: this function is a pure
  * mapping of the host's snapshot. It does not add anything.
+ *
+ * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01 / W4):
+ * `projectDurationForward` is applied to the snapshot BEFORE this
+ * mapping, so the displayed split can progress between two host
+ * publications WITHOUT the webview accumulating anything of its own.
  */
 export function durationDisplayProjection(duration: TaskDurationSnapshot | undefined): DurationDisplayProjection | undefined {
 	if (!duration) {
@@ -459,5 +464,80 @@ export function durationDisplayProjection(duration: TaskDurationSnapshot | undef
 		activeRatio: active / denominator,
 		waitingRatio: waiting / denominator,
 		unknownRatio: unknown / denominator,
+	}
+}
+
+/**
+ * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01 / W4):
+ * the PRESENTATION-ONLY forward projection of the host's snapshot.
+ *
+ * WHY A FORWARD PROJECTION IS NEEDED
+ *
+ *   The host publishes the duration snapshot through the EXISTING state
+ *   mechanism. Between two publications the task can be sitting at a
+ *   human-input gate for minutes with no other message traffic, so no
+ *   state publication happens and the displayed split would FREEZE at
+ *   its last published value - the header would claim the task has been
+ *   waiting "0s" while the human thinks about the answer.
+ *
+ * WHAT IT IS NOT
+ *
+ *   It is NOT webview accumulation. The webview owns no clock, no
+ *   interval ledger and no authoritative duration state:
+ *
+ *   - it projects EXACTLY ONE bucket - the bucket the HOST says is
+ *     currently open ("active" / "waiting" / "unknown");
+ *   - it projects only the time since the SNAPSHOT was published, and
+ *     only forward - a snapshot that is older than the projection
+ *     window is never extrapolated;
+ *   - it NEVER crosses a terminal boundary: a "terminal" phase is
+ *     frozen, so the projection adds nothing;
+ *   - it NEVER changes the phase, the waiting reason or the coverage -
+ *     those are the host's authority, not the webview's.
+ *
+ * THE BOUND
+ *
+ *   `maxProjectionMs` bounds the extrapolation. A snapshot that is
+ *   older than the bound is NOT extrapolated at all (the host's last
+ *   published values are shown verbatim), which keeps a stale snapshot
+ *   from being turned into an unbounded extrapolation.
+ *
+ * @param duration the host's snapshot
+ * @param nowMs the CURRENT wall-clock reading
+ * @param publishedAtMs the wall-clock time the snapshot was published
+ * @param maxProjectionMs the bound on the forward projection
+ */
+export function projectDurationForward(
+	duration: TaskDurationSnapshot | undefined,
+	nowMs: number,
+	publishedAtMs: number | undefined,
+	maxProjectionMs: number,
+): TaskDurationSnapshot | undefined {
+	if (!duration) {
+		return undefined
+	}
+	// A terminal phase is FROZEN: the host's totals are the final word
+	// and the projection adds nothing.
+	if (duration.phase === "terminal") {
+		return duration
+	}
+	if (publishedAtMs === undefined || !Number.isFinite(publishedAtMs) || !Number.isFinite(nowMs)) {
+		return duration
+	}
+	const delta = nowMs - publishedAtMs
+	// A snapshot from the future, or an age beyond the bound, is NOT
+	// extrapolated.
+	if (delta <= 0 || delta > maxProjectionMs) {
+		return duration
+	}
+	const deltaMs = Math.floor(delta)
+	switch (duration.phase) {
+		case "active":
+			return { ...duration, elapsedMs: duration.elapsedMs + deltaMs, activeMs: duration.activeMs + deltaMs }
+		case "waiting":
+			return { ...duration, elapsedMs: duration.elapsedMs + deltaMs, waitingMs: duration.waitingMs + deltaMs }
+		case "unknown":
+		default:
+			return { ...duration, elapsedMs: duration.elapsedMs + deltaMs, unknownMs: duration.unknownMs + deltaMs }
 	}
 }

@@ -312,6 +312,33 @@ function dateStringToTimestamp(value: string | null | undefined): number {
 	return Number.isFinite(timestamp) ? timestamp : 0
 }
 
+/**
+ * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01 / W1
+ * ordering): is `candidate` a STRICTLY NEWER accounting checkpoint than
+ * `written`?
+ *
+ * The accumulated totals of a task's accounting are MONOTONICALLY
+ * NON-DECREASING over the task's lifetime: every closed interval adds
+ * to exactly one bucket and no bucket is ever subtracted. So the sum of
+ * the three buckets is a faithful "how far along is this task's
+ * accounting" measure, and it is immune to a wall-clock adjustment (a
+ * timestamp comparison would not be).
+ *
+ * A candidate that is NOT strictly newer (an equal or a smaller total)
+ * is an out-of-order or duplicate checkpoint and MUST NOT replace the
+ * newer accounting already on disk.
+ *
+ * The comparison is on the SUM of the buckets, not per-bucket, because a
+ * legitimate newer checkpoint can have the same total only if no time
+ * was accounted in between — in which case writing it is harmless but
+ * unnecessary, and dropping it is safe.
+ */
+function isDurationRecordNewerThan(candidate: TaskDurationPersistence, written: TaskDurationPersistence): boolean {
+	const candidateTotal = candidate.activeMs + candidate.waitingMs + candidate.unknownMs
+	const writtenTotal = written.activeMs + written.waitingMs + written.unknownMs
+	return candidateTotal > writtenTotal
+}
+
 function historyItemToTaskResponse(item: HistoryItem): TaskResponse {
 	return TaskResponse.create({
 		id: item.id,
@@ -1214,6 +1241,60 @@ export class Controller {
 	// not leak the listener.
 	private taskTelemetryPhaseUnsub: (() => void) | undefined
 	/**
+	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01 / W1
+	 * ordering): the per-task SERIALIZATION chain for the duration
+	 * accounting writes.
+	 *
+	 * The accounting is written at the authoritative turn boundary, and
+	 * several boundaries can be in flight at once. Without a chain, two
+	 * overlapping read-modify-write cycles could complete out of order
+	 * and an OLDER accounting checkpoint could replace a NEWER one.
+	 *
+	 * BOUNDED: one entry per task id, and the entry is removed as soon
+	 * as the chain drains. There is no unbounded per-task in-memory
+	 * cache of accounting state — only the pending-write chain.
+	 */
+	private durationPersistChains: Map<string, Promise<unknown>> | undefined
+	/**
+	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01 / W1
+	 * ordering): the accounting checkpoint LAST WRITTEN for each task.
+	 *
+	 * Used to drop an out-of-order (older) checkpoint so it cannot roll
+	 * the persisted accounting back. Bounded the same way as the chain:
+	 * the entry is removed when the task's accounting is reset (a NEW
+	 * task identity) and when the controller is disposed.
+	 */
+	private durationPersistedTotals: Map<string, TaskDurationPersistence> | undefined
+
+	/**
+	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01):
+	 * the per-task persistence chain map, created on FIRST USE.
+	 *
+	 * The map is created lazily rather than as a class-field initializer
+	 * so the state is correct for a partially-constructed controller
+	 * (the host test harnesses build a controller through the prototype
+	 * without running the constructor). The maps are otherwise
+	 * per-instance and never shared.
+	 */
+	private get durationChains(): Map<string, Promise<unknown>> {
+		if (!this.durationPersistChains) {
+			this.durationPersistChains = new Map<string, Promise<unknown>>()
+		}
+		return this.durationPersistChains
+	}
+
+	/**
+	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01):
+	 * the last-written accounting checkpoint per task, created on FIRST
+	 * USE. See `durationChains` for why the creation is lazy.
+	 */
+	private get durationWritten(): Map<string, TaskDurationPersistence> {
+		if (!this.durationPersistedTotals) {
+			this.durationPersistedTotals = new Map<string, TaskDurationPersistence>()
+		}
+		return this.durationPersistedTotals
+	}
+	/**
 	 * ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01:
 	 * host-owned opt-in notification coordinator. Constructed
 	 * once per SdkController lifetime; reused across every
@@ -1656,7 +1737,13 @@ export class Controller {
 		// ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A: cumulative task telemetry
 		// (elapsed / tool / recovery counters). Lives across the controller
 		// lifetime so webview reconnect / React remount does not reset.
-		this.taskTelemetry = new TaskTelemetryTracker()
+		// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01 /
+		// F5): the tracker READS the EXISTING conversation/replica epoch
+		// fence (`MessageIdMinter.epoch`) so it can reject a phase write
+		// that belongs to a SUPERSEDED execution epoch. This is a READ of
+		// the authority the runtime already owns - no second epoch
+		// counter is introduced.
+		this.taskTelemetry = new TaskTelemetryTracker(undefined, () => this.messageTranslatorState.getMinter().epoch)
 		// ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01:
 		// construct the host-owned notify-on-terminal coordinator.
 		// The transport closure routes through
@@ -3233,13 +3320,21 @@ export class Controller {
 			// wire field renders the user-visible `⚠ N` glyph.
 			taskTelemetry: {
 				recordRuntimeError: (incident) => this.handleTaskRuntimeError(incident),
-				// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01: the
-				// READ-ONLY persistence projection of the host-owned
-				// duration accounting. The tracker is read through the
-				// controller's own field, so the coordinator never
-				// mutates the accounting.
-				durationPersistence: this.taskTelemetry.durationPersistence,
 			},
+			// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01
+			// / F1): the LAZY read of the host-owned duration accounting.
+			//
+			// The accounting exists only once a task is active. The
+			// previous wiring captured the projection EAGERLY here, at
+			// coordinator-construction time, when NO task was active —
+			// so the captured value was permanently `undefined` and the
+			// persistence seam never fired.
+			//
+			// The read is therefore performed AT the persistence boundary.
+			// The record and the task identity it is bound to are
+			// returned TOGETHER so the coordinator can never derive a
+			// destination identity independently of an unbound record.
+			readDurationPersistence: () => this.readBoundDurationPersistence(),
 		})
 		// ACT-CLINEMM-COMPLETION-AUTHORITY-POST-RUN-REEVALUATION01:
 		// Wire the post-run liveness seam. When the host's
@@ -4746,9 +4841,13 @@ export class Controller {
 	private attachPhaseTelemetrySubscription(): void {
 		this.taskTelemetryPhaseUnsub?.()
 		this.taskTelemetryPhaseUnsub = undefined
-		this.taskTelemetryPhaseUnsub = this.turnStateTracker.subscribe((phase, anchorTs) => {
+		this.taskTelemetryPhaseUnsub = this.turnStateTracker.subscribe((phase, anchorTs, epoch) => {
 			try {
-				this.taskTelemetry.observeTurnPhase(phase, anchorTs)
+				// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01
+				// (AMENDMENT-01 / F5): the committed epoch travels with
+				// the phase so the accounting can reject a stale-epoch
+				// write using the EXISTING fence authority.
+				this.taskTelemetry.observeTurnPhase(phase, anchorTs, epoch)
 			} catch (error) {
 				Logger.error("[SdkController] TaskTelemetryTracker.observer threw; isolated.", error)
 			}
@@ -6565,6 +6664,27 @@ export class Controller {
 	}
 
 	/**
+	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01 / F1):
+	 * the LAZY, IDENTITY-BOUND read of the host-owned duration accounting.
+	 *
+	 * WHY A METHOD AND NOT THE TRACKER GETTER DIRECTLY:
+	 *   The accounting exists only once a task is active, so the read
+	 *   MUST happen at the persistence boundary — not at coordinator
+	 *   construction. This method is the seam the coordinator's
+	 *   `readDurationPersistence` callback invokes.
+	 *
+	 * IDENTITY BINDING:
+	 *   The task identity and the accounting record are returned
+	 *   TOGETHER, straight from the tracker that owns both. The
+	 *   destination identity is therefore NEVER derived independently of
+	 *   the record, which makes a cross-task misattribution
+	 *   structurally impossible.
+	 */
+	private readBoundDurationPersistence(): { taskId: string; record: TaskDurationPersistence } | undefined {
+		return this.taskTelemetry?.boundDurationPersistence
+	}
+
+	/**
 	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01: persist the
 	 * duration accounting into the task's EXISTING `HistoryItem` slot.
 	 *
@@ -6580,6 +6700,21 @@ export class Controller {
 	 * The write is idempotent: the record REPLACES the stored totals
 	 * rather than adding to them, so a repeated persist at the same
 	 * boundary cannot double-count.
+	 *
+	 * AMENDMENT-01 (W1 ordering): the writes for ONE task are SERIALIZED
+	 * through a per-task promise chain, and a write is DROPPED when its
+	 * accounting is not newer than the accounting already written for
+	 * that task. Without this, two overlapping read-modify-write cycles
+	 * could complete out of order and an OLDER accounting checkpoint
+	 * could replace a NEWER one.
+	 *
+	 * The guard compares the ACCUMULATED TOTALS (the accounting is
+	 * monotonically non-decreasing within a task's lifetime), not a
+	 * wall-clock timestamp, so a clock adjustment cannot suppress a
+	 * legitimate newer checkpoint.
+	 *
+	 * The chain is bounded: one pending write per task id, and the map
+	 * entry is removed once the chain drains.
 	 */
 	private async persistDurationAccounting(
 		taskId: string | undefined,
@@ -6588,20 +6723,57 @@ export class Controller {
 		if (!taskId || !record) {
 			return
 		}
-		try {
-			const historyItem = await this.taskHistory.findHistoryItem(taskId)
-			if (!historyItem) {
+		// AMENDMENT-01 (W1 ordering): serialize the writes for this task
+		// and drop a checkpoint that is not newer than the one already
+		// written.
+		const previous = this.durationChains.get(taskId)
+		const next = (previous ?? Promise.resolve()).then(async () => {
+			const written = this.durationWritten.get(taskId)
+			if (written && !isDurationRecordNewerThan(record, written)) {
+				// An OLDER (or equal) accounting checkpoint — the
+				// out-of-order completion case. Writing it would roll
+				// the persisted accounting BACK to a stale value.
 				return
 			}
-			historyItem.duration = record
-			await this.taskHistory.updateTaskHistoryItem(historyItem)
+			await this.writeDurationAccountingRecord(taskId, record)
+			this.durationWritten.set(taskId, record)
+		})
+		this.durationChains.set(
+			taskId,
+			next.catch(() => undefined),
+		)
+		try {
+			await next
 		} catch (error) {
 			// A persistence failure MUST NOT break task execution. The
 			// accounting simply remains unpersisted for this task.
 			Logger.warn(
 				`[OBS05] could not persist the task duration accounting: ${error instanceof Error ? error.message : String(error)}`,
 			)
+		} finally {
+			// Drop the chain entry once THIS write is the tail, so the
+			// map does not grow without bound.
+			if (this.durationChains.get(taskId) === next) {
+				this.durationChains.delete(taskId)
+			}
 		}
+	}
+
+	/**
+	 * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01):
+	 * the single read-modify-write cycle of the duration accounting.
+	 *
+	 * The task identity and the accounting record travel together: the
+	 * record is written into the history slot of EXACTLY the task it is
+	 * bound to. A record is never written into a different task's slot.
+	 */
+	private async writeDurationAccountingRecord(taskId: string, record: TaskDurationPersistence): Promise<void> {
+		const historyItem = await this.taskHistory.findHistoryItem(taskId)
+		if (!historyItem) {
+			return
+		}
+		historyItem.duration = record
+		await this.taskHistory.updateTaskHistoryItem(historyItem)
 	}
 
 	/**

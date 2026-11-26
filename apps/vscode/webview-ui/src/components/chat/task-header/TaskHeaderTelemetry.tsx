@@ -95,6 +95,7 @@ import {
 	formatElapsed,
 	isUsableMechanismProjection,
 	isUsableOutcomeProjection,
+	projectDurationForward,
 	resolveElapsedDisplayMs,
 	taskHeaderPresentationStateLabel,
 } from "./taskHeaderTelemetryHelpers"
@@ -128,6 +129,17 @@ interface TaskHeaderTelemetryProps {
 }
 
 const LIVE_TICK_MS = 1_000
+
+/**
+ * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01 / W4):
+ * the bound on the PRESENTATION-ONLY forward projection of the host's
+ * duration snapshot.
+ *
+ * A snapshot older than this bound is NOT extrapolated - the host's last
+ * published values are rendered verbatim. This keeps a stale snapshot
+ * from turning into an unbounded extrapolation.
+ */
+const DURATION_PROJECTION_BOUND_MS = 5 * 60_000
 
 /**
  * ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 — the semantic
@@ -373,6 +385,23 @@ const TaskHeaderTelemetry: React.FC<TaskHeaderTelemetryProps> = ({
 	// We re-read telemetry.startedAt/endedAt each tick so the value
 	// remains a pure projection of canonical timestamps.
 	const [now, setNow] = useState(() => Date.now())
+	// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01 /
+	// W4): the wall-clock time the CURRENT duration snapshot was
+	// received. It anchors the presentation-only forward projection so
+	// the displayed split can progress between two host publications
+	// without the webview accumulating anything of its own.
+	//
+	// The snapshot identity is the (taskId, elapsedMs, phase) triple:
+	// a NEW snapshot from the host resets the anchor. A snapshot that
+	// is merely re-rendered (the same values) keeps its anchor.
+	const durationSnapshot = telemetry?.duration
+	const durationSnapshotKey = durationSnapshot
+		? `${durationSnapshot.taskId}|${durationSnapshot.elapsedMs}|${durationSnapshot.phase}`
+		: undefined
+	const [durationPublishedAt, setDurationPublishedAt] = useState<number | undefined>(undefined)
+	useEffect(() => {
+		setDurationPublishedAt(Date.now())
+	}, [durationSnapshotKey])
 	useEffect(() => {
 		if (!state.live) {
 			return
@@ -399,7 +428,16 @@ const TaskHeaderTelemetry: React.FC<TaskHeaderTelemetryProps> = ({
 	// authoritative duration snapshot, projected for display. The webview
 	// owns no accumulated duration — it renders the host's numbers and
 	// never adds to them.
-	const durationProjection = durationDisplayProjection(telemetry.duration)
+	//
+	// ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (AMENDMENT-01 /
+	// W4): the PRESENTATION-ONLY forward projection. The webview owns
+	// no accumulated duration: it projects the HOST's snapshot forward
+	// for the ONE bucket the host says is open, bounded by
+	// `DURATION_PROJECTION_BOUND_MS`, and never across a terminal
+	// boundary. The host's next publication replaces the projection
+	// entirely.
+	const projectedDuration = projectDurationForward(telemetry.duration, now, durationPublishedAt, DURATION_PROJECTION_BOUND_MS)
+	const durationProjection = durationDisplayProjection(projectedDuration)
 	const durationTooltip = durationProjection
 		? `${EPOCH_TOOLTIP}\n\n${ACTIVE_TOOLTIP}\n${WAITING_TOOLTIP}${
 				durationProjection.unknownText ? `\n${UNKNOWN_TOOLTIP}` : ""
