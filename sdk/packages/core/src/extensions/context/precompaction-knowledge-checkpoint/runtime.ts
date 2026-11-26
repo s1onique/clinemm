@@ -211,13 +211,31 @@ export interface PckAttemptOutcome {
  */
 export interface PckObservedAttempt extends PckAttemptOutcome {
 	/**
-	 * The PHYSICAL attempt cardinality — how many physical provider
-	 * requests this attempt issued.
+	 * The OBSERVED PHYSICAL attempt cardinality — how many physical
+	 * provider requests this attempt issued.
 	 *
-	 * The WIRE retry cardinality is observed by the provider's own capture,
-	 * not here.
+	 * ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 (AMENDMENT-01)
+	 * — F2.
+	 *
+	 * It is the PROVIDER'S OWN physical-request occupancy authority
+	 * cardinality, so it is an OBSERVED fact and never a hardcoded
+	 * constant.
+	 *
+	 * It is ABSENT when the provider established no cardinality. An
+	 * absent cardinality is UNKNOWN, and it is never replaced by a
+	 * guess: a capture that read it as "one attempt" would assert a
+	 * physical-request count nobody observed.
 	 */
-	readonly physicalAttemptCount: number;
+	readonly physicalAttemptCount?: number;
+	/**
+	 * The request DURATION, in milliseconds, as observed by the runtime
+	 * around the provider call.
+	 *
+	 * ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 (AMENDMENT-01)
+	 * — F2. It is MEASURED at the attempt's own boundary, so it
+	 * covers the provider call itself.
+	 */
+	readonly durationMs?: number;
 	/** The ROUTE the attempt took. */
 	readonly route: "b_prime" | "legacy";
 }
@@ -277,6 +295,18 @@ export type PckGenerate = (input: {
 		readonly inputTokens?: number;
 		readonly cacheReadTokens?: number;
 	};
+	/**
+	 * ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 (AMENDMENT-01)
+	 * — F2.
+	 *
+	 * The OBSERVED PHYSICAL attempt count.
+	 *
+	 * It is the provider's own physical-request occupancy authority
+	 * cardinality: the number of physical `doStream()` calls the turn
+	 * actually made. It is ABSENT when the provider established no
+	 * cardinality, and it is NEVER a hardcoded constant.
+	 */
+	readonly physicalAttemptCount?: number;
 }>;
 
 /**
@@ -429,6 +459,8 @@ export async function runPckAttempt(input: {
 		providerRequestId?: string;
 		inputTokens?: number;
 		cacheReadTokens?: number;
+		physicalAttemptCount?: number;
+		durationMs?: number;
 	} = {};
 	const outcome = await executePckAttempt(input, observed);
 	return {
@@ -436,9 +468,20 @@ export async function runPckAttempt(input: {
 		providerRequestId: observed.providerRequestId,
 		inputTokens: observed.inputTokens,
 		cacheReadTokens: observed.cacheReadTokens,
-		// ONE physical provider request per attempt. The WIRE retry
-		// cardinality is observed by the provider's own capture, not here.
-		physicalAttemptCount: 1,
+		// ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01
+		// (AMENDMENT-01) — F2.
+		//
+		// The PHYSICAL attempt cardinality is the PROVIDER'S OWN
+		// observed cardinality. It is carried by PRESENCE: an
+		// authority that established none leaves the field ABSENT,
+		// and an absent cardinality is UNKNOWN rather than one.
+		...(observed.physicalAttemptCount !== undefined
+			? { physicalAttemptCount: observed.physicalAttemptCount }
+			: {}),
+		// The MEASURED request duration.
+		...(observed.durationMs !== undefined
+			? { durationMs: observed.durationMs }
+			: {}),
 		route: input.route ?? "legacy",
 	};
 }
@@ -465,6 +508,8 @@ async function executePckAttempt(
 		providerRequestId?: string;
 		inputTokens?: number;
 		cacheReadTokens?: number;
+		physicalAttemptCount?: number;
+		durationMs?: number;
 	},
 ): Promise<PckAttemptOutcome> {
 	const observedReferences = collectObservedCanonicalReferences(
@@ -509,8 +554,15 @@ async function executePckAttempt(
 				failed: boolean;
 				providerRequestId?: string;
 				usage?: { inputTokens?: number; cacheReadTokens?: number };
+				// ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01
+				// (AMENDMENT-01) — F2: the OBSERVED physical attempt count.
+				physicalAttemptCount?: number;
 		  }
 		| undefined;
+	// ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 (AMENDMENT-01)
+	// — F2: the request DURATION is MEASURED here, at the attempt's
+	// own boundary, so it covers the provider call itself.
+	const attemptStartedAt = Date.now();
 	try {
 		response = await input.generate({
 			systemPrompt: input.prefixPreservingRequest
@@ -530,7 +582,21 @@ async function executePckAttempt(
 		observed.providerRequestId = response.providerRequestId;
 		observed.inputTokens = response.usage?.inputTokens;
 		observed.cacheReadTokens = response.usage?.cacheReadTokens;
+		// ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01
+		// (AMENDMENT-01) — F2.
+		//
+		// The OBSERVED physical attempt count. It is the provider's
+		// own physical-request occupancy authority cardinality,
+		// carried by PRESENCE. It is NEVER synthesized from the
+		// attempt count or from any constant.
+		if (response.physicalAttemptCount !== undefined) {
+			observed.physicalAttemptCount = response.physicalAttemptCount;
+		}
 	} catch {
+		// ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01
+		// (AMENDMENT-01) — F2: the duration is recorded on EVERY
+		// exit, so a failed attempt still reports how long it took.
+		observed.durationMs = Date.now() - attemptStartedAt;
 		const failureReason = handle.timedOut()
 			? "timeout"
 			: input.taskSignal.aborted
@@ -542,6 +608,10 @@ async function executePckAttempt(
 			accepted: false,
 		};
 	} finally {
+		// ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01
+		// (AMENDMENT-01) — F2: the duration is recorded on EVERY
+		// exit, including the successful one.
+		observed.durationMs = Date.now() - attemptStartedAt;
 		handle.dispose();
 	}
 	if (handle.timedOut()) {

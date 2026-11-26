@@ -800,7 +800,11 @@ describe("ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 — C8 CAPTURE REA
 				extractionOutcome: "accepted",
 				failureReason: undefined,
 				gateAdmittedRecordCount: 1,
-				installedRecordCount: 1,
+				// ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01
+				// (AMENDMENT-01) — F2: the ADMITTED, PROJECTED and
+				// COMMITTED counts are DISTINCT fields.
+				projectedRecordCount: 1,
+				committedRecordCount: 1,
 			});
 			const file = join(
 				directory,
@@ -835,7 +839,11 @@ describe("ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 — C8 CAPTURE REA
 			// The gate-admitted count and the installed count are DISTINCT
 			// fields.
 			expect(record.gateAdmittedRecordCount).toBe(1);
-			expect(record.installedRecordCount).toBe(1);
+			// ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01
+			// (AMENDMENT-01) — F2: the three knowledge states are
+			// DISTINCT and separately observable.
+			expect(record.projectedRecordCount).toBe(1);
+			expect(record.committedRecordCount).toBe(1);
 		} finally {
 			if (previousHome === undefined) {
 				delete process.env.HOME;

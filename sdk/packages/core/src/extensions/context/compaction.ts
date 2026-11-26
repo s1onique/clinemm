@@ -127,7 +127,10 @@ import {
 	resolveEffectiveMaxInputTokens,
 } from "./compaction-shared";
 import { applyVerifiedEvidenceToCompactedMessages } from "./evidence-continuity";
-import { recordPckPrefixCapture } from "./precompaction-knowledge-checkpoint/pck-capture";
+import {
+	isPckPrefixCaptureEnabled,
+	recordPckPrefixCapture,
+} from "./precompaction-knowledge-checkpoint/pck-capture";
 import type { PrefixPreservingParentAuthority } from "./precompaction-knowledge-checkpoint/prefix-preserving-request";
 import { selectPrefixPreservingRoute } from "./precompaction-knowledge-checkpoint/prefix-preserving-request";
 import {
@@ -3339,16 +3342,45 @@ export function createCompactionStateAwarePrepareTurn(input: {
 			// removable.
 			const observedAttempt = result.knowledgeCheckpointObserved;
 			const attemptCaptureContext = result.knowledgeCheckpointCaptureContext;
-			if (observedAttempt !== undefined) {
+			// ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 (AMENDMENT-01)
+			// — F2.
+			//
+			// The capture is DEFAULT-OFF. The record is CONSTRUCTED only
+			// when the capture is armed, so the disabled path performs no
+			// serialization and no identity resolution at all.
+			// ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01
+			// (AMENDMENT-01) — F2.
+			//
+			// The capture is DEFERRED to the durable commit boundary: the
+			// COMMITTED count is only knowable there, because it is the
+			// only place that knows whether the state was written. The
+			// closure carries the ADMITTED and PROJECTED counts and
+			// receives the COMMITTED count from the boundary.
+			//
+			// The capture is DEFAULT-OFF: with it disabled, no record is
+			// constructed, no identity is resolved and nothing is
+			// written.
+			const emitPckPrefixCapture = (committedRecordCount: number): void => {
+				if (observedAttempt === undefined || !isPckPrefixCaptureEnabled()) {
+					return;
+				}
 				const captureContext = attemptCaptureContext ?? {};
 				recordPckPrefixCapture({
 					capturedAt: new Date().toISOString(),
 					sessionId: captureContext.sessionId,
-					decisionId:
-						(captureContext.decisionId ??
-						observedAttempt.physicalAttemptCount === 0)
-							? "unknown"
-							: "unknown",
+					// ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01
+					// (AMENDMENT-01) — F2.
+					//
+					// The EXACT identity of the decision that ORIGINATED
+					// this attempt. The predecessor minted "unknown" in
+					// BOTH branches of its ternary, so every capture
+					// recorded the same synthetic identity and no capture
+					// could be joined to the decision that caused it.
+					//
+					// The identity is CARRIED, never minted: when the
+					// attempt has no decision identity, the field is
+					// ABSENT (UNKNOWN) rather than a synthetic value.
+					decisionId: captureContext.decisionId,
 					preparationRequestId: captureContext.parentRequestId,
 					// The LAST DISPATCHED ordinary request identity is NOT
 					// available at the PCK boundary. The ABSENCE is
@@ -3364,7 +3396,17 @@ export function createCompactionStateAwarePrepareTurn(input: {
 					resolvedInferencePolicyId: captureContext.resolvedInferencePolicyId,
 					inputTokens: observedAttempt.inputTokens,
 					cacheReadTokens: observedAttempt.cacheReadTokens,
-					durationMs: undefined,
+					// ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01
+					// (AMENDMENT-01) — F2.
+					//
+					// The MEASURED request duration. The predecessor
+					// hardcoded "undefined", so the capture never
+					// recorded how long the auxiliary request took.
+					durationMs: observedAttempt.durationMs,
+					// The OBSERVED physical attempt cardinality. It is
+					// the provider's own count, carried by PRESENCE: an
+					// authority that established none leaves it
+					// ABSENT (UNKNOWN) rather than claiming one.
 					physicalAttemptCount: observedAttempt.physicalAttemptCount,
 					extractionOutcome: observedAttempt.accepted
 						? "accepted"
@@ -3372,12 +3414,21 @@ export function createCompactionStateAwarePrepareTurn(input: {
 							? "failed"
 							: "rejected",
 					failureReason: observedAttempt.failureReason,
+					// The ADMITTED count: what the publication gate
+					// accepted.
 					gateAdmittedRecordCount: observedAttempt.records.length,
-					installedRecordCount: checkpointed.applied
+					// The PROJECTED count: what the projection placed
+					// into the transcript that was about to be written.
+					projectedRecordCount: checkpointed.applied
 						? checkpointed.carriedRecordCount
 						: 0,
+					// The COMMITTED count: what was actually PERSISTED. It
+					// comes from the DURABLE COMMIT BOUNDARY, which is
+					// the only place that knows whether the write
+					// happened.
+					committedRecordCount,
 				});
-			}
+			};
 			// ACT-CLINEMM-CMP05-CANCELLATION-COMMIT-AUTHORITY-01: the
 			// INSTALLATION AUTHORITY CHECK.
 			//
@@ -3460,6 +3511,19 @@ export function createCompactionStateAwarePrepareTurn(input: {
 					contractMaxRequestTokens,
 				);
 			}
+			// ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01
+			// (AMENDMENT-01) — F2.
+			//
+			// The COMMITTED-INSTALLATION EVIDENCE. It is emitted HERE,
+			// — at the DURABLE COMMIT BOUNDARY — and nowhere else.
+			// This is the only place that knows the state was really
+			// written, so it is the only place a committed count may
+			// be non-zero. A capture emitted before this boundary
+			// would assert a committed installation that may still
+			// be refused.
+			emitPckPrefixCapture(
+				checkpointed.applied ? checkpointed.carriedRecordCount : 0,
+			);
 			// The installation committed, so the success notice may now be
 			// published.
 			successPublication.release();

@@ -114,8 +114,17 @@ export interface PckPrefixCaptureRecord {
 	readonly capturedAt: string;
 	/** The SESSION identity, when the host supplied it. */
 	readonly sessionId: string | undefined;
-	/** The COMPACTION DECISION identity. */
-	readonly decisionId: string;
+	/**
+	 * The COMPACTION DECISION identity.
+	 *
+	 * ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 (AMENDMENT-01)
+	 * — F2.
+	 *
+	 * It is the EXACT identity of the decision that ORIGINATED the
+	 * attempt. It is never minted, substituted or defaulted: a capture
+	 * that cannot name its decision says so, but it never invents one.
+	 */
+	readonly decisionId: string | undefined;
 	/** The CURRENT preparation identity, when the host supplied it. */
 	readonly preparationRequestId: string | undefined;
 	/**
@@ -159,25 +168,55 @@ export interface PckPrefixCaptureRecord {
 	 * The PHYSICAL attempt cardinality — how many physical provider
 	 * requests the attempt issued, including retries.
 	 */
-	readonly physicalAttemptCount: number;
-	/** The EXTRACTION outcome. */
+	/**
+	 * The OBSERVED PHYSICAL attempt cardinality — how many physical
+	 * provider requests the attempt issued, including retries.
+	 *
+	 * ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 (AMENDMENT-01)
+	 * — F2.
+	 *
+	 * It is the provider's own observed cardinality. It is ABSENT when
+	 * the provider established none: an absent cardinality is UNKNOWN,
+	 * and it is never replaced by a hardcoded constant.
+	 */
+	readonly physicalAttemptCount?: number /** The EXTRACTION outcome. */;
 	readonly extractionOutcome: "accepted" | "rejected" | "failed";
 	/** The failure reason, when the attempt failed. */
 	readonly failureReason: string | undefined;
 	/**
 	 * The number of records the PUBLICATION GATE admitted.
 	 *
-	 * It is NOT the installed count.
+	 * ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 (AMENDMENT-01)
+	 * — F2.
+	 *
+	 * This is the ADMITTED count. It is NOT the projected count and NOT
+	 * the committed count.
 	 */
 	readonly gateAdmittedRecordCount: number;
 	/**
-	 * The number of records actually INSTALLED into the compacted
-	 * transcript.
+	 * The number of records PROJECTED into the compacted transcript.
 	 *
-	 * It is DISTINCT from `gateAdmittedRecordCount`: the projection can
-	 * carry fewer records than the gate admitted.
+	 * ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 (AMENDMENT-01)
+	 * — F2.
+	 *
+	 * PROJECTED is the state between ADMITTED and COMMITTED: the records
+	 * the projection placed into the transcript that is ABOUT to be
+	 * written. It is distinct from the admitted count, because the
+	 * projection can carry fewer records than the gate admitted.
 	 */
-	readonly installedRecordCount: number;
+	readonly projectedRecordCount: number;
+	/**
+	 * The number of records COMMITTED into the persisted transcript.
+	 *
+	 * ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 (AMENDMENT-01)
+	 * — F2.
+	 *
+	 * COMMITTED is the state the installation actually persisted. It is
+	 * ZERO when the installation did not happen, so a record that was
+	 * admitted and projected but never written is distinguishable from
+	 * one that was written.
+	 */
+	readonly committedRecordCount: number;
 }
 
 /**

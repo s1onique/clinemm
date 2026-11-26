@@ -90,13 +90,25 @@ function sseText(text: string): string {
 }
 
 /**
- * The synthetic SSE of a TOOL CALL with CONCRETE ARGUMENTS.
+ * The synthetic SSE of a response that carries BOTH valid checkpoint JSON
+ * AND a concrete mutation tool call.
  *
- * It is syntactically valid: the name, the argument JSON and the finish
- * reason are all well-formed.
+ * The two payloads share ONE response, so the attempt sees a
+ * syntactically valid checkpoint AND a syntactically valid mutation
+ * call. The attempt must reject it: a tool call means the auxiliary
+ * request tried to EXECUTE something, and the checkpoint's contract
+ * forbids that.
  */
-function sseToolCall(toolName: string, args: string): string {
+function sseCheckpointAndToolCall(
+	checkpointJson: string,
+	toolName: string,
+	args: string,
+): string {
 	return (
+		chunk({
+			role: "assistant",
+			content: checkpointJson,
+		}) +
 		chunk({
 			role: "assistant",
 			tool_calls: [
@@ -212,6 +224,23 @@ interface RealTransportResult {
 	readonly pckRequestBody: Record<string, unknown> | undefined;
 	/** The number of PHYSICAL provider requests the composition issued. */
 	readonly physicalProviderRequests: number;
+	/** The ACTUAL history object supplied to production execution. */
+	readonly suppliedHistory: MessageWithMetadata[];
+	/** The ORDINARY (non-PCK) request body. */
+	readonly ordinaryRequestBody: Record<string, unknown> | undefined;
+	/**
+	 * The PARENT's ACTUAL serialized request body, issued through
+	 * the SAME production transport.
+	 */
+	readonly parentRequestBody: Record<string, unknown> | undefined;
+	/**
+	 * The PARENT's provider-visible projection — the ACTUAL
+	 * serialized leading prefix the B' route preserves.
+	 */
+	readonly parentProjection: readonly {
+		readonly role: string;
+		readonly content: unknown;
+	}[];
 }
 
 /**
@@ -223,9 +252,35 @@ interface RealTransportResult {
  */
 async function runRealTransport(options: {
 	readonly pckResponse: string;
+	/**
+	 * The ACTUAL history object supplied to production.
+	 *
+	 * It is an INPUT, not something the helper builds for itself, so
+	 * a witness that asserts on it asserts on the very object the
+	 * production seam received.
+	 */
+	readonly history?: MessageWithMetadata[];
+	/**
+	 * Whether the B' (prefix-preserving) route is enabled.
+	 *
+	 * The LEGACY route is the ordinary independent request; the B'
+	 * route is the parent's messages plus the appended suffix.
+	 */
+	readonly prefixPreserving?: boolean;
 }): Promise<RealTransportResult> {
 	process.env.CLINEMM_PCK_CLOSED_ENABLED = "1";
-	process.env.CLINEMM_PCK_PREFIX_PRESERVING_ENABLED = "1";
+	if (options.prefixPreserving === false) {
+		delete process.env.CLINEMM_PCK_PREFIX_PRESERVING_ENABLED;
+	} else {
+		process.env.CLINEMM_PCK_PREFIX_PRESERVING_ENABLED = "1";
+	}
+	// ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 (AMENDMENT-01)
+	// — F3: each run observes ONLY its OWN requests. The captured
+	// array is shared by the composition, so a second run would
+	// otherwise find the FIRST run's PCK request and compare the
+	// wrong route against the wrong prefix.
+	capturedHttpRequests = [];
+	physicalProviderRequests = 0;
 	const fetchStub = (async (_url: unknown, init: unknown) => {
 		physicalProviderRequests += 1;
 		const requestInit = init as { body?: string } | undefined;
@@ -278,10 +333,35 @@ async function runRealTransport(options: {
 			Parameters<typeof createCompactionStateAwarePrepareTurn>[0]["compact"]
 		>
 	>[0]["model"];
-	const messages = canonicalHistory();
+	const messages = options.history ?? canonicalHistory();
+	// The ACTUAL object supplied to production, so a witness can
+	// assert on the very array the seam received.
+	const suppliedHistory = messages;
 	const parentProjection = new MessageBuilder().buildForApi(
 		messages as unknown as Parameters<MessageBuilder["buildForApi"]>[0],
 	);
+	// ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 (AMENDMENT-01)
+	// — F3.
+	//
+	// The PARENT's OWN serialized request, issued through the SAME
+	// production transport with the SAME provider configuration. The
+	// RT.3 comparison is then between two ACTUAL serialized request
+	// bodies — not between a body and a JS projection, which no
+	// re-derivation could falsify.
+	await generateSummary({
+		providerConfig: providerConfig as never,
+		systemPrompt: PARENT_SYSTEM_PROMPT,
+		request: "",
+		messages: parentProjection as never,
+		tools: PARENT_TOOLS as never,
+		signal: new AbortController().signal,
+	});
+	const parentRequestBody = capturedHttpRequests.find(
+		(request) =>
+			!JSON.stringify(request.body).includes("WORKING-KNOWLEDGE CHECKPOINT"),
+	)?.body;
+	capturedHttpRequests = [];
+	physicalProviderRequests = 0;
 	const inner = createContextCompactionPrepareTurn(
 		{
 			providerId,
@@ -344,14 +424,34 @@ async function runRealTransport(options: {
 		transcript,
 		pckRequestBody: pckRequest?.body,
 		physicalProviderRequests,
+		suppliedHistory,
+		// The ORDINARY (non-PCK) request body the composition issued.
+		// It is the parent request the compaction summarizer sent,
+		// and it is the OTHER side of the RT.3 prefix comparison.
+		parentRequestBody,
+		parentProjection: parentProjection as unknown as readonly {
+			readonly role: string;
+			readonly content: unknown;
+		}[],
+		ordinaryRequestBody: capturedHttpRequests.find(
+			(request) =>
+				!JSON.stringify(request.body).includes("WORKING-KNOWLEDGE CHECKPOINT"),
+		)?.body,
 	};
 }
 
 describe("ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 (AMENDMENT-01) — REAL TRANSPORT", () => {
-	it("RT.1: a syntactically valid MUTATION tool call alongside valid checkpoint JSON installs NOTHING", async () => {
-		// The synthetic SSE carries a valid mutation tool call WITH
-		// CONCRETE ARGUMENTS.
-		const response = sseToolCall(
+	it("RT.1: valid checkpoint JSON AND a concrete mutation tool call in the SAME response install NOTHING", async () => {
+		// ONE response carries BOTH a syntactically valid checkpoint
+		// AND a syntactically valid mutation tool call WITH CONCRETE
+		// ARGUMENTS.
+		//
+		// The predecessor injected the tool call ALONE, so the
+		// "installs nothing" assertion was satisfied by the ABSENCE
+		// of any checkpoint at all — it never exercised the
+		// interaction between a valid checkpoint and a tool call.
+		const response = sseCheckpointAndToolCall(
+			VALID_CHECKPOINT_JSON,
 			"run_commands",
 			JSON.stringify({ commands: ["rm -rf /workspace"] }),
 		);
@@ -359,9 +459,12 @@ describe("ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 (AMENDMENT-01) —
 		// The tool call was ADVERTISED to the provider: the parent's
 		// mutation-tool schema is on the wire.
 		expect(JSON.stringify(result.pckRequestBody)).toContain("run_commands");
-		// ZERO admitted and ZERO installed records.
+		// ZERO admitted and ZERO installed records: the tool call
+		// disqualifies the attempt even though the checkpoint JSON
+		// was valid.
 		expect(result.installed).toBe(false);
 		expect(result.transcript).not.toContain("operation invoked");
+		expect(result.transcript).not.toContain("Working knowledge checkpoint");
 		// NO tool-driven additional inference: the composition issued
 		// EXACTLY ONE physical provider request for the PCK (plus the
 		// compaction's own summarizer request).
@@ -380,11 +483,29 @@ describe("ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 (AMENDMENT-01) —
 		expect(result.transcript).toContain("operation invoked");
 	});
 
-	it("RT.3: the HTTP WIRE body carries the parent's leading messages and the appended suffix", async () => {
-		const result = await runRealTransport({
+	it("RT.3: the ACTUAL serialized ordinary and B' request prefixes are compared", async () => {
+		// The ORDINARY (legacy A) route's ACTUAL serialized request.
+		// It is the ROUTE CONTROL: the legacy route issues an
+		// INDEPENDENT request with its OWN system prompt, so it is
+		// not the B' request and the comparison below is not
+		// trivially satisfied.
+		const ordinary = await runRealTransport({
 			pckResponse: sseText(VALID_CHECKPOINT_JSON),
+			prefixPreserving: false,
 		});
-		const body = result.pckRequestBody as {
+		// The LEGACY route issues an INDEPENDENT request with the
+		// CHECKPOINT's own system prompt, so the parent's system
+		// prompt is NOT in it. That is what makes the B' route's
+		// prefix preservation a real difference.
+		expect(JSON.stringify(ordinary.pckRequestBody ?? {})).not.toContain(
+			PARENT_SYSTEM_PROMPT,
+		);
+		// The B' route's ACTUAL serialized request.
+		const bPrime = await runRealTransport({
+			pckResponse: sseText(VALID_CHECKPOINT_JSON),
+			prefixPreserving: true,
+		});
+		const body = bPrime.pckRequestBody as {
 			messages?: { role: string; content: unknown }[];
 		};
 		expect(Array.isArray(body.messages)).toBe(true);
@@ -394,21 +515,93 @@ describe("ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 (AMENDMENT-01) —
 		expect(messages[0].role).toBe("system");
 		expect(JSON.stringify(messages[0].content)).toContain(PARENT_SYSTEM_PROMPT);
 		// The LAST wire message is the appended extraction suffix.
-		const last = messages[messages.length - 1];
-		expect(last.role).toBe("user");
-		expect(JSON.stringify(last.content)).toContain(
+		const suffix = messages[messages.length - 1];
+		expect(suffix.role).toBe("user");
+		expect(JSON.stringify(suffix.content)).toContain(
 			"WORKING-KNOWLEDGE CHECKPOINT",
 		);
 		// The wire body carries the parent's TOOL SCHEMA.
-		expect(JSON.stringify(result.pckRequestBody)).toContain("run_commands");
+		expect(JSON.stringify(bPrime.pckRequestBody)).toContain("run_commands");
+		//
+		// THE ACTUAL PREFIX COMPARISON.
+		//
+		// The B' route's request is the PARENT's provider-visible
+		// projection PLUS the appended extraction suffix. The
+		// predecessor only asserted that the B' body CONTAINED a
+		// marker, which no re-derivation could falsify: it never
+		// compared the ACTUAL serialized leading messages.
+		//
+		// The comparison below is between the ACTUAL serialized
+		// leading messages of the B' request and the ACTUAL provider-
+		// visible projection of the ordinary (parent) request. The
+		// parent projection is the REAL one: it is the very array
+		// the production seam handed to the provider as the parent's
+		// apiMessages.
+		//
+		// THE ACTUAL SERIALIZED PREFIX COMPARISON.
+		//
+		// The parent's OWN serialized request body — captured by
+		// issuing the parent request through the SAME production
+		// transport — is compared with the B' request's LEADING
+		// serialized messages.
+		//
+		// The predecessor only asserted that the B' body CONTAINED a
+		// marker, which no re-derivation could falsify: it never
+		// compared the ACTUAL serialized prefixes.
+		const parentBody = bPrime.parentRequestBody as {
+			messages?: { role: string; content: unknown }[];
+		};
+		expect(Array.isArray(parentBody.messages)).toBe(true);
+		const parentWireMessages = parentBody.messages ?? [];
+		expect(parentWireMessages.length).toBeGreaterThan(0);
+		// The B' request is the parent's serialized prefix PLUS the
+		// appended extraction suffix.
+		const leadingWireMessages = messages.slice(0, -1);
+		expect(leadingWireMessages.length).toBe(parentWireMessages.length);
+		for (const [index, parentMessage] of parentWireMessages.entries()) {
+			expect(leadingWireMessages[index]).toEqual(parentMessage);
+		}
+		// The FIRST DIVERGENCE is exactly at the appended suffix: the
+		// suffix is the ONLY message the parent does not have.
+		expect(messages.length).toBe(parentWireMessages.length + 1);
+		//
+		// The SERIALIZED CONTENT of each leading message is compared
+		// against the parent's OWN serialized content. The wire
+		// serializer renders the parent's blocks in the provider's
+		// format, so the comparison is over the wire's own
+		// rendering of the SAME parent content.
+		//
+		// The parent's message content is recovered from the wire
+		// body itself: the B' route's leading messages ARE the
+		// parent's serialized prefix. The witness therefore
+		// compares the B' body against a SECOND serialization of
+		// the SAME parent projection, issued through the SAME
+		// transport.
+		// The FIRST DIVERGENCE is at the appended suffix: it is the
+		// LAST message, and it is the ONLY message the parent does
+		// not have.
+		expect(suffix.role).toBe("user");
+		expect(JSON.stringify(suffix.content)).toContain(
+			"WORKING-KNOWLEDGE CHECKPOINT",
+		);
 	});
 
-	it("RT.4: the CANONICAL HISTORY object supplied to production execution is UNCHANGED", async () => {
+	it("RT.4: the ACTUAL supplied history object is UNCHANGED", async () => {
+		// The EXACT object the production seam receives. The witness
+		// asserts on THIS array, not on a second array the helper
+		// built for itself: the predecessor compared a locally
+		// constructed history with itself, so it could never fail.
 		const history = canonicalHistory();
 		const before = JSON.stringify(history);
-		await runRealTransport({ pckResponse: sseText(VALID_CHECKPOINT_JSON) });
+		const result = await runRealTransport({
+			pckResponse: sseText(VALID_CHECKPOINT_JSON),
+			history,
+		});
+		// The production seam really received THIS array.
+		expect(result.suppliedHistory).toBe(history);
 		// The EXACT canonical array supplied to the production seam is
 		// byte-identical after the auxiliary attempt.
+		expect(JSON.stringify(result.suppliedHistory)).toBe(before);
 		expect(JSON.stringify(history)).toBe(before);
 		// The transport raised no error.
 		expect(transportErrors).toEqual([]);

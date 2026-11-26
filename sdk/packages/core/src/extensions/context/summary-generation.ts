@@ -373,6 +373,10 @@ export async function generateSummary(options: {
 	// provider metric is unknown, and it is never turned into a
 	// zero-cost inference.
 	let usage: SummaryUsage | undefined;
+	// ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 (AMENDMENT-01)
+	// — F2: the OBSERVED physical attempt count. It is ABSENT when the
+	// provider established no cardinality.
+	let physicalAttemptCount: number | undefined;
 	// ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01 (AMENDMENT-02 §4)
 	// — THE PHYSICAL REQUEST IDENTITY.
 	//
@@ -503,6 +507,19 @@ export async function generateSummary(options: {
 				// The chunk is read BEFORE any acceptance decision is taken, so
 				// the usage survives every outcome of the generation.
 				usage = collectUsageChunk(usage, chunk);
+				// ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01
+				// (AMENDMENT-01) — F2.
+				//
+				// The OBSERVED PHYSICAL ATTEMPT COUNT. The usage chunk
+				// carries the middleware-owned physical-request OCCUPANCY
+				// AUTHORITY, whose `attemptCount` is the number of physical
+				// `doStream()` calls the turn actually made. It is never
+				// synthesized: an absent authority stays absent, and an
+				// authority that established no cardinality stays unknown.
+				const occupancy = chunk.requestOccupancy;
+				if (occupancy?.attemptCount !== undefined) {
+					physicalAttemptCount = occupancy.attemptCount;
+				}
 			}
 		}
 		observeCancellation();
@@ -534,6 +551,13 @@ export async function generateSummary(options: {
 		// The PHYSICAL provider request identity, so a capture can JOIN
 		// this attempt with the provider's own request record.
 		providerRequestId: requestId,
+		// ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01
+		// (AMENDMENT-01) — F2.
+		//
+		// The OBSERVED physical attempt count. It is ABSENT when the
+		// provider established no cardinality; it is NEVER a hardcoded
+		// constant.
+		...(physicalAttemptCount !== undefined ? { physicalAttemptCount } : {}),
 		finishReason,
 		cancelled,
 		// ACT-CLINEMM-CMP08-SUMMARIZATION-USAGE-CONSERVATION-01: the

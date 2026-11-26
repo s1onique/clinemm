@@ -107,6 +107,37 @@ export type ProviderVisibleBinding =
 			 * tool event is the DECISIVE engineering evidence.
 			 */
 			readonly toolEvent: boolean;
+			/**
+			 * ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 (AMENDMENT-01)
+			 * — F1.
+			 *
+			 * Whether the reference holds RESULT AUTHORITY.
+			 *
+			 * ====================================================================
+			 * INVOCATION AUTHORITY DOES NOT IMPLY RESULT AUTHORITY
+			 * ====================================================================
+			 *
+			 * A visible `tool_use` block proves only that a call was REQUESTED. The
+			 * OUTCOME lives in the `tool_result` block that answers it, and that
+			 * block is a SEPARATE piece of provider-visible material with its own
+			 * visibility, authorization and truncation state.
+			 *
+			 * Result authority therefore requires ALL of:
+			 *
+			 *   - the RESULT is provider-visible (a `tool_result` block for this
+			 *     call id exists in the projection),
+			 *   - the RESULT is AUTHORIZED (the canonical message carrying it is
+			 *     inside the authorized source interval),
+			 *   - the RESULT is NOT TRUNCATED (the projection did not elide the
+			 *     material the outcome depends on), and
+			 *   - the RESULT is NOT PRIVATE REASONING.
+			 *
+			 * When result authority is absent, the reference is STILL a citable
+			 * INVOCATION — it just cannot establish an OBSERVED OUTCOME. The two
+			 * authorities are deliberately separate fields, so a consumer can never
+			 * read one as the other.
+			 */
+			readonly resultAuthority: boolean;
 	  }
 	| {
 			/** The canonical reference key. */
@@ -310,6 +341,9 @@ export function buildProviderVisibleBindings(input: {
 			providerResultMessageIndex: undefined,
 			providerResultBlockIndex: undefined,
 			toolEvent: false,
+			// A MESSAGE reference never carries RESULT AUTHORITY: it denotes
+			// the message, not the outcome of a tool call.
+			resultAuthority: false,
 		});
 	}
 
@@ -360,6 +394,21 @@ export function buildProviderVisibleBindings(input: {
 		// observed OUTCOME, because the outcome lives in the result.
 		const invocation = invocations[0];
 		const result = results.length === 1 ? results[0] : undefined;
+		// ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 (AMENDMENT-01)
+		// — F1.
+		//
+		// The RESULT AUTHORITY is a SEPARATE determination from the
+		// invocation's visibility. A visible `tool_use` block does NOT
+		// make the answered `tool_result` an authorized observation.
+		const resultAuthority =
+			result !== undefined &&
+			isResultAuthorized({
+				canonicalMessages: canonical,
+				toolCallId,
+				authorizedMessageCount: input.authorizedMessageCount,
+				providerMessages: input.providerMessages,
+				providerResult: result,
+			});
 		bindings.set(toolCallId, {
 			reference: toolCallId,
 			status: "resolved",
@@ -368,10 +417,117 @@ export function buildProviderVisibleBindings(input: {
 			providerResultMessageIndex: result?.messageIndex,
 			providerResultBlockIndex: result?.blockIndex,
 			toolEvent: true,
+			// The OUTCOME authority. It is TRUE only when the RESULT is
+			// visible, authorized and non-truncated.
+			resultAuthority,
 		});
 	}
 
 	return bindings;
+}
+
+/**
+ * ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 (AMENDMENT-01) — F1.
+ *
+ * Whether the RESULT of a tool call holds RESULT AUTHORITY.
+ *
+ * ====================================================================
+ * THE RESULT IS AUTHORIZED ONLY WHEN IT IS VISIBLE, AUTHORIZED AND
+ * COMPLETE
+ * ====================================================================
+ *
+ * The canonical history can hold a `tool_result` block for a call whose
+ * RESULT the model never saw: the projection may drop it, merge it away
+ * or truncate it. Retaining that canonical block would let the
+ * interpreter establish an OUTCOME the model cannot see, which is the
+ * exact failure this ACT closes.
+ *
+ * The determination therefore requires ALL of:
+ *
+ *   1. AUTHORIZATION — the canonical message carrying the RESULT is
+ *      INSIDE the authorized source interval, and it is NOT a
+ *      reasoning-only message.
+ *   2. VISIBILITY — the provider projection really carries a
+ *      `tool_result` block for this call id at the recorded position.
+ *   3. COMPLETENESS — neither the canonical result nor the
+ *      provider-visible result carries a truncation marker.
+ *
+ * Any failure is a FALSE, so the authority is absent. The helper never
+ * repairs, reconstructs or substitutes material.
+ */
+function isResultAuthorized(input: {
+	readonly canonicalMessages: readonly MessageWithMetadata[];
+	readonly toolCallId: string;
+	readonly authorizedMessageCount: number;
+	readonly providerMessages: readonly ProviderVisibleMessage[];
+	readonly providerResult: ProviderToolPosition;
+}): boolean {
+	// (1) AUTHORIZATION: the canonical message carrying the RESULT must be
+	// inside the authorized source interval.
+	const canonicalResultIndexes: number[] = [];
+	for (const [canonicalIndex, message] of input.canonicalMessages.entries()) {
+		if (!Array.isArray(message.content)) {
+			continue;
+		}
+		for (const block of message.content) {
+			if (
+				block.type === "tool_result" &&
+				block.tool_use_id === input.toolCallId
+			) {
+				canonicalResultIndexes.push(canonicalIndex);
+			}
+		}
+	}
+	// NO canonical result, or MORE THAN ONE: the outcome cannot be
+	// attributed to this call, so it authorizes nothing.
+	if (canonicalResultIndexes.length !== 1) {
+		return false;
+	}
+	const canonicalResultIndex = canonicalResultIndexes[0];
+	if (canonicalResultIndex >= input.authorizedMessageCount) {
+		// The RESULT is OUTSIDE the authorized source interval, so it
+		// is not an authorized extraction source even though the
+		// INVOCATION is inside it.
+		return false;
+	}
+	const canonicalResultMessage = input.canonicalMessages[canonicalResultIndex];
+	if (isReasoningOnlyMessage(canonicalResultMessage)) {
+		// A reasoning-only message is not an authorized extraction
+		// source.
+		return false;
+	}
+	// (2) VISIBILITY: the provider projection really carries the RESULT.
+	const providerResultMessage =
+		input.providerMessages[input.providerResult.messageIndex];
+	if (!providerResultMessage || !Array.isArray(providerResultMessage.content)) {
+		return false;
+	}
+	const providerResultBlock =
+		providerResultMessage.content[input.providerResult.blockIndex];
+	if (!providerResultBlock || typeof providerResultBlock !== "object") {
+		return false;
+	}
+	const providerResultRecord = providerResultBlock as {
+		type?: unknown;
+		tool_use_id?: unknown;
+	};
+	if (
+		providerResultRecord.type !== "tool_result" ||
+		providerResultRecord.tool_use_id !== input.toolCallId
+	) {
+		// The recorded position does not hold THIS call's result.
+		return false;
+	}
+	// (3) COMPLETENESS: the material the outcome depends on must be
+	// COMPLETE on both sides. A truncated result cannot establish an
+	// outcome, because the elided material may be the outcome.
+	if (containsTruncationMarker(canonicalResultMessage.content)) {
+		return false;
+	}
+	if (containsTruncationMarker(providerResultBlock)) {
+		return false;
+	}
+	return true;
 }
 
 /**
@@ -461,7 +617,13 @@ export function collectAuthorizedToolEventReferences(
 		if (
 			binding.status === "resolved" &&
 			binding.toolEvent &&
-			binding.providerResultMessageIndex !== undefined
+			// ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 (AMENDMENT-01)
+			// — F1: the decisive predicate is the RESULT AUTHORITY, not the
+			// mere PRESENCE of a provider-visible result position. A result
+			// position exists for a result that was truncated or whose
+			// canonical carrier was outside the authorized interval; neither
+			// establishes an observed outcome.
+			binding.resultAuthority
 		) {
 			events.push(binding.reference);
 		}
@@ -508,6 +670,25 @@ export function narrowCanonicalMessagesToAuthority(
 	bindings: ReadonlyMap<string, ProviderVisibleBinding>,
 ): readonly MessageWithMetadata[] {
 	const authorized = new Set(collectAuthorizedReferences(bindings));
+	// ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01 (AMENDMENT-01)
+	// — F1.
+	//
+	// The RESULT-AUTHORIZED references. A `tool_result` block is
+	// retained ONLY when the reference it answers holds RESULT
+	// AUTHORITY: the result is visible, authorized and non-truncated.
+	//
+	// The INVOCATION authority and the RESULT authority are DIFFERENT
+	// things. A visible `tool_use` block proves a call was requested;
+	// it does NOT prove the call's outcome. Retaining a canonical
+	// `tool_result` on invocation authority alone let the interpreter
+	// join the call to its result and establish an OUTCOME the model
+	// cannot see — an observation the model was never given.
+	const resultAuthorized = new Set<string>();
+	for (const binding of bindings.values()) {
+		if (binding.status === "resolved" && binding.resultAuthority) {
+			resultAuthorized.add(binding.reference);
+		}
+	}
 	const narrowed: MessageWithMetadata[] = [];
 	for (const message of canonicalMessages) {
 		const id = message.id;
@@ -526,7 +707,19 @@ export function narrowCanonicalMessagesToAuthority(
 				return authorized.has(block.id);
 			}
 			if (block.type === "tool_result") {
-				return authorized.has(block.tool_use_id);
+				// The RESULT is retained only under RESULT authority.
+				return resultAuthorized.has(block.tool_use_id);
+			}
+			// ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01
+			// (AMENDMENT-01) — F1.
+			//
+			// PRIVATE REASONING is excluded from the interpreter's
+			// evidence input, INCLUDING in a mixed-content message. A
+			// reasoning block is wire-visible but it is not an
+			// authorized extraction source, and a private deliberation
+			// must never become evidence for a published observation.
+			if (block.type === "thinking" || block.type === "redacted_thinking") {
+				return false;
 			}
 			return true;
 		});
