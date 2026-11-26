@@ -434,7 +434,6 @@ function extractReasoningOriginAuthority(
 		? record.originAuthority
 		: undefined;
 }
-}
 
 /**
  * Estimate the provider-visible request input size.

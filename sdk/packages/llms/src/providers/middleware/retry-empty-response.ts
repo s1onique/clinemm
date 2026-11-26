@@ -198,11 +198,111 @@ function addCounts(
 	return (a ?? 0) + (b ?? 0);
 }
 
+/**
+ * ACT-CLINEMM-PROVIDER-USAGE-NORMALIZATION-AUTHORITY-01.
+ *
+ * The REASONING BREAKDOWN of a single attempt's usage.
+ *
+ * The AI SDK's `LanguageModelV4Usage` contract states that
+ * `outputTokens.total` is "the total number of output (completion) tokens
+ * used" and that `outputTokens.text` and `outputTokens.reasoning` are its
+ * PARTS — so `total = text + reasoning`, and the reasoning is a SUBSET of
+ * the total.
+ *
+ * The structured `outputTokens.reasoning` is preferred. The raw provider
+ * payload is the fallback for the providers whose adapter does not populate
+ * the structured breakdown — the resolved `@ai-sdk/anthropic` adapter, for
+ * instance, only reads `output_tokens_details.thinking_tokens` from the
+ * FINAL (`message_delta`) usage frame and drops the OPENING
+ * (`message_start`) frame's breakdown, so an Anthropic-shaped provider that
+ * reports the breakdown in the opening frame leaves the structured field
+ * empty while the raw payload still carries it.
+ */
+function readAttemptReasoning(usage: LanguageModelV4Usage): number | undefined {
+	const structured = usage.outputTokens?.reasoning;
+	if (typeof structured === "number" && Number.isFinite(structured)) {
+		return structured;
+	}
+	const raw = usage.raw;
+	if (!raw || typeof raw !== "object") {
+		return undefined;
+	}
+	const rawRecord = raw as Record<string, unknown>;
+	const details = rawRecord.output_tokens_details;
+	if (details && typeof details === "object") {
+		const detailRecord = details as Record<string, unknown>;
+		for (const key of ["reasoning_tokens", "thinking_tokens"]) {
+			const value = detailRecord[key];
+			if (typeof value === "number" && Number.isFinite(value)) {
+				return value;
+			}
+		}
+	}
+	for (const key of ["reasoning_tokens", "reasoningTokens"]) {
+		const value = rawRecord[key];
+		if (typeof value === "number" && Number.isFinite(value)) {
+			return value;
+		}
+	}
+	return undefined;
+}
+
+/**
+ * ACT-CLINEMM-PROVIDER-USAGE-NORMALIZATION-AUTHORITY-01.
+ *
+ * The VISIBLE (text-only) output of a single attempt's usage.
+ *
+ * When the attempt's usage carries the SDK's structured remainder, that
+ * value IS the visible output. Otherwise the visible output is the total
+ * minus the reasoning — but only when the reasoning is known to be part of
+ * THAT attempt's total.
+ */
+function readAttemptVisibleOutput(
+	usage: LanguageModelV4Usage,
+): number | undefined {
+	const structured = usage.outputTokens?.text;
+	if (typeof structured === "number" && Number.isFinite(structured)) {
+		return structured;
+	}
+	const total = usage.outputTokens?.total;
+	if (typeof total !== "number" || !Number.isFinite(total)) {
+		return undefined;
+	}
+	const reasoning = readAttemptReasoning(usage);
+	if (reasoning === undefined) {
+		return undefined;
+	}
+	return Math.max(0, total - reasoning);
+}
+
 /** Sum two standardized v4 usage records field by field. */
 export function addUsage(
 	a: LanguageModelV4Usage,
 	b: LanguageModelV4Usage,
 ): LanguageModelV4Usage {
+	//
+	// ACT-CLINEMM-PROVIDER-USAGE-NORMALIZATION-AUTHORITY-01.
+	//
+	// Each record's breakdown is resolved INDEPENDENTLY and then summed.
+	//
+	// Resolving them independently is what keeps the aggregate's breakdown
+	// scoped to exactly the attempts the aggregate's total covers. A record
+	// whose adapter left the structured breakdown empty must not contribute
+	// a zero: its breakdown is recovered from its own raw payload, which
+	// describes that attempt alone. Summing the resolved values — rather
+	// than preferring one side's structured field — is what makes
+	// `visible + reasoning == total` hold for the aggregate.
+	//
+	// A record that reports NO breakdown at all (neither structured nor raw)
+	// contributes nothing to the aggregate's breakdown: its output is
+	// unknown, not zero, so the aggregate's breakdown stays incomplete
+	// rather than falsely complete.
+	const reasoning = addCounts(readAttemptReasoning(a), readAttemptReasoning(b));
+	const text = addCounts(
+		readAttemptVisibleOutput(a),
+		readAttemptVisibleOutput(b),
+	);
+	const total = addCounts(a.outputTokens?.total, b.outputTokens?.total);
 	return {
 		inputTokens: {
 			total: addCounts(a.inputTokens?.total, b.inputTokens?.total),
@@ -214,12 +314,9 @@ export function addUsage(
 			),
 		},
 		outputTokens: {
-			total: addCounts(a.outputTokens?.total, b.outputTokens?.total),
-			text: addCounts(a.outputTokens?.text, b.outputTokens?.text),
-			reasoning: addCounts(
-				a.outputTokens?.reasoning,
-				b.outputTokens?.reasoning,
-			),
+			total,
+			text,
+			reasoning,
 		},
 		// `raw` is provider-specific and cannot be summed generically; the
 		// emitted finish keeps the final attempt's raw payload.

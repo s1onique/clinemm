@@ -98,6 +98,9 @@ import {
 	type AiSdkProviderOptionsTarget,
 	composeAiSdkProviderOptions,
 } from "./routing/provider-options";
+// ACT-CLINEMM-PROVIDER-USAGE-NORMALIZATION-AUTHORITY-01: the opt-in
+// NUMERIC usage observation. DEFAULT OFF.
+import { recordUsageObservability } from "./usage-observability-capture";
 import type {
 	AiSdkStreamPart,
 	AiSdkStreamResult,
@@ -1165,14 +1168,56 @@ const MODEL_STREAM_MAX_RETRIES = 3;
 
 type UsagePath = readonly [string] | readonly [string, string];
 
+/**
+ * ACT-CLINEMM-PROVIDER-USAGE-NORMALIZATION-AUTHORITY-01.
+ *
+ * The REASONING BREAKDOWN paths, in authority order.
+ *
+ * The AI SDK's own contract (`LanguageModelV4Usage`) states that
+ * `outputTokens.total` is "the total number of output (completion) tokens
+ * used" and that `outputTokens.text` and `outputTokens.reasoning` are its
+ * PARTS. The flat shape the AI SDK v4 core exposes to the application
+ * (`asLanguageModelUsage`) is therefore:
+ *
+ *   outputTokens        = total (reasoning-INCLUSIVE)
+ *   outputTokenDetails  = { textTokens, reasoningTokens }
+ *
+ * The reasoning breakdown is read from the SDK's STRUCTURED fields first
+ * (they are the SDK's own, correctly scoped, per-attempt authority), and only
+ * then from the raw provider payload.
+ *
+ * `thinking_tokens` is the Anthropic Messages contract's own name for the
+ * reasoning breakdown. It is the native spelling of the same field that the
+ * OpenAI-family names spell `reasoning_tokens`, so it belongs in the same
+ * authority list — NOT as an extension of the vocabulary alone, but because
+ * the Anthropic-native name is what the resolved `@ai-sdk/anthropic` adapter
+ * itself reads (`usage.output_tokens_details?.thinking_tokens`).
+ */
 const REASONING_TOKEN_PATHS: UsagePath[] = [
+	// The AI SDK's structured breakdown (authoritative, per-attempt scoped).
 	["outputTokenDetails", "reasoningTokens"],
-	["output_tokens_details", "reasoning_tokens"],
-	["completion_tokens_details", "reasoning_tokens"],
-	// AI SDK v4's nested outputTokens shape ({ total, text, reasoning, ... }).
 	["outputTokens", "reasoning"],
+	// Raw provider payloads.
+	["output_tokens_details", "reasoning_tokens"],
+	["output_tokens_details", "thinking_tokens"],
+	["completion_tokens_details", "reasoning_tokens"],
 	["reasoningTokens"],
 	["reasoning_tokens"],
+];
+
+/**
+ * The VISIBLE (text-only) output paths, in authority order.
+ *
+ * When the SDK could resolve the breakdown, it already computed the visible
+ * remainder (`outputTokens.text` = total - reasoning). That value IS the
+ * visible output: it needs no subtraction, and it is scoped to exactly the
+ * attempts the total covers. Reading it is what keeps a MULTI-ATTEMPT total
+ * (the retry middleware sums `outputTokens.total` across physical requests)
+ * from being reduced by a SINGLE attempt's reasoning.
+ */
+const VISIBLE_OUTPUT_TOKEN_PATHS: UsagePath[] = [
+	["outputTokenDetails", "textTokens"],
+	["outputTokens", "text"],
 ];
 
 function getUsageValueByPath(source: unknown, path: UsagePath): number {
@@ -1186,16 +1231,55 @@ function getUsageValueByPath(source: unknown, path: UsagePath): number {
 	return getNumericValue(current) ?? 0;
 }
 
-function firstUsageValue(sources: unknown[], paths: UsagePath[]): number {
+/**
+ * ACT-CLINEMM-PROVIDER-USAGE-NORMALIZATION-AUTHORITY-01.
+ *
+ * A usage value that is PRESENT — including an explicit ZERO — as opposed to
+ * an absent one.
+ *
+ * The distinction is load-bearing: an explicit zero is the provider stating
+ * "this metric is zero", while an absent value is "this provider does not
+ * report this metric". Optional zero versus absent metrics must survive the
+ * normalization unchanged.
+ */
+function resolveUsageValue(
+	sources: unknown[],
+	paths: UsagePath[],
+): { present: boolean; value: number } {
 	for (const source of sources) {
 		for (const path of paths) {
-			const value = getUsageValueByPath(source, path);
-			if (value > 0) {
-				return value;
+			const raw = getUsageValueByPath(source, path);
+			if (raw > 0) {
+				return { present: true, value: raw };
+			}
+			// An explicit zero is present, not absent: report it as such so
+			// the caller can distinguish "reported as zero" from "not
+			// reported at all".
+			const direct = getUsageValueByPathDefined(source, path);
+			if (direct !== undefined) {
+				return { present: true, value: 0 };
 			}
 		}
 	}
-	return 0;
+	return { present: false, value: 0 };
+}
+
+/**
+ * Reads a usage value at `path`, returning `undefined` only when the field is
+ * ABSENT (not merely zero).
+ */
+function getUsageValueByPathDefined(
+	source: unknown,
+	path: UsagePath,
+): number | undefined {
+	let current: unknown = source;
+	for (const key of path) {
+		if (!current || typeof current !== "object") {
+			return undefined;
+		}
+		current = (current as Record<string, unknown>)[key];
+	}
+	return getNumericValue(current);
 }
 
 function extractProviderNestedUsage(
@@ -1394,9 +1478,27 @@ export function normalizeUsage(
 				"cache_creation_input_tokens",
 			),
 	};
-	const reasoningTokenCount = firstUsageValue(
+	// ACT-CLINEMM-PROVIDER-USAGE-NORMALIZATION-AUTHORITY-01.
+	//
+	// The reasoning breakdown is resolved from the SDK's STRUCTURED fields
+	// first (the SDK's own per-attempt authority), then from the raw
+	// provider payload. The raw payload describes ONE physical attempt; the
+	// SDK's structured fields describe exactly the attempts the reported
+	// output total covers.
+	const reasoningResolution = resolveUsageValue(
 		[usage, rawUsage, providerUsage ?? {}],
 		REASONING_TOKEN_PATHS,
+	);
+	const reasoningTokenCount = reasoningResolution.value;
+	//
+	// The VISIBLE output, when the SDK could resolve the breakdown. The SDK
+	// computes `outputTokens.text = total - reasoning`, so this value already
+	// excludes the reasoning and needs no further subtraction. Using it is
+	// what keeps a MULTI-ATTEMPT total from being reduced by a single
+	// attempt's reasoning.
+	const visibleOutputResolution = resolveUsageValue(
+		[usage, rawUsage, providerUsage ?? {}],
+		VISIBLE_OUTPUT_TOKEN_PATHS,
 	);
 	const pricing = pricingValue as Record<string, unknown> | undefined;
 	// Cline's included models have no per-request charge, even when the
@@ -1419,21 +1521,48 @@ export function normalizeUsage(
 				? undefined
 				: calculateUsageCostFromPricing(normalizedUsage, pricingValue);
 
+	//
+	// ACT-CLINEMM-PROVIDER-USAGE-NORMALIZATION-AUTHORITY-01.
+	//
+	// The OUTPUT TOTAL is the provider's own count. Under the AI SDK's
+	// contract it INCLUDES the reasoning tokens:
+	//
+	//     outputTokens.total = outputTokens.text + outputTokens.reasoning
+	//
+	// so the visible output is the remainder, never an addition. The
+	// conservation law this normalization upholds is therefore:
+	//
+	//     visible output + reasoning == output total
+	//
+	// Two ways to reach it:
+	//
+	//   1. The SDK resolved the breakdown and published the visible
+	//      remainder itself (`outputTokenDetails.textTokens` /
+	//      `outputTokens.text`). That value is authoritative AND is scoped
+	//      to exactly the attempts the total covers, so it is used as-is.
+	//
+	//   2. The SDK could not resolve the breakdown (the provider reports
+	//      the reasoning only in the raw payload, and the resolved
+	//      `@ai-sdk/anthropic` adapter drops the OPENING frame's
+	//      `output_tokens_details`). The reasoning is then a SUBSET of the
+	//      reported total and is subtracted from it — but never below zero,
+	//      and never below the reasoning that is actually accounted for.
+	//
+	// The reasoning count is reported separately in either case, so every
+	// downstream consumer (session totals, telemetry, Harbor's
+	// n_output_tokens) books the reasoning once, as its own count, and not
+	// also as part of "output".
+	//
+	// Cost above is computed from the PRE-subtraction output total, since
+	// reasoning tokens are still billed at the output rate.
+	const outputTotal = normalizedUsage.outputTokens;
+	const visibleOutput = visibleOutputResolution.present
+		? visibleOutputResolution.value
+		: Math.max(0, outputTotal - reasoningTokenCount);
+
 	return {
 		...normalizedUsage,
-		// Providers report reasoning tokens as a subset of outputTokens (e.g.
-		// OpenAI's completion_tokens_details.reasoning_tokens), not additional
-		// to it. Strip them back out here so outputTokens reflects the actual
-		// non-reasoning output, with reasoningTokenCount tracked separately —
-		// otherwise every downstream consumer (session totals, telemetry,
-		// Harbor's n_output_tokens) double-books reasoning as both its own
-		// count and part of "output". Cost above is computed from the
-		// pre-subtraction outputTokens, since reasoning tokens are still
-		// billed at the output rate.
-		outputTokens: Math.max(
-			0,
-			normalizedUsage.outputTokens - reasoningTokenCount,
-		),
+		outputTokens: visibleOutput,
 		...(reasoningTokenCount > 0 ? { reasoningTokenCount } : {}),
 		...(typeof resolvedTotalCost === "number"
 			? { totalCost: resolvedTotalCost }
@@ -2458,9 +2587,35 @@ async function* emitAiSdkEvents(
 	}
 
 	if (usageToEmit) {
+		const normalizedUsage = normalizeUsage(
+			usageToEmit,
+			metadataToUse,
+			pricingValue,
+			request,
+		);
+		// ACT-CLINEMM-PROVIDER-USAGE-NORMALIZATION-AUTHORITY-01: the
+		// opt-in NUMERIC usage observation. DEFAULT OFF. It correlates the
+		// provider's RAW numeric usage, the AI SDK's normalized usage and
+		// ClineMM's final normalized usage under the physical request
+		// identity, so a reader can attribute a number to the link that
+		// lost or distorted it. NUMERIC ALLOWLIST ONLY: no transcript, no
+		// reasoning text, no response body, no credential, no signature.
+		recordUsageObservability({
+			providerId: request.providerId,
+			modelId: request.modelId,
+			sessionId: request.metadata?.sessionId as string | undefined,
+			providerAttemptId: request.metadata?.modelRequestId as string | undefined,
+			iteration: request.metadata?.iteration as number | undefined,
+			raw:
+				usageToEmit && typeof usageToEmit === "object"
+					? (usageToEmit as Record<string, unknown>).raw
+					: undefined,
+			sdkUsage: usageToEmit,
+			clineUsage: normalizedUsage,
+		});
 		yield {
 			type: "usage",
-			usage: normalizeUsage(usageToEmit, metadataToUse, pricingValue, request),
+			usage: normalizedUsage,
 		};
 	}
 

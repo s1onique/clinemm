@@ -43102,3 +43102,94 @@ A10    Evidence-continuity confidentiality     UNCHANGED
 ```
 
 **A successor ACT is NOT started automatically.**
+
+---
+
+# ACT-CLINEMM-PROVIDER-USAGE-NORMALIZATION-AUTHORITY-01 — GO_PROVIDER_USAGE_NORMALIZATION_AUTHORITY — 2026-11-26
+
+```text
+ACT_ID:       ACT-CLINEMM-PROVIDER-USAGE-NORMALIZATION-AUTHORITY-01
+TYPE:         bounded reproduction and repair
+VERDICT:      GO_PROVIDER_USAGE_NORMALIZATION_AUTHORITY
+ENTRY_HEAD:   0d95d0dc2b0a78bcb3b64c9fbc42808af918bd5b
+MERGE_HEAD:   02274b4cd363fea42579fcb8fa304c2535084e85
+BRANCH:       main
+EPIC:         CMP-09
+```
+
+**THE OUTPUT NORMALIZATION DEFECT WAS REPRODUCED AND REPAIRED AT ITS FIRST
+LOSS BOUNDARY.** The AI SDK's own contract (`LanguageModelV4Usage`) states
+that `outputTokens.total` is the TOTAL output and that `text` and
+`reasoning` are its PARTS, so the visible output is the REMAINDER and never
+an addition. Two defects violated that:
+
+1. The production retry middleware sums `outputTokens.total` across the
+   physical attempts of a turn, but the ClineMM normalizer subtracted the
+   reasoning of ONE attempt from that MULTI-ATTEMPT total. Measured on a
+   3-attempt turn reporting `output_tokens: 900` / `reasoning_tokens: 800`
+   per attempt: the chain emitted `outputTokens 1900` and
+   `reasoningTokenCount 800` against a 2 700 total — 1900 + 800 != 2700.
+2. The Anthropic-native `thinking_tokens` breakdown — the very name the
+   resolved `@ai-sdk/anthropic` adapter reads — was DROPPED by the ClineMM
+   reasoning-path vocabulary, so those reasoning tokens were unaccounted
+   for.
+
+After the repair the same fixture emits `outputTokens 300` and
+`reasoningTokenCount 2400` against the same 2 700 total: 300 + 2400 == 2700.
+The single attempt conserves as 100 + 800 == 900. Reasoning counts are never
+manufactured from text lengths.
+
+**THE INPUT/CACHE NORMALIZATION IS CORRECT AND WAS PRESERVED UNCHANGED.** No
+layer adds cache-read or cache-write usage to a total that already includes
+those values, and no layer subtracts them from a total that excludes them.
+The cache counters are a PARTITION of the total input. The overflow-recovery
+authority consumes the provider's COMPLETE prompt
+(`usage.inputTokens` -> `lastRequestInputTokens` ->
+`previousRequestInputTokens` -> `actualPreviousInputTokens` ->
+`underestimateFactor`); cached tokens are NOT subtracted from the context
+occupancy.
+
+**THE HISTORICAL MINIMAX DISPOSITION IS UNCHANGED: CAPTURE_INSUFFICIENT.** No
+raw historical provider usage was recovered, so no historical provider
+accounting defect is concluded. The recorded CMP-09 shape
+(`inputTokens 1 728 403`, `cacheRead 1 562 316`, remainder `166 087`) is
+INTERNALLY CONSISTENT with the current cache-inclusive semantics and is
+reproducible from the CURRENT path under BOTH the Anthropic-style disjoint
+counters and the OpenAI-style total-inclusive counters. Whether the
+provider's actual prompt was 1 728 403 (over the 1 048 576 window) or
+166 087 (inside it) remains answered only by raw historical provider
+evidence, which does not exist in this capture.
+
+**THE LIVE OBSERVABILITY EXTENSION IS OPT-IN AND NUMERIC-ONLY.**
+`CLINEMM_USAGE_OBSERVABILITY=1` arms a capture that correlates the
+provider's RAW numeric usage fields, the AI SDK's normalized usage and
+ClineMM's final normalized usage under the physical request identity.
+DEFAULT OFF; numeric allowlist only; no transcript, no reasoning text, no
+response body, no credential, no signature; failure-isolated so a capture
+failure cannot change execution or accounting. No new diagnostics framework
+and no request registry.
+
+**A PRE-EXISTING BLOCKING DEFECT WAS FOUND AND CORRECTED.** The merge
+commit `02274b4cd` left a stray closing brace at
+`sdk/packages/shared/src/llms/request-budget.ts:437`; the file did not
+parse, so the ENTIRE `@cline/shared` package — and every suite importing
+it — failed to collect. The stray brace was removed.
+
+```text
+ACT-OWNED WITNESSES:   17 (all PASSED) — 11 llms forensic/conservation,
+                       6 llms usage-observability
+EXISTING SUITES:       llms ai-sdk 41 | retry-empty-response 37 |
+                       agents agent-runtime 152 |
+                       core estimator-parity 20 | runtime-event-adapter 43 |
+                       agent-events 5 | token-evidence-capture 5 |
+                       cmp08 summarization-usage-conservation 24
+                       (CMP-08 NOT reopened)
+TYPECHECK:              @cline/llms CLEAN; @cline/core 45 -> 45, ZERO DELTA
+                         (pre-existing), 0 ACT-OWNED diagnostics
+BIOME:                  clean
+SDK REBUILD:            bun run build:sdk, before cross-package verification
+VSIX PACKAGING:         NOT EXECUTED
+INFERENCE REQUESTS:     0
+```
+
+**A successor ACT is NOT started automatically.**
