@@ -71,8 +71,10 @@ import { extractErrorMessage } from "./format";
 // the reader for the middleware-owned PHYSICAL-REQUEST OCCUPANCY authority.
 import {
 	createRetryEmptyResponseMiddleware,
+	isValidOutputPartition,
 	type PhysicalRequestOccupancy,
 	readPhysicalRequestOccupancy,
+	type UsageBreakdownScope,
 } from "./middleware/retry-empty-response";
 import {
 	isAnthropicCompatibleModel,
@@ -1297,9 +1299,17 @@ function resolveUsageValue(
 			// An explicit zero is present, not absent: report it as such so
 			// the caller can distinguish "reported as zero" from "not
 			// reported at all".
+			//
+			// ACT-CLINEMM-CMP09-FINAL-BOUNDED-CORRECTION-01 (A2): the
+			// ACTUAL defined value is reported. The predecessor reported a
+			// hardcoded ZERO for every non-positive defined value, so a
+			// NEGATIVE metric (-1) was indistinguishable from an explicit
+			// zero — an invalid metric silently became an established one.
+			// The caller validates the partition, so it must see the real
+			// value to be able to reject it.
 			const direct = getUsageValueByPathDefined(source, path);
 			if (direct !== undefined) {
-				return { present: true, value: 0 };
+				return { present: true, value: direct };
 			}
 		}
 	}
@@ -1592,12 +1602,38 @@ export function normalizeUsage(
 	// The attempt count is an OBSERVED fact (the middleware-owned occupancy
 	// authority), never an assumption.
 	const occupancyAuthority = readPhysicalRequestOccupancy(providerMetadata);
-	const observedAttemptCount = occupancyAuthority?.attemptCount;
+	//
+	// ACT-CLINEMM-CMP09-FINAL-BOUNDED-CORRECTION-01 (A1).
+	//
+	// THE BREAKDOWN'S SCOPE IS THE USAGE SCOPE, NOT THE PHYSICAL COUNT.
+	//
+	// The raw payload describes ONE attempt, and the attempt-scoped
+	// fallback is permitted only when the REPORTED USAGE describes ONE
+	// attempt. The number of PHYSICAL attempts is a DIFFERENT fact: a
+	// transient network interruption that kills the stream before any
+	// output is a physical attempt that carries NO usage, so the reported
+	// usage still describes exactly ONE attempt.
+	//
+	// The predecessor used the physical count, so an interrupted-then-
+	// served turn lost a breakdown that was genuinely in scope — the
+	// served attempt's own valid partition (100 visible + 800 reasoning
+	// over a total of 900).
+	//
+	// The usage scope is the middleware's own OBSERVED count of the
+	// usage-bearing attempts the aggregate's usage covers. It is ABSENT
+	// when the authority established none, and an UNKNOWN scope must not
+	// silently become an established single-attempt scope: without a scope
+	// the attempt-scoped fallback is not permitted.
+	const observedUsageAttemptCount = occupancyAuthority?.usageAttemptCount;
+	const usageScopeIsEstablished =
+		observedUsageAttemptCount !== undefined && observedUsageAttemptCount >= 1;
 	const usageCoversManyAttempts =
-		observedAttemptCount !== undefined && observedAttemptCount > 1;
+		usageScopeIsEstablished && observedUsageAttemptCount > 1;
 	const breakdownSources = usageCoversManyAttempts
 		? [usage]
-		: [usage, rawUsage, providerUsage ?? {}];
+		: usageScopeIsEstablished
+			? [usage, rawUsage, providerUsage ?? {}]
+			: [usage];
 	// ACT-CLINEMM-PROVIDER-USAGE-NORMALIZATION-AUTHORITY-01.
 	//
 	// The reasoning breakdown is resolved from the SDK's STRUCTURED fields
@@ -1609,7 +1645,6 @@ export function normalizeUsage(
 		breakdownSources,
 		REASONING_TOKEN_PATHS,
 	);
-	const reasoningTokenCount = reasoningResolution.value;
 	//
 	// The VISIBLE output, when the SDK could resolve the breakdown. The SDK
 	// computes `outputTokens.text = total - reasoning`, so this value already
@@ -1620,6 +1655,54 @@ export function normalizeUsage(
 		breakdownSources,
 		VISIBLE_OUTPUT_TOKEN_PATHS,
 	);
+	//
+	// ACT-CLINEMM-CMP09-FINAL-BOUNDED-CORRECTION-01 (A2).
+	//
+	// THE RESOLVED BREAKDOWN MUST BE A VALID PARTITION.
+	//
+	// The middleware validates the partitions of the records it aggregates,
+	// but the normalizer resolves its OWN breakdown from the SDK's structured
+	// fields and from the attempt-scoped raw payload, and that resolution
+	// bypassed the validation. So an internally impossible partition was
+	// published:
+	//
+	//   total 900, visible 100, reasoning 700   100 + 700 != 900
+	//   total 900, reasoning 1000                 the reasoning exceeds it
+	//   total 900, reasoning -1                   a negative part
+	//
+	// The third shape is the worse one: a NEGATIVE reasoning resolved to a
+	// non-positive value, which the resolver reported as an EXPLICIT ZERO
+	// — indistinguishable from the provider stating "this response carried
+	// no reasoning tokens". An invalid metric must never become an
+	// explicit zero.
+	//
+	// The SAME partition-validation authority the middleware uses is
+	// applied here, so the two consumers cannot drift. An invalid
+	// breakdown is NOT published: the reasoning count is treated as
+	// UNRESOLVED and the visible output falls back to the provider's own
+	// total, which is the authoritative quantity and is never altered.
+	const breakdownScope: UsageBreakdownScope = usageCoversManyAttempts
+		? "aggregate"
+		: "attempt";
+	const resolvedPartitionIsValid = isValidOutputPartition(
+		{
+			inputTokens: usage.inputTokens,
+			outputTokens: {
+				total: normalizedUsage.outputTokens,
+				...(visibleOutputResolution.present
+					? { text: visibleOutputResolution.value }
+					: {}),
+				...(reasoningResolution.present
+					? { reasoning: reasoningResolution.value }
+					: {}),
+			},
+			...(usage.raw !== undefined ? { raw: usage.raw } : {}),
+		} as never,
+		breakdownScope,
+	);
+	const publishedReasoning = resolvedPartitionIsValid
+		? reasoningResolution
+		: { present: false, value: 0 };
 	const pricing = pricingValue as Record<string, unknown> | undefined;
 	// Cline's included models have no per-request charge, even when the
 	// response includes the upstream inference or market cost.
@@ -1676,9 +1759,14 @@ export function normalizeUsage(
 	// Cost above is computed from the PRE-subtraction output total, since
 	// reasoning tokens are still billed at the output rate.
 	const outputTotal = normalizedUsage.outputTokens;
-	const visibleOutput = visibleOutputResolution.present
-		? visibleOutputResolution.value
-		: Math.max(0, outputTotal - reasoningTokenCount);
+	// ACT-CLINEMM-CMP09-FINAL-BOUNDED-CORRECTION-01 (A2): an INVALID
+	// breakdown is not published, so the visible output falls back to the
+	// provider's own TOTAL — the authoritative quantity, never altered.
+	const visibleOutput = publishedReasoning.present
+		? visibleOutputResolution.present
+			? visibleOutputResolution.value
+			: Math.max(0, outputTotal - publishedReasoning.value)
+		: outputTotal;
 
 	//
 	// ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (ADDENDUM-01 CORRECTION-01).
@@ -1724,7 +1812,9 @@ export function normalizeUsage(
 	return {
 		...normalizedUsage,
 		outputTokens: visibleOutput,
-		...(reasoningResolution.present ? { reasoningTokenCount } : {}),
+		...(publishedReasoning.present
+			? { reasoningTokenCount: publishedReasoning.value }
+			: {}),
 		...(typeof resolvedTotalCost === "number"
 			? { totalCost: resolvedTotalCost }
 			: {}),

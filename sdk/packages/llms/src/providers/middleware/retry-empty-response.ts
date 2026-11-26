@@ -238,9 +238,9 @@ function addCounts(
  * exactly. The authoritative total is never altered and no reasoning count is
  * ever invented.
  */
-function isValidOutputPartition(
+export function isValidOutputPartition(
 	usage: LanguageModelV4Usage,
-	scope: UsageBreakdownScope,
+	scope: UsageBreakdownScope = "attempt",
 ): boolean {
 	const total = usage.outputTokens?.total;
 	if (typeof total !== "number" || !Number.isFinite(total) || total < 0) {
@@ -333,7 +333,7 @@ function isCompleteBreakdown(
  * `outputTokens` (with `undefined` values), so the key presence does not
  * distinguish an attempt from an aggregate.
  */
-type UsageBreakdownScope = "attempt" | "aggregate";
+export type UsageBreakdownScope = "attempt" | "aggregate";
 
 /**
  * ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01 (A3.1).
@@ -349,7 +349,7 @@ type UsageBreakdownScope = "attempt" | "aggregate";
  * own breakdown re-establishes a partition whose reasoning was never
  * established.
  */
-function readScopedReasoning(
+export function readScopedReasoning(
 	usage: LanguageModelV4Usage,
 	scope: UsageBreakdownScope,
 ): number | undefined {
@@ -364,7 +364,7 @@ function readScopedReasoning(
  * The visible output of a usage record, resolved within the record's OWN
  * SCOPE. Mirrors `readScopedReasoning`.
  */
-function readScopedVisibleOutput(
+export function readScopedVisibleOutput(
 	usage: LanguageModelV4Usage,
 	scope: UsageBreakdownScope,
 ): number | undefined {
@@ -704,6 +704,26 @@ export interface PhysicalRequestOccupancy {
 	 */
 	readonly attemptCount?: number;
 	/**
+	 * The number of USAGE-BEARING attempts the aggregate's usage covers.
+	 *
+	 * ACT-CLINEMM-CMP09-FINAL-BOUNDED-CORRECTION-01 (A1).
+	 *
+	 * The physical attempt count and the usage-bearing attempt count are
+	 * DIFFERENT facts. A transient network interruption that kills the
+	 * stream before the model produced anything is a PHYSICAL attempt that
+	 * carries NO finish part and therefore NO usage, so it is not covered
+	 * by the aggregate's usage.
+	 *
+	 * This is the SCOPE of the reported usage, and it is what decides
+	 * whether the attempt-scoped raw payload is in scope for the usage's
+	 * breakdown. It is the middleware's own observed count of the attempts
+	 * whose usage the aggregate sums.
+	 *
+	 * It is OPTIONAL because it is a fact INDEPENDENT of the occupancy: an
+	 * unknown usage scope stays UNKNOWN and is never synthesized.
+	 */
+	readonly usageAttemptCount?: number;
+	/**
 	 * The authority travels inside the SDK's `providerMetadata`, whose value
 	 * type is `JSONObject` — a record whose index signature is
 	 * `JSONValue | undefined`. The index signature is declared so the
@@ -726,8 +746,20 @@ export interface PhysicalRequestOccupancy {
 export function buildPhysicalRequestOccupancy(input: {
 	attemptCount: number;
 	servedInputTokens: number | undefined;
+	/**
+	 * ACT-CLINEMM-CMP09-FINAL-BOUNDED-CORRECTION-01 (A1): the number of
+	 * USAGE-BEARING attempts the aggregate's usage covers. It defaults to
+	 * the physical attempt count, which is correct when every attempt
+	 * reported usage.
+	 */
+	usageAttemptCount?: number;
 }): PhysicalRequestOccupancy {
 	const attemptCount = Math.max(1, Math.floor(input.attemptCount));
+	const usageAttemptCount =
+		input.usageAttemptCount === undefined
+			? attemptCount
+			: Math.max(1, Math.floor(input.usageAttemptCount));
+	const usageScope = { usageAttemptCount };
 	const served = input.servedInputTokens;
 	const servedIsAMeasurement =
 		typeof served === "number" && Number.isFinite(served) && served > 0;
@@ -737,16 +769,17 @@ export function buildPhysicalRequestOccupancy(input: {
 		return {
 			state: "single",
 			attemptCount,
+			...usageScope,
 			...(servedIsAMeasurement ? { value: served } : {}),
 		};
 	}
 	if (servedIsAMeasurement) {
-		return { state: "known", value: served, attemptCount };
+		return { state: "known", value: served, attemptCount, ...usageScope };
 	}
 	// SEVERAL attempts and no established served count: the aggregate
 	// covers an UNKNOWN number of requests' worth of expenditure, so it
 	// establishes NO request's occupancy. The authority is DENIED.
-	return { state: "unknown", attemptCount };
+	return { state: "unknown", attemptCount, ...usageScope };
 }
 
 /**
@@ -867,11 +900,28 @@ export function readPhysicalRequestOccupancy(
 	//
 	// The denial carries the INDEPENDENTLY ESTABLISHED cardinality when there
 	// is one, and NO cardinality when the record established none.
+	//
+	// The USAGE SCOPE is read independently of the occupancy and of the
+	// physical cardinality: it is the scope of the REPORTED USAGE, which
+	// survives a denial of the occupancy.
+	const rawUsageAttemptCount = record.usageAttemptCount;
+	const establishedUsageAttemptCount: number | undefined =
+		typeof rawUsageAttemptCount === "number" &&
+		Number.isFinite(rawUsageAttemptCount) &&
+		Number.isInteger(rawUsageAttemptCount) &&
+		rawUsageAttemptCount >= 1
+			? rawUsageAttemptCount
+			: undefined;
+	const usageScope =
+		establishedUsageAttemptCount !== undefined
+			? { usageAttemptCount: establishedUsageAttemptCount }
+			: {};
 	const denied: PhysicalRequestOccupancy = {
 		state: "unknown",
 		...(establishedAttemptCount !== undefined
 			? { attemptCount: establishedAttemptCount }
 			: {}),
+		...usageScope,
 	};
 	const state = record.state;
 	if (state !== "single" && state !== "known" && state !== "unknown") {
@@ -928,6 +978,7 @@ export function readPhysicalRequestOccupancy(
 	return {
 		state,
 		attemptCount,
+		...usageScope,
 		...(valueIsAMeasurement ? { value } : {}),
 	};
 }
@@ -998,12 +1049,28 @@ function withAggregatedUsage(
 	discardedUsage: readonly LanguageModelV4Usage[],
 	physicalAttemptCount: number,
 ): FinishPart {
+	// ACT-CLINEMM-CMP09-FINAL-BOUNDED-CORRECTION-01 (A1).
+	//
+	// THE USAGE SCOPE IS THE USAGE-BEARING ATTEMPT COUNT.
+	//
+	// The aggregate's usage sums the discarded attempts that produced a
+	// FINISH PART plus the served attempt's own usage. A transient network
+	// interruption that kills the stream before any output produces NO
+	// finish part and therefore contributes NO usage, so it is a PHYSICAL
+	// attempt that the reported usage does NOT cover.
+	//
+	// The two counts are DIFFERENT facts and the distinction is load-
+	// bearing: the physical count drives the OCCUPANCY authority (how many
+	// requests the expenditure covers), while the usage-bearing count
+	// drives the USAGE SCOPE (how many attempts the reported breakdown
+	// describes).
 	if (discardedUsage.length === 0) {
 		// ONE physical attempt: the aggregate IS the request's occupancy.
 		return withOccupancyAuthority(
 			finish,
 			buildPhysicalRequestOccupancy({
 				attemptCount: physicalAttemptCount,
+				usageAttemptCount: 1,
 				servedInputTokens: finish.usage.inputTokens?.total,
 			}),
 		);
@@ -1027,6 +1094,7 @@ function withAggregatedUsage(
 		aggregated,
 		buildPhysicalRequestOccupancy({
 			attemptCount: physicalAttemptCount,
+			usageAttemptCount: discardedUsage.length + 1,
 			servedInputTokens: finish.usage.inputTokens?.total,
 		}),
 	);

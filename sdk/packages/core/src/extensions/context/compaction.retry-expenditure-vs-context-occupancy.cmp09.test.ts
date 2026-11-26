@@ -1058,19 +1058,82 @@ describe("ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01 (ADDENDUM-01 CORRECTION-
 		await runtime.run("A".repeat(3_000));
 		const snapshot = runtime.snapshot();
 
-		// The PHYSICAL attempts really happened.
-		expect(state.attempts).toBeGreaterThanOrEqual(3);
+		// THE PHYSICAL attempts really happened: the first request made
+		// three (two discarded, one served) and the closing text turn made
+		// one.
+		// The run makes TWO requests (the tool-call turn and the closing
+		// text turn), and each request makes three physical attempts.
+		expect(state.attempts).toBe(6);
 
-		// THE EXPENDITURE: the aggregate over the turn's attempts, billed.
-		// The first request made three physical attempts (2000 + 3000 +
-		// 1500 = 6500); the closing text turn adds its own attempt.
-		expect(snapshot.usage.inputTokens).toBeGreaterThanOrEqual(6_500);
+		// THE EXPENDITURE, EXACTLY: the aggregate over the turn's attempts,
+		// billed. Each request made three physical attempts (2000 + 3000 +
+		// 1500 = 6500), so the session consumed 6,500 + 6,500 = 13,000.
+		expect(snapshot.usage.inputTokens).toBe(13_000);
 
 		// THE OCCUPANCY: the SERVED attempt's own count, exactly.
 		expect(previousRequestInputTokens).toBe(1_500);
 		// Explicitly NOT the aggregate, and NOT a derived value.
 		expect(previousRequestInputTokens).not.toBe(6_500);
 		expect(previousRequestInputTokens).not.toBe(6_500 / 3);
+	});
+
+	it("CMP09-RETRY-17: the request cardinality is EXACT at the usage boundary", async () => {
+		// ACT-CLINEMM-CMP09-FINAL-BOUNDED-CORRECTION-01.
+		//
+		// The request's PHYSICAL attempt cardinality and its USAGE-BEARING
+		// cardinality are DIFFERENT facts, and both are reported exactly.
+		//
+		// This trajectory makes ONE request with three usage-bearing
+		// physical attempts (two discarded as empty, one served), so both
+		// cardinalities are three.
+		const { fetchImpl, state } = createHeterogeneousFetch({
+			inputTokensPerAttempt: [2_000, 3_000, 1_500],
+		});
+		const gateway = makeGateway(fetchImpl);
+		const request: GatewayStreamRequest = {
+			providerId: "minimax",
+			modelId: EXACT_M31_MODEL_ID,
+			messages: PROMPT_MESSAGES as never,
+			reasoning: { enabled: false },
+			requestPolicy: {
+				retryPolicy: {
+					maxRetries: 0,
+					streamRetries: 0,
+					emptyResponseAttempts: 3,
+				},
+			},
+			metadata: {
+				sessionId: "session-retry-cardinality",
+				runId: "run-retry-cardinality",
+				iteration: 1,
+			},
+		};
+		const stream = await gateway.stream(request);
+		const usages: Array<Record<string, unknown>> = [];
+		for await (const event of stream) {
+			if (event.type === "usage") {
+				usages.push(
+					(event as unknown as { usage: Record<string, unknown> }).usage,
+				);
+			}
+		}
+		expect(state.attempts).toBe(3);
+		expect(usages).toHaveLength(1);
+
+		const occupancy = usages[0]?.requestOccupancy as {
+			attemptCount?: number;
+			usageAttemptCount?: number;
+			state: string;
+			value?: number;
+		};
+		// THE PHYSICAL CARDINALITY: three attempts really happened.
+		expect(occupancy.attemptCount).toBe(3);
+		// THE USAGE-BEARING CARDINALITY: every attempt reported usage, so
+		// the reported usage covers all three.
+		expect(occupancy.usageAttemptCount).toBe(3);
+		// THE OCCUPANCY: the served attempt's own count.
+		expect(occupancy.state).toBe("known");
+		expect(occupancy.value).toBe(1_500);
 	});
 
 	it("CMP09-RETRY-15: a PRESENT-but-INVALID occupancy marker grants NO occupancy authority", async () => {
