@@ -1,0 +1,75 @@
+{
+  "contract_version": 1,
+  "act_id": "ACT-CLINEMM-FWL02-INTERCHANGE-IMPORT-ADAPTER01",
+  "parent": null,
+  "verdict": "PASS_STRUCTURAL_ONLY",
+  "verdict_basis": "The smallest deterministic adapter from the operator-supplied FWMI v1 migration interchange into the EXISTING ClineMM ledger records (docs/closure-plans/imported/*.json) and the historical archive index. Strict validation (ERROR/WARNING/INFO), persisted semantic conservation checks C1-C9 that re-read the written records and compare them field by field against the interchange, historical ACT lookup across the native and imported archives, and an exact-replay proof of zero unintended canonical byte delta. 28/28 focused executable qualification tests GREEN; typecheck (tsc --noEmit -p tools/factory/fwmi/tsconfig.json) 0 diagnostics; biome lint CLEAN. The EXISTING board validator's failure set is IDENTICAL to the pristine-main baseline (4 pre-existing hard-gate failures: INDEX_LINES_LT_400, EVERY_OPEN_NEXT_ROW_HAS_DETAIL, STATUS_VOCABULARY_VALID, NO_OVERSIZED_INDEX_TABLE_CELL) -- no new failure was introduced. ACTUAL-SOURCE MIGRATION NOT EXECUTED: the FWMI v1 interchange package was not produced by this ACT and was not imported against the real board; every import was exercised against an isolated scratch repository under /tmp.",
+  "regression_class": "P1_MIGRATION_SEMANTIC_CONSERVATION",
+  "fix_shape": {
+    "boundary": "ClineMM factory tooling (tools/factory/fwmi/)",
+    "changes": [
+      "contract.ts -- the operator-supplied FWMI v1 contract (data only)",
+      "digest.ts -- SHA-256 and exact source-range byte extraction",
+      "load.ts -- shallow package load (existence, JSON, schema_version)",
+      "validate.ts -- STRICT semantic validation (ERROR / WARNING / INFO)",
+      "plan.ts -- THE ADAPTER: package -> ledger records + historical archive index (pure function)",
+      "apply.ts -- transactional write; byte-delta computation; atomic replace",
+      "conserve.ts -- persisted semantic conservation verification (C1..C9)",
+      "lookup.ts -- historical ACT lookup across the native and imported archives",
+      "recon.ts -- legacy Markdown reconnaissance (read-only)",
+      "cli.ts -- the five operator commands plus apply",
+      "fwmi-adapter.test.ts -- 28 focused executable qualification tests"
+    ],
+    "invariants": [
+      "imported qualification assertions are carried as NOT_VERIFIED_BY_IMPORT, never promoted",
+      "SOURCE_RECONCILIATION_READY is carried as a reconciliation state, never as cutover approval",
+      "an unknown source status is never represented as DEFERRED",
+      "unresolved obligations and unresolved reconciliation records are preserved, not dropped",
+      "a cross-link never carries an obligation; the target keeps sole authority",
+      "the import writes only docs/closure-plans/imported/ -- board, epic files, native closure plans and evidence are untouched"
+    ]
+  },
+  "files_touched": [
+    "tools/factory/fwmi/{contract,digest,load,validate,plan,apply,conserve,lookup,recon,cli}.ts",
+    "tools/factory/fwmi/fwmi-adapter.test.ts",
+    "tools/factory/fwmi/tsconfig.json",
+    "tools/factory/fwmi/__fixtures__/sample-package/**",
+    "package.json (8 fwmi:* scripts)",
+    ".factory/acts/ACT-CLINEMM-FWL02-INTERCHANGE-IMPORT-ADAPTER01.md",
+    ".factory/epic-board.md (one Open-supporting-work row)",
+    ".factory/epics/factory-infrastructure.md (ACT ledger row + Open work entry)",
+    ".factory/evidence/ACT-CLINEMM-FWL02-INTERCHANGE-IMPORT-ADAPTER01/**"
+  ],
+  "tests": {
+    "fwmi focused qualification": "28 PASS / 0 FAIL (114 expect() calls)",
+    "fwmi typecheck": "EXIT=0 (0 diagnostics)",
+    "biome lint (tools/factory/fwmi/)": "CLEAN",
+    "epic-board validator": "same 4 pre-existing hard-gate failures as pristine main; no new failure; OLD_ACT_IDS_PRESERVED PASS",
+    "git diff --stat .factory/epic-board.md .factory/epics/ docs/closure-plans/ (pre-board-edit)": "EMPTY -- canonical surfaces untouched"
+  },
+  "live_verification_label": "NOT_EXECUTED -- actual-source migration requires the operator's real FWMI v1 interchange package and the operator-run source-bound qualification",
+  "trust_state": {
+    "HEAD": "29774ba05851f9dd5a46a33a90d963ff3ef286d5",
+    "branch": "main",
+    "pushed": false,
+    "build_dirs_edited": false,
+    "production_code_files_changed": 0,
+    "ACT_committed_work_convention": "preserved"
+  },
+  "residual_risk": [
+    "the real FWMI package may use field shapes the strict validator rejects -- intended posture; the diagnostic names the exact code and subject before any write",
+    "the real package may use a lifecycle or coverage value outside the FWMI v1 vocabulary -- rejected, not coerced",
+    "a real dependency may name an identity the package does not carry -- rejected unless the reconciliation manifest accounts for it",
+    "the adapter verifies the RANGE and DIGEST SHAPE of a source reference, not the prose meaning of the recovered range -- the producer's validation-receipt.json is the authority on extraction quality",
+    "frontier.md is prose and is not parsed for structure -- deliberate; parsing it would be the forbidden universal semantic Markdown parser"
+  ],
+  "next_act_scope": "FWL02-D (new-epic intake) and the operator-run source-bound qualification against the real FWMI v1 package",
+  "unblocks": [
+    "Operator-run shadow import and cutover qualification against the real FWMI v1 interchange package"
+  ],
+  "reopen_conditions": [
+    "The operator supplies a real FWMI v1 package that the strict validator rejects",
+    "A real source range cannot be bound to a verifiable digest at the frozen source HEAD",
+    "The imported namespace is ever counted as repository-native closure plans by a consumer"
+  ]
+}

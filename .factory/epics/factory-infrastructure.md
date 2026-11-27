@@ -23,10 +23,21 @@
 | `EPIC-CLINEMM-GIT-SAFETY-NO-FORCE-PUSH01` (ruleset id 21037630) | CLOSED | `ACT-CLINEMM-GIT-SAFETY-NO-FORCE-PUSH-ENFORCEMENT01` (closed 2026-08-19) | Block force pushes to `main` via GitHub ruleset |
 | `ACT-CLINEMM-GIT-SAFETY-LOCAL-FORCE-PUSH-GUARD01` | OPEN (P2, non-blocking) | — | Defense-in-depth local pre-push hook |
 | Factorize ACTs (F0..F5 + tooling + intake) | CLOSED | see `quality-substrate.md` | Factorize tooling and intake |
+| `ACT-CLINEMM-FWL02-INTERCHANGE-IMPORT-ADAPTER01` | PASS_STRUCTURAL_ONLY (28/28 tests, typecheck + lint GREEN; actual-source migration NOT executed) | `29774ba05851f9dd5a46a33a90d963ff3ef286d5` | Deterministic adapter from the FWMI v1 migration interchange into the existing ledger records + historical archive index; strict validation, persisted semantic conservation (C1–C9), historical lookup, exact-replay byte proof |
 
 ## Open work
 
 - `ACT-CLINEMM-GIT-SAFETY-LOCAL-FORCE-PUSH-GUARD01` (P2, non-blocking)
+- **FWL02 — FWMI v1 interchange import adapter (P1).** The adapter is implemented and
+  qualified (`tools/factory/fwmi/`, 28/28 tests GREEN). It is OPEN because the
+  load-bearing qualification is **operator-run against the real interchange package**,
+  which codium-clinemm has not yet produced. Exact commands:
+  `bun tools/factory/fwmi/cli.ts {validate|shadow|verify|lookup|replay|apply}
+  --package=<FWMI_PACKAGE_DIR>`. The gate for cutover is `replay` reporting
+  `byteDelta=0` with conservation PASS. Imported records land in
+  `docs/closure-plans/imported/` — an additive namespace that must never be counted as
+  repository-native closure plans. See
+  `.factory/evidence/ACT-CLINEMM-FWL02-INTERCHANGE-IMPORT-ADAPTER01/`.
 
 ## Deferred work
 

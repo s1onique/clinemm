@@ -1,0 +1,31 @@
+{
+	"schema_version": 1,
+	"repository": "clinemm",
+	"source_head": "29774ba05851f9dd5a46a33a90d963ff3ef286d5",
+	"files": [
+		{
+			"path": ".factory/epic-board.md",
+			"bytes": 3571144,
+			"lines": 44730,
+			"sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+			"git_blob": "cccccccccccccccccccccccccccccccccccccccc",
+			"disposition": "indexed"
+		},
+		{
+			"path": ".factory/epics/architecture.md",
+			"bytes": 12000,
+			"lines": 320,
+			"sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+			"git_blob": "dddddddddddddddddddddddddddddddddddddddd",
+			"disposition": "epic"
+		},
+		{
+			"path": ".factory/epics/_index-contract.md",
+			"bytes": 6000,
+			"lines": 179,
+			"sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+			"git_blob": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+			"disposition": "navigation"
+		}
+	]
+}

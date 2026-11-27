@@ -1,0 +1,22 @@
+{
+	"schema_version": 1,
+	"verdict": "SOURCE_RECONCILIATION_READY",
+	"checks": [
+		{
+			"id": "valid_json",
+			"status": "PASS",
+			"detail": "all artifacts parse"
+		},
+		{
+			"id": "unique_epic_identities",
+			"status": "PASS"
+		},
+		{
+			"id": "semantic_conservation",
+			"status": "PASS",
+			"detail": "agent-assisted reconciliation"
+		}
+	],
+	"mechanical_coverage": "22/22 files",
+	"semantic_coverage": "3/3 epics"
+}

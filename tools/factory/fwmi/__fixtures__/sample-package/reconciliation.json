@@ -1,0 +1,15 @@
+{
+	"schema_version": 1,
+	"records": [
+		{
+			"kind": "POSSIBLE_CROSS_LINK",
+			"identities": [
+				"EPIC-PRODUCT-CONFIG-BRANDING/TEMP-INTERNAL-CONTROL-CLEANUP",
+				"EPIC-SAFE-YOLO-SEATBELT/TEMP-INTERNAL-CONTROL-CLEANUP"
+			],
+			"resolution": "UNRESOLVED",
+			"reason": "Determine whether these are independent obligations or two references to one obligation.",
+			"source_refs": []
+		}
+	]
+}

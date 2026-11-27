@@ -1,0 +1,202 @@
+{
+  "act": "ACT-CLINEMM-FWL02-INTERCHANGE-IMPORT-ADAPTER01",
+  "verdict": "PASS_STRUCTURAL_ONLY",
+  "entry_head": "29774ba05851f9dd5a46a33a90d963ff3ef286d5",
+  "final_head": "PENDING_COMMIT",
+  "subject_revision": "29774ba05851f9dd5a46a33a90d963ff3ef286d5 (ClineMM, FWL02 frozen historical source)",
+  "historical_session": "none (no model session claim)",
+  "production_delta_bytes": 0,
+  "production_code_files_changed": 0,
+  "canonical_surfaces_changed": 0,
+  "evidence_labels": [
+    "REAL",
+    "LIVE",
+    "REAL_PRODUCTION_SEAM",
+    "SYNTHETIC_REAL",
+    "SYNTHETIC",
+    "STRUCTURAL",
+    "INFERRED",
+    "NOT_EXECUTED",
+    "UNAVAILABLE_FROM_TRACE",
+    "LIVE_UNOBSERVABLE"
+  ],
+  "actual_source_migration_executed": false,
+  "actual_source_migration_note": "The FWMI v1 interchange package was NOT produced by this ACT and NOT imported against the real board. The operator supplies the real package and executes the source-bound qualification externally.",
+  "artifacts": [
+    {
+      "path": "tools/factory/fwmi/contract.ts",
+      "byte_size": 10478,
+      "sha256": "c4c2c17068537afd6774ad010284d0eb41b9632848de96ab6c791b1629d82cf3",
+      "evidence_classification": "REAL_PRODUCTION_SEAM",
+      "note": "FWMI v1 contract (the operator-supplied interchange format, data only)."
+    },
+    {
+      "path": "tools/factory/fwmi/digest.ts",
+      "byte_size": 1930,
+      "sha256": "9e78314bf205c9f07228d415c8a8b3272d95f9cf1d20ce47b8ff1c3c2e0cddd9",
+      "evidence_classification": "REAL_PRODUCTION_SEAM",
+      "note": "SHA-256 and exact source-range byte extraction."
+    },
+    {
+      "path": "tools/factory/fwmi/load.ts",
+      "byte_size": 6841,
+      "sha256": "783664bc0c0ea4a1dbc3bef84d5395a278ad1e30088bc62ef6680330c3aa1aaf",
+      "evidence_classification": "REAL_PRODUCTION_SEAM",
+      "note": "Shallow package load: artifact existence, JSON parse, schema_version."
+    },
+    {
+      "path": "tools/factory/fwmi/validate.ts",
+      "byte_size": 25251,
+      "sha256": "9f44ec7ec47af18ede9829a1d6e62c7e8ea7fec94abf0681c710ecb169990a19",
+      "evidence_classification": "REAL_PRODUCTION_SEAM",
+      "note": "STRICT semantic validation (ERROR / WARNING / INFO)."
+    },
+    {
+      "path": "tools/factory/fwmi/plan.ts",
+      "byte_size": 13736,
+      "sha256": "ae74a679ac664565a2d2c1a125eb9b4d75fe96e9446c497faeceac951a56a402",
+      "evidence_classification": "REAL_PRODUCTION_SEAM",
+      "note": "THE ADAPTER: package -> ledger records + historical archive index."
+    },
+    {
+      "path": "tools/factory/fwmi/apply.ts",
+      "byte_size": 7762,
+      "sha256": "b1bfc619c64d5f3dbb0a2d452279322340fe8b0dd9f3196ffd5a346a1dad1246",
+      "evidence_classification": "REAL_PRODUCTION_SEAM",
+      "note": "Transactional write; byte-delta computation; atomic replace."
+    },
+    {
+      "path": "tools/factory/fwmi/conserve.ts",
+      "byte_size": 14029,
+      "sha256": "3bb6afbbb53172b9f48a3776dc261c0a8a943f090ecb92c35704a50d5fe6e680",
+      "evidence_classification": "REAL_PRODUCTION_SEAM",
+      "note": "Persisted semantic conservation verification (C1..C9)."
+    },
+    {
+      "path": "tools/factory/fwmi/lookup.ts",
+      "byte_size": 7620,
+      "sha256": "8b0aa701e02bd100ff5104f6b1730feec3e5cffd489717afe40e0aba20139116",
+      "evidence_classification": "REAL_PRODUCTION_SEAM",
+      "note": "Historical ACT lookup across the native and imported archives."
+    },
+    {
+      "path": "tools/factory/fwmi/recon.ts",
+      "byte_size": 6592,
+      "sha256": "4cc3e2c049e9bd8ddb2da0e42631cf39fb8bf7380276d843cf33251ea54a66dd",
+      "evidence_classification": "REAL_PRODUCTION_SEAM",
+      "note": "Legacy Markdown reconnaissance tooling (read-only)."
+    },
+    {
+      "path": "tools/factory/fwmi/cli.ts",
+      "byte_size": 12447,
+      "sha256": "71391739c1f6a6661cb1740c526d946a9dee504a64e39228b81498ad8f57b126",
+      "evidence_classification": "REAL_PRODUCTION_SEAM",
+      "note": "The five operator commands plus apply."
+    },
+    {
+      "path": "tools/factory/fwmi/fwmi-adapter.test.ts",
+      "byte_size": 20566,
+      "sha256": "c822028cf9f9a9f971f45497a0214d96b6ef52ad348aa714a60f89745195386c",
+      "evidence_classification": "REAL_PRODUCTION_SEAM",
+      "note": "Focused executable qualification (28 tests)."
+    },
+    {
+      "path": "tools/factory/fwmi/tsconfig.json",
+      "byte_size": 337,
+      "sha256": "629a1f472335f667ac836aaeace1511047d8bb4b77f8e10c919a5dc7fc2083c5",
+      "evidence_classification": "REAL_PRODUCTION_SEAM",
+      "note": "Typecheck project for the fwmi module."
+    },
+    {
+      "path": "tools/factory/fwmi/__fixtures__/sample-package/source-manifest.json",
+      "byte_size": 898,
+      "sha256": "4104275acbfb5306a9781153203146f7736792533f6560064e7ef90d19017c21",
+      "evidence_classification": "REAL_PRODUCTION_SEAM",
+      "note": "Fixture: FWMI v1 source manifest."
+    },
+    {
+      "path": "tools/factory/fwmi/__fixtures__/sample-package/epics/EPIC-ARCHITECTURE.json",
+      "byte_size": 4171,
+      "sha256": "471d7489368a4a4ba76aa3a7bf1cca2e2477c7bb222a4306d077dcb94144cd37",
+      "evidence_classification": "REAL_PRODUCTION_SEAM",
+      "note": "Fixture: FWMI v1 epic artifact (4 work items incl. UNKNOWN status and UNRESOLVED lifecycle)."
+    },
+    {
+      "path": "tools/factory/fwmi/__fixtures__/sample-package/historical-index.json",
+      "byte_size": 997,
+      "sha256": "9ebb5132c8aba1094b2b4845afe245264abbe698393f60930375d46d4cd6c624",
+      "evidence_classification": "REAL_PRODUCTION_SEAM",
+      "note": "Fixture: FWMI v1 historical ACT index (incl. an AMBIGUOUS record)."
+    },
+    {
+      "path": "tools/factory/fwmi/__fixtures__/sample-package/reconciliation.json",
+      "byte_size": 393,
+      "sha256": "44d176604471690aca3b9554ac532f0eb4c7a8b2f631554eee759b8f060c1bad",
+      "evidence_classification": "REAL_PRODUCTION_SEAM",
+      "note": "Fixture: FWMI v1 reconciliation manifest (UNRESOLVED cross-link)."
+    },
+    {
+      "path": "tools/factory/fwmi/__fixtures__/sample-package/validation-receipt.json",
+      "byte_size": 419,
+      "sha256": "e42d23989159ae4bef7b23acf39d3241601aac20e344c84e66c118c3e1662db8",
+      "evidence_classification": "REAL_PRODUCTION_SEAM",
+      "note": "Fixture: FWMI v1 producer validation receipt."
+    },
+    {
+      "path": "tools/factory/fwmi/__fixtures__/sample-package/frontier.md",
+      "byte_size": 151,
+      "sha256": "7d6733f74da7ce0381eb5f09868caf97c68b3915e148663174d303413ad5c89a",
+      "evidence_classification": "REAL_PRODUCTION_SEAM",
+      "note": "Fixture: FWMI v1 frontier view."
+    },
+    {
+      "path": ".factory/acts/ACT-CLINEMM-FWL02-INTERCHANGE-IMPORT-ADAPTER01.md",
+      "byte_size": 9209,
+      "sha256": "be7db483a929970284b785dc09b3afed4aba344af1c90e19c5928636a4a3e748",
+      "evidence_classification": "REAL_PRODUCTION_SEAM",
+      "note": "The ACT contract."
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-FWL02-INTERCHANGE-IMPORT-ADAPTER01/00-entry-and-scope.md",
+      "byte_size": 2611,
+      "sha256": "9cdd009a407b40c6366d6896a2dacfcde76e4929247b891e647f75731ea4b390",
+      "evidence_classification": "REAL_PRODUCTION_SEAM",
+      "note": "Entry identity, scope boundary, M1-M5 disposition."
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-FWL02-INTERCHANGE-IMPORT-ADAPTER01/01-executable-gates.md",
+      "byte_size": 3550,
+      "sha256": "362d8a579fea1e9179f05586a9c1642ac871e99ac948392fc46267e0b439585d",
+      "evidence_classification": "REAL_PRODUCTION_SEAM",
+      "note": "Executed gates and the requirement-to-test map."
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-FWL02-INTERCHANGE-IMPORT-ADAPTER01/02-operational-receipt.md",
+      "byte_size": 5089,
+      "sha256": "aa7b995bbd8a89144c3a6ae64db115f04f04ad36a97b05e40c2e52b200311c8c",
+      "evidence_classification": "REAL_PRODUCTION_SEAM",
+      "note": "End-to-end operational receipt (5 commands, isolated sandbox)."
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-FWL02-INTERCHANGE-IMPORT-ADAPTER01/03-semantic-conservation-contract.md",
+      "byte_size": 7189,
+      "sha256": "bf6a3a78c5f70d554e93d17dc8ed5c2cb78ec53e4f3d51a6cc58fb7eb9eaa2fa",
+      "evidence_classification": "REAL_PRODUCTION_SEAM",
+      "note": "The strict-validation and C1-C9 conservation contract."
+    },
+    {
+      "path": ".factory/evidence/ACT-CLINEMM-FWL02-INTERCHANGE-IMPORT-ADAPTER01/04-residual-risk-and-operator-handoff.md",
+      "byte_size": 4549,
+      "sha256": "f485c1e1683d46b6b8171aad6860822641b746757a01943f8fcaecc7a25f3376",
+      "evidence_classification": "REAL_PRODUCTION_SEAM",
+      "note": "Residual risk and the operator's exact handoff."
+    },
+    {
+      "path": "docs/closure-plans/ACT-CLINEMM-FWL02-INTERCHANGE-IMPORT-ADAPTER01.json",
+      "byte_size": 5741,
+      "sha256": "11e5c86a2329f0061fb4fb4886da30358b826294dc070d9b6864dfb6967d38d6",
+      "evidence_classification": "REAL_PRODUCTION_SEAM",
+      "note": "The ACT closure plan in the canonical closure-plan store."
+    }
+  ]
+}
