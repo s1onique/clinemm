@@ -23,21 +23,35 @@
 | `EPIC-CLINEMM-GIT-SAFETY-NO-FORCE-PUSH01` (ruleset id 21037630) | CLOSED | `ACT-CLINEMM-GIT-SAFETY-NO-FORCE-PUSH-ENFORCEMENT01` (closed 2026-08-19) | Block force pushes to `main` via GitHub ruleset |
 | `ACT-CLINEMM-GIT-SAFETY-LOCAL-FORCE-PUSH-GUARD01` | OPEN (P2, non-blocking) | — | Defense-in-depth local pre-push hook |
 | Factorize ACTs (F0..F5 + tooling + intake) | CLOSED | see `quality-substrate.md` | Factorize tooling and intake |
-| `ACT-CLINEMM-FWL02-INTERCHANGE-IMPORT-ADAPTER01` | PASS_STRUCTURAL_ONLY (28/28 tests, typecheck + lint GREEN; actual-source migration NOT executed) | `29774ba05851f9dd5a46a33a90d963ff3ef286d5` | Deterministic adapter from the FWMI v1 migration interchange into the existing ledger records + historical archive index; strict validation, persisted semantic conservation (C1–C9), historical lookup, exact-replay byte proof |
+| `ACT-CLINEMM-FWL02-INTERCHANGE-IMPORT-ADAPTER01` | SUPERSEDED — the ClineMM-side adapter is DISOWNED; Leamas owns the consumer | `1d8a204df183a14df0c54ca20d1b6d90b662bd66` | An experimental TypeScript FWMI adapter built in ClineMM. Ownership was clarified: Leamas is the SOLE implementation owner of the Factory Work Ledger and its FWMI import consumer. The ClineMM adapter was removed. |
+
+## Ownership
+
+**Leamas is the sole implementation owner** of the Factory Work Ledger and of
+its FWMI v1 import consumer. The consumer lives in the existing Go ledger
+domain, importer, transaction store, evidence authority and rendering
+mechanisms of the Leamas repository. There is no second ledger implementation
+in ClineMM, no universal Markdown parser and no architectural expansion.
+
+**ClineMM is the PRODUCER** of the FWMI v1 migration data: it reads the source
+board and produces the source-bound interchange package. The destination
+remains `.leamas/ledger/`.
+
+The `ACT-CLINEMM-FWL02-INTERCHANGE-IMPORT-ADAPTER01` adapter was an
+experiment in the wrong repository. It was removed; the evidence package of
+that ACT is retained as the historical record of the experiment, not as a
+canonical implementation.
 
 ## Open work
 
 - `ACT-CLINEMM-GIT-SAFETY-LOCAL-FORCE-PUSH-GUARD01` (P2, non-blocking)
-- **FWL02 — FWMI v1 interchange import adapter (P1).** The adapter is implemented and
-  qualified (`tools/factory/fwmi/`, 28/28 tests GREEN). It is OPEN because the
-  load-bearing qualification is **operator-run against the real interchange package**,
-  which codium-clinemm has not yet produced. Exact commands:
-  `bun tools/factory/fwmi/cli.ts {validate|shadow|verify|lookup|replay|apply}
-  --package=<FWMI_PACKAGE_DIR>`. The gate for cutover is `replay` reporting
-  `byteDelta=0` with conservation PASS. Imported records land in
-  `docs/closure-plans/imported/` — an additive namespace that must never be counted as
-  repository-native closure plans. See
-  `.factory/evidence/ACT-CLINEMM-FWL02-INTERCHANGE-IMPORT-ADAPTER01/`.
+- **FWL02 — FWMI v1 migration interchange, producer side (P1).** The producer
+  emits a source-bound FWMI v1 interchange package (source manifest, epic
+  records, historical index, reconciliation manifest). The operator runs the
+  shadow migration EXTERNALLY, against the real package, in the Leamas
+  repository, once both sides are ready. The consumer side is owned by Leamas
+  and is not implemented here. The exchange contract is documented at
+  `docs/factory/work-ledger-interchange.md` in the Leamas repository.
 
 ## Deferred work
 

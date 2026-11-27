@@ -9418,7 +9418,7 @@ Cross-cutting / substrate work that does not fit a single epic lane. Every row l
 | `EPIC-CLINEMM-MCP-PROCESS-LIFECYCLE01` | P1 | OPEN | n/a | [`upstream-intake.md`](./epics/upstream-intake.md) |
 | `EPIC-CLINEMM-CLINEIGNORE-FILTERING01` | P2 | OPEN | n/a | [`upstream-intake.md`](./epics/upstream-intake.md) |
 | `EPIC-CLINEMM-PROVIDER-MODEL-DISCOVERY01` | P2 | OPEN | n/a | [`upstream-intake.md`](./epics/upstream-intake.md) |
-| FWL02 — FWMI v1 interchange import adapter | P1 | OPEN | operator-run source-bound qualification | [`factory-infrastructure.md`](./epics/factory-infrastructure.md) |
+| FWL02 — FWMI v1 migration interchange (producer side) | P1 | OPEN | operator-run source-bound shadow migration in Leamas | [`factory-infrastructure.md`](./epics/factory-infrastructure.md) |
 
 ---
 
