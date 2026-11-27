@@ -2,7 +2,7 @@
   "act": "ACT-CLINEMM-FWL02-INTERCHANGE-IMPORT-ADAPTER01",
   "verdict": "PASS_STRUCTURAL_ONLY",
   "entry_head": "29774ba05851f9dd5a46a33a90d963ff3ef286d5",
-  "final_head": "PENDING_COMMIT",
+  "final_head": "95234b6b61739a75a5c580e30f312dc464b3cc51",
   "subject_revision": "29774ba05851f9dd5a46a33a90d963ff3ef286d5 (ClineMM, FWL02 frozen historical source)",
   "historical_session": "none (no model session claim)",
   "production_delta_bytes": 0,
@@ -198,5 +198,6 @@
       "evidence_classification": "REAL_PRODUCTION_SEAM",
       "note": "The ACT closure plan in the canonical closure-plan store."
     }
-  ]
+  ],
+  "branch": "act/clinemm-fwl02-interchange-import-adapter01"
 }
