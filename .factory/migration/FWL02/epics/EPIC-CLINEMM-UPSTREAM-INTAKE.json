@@ -12,7 +12,8 @@
   ],
   "items": [
     {
-      "item_id": "EPIC-CLINEMM-UPSTREAM-INTAKE/CHECKPOINT-RELIABILITY01",
+      "schema_version": 1,
+      "item_id": "CHECKPOINT-RELIABILITY01",
       "title": "EPIC-CLINEMM-CHECKPOINT-RELIABILITY01 — checkpoint reliability",
       "description": "Cross-cutting supporting work recorded as OPEN on the board's \"Open supporting work\" table, owned by the upstream-intake detail file. The board states the dependency as n/a.",
       "workstream": "upstream-intake",
@@ -39,7 +40,8 @@
       ]
     },
     {
-      "item_id": "EPIC-CLINEMM-UPSTREAM-INTAKE/MCP-PROCESS-LIFECYCLE01",
+      "schema_version": 1,
+      "item_id": "MCP-PROCESS-LIFECYCLE01",
       "title": "EPIC-CLINEMM-MCP-PROCESS-LIFECYCLE01 — MCP process lifecycle",
       "description": "Cross-cutting supporting work recorded as OPEN on the board's \"Open supporting work\" table, owned by the upstream-intake detail file. The board states the dependency as n/a. The tool-runtime-reliability epic cross-references it as a durable sibling for the MCP routing / approval / validation cluster (3 issues) and does NOT subsume it.",
       "workstream": "upstream-intake",
@@ -66,7 +68,8 @@
       ]
     },
     {
-      "item_id": "EPIC-CLINEMM-UPSTREAM-INTAKE/CLINEIGNORE-FILTERING01",
+      "schema_version": 1,
+      "item_id": "CLINEIGNORE-FILTERING01",
       "title": "EPIC-CLINEMM-CLINEIGNORE-FILTERING01 — .clineignore filtering",
       "description": "Cross-cutting supporting work recorded as OPEN on the board's \"Open supporting work\" table, owned by the upstream-intake detail file. The board states the dependency as n/a.",
       "workstream": "upstream-intake",
@@ -93,7 +96,8 @@
       ]
     },
     {
-      "item_id": "EPIC-CLINEMM-UPSTREAM-INTAKE/PROVIDER-MODEL-DISCOVERY01",
+      "schema_version": 1,
+      "item_id": "PROVIDER-MODEL-DISCOVERY01",
       "title": "EPIC-CLINEMM-PROVIDER-MODEL-DISCOVERY01 — provider model discovery",
       "description": "Cross-cutting supporting work recorded as OPEN on the board's \"Open supporting work\" table, owned by the upstream-intake detail file. The board states the dependency as n/a.",
       "workstream": "upstream-intake",

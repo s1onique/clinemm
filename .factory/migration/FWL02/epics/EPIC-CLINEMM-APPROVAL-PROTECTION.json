@@ -14,13 +14,14 @@
   ],
   "items": [
     {
-      "item_id": "EPIC-CLINEMM-APPROVAL-PROTECTION/EDITOR-TOOL-APPROVAL-FRICTION-RECON01",
+      "schema_version": 1,
+      "item_id": "EDITOR-TOOL-APPROVAL-FRICTION-RECON01",
       "title": "ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01 — editor/tool YOLO confirmation-UI recon",
       "description": "Recon of the non-command / editor-tool YOLO confirmation UI surface. Phase 0 captures one live YOLO confirmation UI and freezes `TOOL_NAME / TOOL_INPUT_KIND / YOLO_EFFECTIVE / SEATBELT_EFFECTIVE / UI_PROMPT_TYPE / PROMPT_OCCURS_BEFORE_OR_AFTER_TOOL_EXECUTION`. Phase 1 traces the `SdkController` non-command tool approval callback at `SdkController.ts:799..818` (where `shouldAutoApproveTool` reads `autoApprovalSettings.actions.editFiles` / `.editFilesExternally` / MCP per-tool flags + session override) and freezes `TOOL_POLICY_SOURCE / SESSION_OVERRIDE_SOURCE / AUTO_APPROVAL_SETTINGS_SOURCE / REQUEST_TOOL_APPROVAL_CALLBACK / FINAL_UI_PROMPT_SEAM`. Phase 2: exact RED with YOLO+Seatbelt on the live-prompt tool; possible outcomes — `callback=ASK` → policy defect, `callback=ALLOW` + UI still prompts → completion/UI seam defect (most likely per upstream #13114), callback never reached → seam moved. Per upstream SDK docs, tool auto-approval is a SEPARATE surface from command policy. SCOPE_BOUNDARY: this ACT is the non-command / editor-tool YOLO confirmation UI surface (frozen §0 invariant: `VS Code interactive Act mode + YOLO_REQUESTED + Seatbelt selected+available + relevant editing permission enabled ⇒ an ordinary native editing tool MUST NOT require an additional user approval before execution`). It is NOT a generic approval-friction catchall: command-policy friction is owned by safe-yolo-seatbelt.md (R5 + workspace-realpath family), and live command-policy ASK is owned by `ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION02`. Sibling — not superseded-by — the command-policy lanes.",
       "workstream": "approval-protection",
       "original_status": "NEXT / HIGH",
       "lifecycle": "ACTIVE",
-      "priority": "HIGH",
+      "priority": "P1",
       "qualification": "UNKNOWN",
       "criteria": [],
       "criteria_coverage": "UNKNOWN",
@@ -46,30 +47,17 @@
           "end_line": 44,
           "sha256": "04e921bf214dd6e43e9cc99c9c13994a933b2e5cf2fd73b03d1c9b73079d3db3"
         }
-      ],
-      "relationships": [
-        {
-          "kind": "RELATED_TO",
-          "target": "EPIC-CLINEMM-RUNTIME-TASK-PROGRESSION/EDITOR-TOOL-APPROVAL-FRICTION-RECON01",
-          "source_refs": [
-            {
-              "path": ".factory/epics/approval-protection.md",
-              "start_line": 44,
-              "end_line": 44,
-              "sha256": "04e921bf214dd6e43e9cc99c9c13994a933b2e5cf2fd73b03d1c9b73079d3db3"
-            }
-          ]
-        }
       ]
     },
     {
-      "item_id": "EPIC-CLINEMM-APPROVAL-PROTECTION/CLASSIC-PROTECTION-RECON01",
+      "schema_version": 1,
+      "item_id": "CLASSIC-PROTECTION-RECON01",
       "title": "ACT-CLINEMM-CLASSIC-PROTECTION-RECON01 — classic (non-Seatbelt) approval protection recon",
       "description": "Classic (non-Seatbelt) approval protection recon — the next-frontier after Safe-YOLO is fully closed. Unblocked by `SEATBELT-DEFAULT-ON01` closure (now satisfied). Likely first deliverable: characterize the path-authority / command-policy / network-read surfaces that take over when Seatbelt is OFF, and compare them to the Seatbelt-confined boundaries to identify any drift.",
       "workstream": "approval-protection",
       "original_status": "OPEN / HIGH",
       "lifecycle": "OPEN",
-      "priority": "HIGH",
+      "priority": "P1",
       "qualification": "UNQUALIFIED",
       "criteria": [],
       "criteria_coverage": "UNKNOWN",
@@ -89,67 +77,11 @@
           "end_line": 43,
           "sha256": "75da7fb7460e4515d97be73a3738fb38ddd690ab4ebad3c00665b1fdf7588fa1"
         }
-      ],
-      "relationships": [
-        {
-          "kind": "RELATED_TO",
-          "target": "EPIC-CLINEMM-SAFE-YOLO-SEATBELT/CLASSIC-PROTECTION-RECON01",
-          "source_refs": [
-            {
-              "path": ".factory/epics/approval-protection.md",
-              "start_line": 43,
-              "end_line": 43,
-              "sha256": "75da7fb7460e4515d97be73a3738fb38ddd690ab4ebad3c00665b1fdf7588fa1"
-            }
-          ]
-        }
       ]
     },
     {
-      "item_id": "EPIC-CLINEMM-APPROVAL-PROTECTION/HOST-TEST-RUNNER",
-      "title": "HOST-TEST RUNNER — host-only-behaviour dependency for the approval lanes",
-      "description": "Status: OPEN / HIGH. Host-only-behaviour dependency for the editor/tool recon (`ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01` Phase 0 / 1 / 2) and for classic-protection host qualification. Author as a new ACT; do NOT roll the runner into an existing closed ACT (would invalidate closure evidence).",
-      "workstream": "approval-protection",
-      "original_status": "OPEN / HIGH",
-      "lifecycle": "OPEN",
-      "priority": "HIGH",
-      "qualification": "UNQUALIFIED",
-      "criteria": [],
-      "criteria_coverage": "UNKNOWN",
-      "dependencies": [],
-      "dependency_coverage": "COMPLETE",
-      "blockers": [],
-      "current_act": null,
-      "related_acts": [],
-      "evidence_locators": [],
-      "reopen_conditions": [
-        "A new host-only-behaviour dependency lands — append to this file's ACT ledger row."
-      ],
-      "source_refs": [
-        {
-          "path": ".factory/epics/approval-protection.md",
-          "start_line": 42,
-          "end_line": 42,
-          "sha256": "16172bdcbe99cae25b06155cce0d53985b4e3fe6cf9d2efd95888a30739058fc"
-        }
-      ],
-      "relationships": [
-        {
-          "kind": "CROSS_LINK",
-          "target": "EPIC-CLINEMM-SAFE-YOLO-SEATBELT/HOST-TEST-RUNNER",
-          "source_refs": [
-            {
-              "path": ".factory/epics/approval-protection.md",
-              "start_line": 42,
-              "end_line": 42,
-              "sha256": "16172bdcbe99cae25b06155cce0d53985b4e3fe6cf9d2efd95888a30739058fc"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "item_id": "EPIC-CLINEMM-APPROVAL-PROTECTION/BYPASS01",
+      "schema_version": 1,
+      "item_id": "BYPASS01",
       "title": "BYPASS01 — temporary YOLO bypass (de-queued)",
       "description": "Temporary YOLO bypass proposal, de-queued. The board's Deferred / hold table records it as consciously postponed; the source states it is only reconsidered if `EDITOR-TOOL-APPROVAL-FRICTION-RECON01` rediscovers it.",
       "workstream": "approval-protection",
@@ -178,13 +110,14 @@
       ]
     },
     {
-      "item_id": "EPIC-CLINEMM-APPROVAL-PROTECTION/DESTRUCTIVE-SCOPE-REFINEMENT-RECON",
+      "schema_version": 1,
+      "item_id": "DESTRUCTIVE-SCOPE-REFINEMENT-RECON",
       "title": "ACT-CLINEMM-DESTRUCTIVE-SCOPE-REFINEMENT-RECON01 — destructive scope refinement",
       "description": "Introduce a future REFINE_SCOPE decision between ALLOW/ASK/DENY for broad or selector-based destructive mutations. Core doctrine: `BROAD_MUTATION != AUTHORIZED_MUTATION` — a broad/selector-based action must deterministically estimate/expand impact where safely possible, force an additional model intent-refinement turn, require an exact bounded target set + intended postcondition, re-evaluate normal policy from scratch, and execute only the precise replacement request. The refinement model is NOT an independent reviewer; the host remains authority. Initial exemplars: `rm *.tmp`, `rm -rf generated/`, `find ... -delete`, `git clean -fdx`. Doctrine anchors: upstream Cline approvals allow an agent to reformulate after a denied tool call, so the typed REFINE_SCOPE response plugs into an existing behavioral substrate; a syntactic-only rm/find classifier is demonstrably brittle in other coding agents, so future doctrine must be semantic scope refinement, not more regex. Anti-patterns: NO \"Are you sure?\" self-review; NO free-form \"explain why this is safe\" as sufficient proof; NO rm-specific regex-only architecture; NO automatic execution merely because the second model turn agrees.",
       "workstream": "approval-protection",
       "original_status": "FUTURE / UNIMPLEMENTED",
       "lifecycle": "DEFERRED",
-      "priority": "HIGH",
+      "priority": "P1",
       "qualification": "UNKNOWN",
       "criteria": [],
       "criteria_coverage": "UNKNOWN",
@@ -211,13 +144,14 @@
       ]
     },
     {
-      "item_id": "EPIC-CLINEMM-APPROVAL-PROTECTION/APPROVAL-TRANSACTION-RECORDER-FUTURE-WORK",
+      "schema_version": 1,
+      "item_id": "APPROVAL-TRANSACTION-RECORDER-FUTURE-WORK",
       "title": "Approval transaction recorder — future work",
       "description": "Already carried by the existing `ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01` \"Reopen / new-work conditions\" block; recorded here so a future reviewer can find it from this epic's deferred section as well. Future seam: the smallest DEFAULT_OFF persistent approval transaction recorder at the real approval entry/terminal seam. Required future fields: schema version, timestamp, session identity, task identity if available, canonical approval / correlation identity, tool name, policy auto-approve state, `shouldAutoApproveTool` result, ENTRY | TERMINAL, approved/rejected/cancelled outcome. Constraints: no policy change; no diagnostic side effect inside semantic state updaters; no heuristic toolName + timestamp identity; no \"latest pending approval\" correlation; bounded / removable / default-off; reuse canonical approval identity if the current runtime supplies one. The existing `tools/factory/capture-approval-specimen.py` remains the consumer; do not redesign it.",
       "workstream": "approval-protection",
       "original_status": "FUTURE / UNIMPLEMENTED",
       "lifecycle": "DEFERRED",
-      "priority": "HIGH",
+      "priority": "P1",
       "qualification": "UNKNOWN",
       "criteria": [],
       "criteria_coverage": "UNKNOWN",

@@ -63,26 +63,26 @@ const SECTION_DISPOSITIONS: readonly SectionDisposition[] = [
 		start_line: 1,
 		end_line: 9343,
 		dispositions: ["historical_execution", "narrative_history"],
-		note: "Prepend-ordered historical ACT report log. 177 report sections were mechanically indexed by identity, verdict and exact source range into `historical-index.json` (167 distinct identities; 7 with competing verdicts, 1 with repeated identical verdicts). The per-ACT prose bodies and the `Updated:` chronology lines are contiguous narrative history, preserved verbatim in the committed source archive and deliberately not reconstructed as work items.",
+		note: "Prepend-ordered historical ACT report log at heading level 1. 177 report sections were mechanically indexed by identity, verdict and exact source range into `historical-index.json`. The per-ACT prose bodies and the `Updated:` chronology lines are contiguous narrative history, preserved verbatim in the committed source archive and deliberately not reconstructed as work items.",
 	},
 	{
 		path: ".factory/epic-board.md",
 		start_line: 9344,
-		end_line: 9350,
+		end_line: 9351,
 		dispositions: ["navigation_or_metadata"],
 		note: "Board provenance header: the source-of-truth statement (`Source-of-truth: .factory/epics/*.md` — the per-epic detail files. **This board is a navigation index, not an archive.**), the contract link, the conservation anchor `5e96cfd3a`, and the size cap. Navigation and metadata, not an epic.",
 	},
 	{
 		path: ".factory/epic-board.md",
 		start_line: 9352,
-		end_line: 9377,
+		end_line: 9380,
 		dispositions: ["current_obligation", "navigation_or_metadata"],
 		note: "The Current frontier table — 21 lanes with their state and NEXT. This is the operational index the migration's frontier records are reconciled from. Lanes recorded CLOSED / CLOSED_STRUCTURAL / CLOSED_V2 carry no current obligation; lanes recorded OPEN / HOLD / ACTIVE do.",
 	},
 	{
 		path: ".factory/epic-board.md",
 		start_line: 9381,
-		end_line: 9402,
+		end_line: 9405,
 		dispositions: [
 			"current_obligation",
 			"navigation_or_metadata",
@@ -93,14 +93,14 @@ const SECTION_DISPOSITIONS: readonly SectionDisposition[] = [
 	{
 		path: ".factory/epic-board.md",
 		start_line: 9406,
-		end_line: 9421,
+		end_line: 9424,
 		dispositions: ["current_obligation", "cross_link"],
 		note: "The Open supporting work table — 9 cross-cutting rows plus the FWL02 producer row. Each row's Detail link determines the owning epic; the rows are represented in their owning epic's item collection.",
 	},
 	{
 		path: ".factory/epic-board.md",
 		start_line: 9425,
-		end_line: 9439,
+		end_line: 9442,
 		dispositions: ["deferred_obligation"],
 		note: "The Deferred / hold table — 9 rows. Every row is represented with `lifecycle: DEFERRED` in its owning epic. A DEFERRED row is work the source explicitly postponed; it is not part of the operational frontier.",
 	},
@@ -110,6 +110,13 @@ const SECTION_DISPOSITIONS: readonly SectionDisposition[] = [
 		end_line: 9541,
 		dispositions: ["narrative_history", "historical_execution"],
 		note: 'The Historical task census — a conservation-only ACT-ID listing grouped by family, explicitly "an audit trail, not a status report". The identities it lists are already covered by the historical ACT index; the region is accounted for as narrative history plus the already-indexed ACT identities.',
+	},
+	{
+		path: ".factory/epic-board.md",
+		start_line: 9542,
+		end_line: 44731,
+		dispositions: ["historical_execution", "narrative_history"],
+		note: "The TRAILING region of the board — the range the previous source accounting stopped at. It is NOT narrative-only: it carries the board's maintenance contract, its status / priority vocabulary, its size invariant and, above all, 205 further ACT report sections at heading level 2 (`## ACT-... — VERDICT — date`). Those 205 sections belong to 149 DISTINCT historical ACT identities that the level-1-only extraction had silently skipped, which is why the previous accounting reported 167 identities. Every one of those identities is now mechanically indexed by identity, verdict and exact source range into `historical-index.json` with its own disposition (289 UNAMBIGUOUS, 2 AMBIGUOUS, 25 CONFLICTING over 316 distinct identities in total). The 25 conflicting identities are surfaced by the SOURCE_CONFLICT reconciliation records; the remainder are accounted for at the COLD level — identity, verdict and exact source range — with their complete original bytes preserved verbatim in the committed source archive. The report bodies and `Updated:` chronology lines inside this range are accounted for as contiguous narrative history at the byte level and are deliberately NOT reconstructed paragraph-by-paragraph as new work items. No outstanding obligation was found in this range that the operational index and the per-epic detail files do not already own; the 149 identities are historical EXECUTIONS, not current obligations.",
 	},
 	{
 		path: ".factory/epics/_index-contract.md",
@@ -675,6 +682,101 @@ function computeDelta(
 	return delta;
 }
 
+/**
+ * One SECONDARY REPRESENTATION of an engineering obligation.
+ *
+ * The authoritative obligation is the one that carries the lifecycle; this
+ * entry records the other representations of the SAME obligation, with the
+ * epic that carried them and the source range that established them.
+ */
+interface SecondaryRepresentation {
+	/** The scoped identity of the AUTHORITATIVE obligation. */
+	readonly authoritative_obligation: string;
+	/** The scoped identity of this SECONDARY representation. */
+	readonly secondary_representation: string;
+	/** The epic that carried the secondary representation. */
+	readonly represented_in_epic: string;
+	/** Why the source establishes shared ownership for this obligation. */
+	readonly ownership_basis: string;
+	/** The source ranges that establish the secondary representation. */
+	readonly source_ranges: readonly {
+		readonly path: string;
+		readonly lines: readonly [number, number];
+	}[];
+}
+
+/**
+ * The secondary representations conserved out of the obligation collection.
+ *
+ * Each group is ONE engineering obligation. The authoritative obligation is
+ * the one the source establishes as the owner; the secondary representations
+ * are preserved here, source-referenced, and carry no lifecycle authority.
+ */
+const SECONDARY_REPRESENTATIONS: readonly SecondaryRepresentation[] = [
+	{
+		authoritative_obligation:
+			"EPIC-CLINEMM-HOST-TEST-INFRASTRUCTURE/HOST-TEST-RUNNER",
+		secondary_representation:
+			"EPIC-CLINEMM-SAFE-YOLO-SEATBELT/HOST-TEST-RUNNER",
+		represented_in_epic: "EPIC-CLINEMM-SAFE-YOLO-SEATBELT",
+		ownership_basis:
+			"safe-yolo-seatbelt.md Open work carries the row as " +
+			"`HOST-TEST RUNNER` (row 18) with the status OPEN / HIGH and the full open-work description; host-test-infrastructure.md is the canonical detail file that gives the working label a durable detail file.",
+		source_ranges: [
+			{ path: ".factory/epics/safe-yolo-seatbelt.md", lines: [44, 44] },
+		],
+	},
+	{
+		authoritative_obligation:
+			"EPIC-CLINEMM-HOST-TEST-INFRASTRUCTURE/HOST-TEST-RUNNER",
+		secondary_representation:
+			"EPIC-CLINEMM-APPROVAL-PROTECTION/HOST-TEST-RUNNER",
+		represented_in_epic: "EPIC-CLINEMM-APPROVAL-PROTECTION",
+		ownership_basis:
+			"approval-protection.md Open work carries the row as row 18 and explicitly defers to safe-yolo-seatbelt.md: `See .factory/epics/safe-yolo-seatbelt.md for the full open-work description`.",
+		source_ranges: [
+			{ path: ".factory/epics/approval-protection.md", lines: [42, 42] },
+		],
+	},
+	{
+		authoritative_obligation:
+			"EPIC-CLINEMM-APPROVAL-PROTECTION/CLASSIC-PROTECTION-RECON01",
+		secondary_representation:
+			"EPIC-CLINEMM-SAFE-YOLO-SEATBELT/CLASSIC-PROTECTION-RECON01",
+		represented_in_epic: "EPIC-CLINEMM-SAFE-YOLO-SEATBELT",
+		ownership_basis:
+			"safe-yolo-seatbelt.md Open work carries the same ACT with the same status, unblocking condition and first-deliverable description; the board's Current frontier lane `Approval / classic` names approval-protection.md as the Detail link, which is the authoritative placement.",
+		source_ranges: [
+			{ path: ".factory/epics/safe-yolo-seatbelt.md", lines: [45, 45] },
+		],
+	},
+	{
+		authoritative_obligation:
+			"EPIC-CLINEMM-APPROVAL-PROTECTION/EDITOR-TOOL-APPROVAL-FRICTION-RECON01",
+		secondary_representation:
+			"EPIC-CLINEMM-RUNTIME-TASK-PROGRESSION/EDITOR-TOOL-APPROVAL-FRICTION-RECON01",
+		represented_in_epic: "EPIC-CLINEMM-RUNTIME-TASK-PROGRESSION",
+		ownership_basis:
+			"runtime-task-progression.md Open work names the same ACT as restored to NEXT with the same completion-authority prerequisite and the same remaining gates; the board's Current frontier lane `Approval / editor-tool` names approval-protection.md as the Detail link, which is the authoritative placement.",
+		source_ranges: [
+			{ path: ".factory/epics/runtime-task-progression.md", lines: [78, 78] },
+		],
+	},
+	{
+		authoritative_obligation:
+			"EPIC-CLINEMM-SAFE-YOLO-SEATBELT/TEMP-INTERNAL-CONTROL-CLEANUP",
+		secondary_representation:
+			"EPIC-CLINEMM-PRODUCT-CONFIG-BRANDING/TEMP-INTERNAL-CONTROL-CLEANUP",
+		represented_in_epic: "EPIC-CLINEMM-PRODUCT-CONFIG-BRANDING",
+		ownership_basis:
+			"product-config-branding.md carries the row as the cross-cutting child and states the ownership explicitly: `The primary owner is safe-yolo-seatbelt.md (the env controls are owned by the seatbelt substrate)`.",
+		source_ranges: [
+			{ path: ".factory/epics/product-config-branding.md", lines: [93, 100] },
+			{ path: ".factory/epics/product-config-branding.md", lines: [131, 140] },
+		],
+	},
+];
+
 /** Write the supplemental artifacts. */
 function main(): void {
 	// ---- source-accounting.json -----------------------------------------
@@ -690,6 +792,22 @@ function main(): void {
 			end_line: section.end_line,
 			dispositions: section.dispositions,
 			note: section.note,
+		})),
+		/**
+		 * The SECONDARY REPRESENTATIONS of one engineering obligation.
+		 *
+		 * The FWMI v1 wire schema carries ONE lifecycle-bearing work item per
+		 * obligation. Where the source represents one obligation in several
+		 * places, exactly one representation is authoritative and the others
+		 * are retained HERE — with their source references and their owning
+		 * epic — instead of becoming independent schedulable obligations.
+		 *
+		 * This is the accounting the wire schema has no field for: it is the
+		 * record of WHERE a representation was dropped from the obligation
+		 * collection, so no source representation is silently lost.
+		 */
+		secondary_representations: SECONDARY_REPRESENTATIONS.map((entry) => ({
+			...entry,
 		})),
 	};
 	writeFileSync(
@@ -800,6 +918,40 @@ function main(): void {
 		"current work item rather than being absent. The first shadow migration's counts",
 		"are NOT target values for this package; the recovered inventory is reported from",
 		"the actual source.",
+		"",
+		"## The CORRECTION-02 correction of the reconciled inventory",
+		"",
+		"This package is the CORRECTED successor of the original FWL02 producer package.",
+		"The correction changed the PRODUCER's reconciliation, not the source: the source",
+		"head is unchanged at `e196d0e6243f40ebfd76d2cf0db7bda74e97d6d6`, and every",
+		"assertion is still bound to the exact committed bytes it was derived from.",
+		"",
+		"Four bounded defects were corrected:",
+		"",
+		"1. **Wire compatibility.** The package emitted a `relationships` field that the",
+		"   actual Leamas Go consumer does not have, omitted the nested `schema_version` on",
+		"   every work item, historical record and reconciliation record, and used a",
+		"   globally-scoped `item_id`. The consumer's strict decoder rejected all three.",
+		"   All relationship kinds now live in the `dependencies` array, every nested record",
+		"   carries `schema_version: 1`, and every item identity is local to its epic.",
+		"2. **Prerequisite direction.** The architecture package emitted E8 DEPENDS_ON E9",
+		"   alongside E9 DEPENDS_ON E8, a cycle that contradicted the recovered `E7 -> E8",
+		"   -> E9 -> ELMIZATION02` ordering. The reversed edge is withdrawn; E7 remains an",
+		"   explicit blocker on E8 and is not invented as an obligation.",
+		"3. **One authoritative obligation per identity.** Four duplicate groups carried",
+		"   independent lifecycle-bearing records. Each group now has exactly one",
+		"   authoritative obligation; the secondary representations are conserved in the",
+		"   reconciliation records and in `source-accounting.json`.",
+		"4. **Historical source accounting.** The board's trailing region 9,542-44,731 was",
+		"   assumed to be narrative history. It is not: it carries 205 further ACT report",
+		"   sections at heading level 2, belonging to 149 distinct historical identities",
+		"   the level-1-only extraction had skipped. The corrected extraction indexes 361",
+		"   report sections carrying 316 distinct identities.",
+		"",
+		"The corrected inventory is therefore NOT the previous one: 45 obligations (not 50)",
+		"and 316 historical identities (not 167). Neither count was tuned to reproduce a",
+		"previous value; both are what the actual source yields under the corrected",
+		"reconciliation.",
 		"",
 	].join("\n");
 	writeFileSync(join(PACKAGE_DIR, "source-delta.md"), deltaMarkdown, "utf8");

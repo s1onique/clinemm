@@ -46,6 +46,7 @@ export const EPIC_PRODUCT_CONFIG_BRANDING: ReconciledEpic = {
 		"ACTIVE — closed cost/consolidation substrate + 2 open product fronts",
 	lifecycle: "ACTIVE",
 	priority: "P2",
+	source_priority: "P2",
 	exit_criteria: [
 		"Cost display observed diverging from the canonical cost source.",
 		"Main branch loses the consolidated state (i.e. a non-canonical branch re-emerges as a long-lived side).",
@@ -58,8 +59,7 @@ export const EPIC_PRODUCT_CONFIG_BRANDING: ReconciledEpic = {
 	],
 	items: [
 		{
-			item_id:
-				"EPIC-CLINEMM-PRODUCT-CONFIG-BRANDING/TOOL-EXECUTION-SEMANTICS01",
+			item_id: "TOOL-EXECUTION-SEMANTICS01",
 			title:
 				"EPIC-CLINEMM-TOOL-EXECUTION-SEMANTICS01 — tool-execution semantics telemetry umbrella",
 			description:
@@ -68,10 +68,11 @@ export const EPIC_PRODUCT_CONFIG_BRANDING: ReconciledEpic = {
 			original_status: "OPEN",
 			lifecycle: "OPEN",
 			priority: "P2",
+			source_priority: "P2",
+			relationships: [],
 			qualification: "STRUCTURAL_ONLY",
 			criteria: [],
 			criteria_coverage: "UNKNOWN",
-			dependencies: [],
 			dependency_coverage: "COMPLETE",
 			blockers: [],
 			current_act: null,
@@ -89,7 +90,7 @@ export const EPIC_PRODUCT_CONFIG_BRANDING: ReconciledEpic = {
 			source_refs: [{ path: PRODUCT, lines: [36, 36] }],
 		},
 		{
-			item_id: "EPIC-CLINEMM-PRODUCT-CONFIG-BRANDING/BRANDING01",
+			item_id: "BRANDING01",
 			title: "EPIC-CLINEMM-BRANDING01 — visible branding umbrella",
 			description:
 				"The umbrella epic is board row 21. Its first bounded slice is `ACT-CLINEMM-BRANDING-ACTIVITYBAR-ICON01` (board row 24, `NEXT / MED`). Icon: `‖ → --`. Preserve VS Code monochrome / theming behavior.",
@@ -97,10 +98,11 @@ export const EPIC_PRODUCT_CONFIG_BRANDING: ReconciledEpic = {
 			original_status: "OPEN",
 			lifecycle: "OPEN",
 			priority: "P2",
+			source_priority: "P2",
+			relationships: [],
 			qualification: "UNQUALIFIED",
 			criteria: [],
 			criteria_coverage: "UNKNOWN",
-			dependencies: [],
 			dependency_coverage: "COMPLETE",
 			blockers: [],
 			current_act: "ACT-CLINEMM-BRANDING-ACTIVITYBAR-ICON01",
@@ -112,7 +114,7 @@ export const EPIC_PRODUCT_CONFIG_BRANDING: ReconciledEpic = {
 			source_refs: [{ path: PRODUCT, lines: [37, 37] }],
 		},
 		{
-			item_id: "EPIC-CLINEMM-PRODUCT-CONFIG-BRANDING/TASK-COST-TRUTH-RECON01",
+			item_id: "TASK-COST-TRUTH-RECON01",
 			title:
 				"ACT-CLINEMM-TASK-COST-TRUTH-RECON01 — two-layer cost-provenance recon",
 			description:
@@ -121,10 +123,11 @@ export const EPIC_PRODUCT_CONFIG_BRANDING: ReconciledEpic = {
 			original_status: "OPEN / HOLD_FOR_EXECUTION",
 			lifecycle: "BLOCKED",
 			priority: "P1",
+			source_priority: "P1",
+			relationships: [],
 			qualification: "UNKNOWN",
 			criteria: [],
 			criteria_coverage: "UNKNOWN",
-			dependencies: [],
 			dependency_coverage: "COMPLETE",
 			blockers: [
 				"Held until the operational frontier (`EDITOR-TOOL-APPROVAL-FRICTION-RECON01`, `OPEN / WAITING_FOR_LIVE_SPECIMEN`) is bound; sequenced next after that.",
@@ -140,8 +143,7 @@ export const EPIC_PRODUCT_CONFIG_BRANDING: ReconciledEpic = {
 			source_refs: [{ path: PRODUCT, lines: [38, 38] }],
 		},
 		{
-			item_id:
-				"EPIC-CLINEMM-PRODUCT-CONFIG-BRANDING/UPSTREAM-SETTINGS-SURFACE-PARITY-RECON01",
+			item_id: "UPSTREAM-SETTINGS-SURFACE-PARITY-RECON01",
 			title:
 				"ACT-CLINEMM-UPSTREAM-SETTINGS-SURFACE-PARITY-RECON01 — upstream settings-surface parity recon",
 			description:
@@ -150,10 +152,10 @@ export const EPIC_PRODUCT_CONFIG_BRANDING: ReconciledEpic = {
 			original_status: "OPEN / HOLD_FOR_EXECUTION",
 			lifecycle: "BLOCKED",
 			priority: "P2",
+			source_priority: "P2",
 			qualification: "PARTIAL",
 			criteria: [],
 			criteria_coverage: "UNKNOWN",
-			dependencies: [],
 			dependency_coverage: "COMPLETE",
 			blockers: [
 				"Held until the operational frontier is bound; sequenced after `TASK-COST-TRUTH-RECON01`.",
@@ -175,42 +177,7 @@ export const EPIC_PRODUCT_CONFIG_BRANDING: ReconciledEpic = {
 			],
 		},
 		{
-			item_id:
-				"EPIC-CLINEMM-PRODUCT-CONFIG-BRANDING/TEMP-INTERNAL-CONTROL-CLEANUP",
-			title:
-				"TEMP-INTERNAL-CONTROL-CLEANUP — cross-cutting child of settings-parity",
-			description:
-				'This is the SECONDARY cross-cutting row; the primary owner is safe-yolo-seatbelt.md (the env controls are owned by the seatbelt substrate). This row is a cross-link because the eventual replacement is a settings surface that lives in EPIC-CLINEMM-BRANDING01-adjacent settings UI. See safe-yolo-seatbelt.md Deferred work for the primary row. It is an inventory + classification task: each temporary / internal control must be classified as KEEP_INTERNAL / REPLACE_WITH_SETTING / REMOVE_AFTER_SUCCESSOR / DEBUG_ONLY before any cleanup ACT can be opened. No inventory exists yet; opening a "cleanup" ACT without the inventory would be premature. Ideal long-term shape: upstream Settings remain recognizable + ClineMM-only section(s) are additive, minimizing future upstream sync cost. Cross-links to existing substrate (do NOT duplicate): safe-yolo-seatbelt.md Deferred FW-05 (seatbelt-user-facing settings surface cross-link); safe-yolo-seatbelt.md Deferred FW-11 (TEMP-INTERNAL-CONTROL-CLEANUP primary owner); product-config-branding.md Deferred FW-11 (cross-link); ACT-CLINEMM-PTAD-ENV-OPTIN01 ledger (PTAD env var history); ACT-CLINEMM-SEATBELT-DEFAULT-ON01 ledger (default-ON posture); ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-RECON01 §15 (frozen SSH credential authority contract — settings surface must NOT renegotiate). Constraints: no implementation in this backlog ACT; no env-var removal; no Seatbelt behavior change; no SSH-agent code change; the env controls remain valid until a stable settings surface can fully cover them.',
-			workstream: "product-config-branding",
-			original_status: "FUTURE / DEFER",
-			lifecycle: "DEFERRED",
-			priority: "P2",
-			qualification: "UNKNOWN",
-			criteria: [],
-			criteria_coverage: "UNKNOWN",
-			dependencies: [],
-			dependency_coverage: "COMPLETE",
-			blockers: [],
-			current_act: null,
-			related_acts: [],
-			evidence_locators: [
-				".factory/evidence/ACT-CLINEMM-UPSTREAM-PARITY-AND-SETTINGS-BACKLOG-REFINEMENT01/reconciliation.md (Track C, recorded 2026-08-29 by this ACT)",
-			],
-			reopen_conditions: [
-				"A future ACT is opened whose mission is the temporary / internal control inventory; the inventory must be produced before any cleanup ACT is opened.",
-			],
-			source_refs: [{ path: PRODUCT, lines: [93, 152] }],
-			relationships: [
-				{
-					kind: "CROSS_LINK",
-					target:
-						"EPIC-CLINEMM-SAFE-YOLO-SEATBELT/TEMP-INTERNAL-CONTROL-CLEANUP",
-					source_refs: [{ path: PRODUCT, lines: [131, 136] }],
-				},
-			],
-		},
-		{
-			item_id: "EPIC-CLINEMM-PRODUCT-CONFIG-BRANDING/BRANDING-DEMO-JAN1-ICON",
+			item_id: "BRANDING-DEMO-JAN1-ICON",
 			title:
 				"ACT-CLINEMM-BRANDING-DEMO-JAN1-ICON01 — January 1 demo icon decoration",
 			description:
@@ -218,11 +185,12 @@ export const EPIC_PRODUCT_CONFIG_BRANDING: ReconciledEpic = {
 			workstream: "product-config-branding",
 			original_status: "FUTURE / UNIMPLEMENTED",
 			lifecycle: "DEFERRED",
-			priority: "DEMO / LOW",
+			priority: "P3",
+			source_priority: "DEMO / LOW",
+			relationships: [],
 			qualification: "UNKNOWN",
 			criteria: [],
 			criteria_coverage: "UNKNOWN",
-			dependencies: [],
 			dependency_coverage: "COMPLETE",
 			blockers: [],
 			current_act: null,
@@ -244,6 +212,7 @@ export const EPIC_FACTORY_INFRASTRUCTURE: ReconciledEpic = {
 	original_status: "ACTIVE (substrate-level rules)",
 	lifecycle: "ACTIVE",
 	priority: "P0",
+	source_priority: "P0",
 	exit_criteria: [
 		"Git safety: repository ruleset `cline-- protect published history` (`id=21037630`) blocks force pushes to `main`. `BYPASS_ACTOR_COUNT = 0`. Reopen conditions: ruleset disabled; `non_fast_forward` removed; any bypass actor added; branch protection changed to allow force pushes; default branch moves out of `refs/heads/main`; ownership/topology changes.",
 	],
@@ -253,8 +222,7 @@ export const EPIC_FACTORY_INFRASTRUCTURE: ReconciledEpic = {
 	],
 	items: [
 		{
-			item_id:
-				"EPIC-CLINEMM-FACTORY-INFRASTRUCTURE/GIT-SAFETY-LOCAL-FORCE-PUSH-GUARD01",
+			item_id: "GIT-SAFETY-LOCAL-FORCE-PUSH-GUARD01",
 			title:
 				"ACT-CLINEMM-GIT-SAFETY-LOCAL-FORCE-PUSH-GUARD01 — local pre-push force-push guard",
 			description:
@@ -263,10 +231,11 @@ export const EPIC_FACTORY_INFRASTRUCTURE: ReconciledEpic = {
 			original_status: "OPEN (P2, non-blocking)",
 			lifecycle: "OPEN",
 			priority: "P2",
+			source_priority: "P2",
+			relationships: [],
 			qualification: "UNQUALIFIED",
 			criteria: [],
 			criteria_coverage: "UNKNOWN",
-			dependencies: [],
 			dependency_coverage: "COMPLETE",
 			blockers: [],
 			current_act: "ACT-CLINEMM-GIT-SAFETY-LOCAL-FORCE-PUSH-GUARD01",
@@ -281,8 +250,7 @@ export const EPIC_FACTORY_INFRASTRUCTURE: ReconciledEpic = {
 			],
 		},
 		{
-			item_id:
-				"EPIC-CLINEMM-FACTORY-INFRASTRUCTURE/FWL02-FWMI-V1-MIGRATION-INTERCHANGE",
+			item_id: "FWL02-FWMI-V1-MIGRATION-INTERCHANGE",
 			title: "FWL02 — FWMI v1 migration interchange (producer side)",
 			description:
 				"The producer emits a source-bound FWMI v1 interchange package (source manifest, epic records, historical index, reconciliation manifest). The operator runs the shadow migration EXTERNALLY, against the real package, in the Leamas repository, once both sides are ready. The consumer side is owned by Leamas and is NOT implemented here. The exchange contract is documented at `docs/factory/work-ledger-interchange.md` in the Leamas repository. Leamas is the SOLE implementation owner of the Factory Work Ledger and of its FWMI v1 import consumer; the consumer lives in the existing Go ledger domain, importer, transaction store, evidence authority and rendering mechanisms of the Leamas repository. There is no second ledger implementation in ClineMM, no universal Markdown parser and no architectural expansion. The `ACT-CLINEMM-FWL02-INTERCHANGE-IMPORT-ADAPTER01` adapter was an experiment in the wrong repository. It was removed; the evidence package of that ACT is retained as the historical record of the experiment, not as a canonical implementation.",
@@ -290,10 +258,11 @@ export const EPIC_FACTORY_INFRASTRUCTURE: ReconciledEpic = {
 			original_status: "OPEN",
 			lifecycle: "ACTIVE",
 			priority: "P1",
+			source_priority: "P1",
+			relationships: [],
 			qualification: "UNKNOWN",
 			criteria: [],
 			criteria_coverage: "UNKNOWN",
-			dependencies: [],
 			dependency_coverage: "COMPLETE",
 			blockers: [],
 			current_act: "ACT-CLINEMM-FWL02-B-HISTORICAL-RECONCILIATION-01",
@@ -310,8 +279,7 @@ export const EPIC_FACTORY_INFRASTRUCTURE: ReconciledEpic = {
 			],
 		},
 		{
-			item_id:
-				"EPIC-CLINEMM-FACTORY-INFRASTRUCTURE/HUSKY-TOOLCHAIN-PATH-PORTABILITY01",
+			item_id: "HUSKY-TOOLCHAIN-PATH-PORTABILITY01",
 			title:
 				"HUSKY-TOOLCHAIN-PATH-PORTABILITY01 — repository hook tool discovery portability",
 			description:
@@ -320,10 +288,11 @@ export const EPIC_FACTORY_INFRASTRUCTURE: ReconciledEpic = {
 			original_status: "FUTURE / DEFER",
 			lifecycle: "DEFERRED",
 			priority: "P2",
+			source_priority: "P2",
+			relationships: [],
 			qualification: "UNKNOWN",
 			criteria: [],
 			criteria_coverage: "UNKNOWN",
-			dependencies: [],
 			dependency_coverage: "COMPLETE",
 			blockers: [],
 			current_act: null,
@@ -338,7 +307,7 @@ export const EPIC_FACTORY_INFRASTRUCTURE: ReconciledEpic = {
 			source_refs: [{ path: FACTORY, lines: [58, 100] }],
 		},
 		{
-			item_id: "EPIC-CLINEMM-FACTORY-INFRASTRUCTURE/UPSTREAM-CATCHUP-RECON01",
+			item_id: "UPSTREAM-CATCHUP-RECON01",
 			title:
 				"ACT-CLINEMM-UPSTREAM-CATCHUP-RECON01 — upstream fork-distance catch-up",
 			description:
@@ -346,11 +315,12 @@ export const EPIC_FACTORY_INFRASTRUCTURE: ReconciledEpic = {
 			workstream: "factory-infrastructure",
 			original_status: "FUTURE / UNIMPLEMENTED",
 			lifecycle: "DEFERRED",
-			priority: "HIGH",
+			priority: "P1",
+			source_priority: "HIGH",
+			relationships: [],
 			qualification: "UNKNOWN",
 			criteria: [],
 			criteria_coverage: "UNKNOWN",
-			dependencies: [],
 			dependency_coverage: "COMPLETE",
 			blockers: [],
 			current_act: null,
@@ -373,6 +343,7 @@ export const EPIC_HOST_TEST_INFRASTRUCTURE: ReconciledEpic = {
 		"ACTIVE — fresh epic opened at FUTURE-BACKLOG-CENSUS01 (2026-08-27). No ACT authored yet; `HOST-TEST RUNNER` is the working label and remains a label until canonical ACT ID is assigned per FACT-001 in `.factory/epics/factory-infrastructure.md`.",
 	lifecycle: "ACTIVE",
 	priority: "P1",
+	source_priority: "P1",
 	exit_criteria: [
 		"A Seatbelt / approval / classic-protection ACT needs host-only evidence and the runner does not yet cover the required corpus (→ new runner ACT scoped).",
 		"The runner is observed widening authority / leaking secrets / being used as a covert bypass (→ HALT the runner ACT and any consumer).",
@@ -383,18 +354,18 @@ export const EPIC_HOST_TEST_INFRASTRUCTURE: ReconciledEpic = {
 	],
 	items: [
 		{
-			item_id: "EPIC-CLINEMM-HOST-TEST-INFRASTRUCTURE/HOST-TEST-RUNNER",
+			item_id: "HOST-TEST-RUNNER",
 			title: "HOST-TEST RUNNER — author the host-orchestrated runner",
 			description:
 				"Authoring ACT must ship: (a) the runner binary / script, (b) the corpus/result schema, (c) at least one minimal invocation per dependent ACT (real-kernel Seatbelt probe + fresh VSIX dogfood + live approval-UI capture), (d) the audit-log contract (ACT ID, source HEAD, corpus file path, runner version, host OS / kernel, start/end wall time, full result; appended to `.factory/evidence/<ACT>/`). No widening of authority: the runner runs as the host user, does not gain Seatbelt privileges the user lacks, and is not a covert YOLO bypass. A separate ACT is also required (NOT part of the runner ACT) to reclassify prior per-test Vitest `skipIf(!HAS_SUBSTRATE)` callers from `SKIP` to `HOST_REQUIRED` via the runner.",
 			workstream: "host-test-infrastructure",
 			original_status: "OPEN / HIGH",
 			lifecycle: "OPEN",
-			priority: "HIGH",
+			priority: "P1",
+			source_priority: "HIGH",
 			qualification: "UNQUALIFIED",
 			criteria: [],
 			criteria_coverage: "UNKNOWN",
-			dependencies: [],
 			dependency_coverage: "COMPLETE",
 			blockers: [],
 			current_act: null,
@@ -408,13 +379,20 @@ export const EPIC_HOST_TEST_INFRASTRUCTURE: ReconciledEpic = {
 				{ path: HOSTTEST, lines: [33, 33] },
 				{ path: HOSTTEST, lines: [38, 46] },
 			],
-			relationships: [
-				{
-					kind: "CROSS_LINK",
-					target: "EPIC-CLINEMM-SAFE-YOLO-SEATBELT/HOST-TEST-RUNNER",
-					source_refs: [{ path: HOSTTEST, lines: [38, 40] }],
-				},
-			],
+			/**
+			 * No CROSS_LINK edge.
+			 *
+			 * This epic is the CANONICAL OWNER of the HOST-TEST-RUNNER
+			 * obligation: `host-test-infrastructure.md` is the canonical detail
+			 * file that "gives the working label a canonical detail file so
+			 * the lane has durable backlog rather than a single-row reference".
+			 * The safe-yolo-seatbelt.md and approval-protection.md rows were
+			 * SECOND REPRESENTATIONS of the same obligation; they are
+			 * preserved in `reconciliation.json` and in the supplemental
+			 * source accounting, and they are not independent
+			 * lifecycle-bearing obligations, so there is no edge to them.
+			 */
+			relationships: [],
 		},
 	],
 };
@@ -428,6 +406,7 @@ export const EPIC_QUALITY_SUBSTRATE: ReconciledEpic = {
 		"ACTIVE — closed substrate + open frontier (typecheck umbrella partially open at CI parity + code-coverage baseline still open)",
 	lifecycle: "ACTIVE",
 	priority: "P1",
+	source_priority: "P1",
 	exit_criteria: [
 		"Vitest baseline regresses (any failure count > 0).",
 		"Runtime-task-progression defect reproduces at the canonical seam.",
@@ -440,7 +419,7 @@ export const EPIC_QUALITY_SUBSTRATE: ReconciledEpic = {
 	],
 	items: [
 		{
-			item_id: "EPIC-CLINEMM-QUALITY-SUBSTRATE/TYPECHECK-ZERO-BASELINE01",
+			item_id: "TYPECHECK-ZERO-BASELINE01",
 			title:
 				"TYPECHECK-ZERO-BASELINE01 — typecheck zero-diagnostic baseline (CI parity leg)",
 			description:
@@ -449,10 +428,10 @@ export const EPIC_QUALITY_SUBSTRATE: ReconciledEpic = {
 			original_status: "CLOSED at local canonical seam; OPEN at CI parity",
 			lifecycle: "BLOCKED",
 			priority: "P1",
+			source_priority: "P1",
 			qualification: "PARTIAL",
 			criteria: [],
 			criteria_coverage: "UNKNOWN",
-			dependencies: [],
 			dependency_coverage: "COMPLETE",
 			blockers: [
 				"The CI-parity leg is tracked under `EPIC-CLINEMM-GITHUB-ACTIONS01`; the workflow does not currently gate the canonical tsc command.",
@@ -475,18 +454,19 @@ export const EPIC_QUALITY_SUBSTRATE: ReconciledEpic = {
 			],
 		},
 		{
-			item_id: "EPIC-CLINEMM-QUALITY-SUBSTRATE/CODE-COVERAGE-BASELINE01",
+			item_id: "CODE-COVERAGE-BASELINE01",
 			title: "CODE-COVERAGE-BASELINE01 — code-coverage baseline",
 			description:
 				"Status: OPEN / HIGH. The ratchet ACT (`CODE-COVERAGE-RATCHET01`) is closed and ready to enforce non-regression once the baseline is set; the baseline itself is not yet fixed.",
 			workstream: "quality-substrate",
 			original_status: "OPEN / HIGH",
 			lifecycle: "OPEN",
-			priority: "HIGH",
+			priority: "P1",
+			source_priority: "HIGH",
+			relationships: [],
 			qualification: "UNQUALIFIED",
 			criteria: [],
 			criteria_coverage: "UNKNOWN",
-			dependencies: [],
 			dependency_coverage: "COMPLETE",
 			blockers: [],
 			current_act: "ACT-CLINEMM-CODE-COVERAGE-BASELINE01",

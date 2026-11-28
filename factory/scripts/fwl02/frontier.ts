@@ -26,7 +26,10 @@ interface FrontierEntry {
 	readonly title: string;
 	readonly workstream: string;
 	readonly lifecycle: string;
+	/** The NORMALIZED priority (P0/P1/P2/P3). */
 	readonly priority: string | null;
+	/** The source's OWN priority wording, VERBATIM. */
+	readonly source_priority: string | null;
 	readonly original_status: string | null;
 	readonly qualification: string;
 	readonly current_act: string | null;
@@ -54,6 +57,7 @@ const FRONTIER_ENTRIES: readonly FrontierEntry[] = [
 		workstream: "file-tool-workspace-realpath-authority",
 		lifecycle: "ACTIVE",
 		priority: "P0",
+		source_priority: "P0",
 		original_status: "OPEN (RECON lane)",
 		qualification: "UNQUALIFIED",
 		current_act: "ACT-CLINEMM-FILE-TOOL-WORKSPACE-REALPATH-AUTHORITY-RECON01",
@@ -71,7 +75,8 @@ const FRONTIER_ENTRIES: readonly FrontierEntry[] = [
 		title: "MCP auto-approval-off authority recon",
 		workstream: "approval-mcp-authority",
 		lifecycle: "OPEN",
-		priority: "P0-if-reproduced",
+		priority: "P1",
+		source_priority: "P0-if-reproduced",
 		original_status: "OPEN",
 		qualification: "UNQUALIFIED",
 		current_act: "ACT-CLINEMM-MCP-AUTOAPPROVE-OFF-AUTHORITY-RECON01",
@@ -89,7 +94,8 @@ const FRONTIER_ENTRIES: readonly FrontierEntry[] = [
 		title: "Editor/tool YOLO confirmation-UI recon",
 		workstream: "approval-protection",
 		lifecycle: "ACTIVE",
-		priority: "HIGH",
+		priority: "P1",
+		source_priority: "HIGH",
 		original_status: "NEXT / HIGH",
 		qualification: "UNKNOWN",
 		current_act: "ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01",
@@ -108,7 +114,8 @@ const FRONTIER_ENTRIES: readonly FrontierEntry[] = [
 		title: "Classic (non-Seatbelt) approval protection recon",
 		workstream: "approval-protection",
 		lifecycle: "OPEN",
-		priority: "HIGH",
+		priority: "P1",
+		source_priority: "HIGH",
 		original_status: "OPEN / HIGH",
 		qualification: "UNQUALIFIED",
 		current_act: "ACT-CLINEMM-CLASSIC-PROTECTION-RECON01",
@@ -121,21 +128,23 @@ const FRONTIER_ENTRIES: readonly FrontierEntry[] = [
 		note: "The next-frontier after Safe-YOLO is fully closed. Unblocked by `SEATBELT-DEFAULT-ON01` closure (now satisfied) — the source states the blocker is resolved, so this is NOT blocked.",
 	},
 	{
-		item_id: "EPIC-CLINEMM-SAFE-YOLO-SEATBELT/HOST-TEST-RUNNER",
+		item_id: "EPIC-CLINEMM-HOST-TEST-INFRASTRUCTURE/HOST-TEST-RUNNER",
 		title: "HOST-TEST RUNNER — host-orchestrated end-to-end test runner",
-		workstream: "safe-yolo-seatbelt",
+		workstream: "host-test-infrastructure",
 		lifecycle: "OPEN",
-		priority: "HIGH",
+		priority: "P1",
+		source_priority: "HIGH",
 		original_status: "OPEN / HIGH",
 		qualification: "UNQUALIFIED",
 		current_act: null,
 		blockers: [],
 		dependencies: [],
 		source_paths: [
-			".factory/epics/safe-yolo-seatbelt.md",
 			".factory/epics/host-test-infrastructure.md",
+			".factory/epics/safe-yolo-seatbelt.md",
+			".factory/epics/approval-protection.md",
 		],
-		note: "Board row 18, `HOST_REQUIRED`. The canonical detail file is host-test-infrastructure.md; the safe-yolo and approval-protection rows are explicit cross-links to the same obligation. Must be authored as a NEW ACT — do NOT roll the runner into an existing closed ACT, which would invalidate closure evidence.",
+		note: "Board row 18, `HOST_REQUIRED`. The canonical detail file — and therefore the AUTHORITATIVE owner of this obligation — is host-test-infrastructure.md; the safe-yolo and approval-protection rows are SECOND REPRESENTATIONS of the same obligation, preserved in the reconciliation record and the source accounting, and they carry no separate lifecycle authority. Must be authored as a NEW ACT — do NOT roll the runner into an existing closed ACT, which would invalidate closure evidence.",
 	},
 	{
 		item_id: "EPIC-CLINEMM-SAFE-YOLO-SEATBELT/R5-MANUAL-APPROVAL-LANE",
@@ -143,6 +152,7 @@ const FRONTIER_ENTRIES: readonly FrontierEntry[] = [
 		workstream: "safe-yolo-seatbelt",
 		lifecycle: "OPEN",
 		priority: "P0",
+		source_priority: "P0",
 		original_status: "OPEN",
 		qualification: "UNQUALIFIED",
 		current_act: null,
@@ -157,7 +167,8 @@ const FRONTIER_ENTRIES: readonly FrontierEntry[] = [
 		title: "Runtime task progression recon",
 		workstream: "runtime-task-progression",
 		lifecycle: "OPEN",
-		priority: "HIGH",
+		priority: "P1",
+		source_priority: "HIGH",
 		original_status: "HIGH",
 		qualification: "UNKNOWN",
 		current_act: "ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01",
@@ -172,7 +183,8 @@ const FRONTIER_ENTRIES: readonly FrontierEntry[] = [
 		title: "Cancel-affordance authority recon",
 		workstream: "runtime-task-progression",
 		lifecycle: "OPEN",
-		priority: "HIGH",
+		priority: "P1",
+		source_priority: "HIGH",
 		original_status: "HIGH — partial",
 		qualification: "INSUFFICIENT",
 		current_act: null,
@@ -190,6 +202,7 @@ const FRONTIER_ENTRIES: readonly FrontierEntry[] = [
 		workstream: "context-compaction-token-accounting",
 		lifecycle: "ACTIVE",
 		priority: "P1",
+		source_priority: "P1",
 		original_status: "OPEN 2026-09-02; RECON_ONLY",
 		qualification: "PARTIAL",
 		current_act: "ACT-CLINEMM-COMPACTION-HEADER-BAR-FRESHNESS-RECON01",
@@ -208,7 +221,8 @@ const FRONTIER_ENTRIES: readonly FrontierEntry[] = [
 		title: "Code-coverage baseline",
 		workstream: "quality-substrate",
 		lifecycle: "OPEN",
-		priority: "HIGH",
+		priority: "P1",
+		source_priority: "HIGH",
 		original_status: "OPEN / HIGH",
 		qualification: "UNQUALIFIED",
 		current_act: "ACT-CLINEMM-CODE-COVERAGE-BASELINE01",
@@ -226,6 +240,7 @@ const FRONTIER_ENTRIES: readonly FrontierEntry[] = [
 		workstream: "quality-substrate",
 		lifecycle: "BLOCKED",
 		priority: "P1",
+		source_priority: "P1",
 		original_status: "CLOSED at local canonical seam; OPEN at CI parity",
 		qualification: "PARTIAL",
 		current_act: null,
@@ -245,6 +260,7 @@ const FRONTIER_ENTRIES: readonly FrontierEntry[] = [
 		workstream: "product-config-branding",
 		lifecycle: "BLOCKED",
 		priority: "P1",
+		source_priority: "P1",
 		original_status: "OPEN / HOLD_FOR_EXECUTION",
 		qualification: "UNKNOWN",
 		current_act: "ACT-CLINEMM-TASK-COST-TRUTH-RECON01",
@@ -262,6 +278,7 @@ const FRONTIER_ENTRIES: readonly FrontierEntry[] = [
 		workstream: "product-config-branding",
 		lifecycle: "BLOCKED",
 		priority: "P2",
+		source_priority: "P2",
 		original_status: "OPEN / HOLD_FOR_EXECUTION",
 		qualification: "PARTIAL",
 		current_act: "ACT-CLINEMM-UPSTREAM-SETTINGS-SURFACE-PARITY-RECON01",
@@ -281,6 +298,7 @@ const FRONTIER_ENTRIES: readonly FrontierEntry[] = [
 		workstream: "architecture",
 		lifecycle: "BLOCKED",
 		priority: "P2",
+		source_priority: "P2",
 		original_status: "OPEN",
 		qualification: "UNKNOWN",
 		current_act: null,
@@ -298,6 +316,7 @@ const FRONTIER_ENTRIES: readonly FrontierEntry[] = [
 		workstream: "factory-infrastructure",
 		lifecycle: "OPEN",
 		priority: "P2",
+		source_priority: "P2",
 		original_status: "OPEN (P2, non-blocking)",
 		qualification: "UNQUALIFIED",
 		current_act: "ACT-CLINEMM-GIT-SAFETY-LOCAL-FORCE-PUSH-GUARD01",
@@ -315,6 +334,7 @@ const FRONTIER_ENTRIES: readonly FrontierEntry[] = [
 		workstream: "distribution-ci",
 		lifecycle: "OPEN",
 		priority: "P2",
+		source_priority: "P2",
 		original_status: "OPEN",
 		qualification: "UNQUALIFIED",
 		current_act: "ACT-CLINEMM-GITHUB-ACTIONS-RECON01",
@@ -332,7 +352,8 @@ const FRONTIER_ENTRIES: readonly FrontierEntry[] = [
 		title: "Tool/command runtime-correctness recon",
 		workstream: "tool-runtime-reliability",
 		lifecycle: "OPEN",
-		priority: "HIGH",
+		priority: "P1",
+		source_priority: "HIGH",
 		original_status: "HIGH",
 		qualification: "UNKNOWN",
 		current_act: null,
@@ -347,6 +368,7 @@ const FRONTIER_ENTRIES: readonly FrontierEntry[] = [
 		workstream: "dynamic-editing-backends",
 		lifecycle: "OPEN",
 		priority: "P1",
+		source_priority: "P1",
 		original_status: "OPEN",
 		qualification: "UNQUALIFIED",
 		current_act: null,
@@ -361,6 +383,7 @@ const FRONTIER_ENTRIES: readonly FrontierEntry[] = [
 		workstream: "product-config-branding",
 		lifecycle: "OPEN",
 		priority: "P2",
+		source_priority: "P2",
 		original_status: "OPEN",
 		qualification: "UNQUALIFIED",
 		current_act: "ACT-CLINEMM-BRANDING-ACTIVITYBAR-ICON01",
@@ -412,6 +435,12 @@ export function buildFrontierMarkdown(
 		lines.push(`- **Workstream.** ${entry.workstream}`);
 		lines.push(`- **Lifecycle.** ${entry.lifecycle}`);
 		lines.push(`- **Priority.** ${entry.priority ?? "(not stated)"}`);
+		if (
+			entry.source_priority !== null &&
+			entry.source_priority !== entry.priority
+		) {
+			lines.push(`- **Source priority (verbatim).** ${entry.source_priority}`);
+		}
 		lines.push(
 			`- **Original status (verbatim).** ${entry.original_status ?? "(not stated)"}`,
 		);

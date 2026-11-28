@@ -4,7 +4,7 @@
   "title": "Tool runtime reliability",
   "original_status": "OPEN — fresh epic opened at FUTURE-BACKLOG-CENSUS01-CORRECTION01. No ACT authored yet; the items below are working labels (canonical ACT IDs are assigned per FACT-001 in `.factory/epics/factory-infrastructure.md`).",
   "lifecycle": "OPEN",
-  "priority": "HIGH",
+  "priority": "P1",
   "exit_criteria": [
     "A cluster reproduces at the local canonical seam (→ the cluster ACT gets unblocked and authored as a bounded repair ACT).",
     "An upstream `RELATED_TOOL_RUNTIME` issue graduates from RADAR to IMPORT against this epic.",
@@ -12,13 +12,14 @@
   ],
   "items": [
     {
-      "item_id": "EPIC-CLINEMM-TOOL-RUNTIME-RELIABILITY/TOOL-RUNTIME-RELIABILITY-RECON01",
+      "schema_version": 1,
+      "item_id": "TOOL-RUNTIME-RELIABILITY-RECON01",
       "title": "TOOL-RUNTIME-RELIABILITY-RECON01 — tool/command runtime-correctness recon",
       "description": "First ACT: bounded RECON + exact live RED. The deliverable is a markdown document that (a) characterizes each of the 7 clusters against local ClineMM evidence, (b) promotes only the clusters that pass the strict destination-contract test against this epic, (c) leaves the rest as RADAR with a clear re-promotion path, (d) does NOT pre-classify cause. No production change in this ACT. Scope boundary: tool-runtime-reliability = \"did an individual tool/command execute, return, time out, parse, route, retry, terminate correctly?\"; runtime-task-progression = \"after that event, did the overall agent/task make the correct state transition and continue?\"; tool-execution-semantics = \"telemetry classification of what the tool was (mechanism / outcome / duration / effect-class / purpose)\". These three questions are separately answerable and must NOT be merged into a single epic. Correction-03 cluster inventory: terminal-timeout / wait lifecycle 9; tool-call parsing 5; MCP routing / approval / validation 3; shell integration 2; tool loop / retry 2; file-edit reliability 1; tool-approval UX 1 (total 23 upstream issues, recorded as RADAR / cluster-assigned; none graduated to IMPORT yet).",
       "workstream": "tool-runtime-reliability",
       "original_status": "HIGH",
       "lifecycle": "OPEN",
-      "priority": "HIGH",
+      "priority": "P1",
       "qualification": "UNKNOWN",
       "criteria": [],
       "criteria_coverage": "UNKNOWN",

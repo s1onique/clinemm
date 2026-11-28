@@ -2,6 +2,24 @@
   "schema_version": 1,
   "records": [
     {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-ACTIVE-COMMAND-GAUGE-LIVE-PROJECTION-DISCRIMINATOR01",
+      "original_verdict": "PASS_SOURCE_LEVEL_GAUGE_CHAIN (LIVE_GREEN = PENDING_OPERATOR_QUALIFICATION) (CASE_B)",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 12310,
+          "end_line": 13277,
+          "sha256": "27a0782cd78d66701e5e73158199202a304d8be77237574f71af4bcf58a2d813"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-ADJUDICATION-CONTINUITY-RED-01",
       "original_verdict": "RED_REPRODUCED_BOUNDARY_CLASSIFIED",
       "epic_id": null,
@@ -18,6 +36,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-ADJUDICATION-CONTINUITY-REPAIR-01",
       "original_verdict": "HALT_TRUST_BOUNDARY_UNRESOLVED",
       "epic_id": null,
@@ -34,6 +53,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-IMPLEMENT-01-CORRECTION01",
       "original_verdict": "PASS_CORRECTION_PROVENANCE_BOUND",
       "epic_id": null,
@@ -50,6 +70,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01",
       "original_verdict": "PASS_PROBE_CONTINUITY_STRUCTURAL",
       "epic_id": null,
@@ -66,6 +87,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-ADJUDICATION-OUTPUT-CONTRACT-PROBE-01-CORRECTION01",
       "original_verdict": "PASS_CORRECTION_EVIDENCE_RECONCILED",
       "epic_id": null,
@@ -82,6 +104,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01-CORRECTION01",
       "original_verdict": "PASS_STRUCTURAL_ONLY",
       "epic_id": null,
@@ -98,6 +121,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-ADJUDICATION-VSCODE-ACTIVATION-01-CORRECTION02",
       "original_verdict": "PASS_SECURITY_BOUNDARY_STRUCTURAL",
       "epic_id": null,
@@ -114,6 +138,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-AUTOMATIC-INCIDENT-CAPTURE-AND-EXPORT01-CORRECTION01",
       "original_verdict": "PASS_EVIDENCE_PROVENANCE_CORRECTION",
       "epic_id": null,
@@ -130,6 +155,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-01",
       "original_verdict": "GO_AUTONOMOUS_RECOVERY_R1_DOGFOOD",
       "epic_id": null,
@@ -146,6 +172,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-AUTONOMOUS-EXECUTION-RECOVERY-R2-01",
       "original_verdict": "GO_R2_BOUNDED_OBJECTIVE_DOGFOOD",
       "epic_id": null,
@@ -162,6 +189,434 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-AWAITING-FOLLOWUP-USER-ACTION-SEMANTICS01",
+      "original_verdict": "BOUNDED_PRODUCT_REPAIR_CLOSURE",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 9945,
+          "end_line": 10039,
+          "sha256": "6efe1897264a47ed85eae773e1d401d2fa16e043d3d8871e7daa3fd41aaf09cb"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-BACKGROUND-COMMAND-AGENT-CONTINUATION01",
+      "original_verdict": "HALT_PRODUCT_CONTRACT_REQUIRED",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 13860,
+          "end_line": 14143,
+          "sha256": "b6690b2c9999e34d5ef49fdbbe85285dd8cd73e08d9801dde342cf2bee76ec29"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-BACKGROUND-COMMAND-CANCELLATION-PROVENANCE01",
+      "original_verdict": "LIVE_RESULT_CASE_CP3_CALLER_ABORT_SIGNAL",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 13514,
+          "end_line": 13769,
+          "sha256": "b29cad04e9c97f03cdc1bedfcbf0bd16824456110c723897fcef794fd41cb3b5"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01",
+      "original_verdict": "CAPTURE_INSUFFICIENT",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 13278,
+          "end_line": 13513,
+          "sha256": "bdcafcf24f865c9deec3c01f4beac0c4fcd9b7b12275a29a7d28ed9d9dd4b39f"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01",
+      "original_verdict": "RED_REPRODUCED_ABLATION_PENDING + BOUNDED REPAIR",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 13770,
+          "end_line": 13817,
+          "sha256": "2d22ddb900f826e5ed0a2f26838e0d189772c6eb9b58b4e665c1ca220d74c7db"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 13818,
+          "end_line": 13859,
+          "sha256": "a8aba9a011c66c4443f1941b4eef3064c55292d86c6e85a05534a1f446f7b6f5"
+        }
+      ],
+      "reconciliation": "CONFLICTING"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01",
+      "original_verdict": "PASS_BACKGROUND_TERMINAL_CARD_PROJECTION_REPAIRED",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 14144,
+          "end_line": 14644,
+          "sha256": "812fd9701e33adab238b1d74520d28a95a10d22df3d78a45981f8281b36a645a"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CONTINUATION01",
+      "original_verdict": "PASS_BACKGROUND_TERMINAL_CONTINUATION_REPAIRED",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 8371,
+          "end_line": 8446,
+          "sha256": "352ce973472634ba7e2d5bcb15f6bb982f18a2fa765eb0ba5aed42435131a328"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-PRESENTATION-ARBITRATION01",
+      "original_verdict": "BOUNDED REPAIR",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 19195,
+          "end_line": 19782,
+          "sha256": "1b9d3b8f9eff6b67d1c0c6f57f93a41fc3c7ae7f14021d69f886cea599a2c25a"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01",
+      "original_verdict": "PASS_BACKGROUND_COMPLETION_BARRIER (GREEN + adversarial + integration closed-loop; LIVE-A..D deferred)",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 20724,
+          "end_line": 20913,
+          "sha256": "d8269219ae9fcbe36355a94814d5ead931dbcb08eb38a7bb1ce0ae13cae1d92d"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 20914,
+          "end_line": 21011,
+          "sha256": "049b92da5eaee57b929739fa06cda03cf25123af8b62a87a8a60d88cd4255c5d"
+        }
+      ],
+      "reconciliation": "CONFLICTING"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION01",
+      "original_verdict": "PASS_CONSUMPTION_BARRIER",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 21012,
+          "end_line": 21143,
+          "sha256": "db5427e068a9021027eb39f13c6545ee1598084f14f7e1757440fec98d4c41ac"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 21144,
+          "end_line": 21164,
+          "sha256": "e486e7b9979c8dad4d62a071477aec61e2603659add0b0ef5e3110ff25f27fad"
+        }
+      ],
+      "reconciliation": "CONFLICTING"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION02",
+      "original_verdict": "PASS_NOTIFY_FALSE_CONSUMER",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 21165,
+          "end_line": 21282,
+          "sha256": "ac8f0433f7942b231edfa2a5c058c8244c5fdb74e645473cd29a91cdc10d75b4"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION03",
+      "original_verdict": "PASS_FINALIZATION_AUTHORITY",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 21283,
+          "end_line": 21384,
+          "sha256": "f0e889fe8217c54faedb227b12b1d4d4ee69cb384870d105c2c23cbb80629f62"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION04",
+      "original_verdict": "PASS_TRIGGER_AT_TERMINAL_IDLE",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 21385,
+          "end_line": 21493,
+          "sha256": "96562878d20e9a0f3f724f0374a71dca8757f2ff0abb5c0aa475805f6fd97aa5"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-BACKGROUND-COMPLETION-CONSUMER-AVAILABILITY01",
+      "original_verdict": "PASS_FINALIZATION_CONSUMER_AVAILABLE",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 21585,
+          "end_line": 21743,
+          "sha256": "652e219458e3455ef155aeda514f98f96740ec03c512c8f104a3bde12fff88f0"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-BACKGROUND-COMPLETION-LIVE01",
+      "original_verdict": "PASS_LIVE_FINALIZATION_MECHANISM",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 21494,
+          "end_line": 21584,
+          "sha256": "5a97c28f094cd9cac4dddf5d885f0323f34adaef3179f710e06d215a7935d690"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-BACKGROUND-EXEC-EPERM-QUALIFICATION01-CORRECTION01",
+      "original_verdict": "PASS_CORRECTION_WITH_ONE_NEW_FIX",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 34496,
+          "end_line": 34667,
+          "sha256": "3c247b103602cd3ee40fd9bd84f14b546d2af21ae0b22ca8089251b994fb9d11"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-BACKGROUND-EXEC-LAUNCHD-BOUNDARY-RECON01",
+      "original_verdict": "CAPTURE_INSUFFICIENT",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 34668,
+          "end_line": 34821,
+          "sha256": "072dad60e1dfb2f1c64770a3d754c2de752e2e0832eca4d86079d37ce640bd87"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-BACKGROUND-EXEC-SAME-SANDBOX-SIGNAL-REPAIR01",
+      "original_verdict": "REPAIR_IMPLEMENTED_AND_STRUCTURALLY_QUALIFIED",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 35155,
+          "end_line": 35438,
+          "sha256": "c8b79bab9dc28c600f1b49e3f4a93458771905c699de666a33b0f934d127e40f"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-BACKGROUND-EXEC-SIGNAL-AUTHORITY-BOUNDARY-RECON02",
+      "original_verdict": "READY_FOR_OPERATOR_PROBES",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 34822,
+          "end_line": 34978,
+          "sha256": "7249a41bfb7e5c70a15fa5117630515b86e20b18e005f3b46ce82eaa512dd8e3"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 34979,
+          "end_line": 35057,
+          "sha256": "d5ee1d0ef15c877d6449f261e8b5e55889299ed13feaf54eef771576280294f4"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 35058,
+          "end_line": 35154,
+          "sha256": "a57d04475f22500ed16649b8a0f36dd0c928a9f4c26f17213f9a55fc74179266"
+        }
+      ],
+      "reconciliation": "CONFLICTING"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01",
+      "original_verdict": "LIVE_FIRST_IDLE_WRITER_BOUND",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 9753,
+          "end_line": 9838,
+          "sha256": "5f1dc02bd59bfbafb4ebcd9a07874a68c42632e145a4cab073d9e19677758618"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 9839,
+          "end_line": 9944,
+          "sha256": "5c03ac900cd93af7092bf315cf0f1da0a098b23da5ef4f6497361cd072454b78"
+        }
+      ],
+      "reconciliation": "CONFLICTING"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-LIVE-QUALIFICATION01",
+      "original_verdict": "CAPTURE_INSUFFICIENT[SYSTEM] (Electron sandbox blocker)",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 19943,
+          "end_line": 20064,
+          "sha256": "6335d06b5973e4bede32944b075e282625f6b104938cc404588ba67a674e7002"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01",
+      "original_verdict": "GREEN_AND_ABLATION (operator-driven dogfood + LIVE-A..D DEFERRED)",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 19783,
+          "end_line": 19942,
+          "sha256": "501d6e686de0b84e7e85ccf77ec33275010f0014697bf95ef88d8cc1969d2710"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-BACKGROUND-NOTIFY-EXACTLY-ONCE-PRESENTATION01",
+      "original_verdict": "PASS_PRESENTATION_EXACTLY_ONCE_REPAIRED",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 8126,
+          "end_line": 8259,
+          "sha256": "37dac8de2d2f153806e1cb25c333d9a00371021b37cc438f4368fb72af1ccb10"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-BCB-CAPTURE-ACTIVATION01",
       "original_verdict": "PASS_CAPTURE_ACTIVATION_FIXED + LIVE_QUALIFICATION_BLOCKED_BY_ENV",
       "epic_id": null,
@@ -178,6 +633,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-BCB-CAPTURE01",
       "original_verdict": "PASS_CAPTURE_DELIVERED + LIVE_QUALIFICATION_BLOCKED_BY_ENV",
       "epic_id": null,
@@ -194,6 +650,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-BCB-CAUSAL-FLIGHT-RECORDER01",
       "original_verdict": "PASS_STRUCTURAL_READY_FOR_LIVE",
       "epic_id": null,
@@ -210,6 +667,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-BCB-OBSERVABILITY-REPAIR01",
       "original_verdict": "PASS_REPAIR_STRUCTURAL_LIVE_PENDING",
       "epic_id": null,
@@ -226,6 +684,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-BEFOREMODEL-OPERATOR-CHECKPOINT-01",
       "original_verdict": "PASS_STRUCTURAL_ONLY",
       "epic_id": null,
@@ -242,6 +701,24 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-C10-FILTER-ABLATION01",
+      "original_verdict": "PASS_C10_ABLATION_RETAINED (bounded correction ROUND 2)",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 20065,
+          "end_line": 20179,
+          "sha256": "d435d93d462c835d09882d1a8216ac03fcae6f86d0c8ffe79b85227908357a55"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-C9C10-MERMAID-RENDER-FIX01",
       "original_verdict": "CLOSED_CLEAN",
       "epic_id": null,
@@ -258,6 +735,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-CACHE-PRESERVING-AUXILIARY-INFERENCE-RECON-01",
       "original_verdict": "GO_PCK_PREFIX_PRESERVING_IMPLEMENTATION",
       "epic_id": null,
@@ -274,6 +752,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-CANCEL-LIVENESS-DISCRIMINATOR01",
       "original_verdict": "IN PROGRESS",
       "epic_id": null,
@@ -296,6 +775,7 @@
       "reconciliation": "CONFLICTING"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-CANONICAL-EVIDENCE-CONTINUITY-LIVE-01",
       "original_verdict": "PASS_CANONICAL_CONTINUITY_LIVE",
       "epic_id": null,
@@ -312,6 +792,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-CMP05-TERMINAL-NEGATIVE-SIGNAL-PRECEDENCE-01",
       "original_verdict": "GO_CMP05_TERMINAL_NEGATIVE_SIGNAL_PRECEDENCE",
       "epic_id": null,
@@ -328,6 +809,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-CMP09-CONTEXT-BUDGET-AUTHORITY-01",
       "original_verdict": "GO_CMP09_CONTEXT_BUDGET_AUTHORITY + MEASUREMENT_DIVERGENCE_NOT_CAUSAL",
       "epic_id": null,
@@ -344,6 +826,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-CMP09-INTEGRATED-AUTHORITY-CLOSURE-01",
       "original_verdict": "GO_CMP09_INTEGRATED_AUTHORITY_CLOSURE",
       "epic_id": null,
@@ -360,6 +843,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-COMMAND-PROCESS-OUTCOME-TRACE-BRIDGE01",
       "original_verdict": "PASS_STRUCTURAL_VERIFIED",
       "epic_id": null,
@@ -376,6 +860,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-COMMAND-PROCESS-OUTCOME-TRACE-BRIDGE01-CORRECTION01",
       "original_verdict": "PASS_STRUCTURAL_VERIFIED_CORRECTION01",
       "epic_id": null,
@@ -392,6 +877,24 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01",
+      "original_verdict": "HALT_ACTIVE_COMMAND_GAUGE_START_DELTA_NOT_OBSERVED + BOUNDED FIX CYCLE",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 8447,
+          "end_line": 8530,
+          "sha256": "01825243e7a22a1cafeaf9e22d446e21a6fc13892e9d763f2daa9ebb030058fa"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-COMPACTION-BOUNDED-EVIDENCE-INPUT-CONTRACT-RECON-01",
       "original_verdict": "GO_BOUNDED_SUMMARIZER_INPUT_REPAIR",
       "epic_id": null,
@@ -408,6 +911,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-COMPACTION-DECISION-CAPTURE01",
       "original_verdict": "PASS_WITH_NONBLOCKING_RESIDUE",
       "epic_id": null,
@@ -424,6 +928,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-CORRECTION01",
       "original_verdict": "VERIFIED_EVIDENCE_ATTRIBUTION_AND_PRIVACY_CORRECTED",
       "epic_id": null,
@@ -440,6 +945,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-CORRECTION02",
       "original_verdict": "VERIFIED_EVIDENCE_SAFETY_COMPLETE",
       "epic_id": null,
@@ -456,6 +962,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-COMPACTION-EVIDENCE-CONTINUITY-RECON01",
       "original_verdict": "VERIFIED_OUTCOME_CONTINUITY_REPAIRED",
       "epic_id": null,
@@ -472,6 +979,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01",
       "original_verdict": "PASS_STRUCTURAL_ONLY",
       "epic_id": null,
@@ -488,6 +996,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-01-CORRECTION01",
       "original_verdict": "PASS_STRUCTURAL_ONLY",
       "epic_id": null,
@@ -504,6 +1013,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-CONTAINMENT-01",
       "original_verdict": "PASS_STRUCTURAL_ONLY (automatic feature WITHDRAWN)",
       "epic_id": null,
@@ -520,6 +1030,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-COMPACTION-EVIDENCE-FIDELITY-SECURITY-01",
       "original_verdict": "PASS_STRUCTURAL_ONLY",
       "epic_id": null,
@@ -536,6 +1047,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-COMPACTION-STABLE-PREFIX-REPAIR-01",
       "original_verdict": "PASS_STABLE_PREFIX_REPAIR",
       "epic_id": null,
@@ -552,6 +1064,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-COMPACTION-SUMMARY-CHURN-01",
       "original_verdict": "EVIDENCE_RESTORATION_CAUSAL",
       "epic_id": null,
@@ -568,6 +1081,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-COMPACTION-TRIGGER-LIVE-ADJUDICATION-01",
       "original_verdict": "PASS_OBSERVED_TRIGGER_CAUSALITY",
       "epic_id": null,
@@ -584,6 +1098,473 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-COMPLETED-TASK-COMPACTION-AUTHORITY01",
+      "original_verdict": "PASS_STRUCTURAL_ONLY",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 35439,
+          "end_line": 35522,
+          "sha256": "9b63c909396de3f202057489dadfcb45165903de0d8c0c6cfb5465c4aa57c60f"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-COMPLETION-AUTHORITY-CCARD-COMMIT-STAGE-BOUNDARY-MISBOUND-REPAIR01",
+      "original_verdict": "HALT_CCARD_COMMIT_STAGE_MISBOUND",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 25031,
+          "end_line": 25297,
+          "sha256": "0a22ee2ff50ef7802c0f96244778dc5a78d269edb07473a6b477daf97e20a0b7"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-COMPLETION-AUTHORITY-EFFECT-DISCRIMINATOR01",
+      "original_verdict": "PASS_AUTHORITY_EFFECT_REPAIR + HALT_LIVE_NOT_QUALIFIED",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 26300,
+          "end_line": 26555,
+          "sha256": "4d96a8f4330591b3c0c005a8de949441c4f0b103f4bfdb75372fe6b866e76c4f"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-COMMIT-WHILE-RUN-ACTIVE-DISCRIMINATOR01",
+      "original_verdict": "VERDICT=H1_ELM_TOO_STRICT",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 24089,
+          "end_line": 24126,
+          "sha256": "37f35417853a04d52ce52ab47716e133748c47f616e0613bc91f3ca74c8f3fb5"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-COMMIT-WHILE-RUN-ACTIVE-REPAIR01",
+      "original_verdict": "VERDICT=PASS_ELM_COMMIT_WHILE_RUN_ACTIVE_REPAIR",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 24127,
+          "end_line": 24253,
+          "sha256": "237a0119e9e3d4d2df66fd9390468397f97a2c3b31b56b20a4956c797498b185"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DEFAULT01-RECON-OWNERSHIP-CLEANUP",
+      "original_verdict": "RECON_PASS_OWNERSHIP_INVENTORY",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 26556,
+          "end_line": 26644,
+          "sha256": "28343decfecf019ff87c98f01c31ce6eff1c8dc0af72fbd25d1e107c0969a024"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-DEFAULT01-REMOVE-LEGACY-TS-AUTHORITY",
+      "original_verdict": "IMPLEMENTATION_PASS_LEGACY_TS_AUTHORITY_REMOVED",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 26645,
+          "end_line": 26695,
+          "sha256": "778d54aab2617a4f2d708a1fbf2b0cd93784d47ce9290fd7f86c191ab53173f6"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-HISTORICAL-REPLAY01",
+      "original_verdict": "CAPTURE_INSUFFICIENT",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 7474,
+          "end_line": 7475,
+          "sha256": "5152dd890b0084e34780a7ac77c70b4ec8e7e2c14da70464031a159511e0e05f"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 7476,
+          "end_line": 7542,
+          "sha256": "5152dd890b0084e34780a7ac77c70b4ec8e7e2c14da70464031a159511e0e05f"
+        }
+      ],
+      "reconciliation": "AMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01",
+      "original_verdict": "HALT_AUTHORITY_NOT_CAUSAL",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 24440,
+          "end_line": 24569,
+          "sha256": "a9a95fad26255270d4e6deadfc3f1812e2c58d5918b2140e4df6554dd663859a"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION01-REAL-ELM-PROVIDER",
+      "original_verdict": "PASS_FIRST_ELM_AUTHORITY_SEAM",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 24570,
+          "end_line": 24643,
+          "sha256": "5e592f76aca54aa4e4f8abda9e8fbd1bbfdef30f76d8a6638635977e5f07a3ee"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 24644,
+          "end_line": 24716,
+          "sha256": "2cf1eafcbc5c206747ebce35cbb6cff8a3683e3bac0c0946ae8c0884eae5306a"
+        }
+      ],
+      "reconciliation": "CONFLICTING"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION02-PRODUCTION-STAGE-VOCABULARY",
+      "original_verdict": "PASS_ARTIFACT_BOUND",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 24717,
+          "end_line": 25030,
+          "sha256": "4744574949991a9d8d759c581d75f041cc0e076b0ced3c9aafe5716b82f9f7af"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW01-CORRECTION02",
+      "original_verdict": "PASS_KERNEL_EXECUTABLE_GREEN / CLOSED_CLEAN / READY_FOR_HISTORICAL_REPLAY",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 24055,
+          "end_line": 24088,
+          "sha256": "f644d08b1183412f18269a4a4156558bdc6fc00a5354d1c3fe414b2d9963ed57"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW02-CORRECTION05",
+      "original_verdict": "PASS_ELM_PROJECT_CWD",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 24254,
+          "end_line": 24372,
+          "sha256": "bc1a97359f547dfb838a823554702abb279c94699794fc21aab74b6f7a59d9f2"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-COMPLETION-AUTHORITY-POST-RUN-REEVALUATION01",
+      "original_verdict": "PASS_POST_RUN_REEVALUATION_IMPLEMENTATION_AND_ARTIFACT",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 25298,
+          "end_line": 25371,
+          "sha256": "b4d82407e0328b121cb7ee035c619a5b258784014c747e361253d7933e53c36f"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-COMPLETION-AUTHORITY-POST-RUN-REEVALUATION01-CORRECTION01-PRECHECK-LIVENESS",
+      "original_verdict": "HALT_CONTINUATION_DELIVERY (precheck classified; downstream delivery unresolved)",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 25372,
+          "end_line": 25461,
+          "sha256": "cd4361640a1fd287d23c3fd172fda823288bfc39efead835fd6b21c963d0b460"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-COMPLETION-AUTHORITY-SESSION-LIFECYCLE01-CALLER-REASON-DISCRIMINATOR",
+      "original_verdict": "INSTRUMENTED_BUILD",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 25800,
+          "end_line": 25877,
+          "sha256": "62a6e5eacc52057046f79da91485b55bb1328a143dbd9c66b31dd15f267c0626"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 25878,
+          "end_line": 25974,
+          "sha256": "96afe5fb32ce27f515eb2b7823e7f6ce788bc6557ab682dfd0b0b0856748d443"
+        }
+      ],
+      "reconciliation": "CONFLICTING"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-COMPLETION-AUTHORITY-SESSION-LIFECYCLE01-CORRECTION03-MCP-TOOL-RESTART-CAUSAL-REPRODUCTION",
+      "original_verdict": "PASS_FIRST_ELM_AUTHORITY_SEAM",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 25975,
+          "end_line": 26054,
+          "sha256": "e08b91ae228e5d1070a2b83433cee7175069bae8e221c48d21087230dbb9e5ac"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 26055,
+          "end_line": 26131,
+          "sha256": "3588d773617caca87f24f75dea7ed6b1cf94bd76fcbcd8896aac61571823fa67"
+        }
+      ],
+      "reconciliation": "CONFLICTING"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-COMPLETION-AUTHORITY-SESSION-LIFECYCLE01-CORRECTION04-P1-CONSERVATION-SUFFIX",
+      "original_verdict": "P1 FIX ONCE",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 26132,
+          "end_line": 26299,
+          "sha256": "891f45097915219e8e424a6cd4ca260c73650743afcde00da5aa34aa030abb7c"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01",
+      "original_verdict": "IN_PROGRESS",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 7357,
+          "end_line": 7420,
+          "sha256": "61b42839511e16333e0de908388d15348f21c729b4ba28a8671b533296bb9bbc"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01-CORRECTION01",
+      "original_verdict": "PASS_CAPTURE_EXTENSION_GREEN",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 7421,
+          "end_line": 7473,
+          "sha256": "8bbadf450cea4dc1d306019dc0085d842d73d3b788c55ce88d21a5b2c505ff1e"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01",
+      "original_verdict": "HALT_RED_NOT_REPRODUCED",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 25462,
+          "end_line": 25588,
+          "sha256": "708b0c4b466bc2cacd9e7d9f4723c11231f97c98a8610553d9e5e842be61940d"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION01-LIVE-CALLBACK-OUTCOME",
+      "original_verdict": "INSTRUMENTED_BUILD",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 25589,
+          "end_line": 25664,
+          "sha256": "b3c66ea6c6eab47c33d5d3a46683cbe34652d013075458d16a652c212ec0fe4e"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION02-DOGFOOD-DIAGNOSTIC-GATE-AND-ARTIFACT-BINDING",
+      "original_verdict": "INSTRUMENTED_BUILD",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 25665,
+          "end_line": 25681,
+          "sha256": "04159b0a74fd865c0c766b93c7ba1483381806e4bec311eb51f4b7918fc715a3"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION03-LIVE-UPSTREAM-CALLBACK-DISCRIMINATOR",
+      "original_verdict": "INSTRUMENTED_BUILD",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 25682,
+          "end_line": 25724,
+          "sha256": "7fa88f0c9e04a306a62664c98c08f4243f8afb8e67ba3aa75f110f4c0e2fe5a5"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-COMPLETION-CONTINUATION-DELIVERY-SEAM01-CORRECTION04-LIVE-ACTIVE-SESSION-LOOKUP-DISCRIMINATOR",
+      "original_verdict": "INSTRUMENTED_BUILD",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 25725,
+          "end_line": 25799,
+          "sha256": "c0b892f19acab256f7b950fced1c90eadc1566d5fd6ca5921246d2accacc05f6"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-COMPLETION-PRESENTATION-AUTHORITY01",
+      "original_verdict": "PASS_COMPLETION_PRESENTATION_AUTHORITY",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 7543,
+          "end_line": 7636,
+          "sha256": "14de9f5f9459672e6f67263d7ce9890c872339f7e77de04bca34754c5c03b3ad"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-COMPOSER-REASONING-EFFORT-LABEL01",
       "original_verdict": "PASS_STRUCTURAL_ONLY",
       "epic_id": null,
@@ -600,6 +1581,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-CONTAINMENT-FAILURE-PROVENANCE-RETENTION01",
       "original_verdict": "PASS_STRUCTURAL_READY_FOR_LIVE",
       "epic_id": null,
@@ -616,6 +1598,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-CONTAINMENT-LEDGER-CAUSAL-RECON01",
       "original_verdict": "PASS_RECON",
       "epic_id": null,
@@ -632,6 +1615,36 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-CONTINUATION-CARDINALITY-CORRELATION-LOSS01",
+      "original_verdict": "PASS_CONTINUATION_CORRELATION_RESTORED",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 19040,
+          "end_line": 19130,
+          "sha256": "daf52c51e9794b92599e31451d6e02172d2060391c9448d25aa591f8a959e3c9"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 19131,
+          "end_line": 19166,
+          "sha256": "832861e82c6bf028aad0595576b914e7b075e7e8b5f35f4812775b2474f94025"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 19167,
+          "end_line": 19194,
+          "sha256": "82964e2179325d9995646dfd8c4bfd1b967b915103218dc022689ebbd78f83ac"
+        }
+      ],
+      "reconciliation": "CONFLICTING"
+    },
+    {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-DIAGNOSTIC-EXPORT-PRIVACY-QUALIFICATION-01",
       "original_verdict": "PASS_EXPORT_PRIVACY_QUALIFIED",
       "epic_id": null,
@@ -648,6 +1661,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-DIAGNOSTIC-EXPORT-PRIVACY01",
       "original_verdict": "PASS",
       "epic_id": null,
@@ -664,6 +1678,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-DOGFOOD-MODEL-BEHAVIOR-TRACE-VIAPDT01",
       "original_verdict": "PASS_STRUCTURAL_ONLY",
       "epic_id": null,
@@ -680,6 +1695,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-EDITOR-REALPATH-AUTHORITY-TRIAGE01",
       "original_verdict": "PASS_INTENDED_EXTERNAL_EDIT_CONTRACT",
       "epic_id": null,
@@ -696,6 +1712,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-EDITOR-REALPATH-TEST-CONTRACT-CORRECTION01",
       "original_verdict": "PASS",
       "epic_id": null,
@@ -712,6 +1729,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-ELM-SEAM04-CORRECTION01",
       "original_verdict": "PASS_ELM_SEAM04_AUTHORITY_CUTOVER",
       "epic_id": null,
@@ -728,6 +1746,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-ELM-SEAM06-PROMPT-ADMISSION-CUTOVER",
       "original_verdict": "NOT_A_GOOD_ELM_SEAM",
       "epic_id": null,
@@ -744,6 +1763,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-ELM-SEAM07-CORRECTION01",
       "original_verdict": "PASS_ELM_SEAM07_CORRECTION01",
       "epic_id": null,
@@ -753,13 +1773,14 @@
         {
           "path": ".factory/epic-board.md",
           "start_line": 28780,
-          "end_line": 29346,
+          "end_line": 28916,
           "sha256": "25dba6e2a07f37237bc28efee1e087b8f793c65bd76dd1a905a9056377a6c1d4"
         }
       ],
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-ELM-SEAM07-LONG-HORIZON-CONTINUATION-RECON",
       "original_verdict": "PASS_ELM_SEAM07_RECON",
       "epic_id": null,
@@ -776,6 +1797,143 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-ELM-SEAM08-DEFERRED-COMPLETION-BARRIER-AUTHORITY-MIGRATION",
+      "original_verdict": "CLOSED",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 28917,
+          "end_line": 28970,
+          "sha256": "a4d9d27181bd0423767aa0ce047afd6a5d09edcc9c1caaefa1fac0dce2bf61b5"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-ELM-SEAM08.1-E3.1-AUTHORITY-CUTOVER",
+      "original_verdict": "CLOSED",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 28971,
+          "end_line": 29022,
+          "sha256": "6df44a6e1123b718058ed8efa631d00d3b6dfd9ede66a41bacee8df5189c4111"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-ELM-SEAM08.2-E3.1-PRODUCTION-CUTOVER",
+      "original_verdict": "CLOSED",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 29023,
+          "end_line": 29082,
+          "sha256": "a626ef34213016e3bf7cce47150b63195b49817d13639a4f07f2ad497a729a17"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-ELM-SEAM08.3-CORRECTION01-STALE-FALLBACK-ON-DRIFT",
+      "original_verdict": "HALT_STALE_FALLBACK_ON_DRIFT_REPAIRED",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 29273,
+          "end_line": 29346,
+          "sha256": "e6709fdb4d1126c7069821bc2846444238bfe7381417bb0f02cb10e1260730ed"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-ELM-SEAM08.3-CORRECTION01-STALE-REQUEST-CONSERVATION",
+      "original_verdict": "PASS_SEAM08.3_CORRECTION01",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 29186,
+          "end_line": 29272,
+          "sha256": "e91814f1db92a5841bba78f9531c32591b78558db1390b1cbf445f9292870772"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-ELM-SEAM08.3-E3.1-QUALIFICATION",
+      "original_verdict": "PASS_WITH_NONBLOCKING_RESIDUE",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 29083,
+          "end_line": 29185,
+          "sha256": "82e63aa9e52906b0740998b6e326821dffcd515a9706863175ddf9ec3bde35f3"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-ELM-SEAM09-TOOL-APPROVAL-LIFECYCLE-RECON",
+      "original_verdict": "PASS_ELM_SEAM09_RECON",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 30334,
+          "end_line": 30460,
+          "sha256": "e396b3a3845d9d1733dc136d78b05540cc6fad13bcb850388e0ca618aef2f4af"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-ELM-SEAM10-INTEROP-DISC",
+      "original_verdict": "NOT_A_GOOD_ELM_SEAM",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 30461,
+          "end_line": 30563,
+          "sha256": "5b44a186e4cb2ffb4e4b4d45ddc3a460329d0e7c776bf07f043d5e4f6742511b"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-ELM-SEAM11-ASYNC-AUTHORITY-RECON",
       "original_verdict": "NOT_A_GOOD_ELM_SEAM",
       "epic_id": null,
@@ -792,6 +1950,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-ELM-SEAM11-WEBVIEW-REPLICA-AUTHORITY-RECON",
       "original_verdict": "NOT_A_GOOD_ELM_SEAM",
       "epic_id": null,
@@ -808,6 +1967,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-ELM-SEAM12-DCB-LIVE-QUALIFICATION01",
       "original_verdict": "LIVE_NO_TRIGGER + PASS_BCB_REPAIR_LIVE_NO_HELD_TRIGGER",
       "epic_id": null,
@@ -824,6 +1984,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-ELM-TASK-HEADER-PROJECTION01",
       "original_verdict": "PASS_NO_NEW_ELM_MIGRATION_NEEDED (re-validation)",
       "epic_id": null,
@@ -840,6 +2001,41 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-ELMIZE-P1-BLOCKED-OUTCOME-CLASSIFICATION01",
+      "original_verdict": "PASS_NO_ELM_MIGRATION_NEEDED_HOST_OUTCOME_GAP",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 6692,
+          "end_line": 6715,
+          "sha256": "efef150c42e7b240af1d16863db3bcccd7f66d4b15c672972380c1cdf7b0b65e"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-ELMIZE-P1-COMPLETION-BARRIER-CONSERVATION01",
+      "original_verdict": "PASS_NO_ELM_MIGRATION_NEEDED",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 6716,
+          "end_line": 6733,
+          "sha256": "eae3dd6a6bf9065a57c53101a0377087b8cb4818b88ca2840f918a4922eedbe3"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-ELMIZE-P1-COMPLETION-TERMINAL-QUEUE-CONVERGENCE01",
       "original_verdict": "PASS_COMPLETION_TERMINAL_QUEUE_HOST_REPAIR_PRELIVE",
       "epic_id": null,
@@ -856,6 +2052,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-ELMIZE-P1-COMPLETION-TERMINAL-QUEUE-CONVERGENCE01-CORRECTION01-ELIGIBILITY-AND-IDENTITY",
       "original_verdict": "PASS_COMPLETION_TERMINAL_QUEUE_HOST_REPAIR_CORRECTION01_PRELIVE",
       "epic_id": null,
@@ -872,6 +2069,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-ELMIZE-P1-HELD-SET-PROGRESS-AUTHORITY01",
       "original_verdict": "PASS_HELD_SET_PROGRESS_ELM_AUTHORITY_PRELIVE",
       "epic_id": null,
@@ -881,13 +2079,14 @@
         {
           "path": ".factory/epic-board.md",
           "start_line": 5965,
-          "end_line": 27663,
+          "end_line": 6594,
           "sha256": "d7e094a8d2dcc6c4d4b579e6e5574299e1f3053ded31c39761fc7417aee91565"
         }
       ],
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-ELMIZE-P1-HELD-SET-PROGRESS-AUTHORITY01-CORRECTION01-SAFETY-AND-CLASSIFIER",
       "original_verdict": "PASS_HELD_SET_PROGRESS_ELM_AUTHORITY_PRELIVE",
       "epic_id": null,
@@ -904,6 +2103,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-ELMIZE-P1-HELD-SET-PROGRESS-AUTHORITY01-CORRECTION02-SORTEDNESS-FAIL-CLOSED",
       "original_verdict": "PASS_HELD_SET_SORTEDNESS_FAIL_CLOSED_PRELIVE",
       "epic_id": null,
@@ -920,6 +2120,92 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION02-CORRECTION03-KERNEL-OFFLINE-DISCRIMINATOR",
+      "original_verdict": "PASS_KERNEL_OFFLINE_REPAIR",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 6791,
+          "end_line": 6831,
+          "sha256": "1483eb88a5556ebdc70c9d5b8f6772166f10479ee4d46954e4f3d602fbf1b74d"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION03-AUTHORITY",
+      "original_verdict": "PASS_TASK_HEADER_ELM_AUTHORITY",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 26844,
+          "end_line": 26913,
+          "sha256": "0e2fa1b11ca92351f13f0ba664166ab28c412466459972367fb9d3fb20797316"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-ORCHESTRATION03-CORRECTION01-FAILURE-CACHE-SCOPE",
+      "original_verdict": "PASS_FAIL_CLOSED_BOUNDED_SENTINEL",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 26914,
+          "end_line": 26965,
+          "sha256": "4f02d8f0674da446d3357f5e39109573012086b7b2e8c9cf8ac8c2b46ef31301"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-ELMIZE-P1-TASK-HEADER-TELEMETRY-PRESENTATION-AUTHORITY01",
+      "original_verdict": "PASS_NO_NEW_ELM_MIGRATION_NEEDED",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 6763,
+          "end_line": 6790,
+          "sha256": "4db7fb413f3feade0290e0b139fb6fb86cb31d439b65e9efad02ce327f442d28"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-ELMIZE-P1-TOOLCHAIN-RESOLVER01",
+      "original_verdict": "PASS_CLINEMM_TOOLCHAIN_RESOLVER",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 27489,
+          "end_line": 27538,
+          "sha256": "36dfa4a6ffabe9e6f636ebb050247b213c21c35dfb3d34d4ce8045abecff7f51"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-EMBEDDED-MCP-CONTROL-SEAM-RECON01",
       "original_verdict": "PASS_STRUCTURAL_ONLY",
       "epic_id": null,
@@ -936,6 +2222,24 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-ESCAPED-DESCENDANT-REMEDIATION-DECISION01",
+      "original_verdict": "PASS (BOUNDED CORRECTION02)",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 11829,
+          "end_line": 11971,
+          "sha256": "91e12df6a7d20e151e2e5ae16cd3192ec2a5b20836ff044804cc75e6b1ffd785"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-ESTIMATOR-INDEPENDENT-HOLDOUT-01",
       "original_verdict": "AWAITING_INDEPENDENT_DOGFOOD_SESSION (CORRECTION01, CORRECTION02)",
       "epic_id": null,
@@ -952,6 +2256,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-EXACT-HEAD-DOGFOOD-C1-GO",
       "original_verdict": "PASS",
       "epic_id": null,
@@ -961,13 +2266,14 @@
         {
           "path": ".factory/epic-board.md",
           "start_line": 29841,
-          "end_line": 29996,
+          "end_line": 29944,
           "sha256": "770b7a37efede03624e5fdebdaf036c05edbaa1d353476b50fbe1ea2d978b3d0"
         }
       ],
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-EXECUTION-PROGRESS-CLASSIFIER-CORRECTION-01",
       "original_verdict": "GO_EXECUTION_PROGRESS_CLASSIFIER_DOGFOOD",
       "epic_id": null,
@@ -990,6 +2296,302 @@
       "reconciliation": "CONFLICTING"
     },
     {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-EXTENSION-HOST-ALLOCATION-AUTHORITY01",
+      "original_verdict": "PASS_ALLOCATION_INFRASTRUCTURE_READY_LIVE_CAPTURE_PENDING (post HALT_ALLOCATION_FINALIZATION_BROKEN + post HALT_ALLOCATION_INSTALLED_BUNDLE_IDENTITY_PATH_UNPROVEN)",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 16084,
+          "end_line": 16248,
+          "sha256": "d8c9fbb19330173cf97cdf493e3125c2bb5c8abd2987c52ac0eb3b2ae4ab651c"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-EXTENSION-HOST-CONTINUOUS-CPU-SAMPLING01",
+      "original_verdict": "PASS_CPU_CAPTURE_INFRASTRUCTURE_READY_LIVE_CAPTURE_AUTHORIZED",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 16597,
+          "end_line": 16709,
+          "sha256": "d120fafac40088a7ab843ee20c9db29801a1fcb5c46c027328343881c4920b95"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-EXTENSION-HOST-CPUPROFILE-TIMEDELTA-VALIDATION01",
+      "original_verdict": "PASS_CWI_CPU_HOTLEAF_REFUTED",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 15679,
+          "end_line": 15864,
+          "sha256": "cb1c6cfbcb8acf568b76437fc417706457e9c2134d2d74eaf203eae05d062b86"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-EXTENSION-HOST-LIVE-CAPTURE-LAUNCHER01",
+      "original_verdict": "PASS_LIVE_CAPTURE_LAUNCHER_READY",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 17357,
+          "end_line": 18501,
+          "sha256": "6756eb86f3bf4077bc0db174bfd8badc807717b5daeea0fc3f88b937ac22d3b9"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-EXTENSION-HOST-OOM-DELIVERY-SEMANTICS-REPAIR01",
+      "original_verdict": "PASS_DELIVERY_SEMANTICS_REPAIR (LIVE_QUALIFICATION: OPERATOR_PENDING)",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 18880,
+          "end_line": 19039,
+          "sha256": "be48d2a796aa87c5295ee3fbbea4e603022874eb7bf875b1077e6e086057a7b5"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01",
+      "original_verdict": "DISCRIMINATORS_INSTALLED_LIVE_SPECIMEN_READY_FOR_OPERATOR",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 18502,
+          "end_line": 18879,
+          "sha256": "0ed8d5af8842b585e33620e1490717d187d9a88707d02ab0013e92fcb3edf0c4"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-EXTENSION-HOST-RNL-DRAIN-LEAF-SYMBOLIZATION01",
+      "original_verdict": "PASS_SYMBOLIZATION_WITH_CAUSALITY_GAP — HALT_REPAIR_ACT",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 15865,
+          "end_line": 16083,
+          "sha256": "0b03c31fe13a4b1f361fd7b4b656dae0858c57d54ec006c8c2d9712def5c0b96"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLEAF-SYMBOLIZATION02",
+      "original_verdict": "PASS_HOTLEAF_cwi_SYMBOLIZED",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 15499,
+          "end_line": 15678,
+          "sha256": "40703ffb74067c5ab483603be5f6fa2bfac21341fb12d3c8592da0c1cbad2749"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLOOP01",
+      "original_verdict": "PASS_EXTENSION_HOST_HOTLOOP_REPAIRED",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 14929,
+          "end_line": 15375,
+          "sha256": "4a4ac1735dd6254e52a5bc53b8283716bc61da36f1348f291ee0b5fe6485d2de"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01",
+      "original_verdict": "PASS_TERMINATION_AUTHORITY_INFRASTRUCTURE_READY_LIVE_SPECIMEN_AUTHORIZED",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 16710,
+          "end_line": 17081,
+          "sha256": "49caa5ef068a6e806d2d6e2cac02ccd6d365071a8b89f1643f786e87011fe8ea"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01",
+      "original_verdict": "PASS_TERMINATION_AUTHORITY_CLASSIFIER_REPAIRED_LIVE_WITNESS_INSTALLED_OBSERVER_INITIAL_DEAD_GUARDED",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 17082,
+          "end_line": 17083,
+          "sha256": "56896f47cf7e81faf5e19fac7aca30fd5b395b2c9b2886ffce22b38b47b8eb6f"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 17084,
+          "end_line": 17356,
+          "sha256": "6dfe398ccffcb9b99090aa46af783f9fc2edfe3c93150f1e517ff5a286df8de5"
+        }
+      ],
+      "reconciliation": "CONFLICTING"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-EXTENSION-HOST-TURN-STATE-PROVENANCE-HOTPATH01",
+      "original_verdict": "CORRECTION02",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 15376,
+          "end_line": 15498,
+          "sha256": "4cbbaa78a83f3bdf7deab47f28eab031d7e20784cf8b97a3d2ee78ec2c19aab7"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-EXTENSION-HOST-WEBVIEW-STATE-SESSION-LISTING-REENUMERATION-REPAIR01",
+      "original_verdict": "PASS_WEBVIEW_SESSION_LISTING_REENUMERATION_REPAIRED_PENDING_LIVE_CAPTURE",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 16249,
+          "end_line": 16328,
+          "sha256": "8d20daa091a008813d983242f1b4ba05bcc972a3ced667f8696699d1c5459c51"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-EXTENSION-HOST-WEBVIEW-STATE-SESSION-LISTING-REENUMERATION-REPAIR01-CORRECTION01",
+      "original_verdict": "PASS_HALT_STALE_SESSION_HISTORY_AUTHORITY_UNPROVEN_CANCELLED",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 16329,
+          "end_line": 16391,
+          "sha256": "c5624f31e622212c0fc6d7629ee55ed09f13ee7e7669226dfb4292b321d6990d"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-EXTENSION-HOST-WEBVIEW-STATE-SESSION-LISTING-REENUMERATION-REPAIR01-CORRECTION02",
+      "original_verdict": "PASS_HALT_CACHE_COHERENCE_EVENT_BRIDGE_CLOSED",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 16392,
+          "end_line": 16596,
+          "sha256": "58e31db8d9b52c3b1d73912951710159215ceeef764e4a91c2980c6784fda99d"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-FINALIZATION-RUN-BOOTSTRAP-STALL01",
+      "original_verdict": "PASS_BOUNDED_MCP_BOOTSTRAP",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 22823,
+          "end_line": 22902,
+          "sha256": "3ceb4fd955f80abbe44cf000dd9a2d046d826c5a3cee14cda711d3245a75f326"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-FINALIZATION-TOOL-SURFACE-LIVE01",
+      "original_verdict": "STUB OPENED",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 22066,
+          "end_line": 22211,
+          "sha256": "2a95075701498ac36f0d8bee18f5bc98b2bbfd069803baf22128da6c0737868e"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-FORK-UPSTREAM-MERGE01",
       "original_verdict": "PASS_STRUCTURAL_ONLY",
       "epic_id": null,
@@ -1006,6 +2608,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-FORK-UPSTREAM-MERGE01-QUALIFICATION-CORR01",
       "original_verdict": "PASS_STRUCTURAL_ONLY",
       "epic_id": null,
@@ -1022,6 +2625,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-HARNESS-NEUTRAL-TRACE-CONTRACT-RECON01",
       "original_verdict": "PASS_RECON_WITH_GAPS",
       "epic_id": null,
@@ -1038,6 +2642,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-HARNESS-NEUTRAL-TRACE-CONTRACT-RECON01-CORR01",
       "original_verdict": "PASS_CORRECTED",
       "epic_id": null,
@@ -1054,6 +2659,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-HARNESS-NEUTRAL-TRACE-CONTRACT-RECON01-CORR02",
       "original_verdict": "PASS_CORRECTED",
       "epic_id": null,
@@ -1070,6 +2676,107 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01",
+      "original_verdict": "PREEXEC BOUNDED FIX / HALT_PREATTACH_DISCRIMINATOR_STILL_HAS_A_RACE",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 10366,
+          "end_line": 10420,
+          "sha256": "a90f03c0fd38cf8a7041cce9892aa83dceaa41252112054604bf77113f89dea9"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 10421,
+          "end_line": 10538,
+          "sha256": "3696990de5b3143d2a92a9eb8ead23ff5ad65c21ff0ebb363a2662ee027fbb02"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 10539,
+          "end_line": 10655,
+          "sha256": "b01dbbf719249b3229ae8e8088bdec7813df25a4db5722ba33e16f311bf81ca9"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 10656,
+          "end_line": 10799,
+          "sha256": "272c7c9f22154ee8e4f505ee375427c8445938024f10ff2a056e042f875dc310"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 10800,
+          "end_line": 10913,
+          "sha256": "e77ebf9ab6e20e9d1f53fe5feb9dc9996f5fe3b0c405d54e038f05e41a5dc7c5"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 10914,
+          "end_line": 11043,
+          "sha256": "04dccaa4bf5ce6e219ad3cd7bf047270751e5dd0875170e354bde791c8601eb9"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 11044,
+          "end_line": 11185,
+          "sha256": "2b3f9b2b91892c6bed54c8f896bfd24106d524f4912a56435052a37386d2cfe1"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 11186,
+          "end_line": 11370,
+          "sha256": "099bce8af0e48091eade70c838209fb4e39377f3538b31f860acd6b2ea0014d9"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 11371,
+          "end_line": 11573,
+          "sha256": "e7eba7e90b95277b6c789d526e7f08654df327f9e9f812fb4aff57723a212835"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 11574,
+          "end_line": 11698,
+          "sha256": "adae89e36e093ca36c645d2cc2c0e5ed1309998df8945c962072265ea4a6d2e8"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 11699,
+          "end_line": 11828,
+          "sha256": "eef6c21b4d8ebc6724c8f96b7b4472fc23942412ddd455afdae8e408659dd263"
+        }
+      ],
+      "reconciliation": "CONFLICTING"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-HELPER-SUPERVISED-COMMAND-CONTAINMENT01",
+      "original_verdict": "DISCRIMINATOR_VERDICT_NONE",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 10040,
+          "end_line": 10143,
+          "sha256": "a87c4c6235e73dd82fe74effe62e8eecb1ef862d710ebbdc0a6d0994b57613d4"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 10144,
+          "end_line": 10365,
+          "sha256": "9093edbe23cf67d271b48b4903af5c04b4b4e8a4cab976ee06559788d7afe8d9"
+        }
+      ],
+      "reconciliation": "CONFLICTING"
+    },
+    {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-HOST-HELPER-BOUNDED-REQUEST-LIFECYCLE01",
       "original_verdict": "READY_FOR_OPERATOR_QUALIFICATION",
       "epic_id": null,
@@ -1086,6 +2793,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-HTEC02-POST-START-LATE-TERMINAL-RELEASE-CORRECTION01",
       "original_verdict": "PASS_HTEC02_LATE_TERMINAL_RELEASE (correction)",
       "epic_id": null,
@@ -1114,6 +2822,7 @@
       "reconciliation": "CONFLICTING"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-HTEC02-PRELAUNCH-OBSERVATION-CAPACITY-ADMISSION",
       "original_verdict": "PASS_HTEC02_PRELAUNCH_ADMISSION",
       "epic_id": null,
@@ -1130,6 +2839,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-INDEPENDENT-ACCEPTANCE-EVALUATOR01",
       "original_verdict": "PASS_INDEPENDENT_ACCEPTANCE",
       "epic_id": null,
@@ -1146,6 +2856,58 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-LAUNCHAGENT-OWNED-PGID-LIVE-QUALIFICATION01",
+      "original_verdict": "PASS_WITH_BOUNDED_INSTALL_PATH_HALT",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 8616,
+          "end_line": 8634,
+          "sha256": "9ec11fefffec0fc47bedc005dd4c8d9a75476ae4100cbbb9abcdb7c0c79447c0"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-LAUNCHAGENT-OWNED-PGID-LIVE-QUALIFICATION01-CORRECTION01",
+      "original_verdict": "C1 GREEN — bounded correction",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 9636,
+          "end_line": 9659,
+          "sha256": "0e38dc9ac80b8b138c1b183ffa2bce82b25ae319d19ca8e6cdc788a50f0b334f"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-LAUNCHAGENT-OWNED-PGID-LIVE-QUALIFICATION01-CORRECTION02",
+      "original_verdict": "PASS",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 8635,
+          "end_line": 8746,
+          "sha256": "e500c1aec08540cfd79e77a8bb5591e766c312b1ab7403254d59b50791046b40"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-LIFECYCLE-EXECUTABLE-COMPLETION-AUTHORITY-CONTRACT01",
       "original_verdict": "PASS_STRUCTURAL_ONLY",
       "epic_id": null,
@@ -1162,6 +2924,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-LIFECYCLE-EXECUTABLE-PRESENTATION-CONTRACT01",
       "original_verdict": "PASS_STRUCTURAL_ONLY",
       "epic_id": null,
@@ -1178,6 +2941,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-LIFECYCLE-EXECUTABLE-PRESENTATION-CONTRACT01-CORR01",
       "original_verdict": "PASS_STRUCTURAL_ONLY",
       "epic_id": null,
@@ -1194,6 +2958,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-LIFECYCLE-EXECUTABLE-TURN-PHASE-CONTRACT01",
       "original_verdict": "PASS_STRUCTURAL_ONLY",
       "epic_id": null,
@@ -1210,6 +2975,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-LIFECYCLE-TRACEABILITY-01-CORRECTION01",
       "original_verdict": "PASS_STRUCTURAL_ONLY",
       "epic_id": null,
@@ -1232,6 +2998,7 @@
       "reconciliation": "AMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-LIFECYCLE-TRACEABILITY-01-CORRECTION02",
       "original_verdict": "CLOSED_CLEAN",
       "epic_id": null,
@@ -1248,6 +3015,87 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01",
+      "original_verdict": "PASS_DIAGNOSTIC_INSTRUMENTATION_LANDED",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 14645,
+          "end_line": 14759,
+          "sha256": "498a316356dcdb7f8fe69b5c57046caafcaaa2d8613368441458ab9d160d9855"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 14760,
+          "end_line": 14852,
+          "sha256": "d63eecabc464c541a8180e7c8b254f47ab98aa166da113a417bda8ddaa22481d"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 14853,
+          "end_line": 14928,
+          "sha256": "1d26bbe1d742aa949cd228334b75cf555066529e118f3bd3d764b4598e5542ae"
+        }
+      ],
+      "reconciliation": "CONFLICTING"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-LONG-HORIZON-OUTSTANDING-WORK-AUTHORITY01",
+      "original_verdict": "PASS_LONG_HORIZON_OPERATOR_AUTHORITY_REPAIRED (CORRECTION02)",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 8342,
+          "end_line": 8370,
+          "sha256": "d815d67f6be323a2fb1dbb36ba9854b1df33d3987df10f60f0884160c6251bbf"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01",
+      "original_verdict": "PASS_PENDING_PROMPT_AUTHORITY_TRANSPORT_NEUTRAL",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 8260,
+          "end_line": 8341,
+          "sha256": "63f57229d35af80d4a510e6b0a6fede5ed663d2278956f3eab03f2b91554c2f5"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01",
+      "original_verdict": "PASS_TASK_QUIESCENCE_COMPLETION_BARRIER_REPAIRED",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 7965,
+          "end_line": 8125,
+          "sha256": "ba6a768e3ce4c17ee5423859d00ec8e95cef4dfbcc114cc6d3c59d6034e1ae00"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-M31-CATALOG-SNAPSHOT-REFRESH01",
       "original_verdict": "PASS_STRUCTURAL_ONLY",
       "epic_id": null,
@@ -1264,6 +3112,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-M31-EXACT-MODEL-ID-WIRE-AUTHORITY01",
       "original_verdict": "PASS_WIRE_AUTHORITY",
       "epic_id": null,
@@ -1280,6 +3129,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-MCP-EVENT-SESSION-ISOLATION01",
       "original_verdict": "PASS_STRUCTURAL_ONLY",
       "epic_id": null,
@@ -1296,6 +3146,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-01",
       "original_verdict": "PASS_STRUCTURAL_ONLY",
       "epic_id": null,
@@ -1312,6 +3163,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-MCP-EXECUTION-CONTROL-V1-CORR01",
       "original_verdict": "PASS_STRUCTURAL_ONLY",
       "epic_id": null,
@@ -1328,6 +3180,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-MCP-OWNER-EXCLUSIVITY-CORR02",
       "original_verdict": "PASS",
       "epic_id": null,
@@ -1344,6 +3197,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-MCP-READONLY-LIVE-QUAL01",
       "original_verdict": "PASS_STRUCTURAL_ONLY",
       "epic_id": null,
@@ -1360,6 +3214,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-MCP-SUPERVISION-V2-01",
       "original_verdict": "PASS_STRUCTURAL_ONLY",
       "epic_id": null,
@@ -1376,6 +3231,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-MCP-SUPERVISION-V2-CORR01",
       "original_verdict": "PASS_STRUCTURAL_ONLY",
       "epic_id": null,
@@ -1392,6 +3248,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-MCP-TASK-STATE-PROJECTION01",
       "original_verdict": "PASS_WITH_NONBLOCKING_RESIDUE (identity-boundary CORRECTION01)",
       "epic_id": null,
@@ -1408,6 +3265,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01-CORRECTION01",
       "original_verdict": "PASS_STRUCTURAL_ONLY",
       "epic_id": null,
@@ -1424,6 +3282,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-MINIMAX-REASONING-HARNESS-DISCRIMINATOR01-CORRECTION02",
       "original_verdict": "PASS_STRUCTURAL_ONLY",
       "epic_id": null,
@@ -1440,6 +3299,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01-CORR01",
       "original_verdict": "PASS_STRUCTURAL_ONLY",
       "epic_id": null,
@@ -1456,6 +3316,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-MODEL-BEHAVIOR-EDIT-EFFICIENCY-TRACE01-CORR02",
       "original_verdict": "PASS_STRUCTURAL_ONLY",
       "epic_id": null,
@@ -1472,6 +3333,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-MODEL-BEHAVIOR-LIVE-EVENT-COVERAGE01",
       "original_verdict": "PASS_STRUCTURAL_ONLY",
       "epic_id": null,
@@ -1488,6 +3350,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01",
       "original_verdict": "PASS_STRUCTURAL_ONLY",
       "epic_id": null,
@@ -1504,6 +3367,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR01",
       "original_verdict": "PASS_STRUCTURAL_ONLY",
       "epic_id": null,
@@ -1520,6 +3384,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-MODEL-BEHAVIOR-WORKSPACE-EFFECT-TRACE01-CORR02",
       "original_verdict": "PASS_STRUCTURAL_ONLY",
       "epic_id": null,
@@ -1536,6 +3401,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-NATURAL-EXIT-PGID-CAUSAL-REPRO01",
       "original_verdict": "PASS_CAUSAL_REPRO",
       "epic_id": null,
@@ -1552,6 +3418,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-NATURAL-EXIT-PGID-CAUSAL-REPRO01-CORRECTION01",
       "original_verdict": "PASS_EVIDENCE_CORRECTION",
       "epic_id": null,
@@ -1568,6 +3435,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01",
       "original_verdict": "PASS_STRUCTURAL_ONLY",
       "epic_id": null,
@@ -1584,6 +3452,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-ORDINARY-COMPACTION-UPSTREAM-AND-FIDELITY-REPAIR-01",
       "original_verdict": "HALT_FACTUAL_PRESERVATION_NOT_ESTABLISHED",
       "epic_id": null,
@@ -1600,6 +3469,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-OUTPUT-EXHAUSTION-RECOVERY-LIFECYCLE-01",
       "original_verdict": "GO_OUTPUT_EXHAUSTION_RECOVERY_DOGFOOD",
       "epic_id": null,
@@ -1616,6 +3486,41 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-P0-APPLICATION-OWNERSHIP-PROJECTION-COHERENCE01",
+      "original_verdict": "PASS_APPLICATION_OWNERSHIP_ALREADY_COHERENT",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 29945,
+          "end_line": 29996,
+          "sha256": "9ef4f1c3e3948f2e0fe4180e4355620a7a94bbfa10af7c13adc4e33bbb63bbd4"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-P0-BLOCKED-COMPLETION-LIFECYCLE-OWNER01",
+      "original_verdict": "PASS_BLOCKED_COMPLETION_LIFECYCLE_OWNER_FROZEN",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 6595,
+          "end_line": 6650,
+          "sha256": "c56b9a1368dec1e1bcf2c4bb7e74a47f26d53a33d953b44d8363d5f3066a061d"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-P0-BLOCKED-OBSERVATION-CAPABILITY-RECOVERY-PROBE01",
       "original_verdict": "PASS_BOCR01_HOST_HOLD_AND_RECOVERY_INTACT",
       "epic_id": null,
@@ -1632,6 +3537,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-P0-BLOCKED-RECOVERY-PUBLICATION-AND-UI-AUTHORITY01",
       "original_verdict": "BRPU01 — PASS_BLOCKED_RECOVERY_UI_AUTHORITY_PRELIVE",
       "epic_id": null,
@@ -1648,6 +3554,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-P0-BLOCKED-RECOVERY-PUBLICATION-AND-UI-AUTHORITY01-CORRECTION01",
       "original_verdict": "BRPU01-C1 — PASS_BLOCKED_RECOVERY_UI_AUTHORITY_PRELIVE",
       "epic_id": null,
@@ -1664,6 +3571,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-P0-BLOCKED-RECOVERY-PUBLICATION-AND-UI-AUTHORITY01-CORRECTION02",
       "original_verdict": "BRPU01-C2 — PASS_BLOCKED_RECOVERY_UI_AUTHORITY_PRELIVE",
       "epic_id": null,
@@ -1673,13 +3581,14 @@
         {
           "path": ".factory/epic-board.md",
           "start_line": 30267,
-          "end_line": 30563,
+          "end_line": 30333,
           "sha256": "e1a6224f94d5f458686b17016ad7fe429f0ea5b39498e15b591d4ed48f5b64f1"
         }
       ],
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01",
       "original_verdict": "PASS_STRUCTURAL_PENDING_LIVE",
       "epic_id": null,
@@ -1696,6 +3605,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-P0-C9-C10-STATECHART-CAUSAL-REPAIR01-CORRECTION01",
       "original_verdict": "PASS_STRUCTURAL_PENDING_LIVE",
       "epic_id": null,
@@ -1712,6 +3622,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-P0-COMPLETION-COMMIT-SHADOW-DIVERGENCE-RECONREPAIR01",
       "original_verdict": "CAPTURE_INSUFFICIENT",
       "epic_id": null,
@@ -1728,6 +3639,92 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01",
+      "original_verdict": "REOPENED as CORRECTION01",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 27063,
+          "end_line": 27147,
+          "sha256": "b8024de5315aa27135613d35d8db103dc67735918296364232d0901b885812ce"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION01-STRUCTURAL-BOUNDARY",
+      "original_verdict": "PASS_COMPLETION_CONTINUATION_STRUCTURAL_AUTHORITY",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 27148,
+          "end_line": 27259,
+          "sha256": "8844420c235f018a4147b252011c5284e80b59fda5c74038f42324ca5b7d5a1f"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-P0-COMPLETION-CONTINUATION-CONTROL-AUTHORITY01-CORRECTION05-INSTRUCTIONS-TRANSPORT",
+      "original_verdict": "PASS_COMPLETION_CONTINUATION_INSTRUCTIONS_TRANSPORT",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 27260,
+          "end_line": 27488,
+          "sha256": "b8acc9d3b4684752bf59108385484804ede5792f75c4e1e8dc79d0dc2009a0d1"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-P0-COMPLETION-CONTINUATION-REARM01",
+      "original_verdict": "PASS_COMPLETION_CONTINUATION_REARM",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 27007,
+          "end_line": 27062,
+          "sha256": "86f50043eabe96091c868dd238263eb43e683ad35669a212459b8ef423664712"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-P0-COMPLETION-CONTINUATION-STALLED-REARM-LOOP01",
+      "original_verdict": "PASS_COMPLETION_CONTINUATION_STALLED_REARM_CONVERGENCE",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 27539,
+          "end_line": 27602,
+          "sha256": "e552a2447be727edc7f855ed7cffb800bdf377bcff408dcff39ce62028fa5b09"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-P0-COMPLETION-REEVALUATION-CAPABILITY-DISCRIMINATOR01",
       "original_verdict": "CRCD_PRODUCTION_DEFECT_AND_REPAIR",
       "epic_id": null,
@@ -1737,13 +3734,14 @@
         {
           "path": ".factory/epic-board.md",
           "start_line": 28031,
-          "end_line": 28519,
+          "end_line": 28092,
           "sha256": "40a32b4eb48d256bdf110e8ad3b01fb4e864c5799e2b5b5284ad0cad390ee0cc"
         }
       ],
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01",
       "original_verdict": "PASS_HELD_TERMINAL_EVICTION_REPAIR",
       "epic_id": null,
@@ -1760,6 +3758,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01-CORR01",
       "original_verdict": "PASS_HELD_TERMINAL_EVICTION_REPAIR (correction)",
       "epic_id": null,
@@ -1776,6 +3775,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01-CORR02",
       "original_verdict": "PASS_HELD_TERMINAL_RECEIPT_CAPACITY_CONSERVATION (correction)",
       "epic_id": null,
@@ -1792,6 +3792,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-P0-HELD-TERMINAL-EVICTION-CONSERVATION01-CORR03",
       "original_verdict": "PASS_HELD_TERMINAL_SECONDARY_MAP_NO_LRU (correction)",
       "epic_id": null,
@@ -1808,6 +3809,41 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-CONSUMER-PROBE01",
+      "original_verdict": "PASS_WITH_NONBLOCKING_RESIDUE",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 27603,
+          "end_line": 27663,
+          "sha256": "f953aeee7c89856671c26b20abc0a28acdf13f9dc00bd162335de45d621c81e8"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-P0-HOST-BLOCKED-OUTCOME-PUBLICATION01",
+      "original_verdict": "HALTED_AT_PRODUCTION_CONSUMER_GAP",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 6651,
+          "end_line": 6691,
+          "sha256": "fd04f9b83f38b7a2482c5d5c02151bbf0dcf8a99216515d86d35b17efb0a63fb"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-P0-HOST-BLOCKED-RECOVERY-CONTRACT01",
       "original_verdict": "HALT_RECOVERY_PRODUCT_CONTRACT_REQUIRED",
       "epic_id": null,
@@ -1824,6 +3860,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-P0-OBSERVATION-CAPABILITY-RUNTIME-REGISTRY-DISCRIMINATOR01",
       "original_verdict": "PASS_OCRRD01_RUNTIME_REGISTRY_AND_DRAIN_INTACT",
       "epic_id": null,
@@ -1846,6 +3883,7 @@
       "reconciliation": "CONFLICTING"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-P0-OCRRD01-PENDING-PROMPT-LIFECYCLE-DISCRIMINATOR01",
       "original_verdict": "HALT_OCRRD01_PENDING_PROMPT_LIFECYCLE_CONVERGENCE_PENDING_EXECUTION",
       "epic_id": null,
@@ -1862,6 +3900,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-P0-POST-TERMINAL-LIFECYCLE-LIVENESS01",
       "original_verdict": "PASS_STRUCTURAL_PENDING_LIVE",
       "epic_id": null,
@@ -1878,6 +3917,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-P0-POST-TERMINAL-LIFECYCLE-LIVENESS01-CORR01",
       "original_verdict": "L1_CAUSAL_PROOF_CORRECTED_LIVE_BLOCKED",
       "epic_id": null,
@@ -1894,6 +3934,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01",
       "original_verdict": "PASS_P0_RED_REPRODUCED",
       "epic_id": null,
@@ -1910,6 +3951,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01-CORRECTION01",
       "original_verdict": "PASS_STRUCTURAL_ONLY",
       "epic_id": null,
@@ -1926,6 +3968,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-P0-POST-TERMINAL-WORKING-CANCEL-REPRO01-CORRECTION01-PROMPT-ORIGIN01",
       "original_verdict": "PASS_STRUCTURAL_ONLY",
       "epic_id": null,
@@ -1942,6 +3985,24 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-P0-POST-TURN-BLOCKED-PRESENTATION-CONVERGENCE01",
+      "original_verdict": "PASS_POST_TURN_BLOCKED_PRESENTATION_CONVERGENCE_PRELIVE",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 28464,
+          "end_line": 28519,
+          "sha256": "4390f07948871ffe97f628ea6604938af823cb969976a96a7c1f9825d46b7bd9"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-P0-RECOVERY-PRODUCT-CONTRACT-FREEZE-PROBE01",
       "original_verdict": "EPSD01 — PASS_EPSD01_NO_EXISTING_PUBLICATION_DISTINGUISHES_BCB_BLOCK_FROM_API_REQ_FAILED",
       "epic_id": null,
@@ -1958,6 +4019,92 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-P0-RUN-COMMANDS-NONTERMINAL-RESULT-AUTHORITY01",
+      "original_verdict": "PASS_NONTERMINAL_COMMAND_RESULT_CLASSIFICATION_PRELIVE",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 28093,
+          "end_line": 28153,
+          "sha256": "cd91ee7b77d478353016bac4883fe63bfdd1487c582f36a104c63b5eee93bbd4"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-P0-RUN-COMMANDS-NONTERMINAL-RESULT-AUTHORITY01-CORRECTION01",
+      "original_verdict": "BOUNDED_RUN_COMMANDS_TOOL_RESULT_DISCRIMINATOR",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 28154,
+          "end_line": 28211,
+          "sha256": "5862897188149cbd89f801507aab85c10cf12b31679cad4e6a1417e4775e83c8"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-P0-RUN-COMMANDS-NONTERMINAL-RESULT-AUTHORITY01-CORRECTION02",
+      "original_verdict": "TERMINAL_STATE_MONOTONICITY_SAFETY",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 28212,
+          "end_line": 28305,
+          "sha256": "b9c48c5b2ae40f64ed94b7a44129e16bfb70e85c9a0e0d563aec3b0ea2683757"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-P0-RUN-COMMANDS-NONTERMINAL-RESULT-AUTHORITY01-CORRECTION03",
+      "original_verdict": "STALE_LIVENESS_CURRENTNESS",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 28306,
+          "end_line": 28411,
+          "sha256": "9a334c1b7607ca8cabf31470be89ceec0f40554046ee00e191b5cc3cb6b8b636"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-P0-RUN-COMMANDS-NONTERMINAL-RESULT-AUTHORITY01-CORRECTION04",
+      "original_verdict": "PRODUCTION_CLOSURE_FIXTURE",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 28412,
+          "end_line": 28463,
+          "sha256": "d3395a30b949b0b3714ef9da2b78d4cd973dfa0dcd7ef1a64dcac9c85d502da5"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-P0-TERMINAL-WAKE-QUEUE-CONSUMER-PROBE01",
       "original_verdict": "IN_PROGRESS",
       "epic_id": null,
@@ -1986,6 +4133,7 @@
       "reconciliation": "CONFLICTING"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-P0-UNRESOLVABLE-COMPLETION-HOST-CONVERGENCE01",
       "original_verdict": "PASS_UNRESOLVABLE_COMPLETION_HOST_CONVERGENCE_PRELIVE",
       "epic_id": null,
@@ -2002,6 +4150,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-P0-VERIFIED-SUBMISSION-TERMINAL-NONCONVERGENCE01",
       "original_verdict": "PASS_COMPLETION_CONSERVATION_BLOCKED_AS_DESIGNED",
       "epic_id": null,
@@ -2018,6 +4167,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-PAUSED-CONTAINMENT-EVIDENCE-01",
       "original_verdict": "PASS_CAPTURE_DECISIVE",
       "epic_id": null,
@@ -2034,6 +4184,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-PAUSED-EXPORT-EVIDENCE-GAP-REPAIR01",
       "original_verdict": "PASS_EVIDENCE_EXPORT_REPAIRED",
       "epic_id": null,
@@ -2050,6 +4201,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-PAUSED-EXPORT-EVIDENCE-GAP-REPAIR01-CORRECTION01",
       "original_verdict": "PASS_EVIDENCE_EXPORT_REPAIRED",
       "epic_id": null,
@@ -2066,6 +4218,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-PAUSED-EXPORT-EVIDENCE-GAP-REPAIR01-CORRECTION02",
       "original_verdict": "PASS_EVIDENCE_EXPORT_REPAIRED",
       "epic_id": null,
@@ -2082,6 +4235,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-PCK-PREFIX-PRESERVING-IMPLEMENTATION-01",
       "original_verdict": "READY_FOR_EXPERIMENTAL_LIVE_QUALIFICATION_PENDING_SOURCE_ACCEPTANCE",
       "epic_id": null,
@@ -2098,6 +4252,75 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-PENDING-PROMPT-DRAIN-AFTER-COMPLETING-RUN01",
+      "original_verdict": "VERDICT=NOT_REPRODUCED",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 21924,
+          "end_line": 22065,
+          "sha256": "2dc44f6aa2752b3ea72805ce221d7c3f66247f739ded8d2aff2d705009e060ab"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-PENDING-PROMPT-LOST-WAKEUP01",
+      "original_verdict": "HALT_RED_NOT_REPRODUCED",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 22212,
+          "end_line": 22369,
+          "sha256": "cafca387f28544e26c9c2b625d137f25b086742d6ddb0d4ad84e11ef33fc1e4e"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-PGID-CONTAINMENT-PRODUCT-CONTRACT01",
+      "original_verdict": "PASS_PGID_CONTAINMENT_PRODUCT_CONTRACT",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 11972,
+          "end_line": 12214,
+          "sha256": "c80351e2108a59f54fa5eb9826126c05e4a32d5504a1a234c39361443333634f"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-PGID-CONTAINMENT-PRODUCTION-DOGFOOD01",
+      "original_verdict": "HALT_PRODUCTION_SEAM_NOT_DRIVABLE_FROM_SHELL",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 12215,
+          "end_line": 12309,
+          "sha256": "adf417dfd92c68adcddfae498cb1a3ccb1390e8d0185df8d55cf93d1c16eb32c"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-PORTABLE-TRACE-EVIDENCE-BINDING-CORR03",
       "original_verdict": "PASS_EVIDENCE_BOUND",
       "epic_id": null,
@@ -2114,6 +4337,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-01",
       "original_verdict": "PREFIX_MUTATION_ISOLATED",
       "epic_id": null,
@@ -2130,6 +4354,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION01",
       "original_verdict": "HALT_CAUSAL_ATTRIBUTION_UNPROVEN",
       "epic_id": null,
@@ -2146,6 +4371,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION02",
       "original_verdict": "HALT_CROSS_REQUEST_LINEAGE_CONTRACT",
       "epic_id": null,
@@ -2162,6 +4388,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION03",
       "original_verdict": "HALT_INCOMPLETE_LINEAGE_ACCEPTED",
       "epic_id": null,
@@ -2178,6 +4405,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION04",
       "original_verdict": "HALT_DUPLICATE_CONFLICT_RESURRECTION",
       "epic_id": null,
@@ -2194,6 +4422,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-POST-COMPACTION-PREFIX-FORENSICS-CORRECTION05",
       "original_verdict": "HALT_CAPTURE_CONTRACT_SESSION_ID_MISSING",
       "epic_id": null,
@@ -2210,6 +4439,58 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02",
+      "original_verdict": "PASS_OBSERVATION_SEAM",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 23642,
+          "end_line": 23762,
+          "sha256": "c9033b7892fe65b212f96cd33dbb67adcf7db5204d5b7d0295125647b71483d6"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02-CORRECTION01",
+      "original_verdict": "PASS_REAL_OBSERVATION_SEAM",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 23763,
+          "end_line": 23862,
+          "sha256": "7e4b694c528af06a70bf7a2740267bf29673bbaad81e9af666a5d0fbf073de97"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02-CORRECTION02",
+      "original_verdict": "PASS_REAL_OBSERVATION_SEAM",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 23863,
+          "end_line": 23978,
+          "sha256": "5f8b5a1a749e3d9083732c2f4a8592bf81b6e07e11d60881e0830f5ff329985a"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-POSTMERGE-VSCODE-REACHABILITY-SECURITY-QUAL01",
       "original_verdict": "PASS_WITH_NONBLOCKING_RESIDUE",
       "epic_id": null,
@@ -2226,6 +4507,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-PREMATURE-PAUSED-BCB-REPRO-REPAIR01",
       "original_verdict": "PASS_STRUCTURAL_ONLY",
       "epic_id": null,
@@ -2242,6 +4524,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-PROVIDER-REASONING-CONTINUITY-P0-01-CORRECTION02-AMENDMENT02",
       "original_verdict": "GO_PROVIDER_REASONING_REPAIR_INTEGRATION",
       "epic_id": null,
@@ -2258,6 +4541,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-PROVIDER-USAGE-NORMALIZATION-AUTHORITY-01",
       "original_verdict": "GO_PROVIDER_USAGE_NORMALIZATION_AUTHORITY",
       "epic_id": null,
@@ -2274,6 +4558,41 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-REAL-LAUNCHAGENT-SIGNAL-DISCRIMINATOR02",
+      "original_verdict": "C1 GREEN",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 8531,
+          "end_line": 8615,
+          "sha256": "259db9cea857677b095b243b50681c2b2eb9639d3c253660e7d9fadcb05f178d"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-REPRODUCIBLE-DOGFOOD-VSIX01-CORRECTION06",
+      "original_verdict": "PASS_DUPLICATE_PREPUBLISH_SUPPRESSION",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 24373,
+          "end_line": 24439,
+          "sha256": "9c1987e3c89c0fbe5c25ae636e4d0a540de67e50fe8286d09d056e5872000d47"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-ROUND-C-NONCONVERGENCE-RECON-01",
       "original_verdict": "PASS_BOUNDARY_CLASSIFIED",
       "epic_id": null,
@@ -2290,6 +4609,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-ROUND-C-NONCONVERGENCE-RECON-CORRECTION01",
       "original_verdict": "PASS_EVIDENCE_STRENGTH_CORRECTED",
       "epic_id": null,
@@ -2306,6 +4626,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-ROUND-C-NONCONVERGENCE-RECON-CORRECTION02",
       "original_verdict": "PASS_PROBE_SEMANTICS_CORRECTED",
       "epic_id": null,
@@ -2322,6 +4643,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-ROUND-C-TRACE-QUAL01-CORRECTION01",
       "original_verdict": "HALT_EVIDENCE_EQUIVALENCE_UNSOUND (corrected)",
       "epic_id": null,
@@ -2338,6 +4660,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-ROUNDC-COMPACTION-FIDELITY-CORRECTION01",
       "original_verdict": "PASS_WITH_CORRECTION_APPLIED_S1_REPAIRED_S2_HALTED",
       "epic_id": null,
@@ -2354,6 +4677,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-ROUNDC-LIVE-LATENCY-ATTRIBUTION-01",
       "original_verdict": "NOT_REPRODUCED",
       "epic_id": null,
@@ -2376,6 +4700,110 @@
       "reconciliation": "CONFLICTING"
     },
     {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-SEATBELT-GO-DEFAULT-CACHE01-CORRECTION02",
+      "original_verdict": "C1 GREEN",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 8747,
+          "end_line": 8879,
+          "sha256": "4e8a510d8449a9852c948dc04a93edd1b9b25ad8a866b8db86dc75eed36164ba"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-SEATBELT-GO-DEFAULT-CACHE01-CORRECTION03",
+      "original_verdict": "P1 FIX ONCE",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 8880,
+          "end_line": 9635,
+          "sha256": "896c9a9aaf708d34782440a2371d88cfa7f96cf438b7abcb23f623c7af1243e7"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-SW-CM01-SKILL-TRIGGER-EVALS01",
+      "original_verdict": "PASS_SKILL_TRIGGER_EVALS_RUNTIME_SEAM_CHARACTERIZED_LIVE_CAPTURE_INSUFFICIENT",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 20433,
+          "end_line": 20510,
+          "sha256": "ab22c77e4dbed2f91a07ee1d5e1f680b5b85349c05ded58c5c38181f82e59ced"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 20511,
+          "end_line": 20560,
+          "sha256": "b0163b45979f2ae61d9025ee7f933c7d7081c753603787cae5ffaff19ee2d285"
+        }
+      ],
+      "reconciliation": "CONFLICTING"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-SW-CM03-GUIDE-SUFFICIENCY-PROGRESSIVE-DISCLOSURE-EVALS01",
+      "original_verdict": "PASS_GUIDE_SUFFICIENCY_PROGRESSIVE_DISCLOSURE_RUNTIME",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 20561,
+          "end_line": 20579,
+          "sha256": "6f9a8670b2450feba62871b4dd7f00b119252c4fc84120adb861543378ed5253"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-SW-CM04-CONTINUATION-PATHOLOGICAL-CORPUS01",
+      "original_verdict": "PASS_CONTINUATION_PATHOLOGICAL_CORPUS",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 20180,
+          "end_line": 20261,
+          "sha256": "6e4d65159d3db347750382587f9695368d50fd21c65d7f09d353497f7930b79d"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 20262,
+          "end_line": 20346,
+          "sha256": "c5606a1a72fbfbdf051e7511d20730b5e513050cf853affda46cfd8df371b036"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 20347,
+          "end_line": 20432,
+          "sha256": "58252c4c6174495dd7d93cb8420213a7c179c97c1789fe69bca1c51ffc285747"
+        }
+      ],
+      "reconciliation": "CONFLICTING"
+    },
+    {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-TART-HELPER-REAL-LIFECYCLE-CORRECTION01",
       "original_verdict": "PASS_TART_LAUNCHD_REAL_GUEST",
       "epic_id": null,
@@ -2392,6 +4820,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-TART-P1-REAL-GUEST-LAUNCHD-QUALIFICATION02",
       "original_verdict": "CLOSED_HALTED_CLEAN",
       "epic_id": null,
@@ -2408,6 +4837,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-TART-P2-REAL-GUEST-EXECUTION-RECOVERY01",
       "original_verdict": "CLOSED_HALTED_CLEAN",
       "epic_id": null,
@@ -2424,6 +4854,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-TART-P4-IMPORTED-SONOMA-REAL-GUEST-LIFECYCLE01",
       "original_verdict": "IN PROGRESS",
       "epic_id": null,
@@ -2440,6 +4871,30 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-TART-P4.1-C1-GO-NATIVE-HELPER-ATOMIC-BUILD01",
+      "original_verdict": "BOUNDED C1 FIX FOR IN-PLACE BUILD HAZARD",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 32658,
+          "end_line": 32734,
+          "sha256": "66ce41ad7af25540e900b2eb5fcf58dbf13d1a83adac8a3633711f091517108b"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 32735,
+          "end_line": 32828,
+          "sha256": "cf692146bd867530fa85e6b6c3743d553aba01e2f4e668425378f8c177ac3d74"
+        }
+      ],
+      "reconciliation": "CONFLICTING"
+    },
+    {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-TART-P4.1-CORRECTION02",
       "original_verdict": "BOUNDED EXECUTABLE CORRECTION",
       "epic_id": null,
@@ -2456,6 +4911,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-TART-P4.1-CORRECTION03",
       "original_verdict": "BOUNDED TEST-PROOF AND CLEANUP-SAFETY CORRECTION",
       "epic_id": null,
@@ -2465,13 +4921,31 @@
         {
           "path": ".factory/epic-board.md",
           "start_line": 32331,
-          "end_line": 32828,
+          "end_line": 32497,
           "sha256": "5595fcec6d69d2c7a75cbed5a385834d6918f3377f48611ffbaeddedab7f096a"
         }
       ],
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-TART-P4.1-CORRECTION04",
+      "original_verdict": "BOUNDED C1 FIX (ENVIRONMENT_BLOCKED)",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 32498,
+          "end_line": 32657,
+          "sha256": "3d2f3ee12b69c5f4e1f37d52dd402c83f7772d124196215cbbac43473e45de6f"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-TART-P4.1-GUEST-AGENT-HELPER-EXEC01",
       "original_verdict": "BOUNDED P0 CORRECTION (HALT_NATIVE_SMOKE_SAFETY)",
       "epic_id": null,
@@ -2488,6 +4962,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-TART-P4.1-POSTREVIEW-CORRECTION01",
       "original_verdict": "BOUNDED EXECUTABLE CORRECTION",
       "epic_id": null,
@@ -2504,6 +4979,41 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01",
+      "original_verdict": "GREEN-CORRECTION01",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 9660,
+          "end_line": 9718,
+          "sha256": "26a03d3f684bf7d5fb0f94d1e1a075ed25adbe5cf3202d71990998336221eb5b"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION02",
+      "original_verdict": "HALT_REAL_TASK_EPERM_NOT_REPRODUCED",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 9719,
+          "end_line": 9752,
+          "sha256": "8d877c51861ecc3bfa46930df6a4e15090988010a4662c9a376449ff05c00f67"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-TASKHEADER-UNOBSERVED-IDLE-DEMOTES-COMPLETED-REPAIR01",
       "original_verdict": "PASS_TASKHEADER_STRUCTURAL_LIVE_UNOBSERVABLE",
       "epic_id": null,
@@ -2520,6 +5030,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-TERMINAL-REPORT-CARDINALITY-REPAIR01",
       "original_verdict": "PASS_REPAIR_STRUCTURAL_LIVE_PENDING (real-seam GREEN, conservation established)",
       "epic_id": null,
@@ -2536,6 +5047,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-TERMINAL-REPORT-CARDINALITY-REPAIR01-CORR01",
       "original_verdict": "PASS_CORRECTED_STRUCTURAL_LIVE_PENDING (RED→GREEN held-attribution correction, 8/8 GREEN)",
       "epic_id": null,
@@ -2552,6 +5064,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-TERMINAL-REPORT-DUPLICATION-RED01",
       "original_verdict": "NOT_REPRODUCED (category D — INTENTIONAL_HISTORY)",
       "epic_id": null,
@@ -2568,6 +5081,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-TERMINAL-REPORT-DUPLICATION-RED01-CORR01",
       "original_verdict": "PRODUCT_CONTRACT_REQUIRED (source-traced, REAL_PRODUCTION_SEAM)",
       "epic_id": null,
@@ -2584,6 +5098,87 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-TESTBED-TART-P1-DOGFOOD01-REAL-GUEST-QUALIFICATION01",
+      "original_verdict": "HALTED",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 6832,
+          "end_line": 6881,
+          "sha256": "74802722a18a9d02d6fcd06bc38821d0a5bc2fd126761a5f93e49ee7daf8f54b"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-EXECUTION-BOUNDARY01",
+      "original_verdict": "PASS_CLINEMM_TART_LAUNCHD_BOUNDARY_CODE_READY",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 6734,
+          "end_line": 6762,
+          "sha256": "9dba2655489591eba40a59af7392760a8c4826009d7e94025a5a87a88c9472e5"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-TESTBED-TART-P1-LAUNCHD-RUNNER01",
+      "original_verdict": "PASS_CLINEMM_TART_LAUNCHD_RUNNER",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 26966,
+          "end_line": 27006,
+          "sha256": "aa8c58c9307d477a0504e495744dc56e5e778ee894560dcb7fb0b8747404686b"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM-TESTBED-TART-P1-SUBSTRATE01",
+      "original_verdict": "CORRECTION02_CLOSED",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 6882,
+          "end_line": 6906,
+          "sha256": "e1d22724345f0d614791e6def9475aa1e215fc70266fadd448cc68a9793c7327"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 6907,
+          "end_line": 6935,
+          "sha256": "79f5cb182607a87af72ab976169d699a818bd93db04d7c0ffe7bcea6e6d94e49"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 6936,
+          "end_line": 7009,
+          "sha256": "6661dda6fadb80cfa1f4b9c27048820af1bf21e89313a795063c8f12e8729602"
+        }
+      ],
+      "reconciliation": "CONFLICTING"
+    },
+    {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-OUTCOME-PROJECTION01",
       "original_verdict": "PASS_STRUCTURAL_ONLY",
       "epic_id": null,
@@ -2600,6 +5195,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-OUTCOME-PROJECTION01-CORRECTION01",
       "original_verdict": "PASS_STRUCTURAL_ONLY",
       "epic_id": null,
@@ -2616,6 +5212,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-TOOL-NORMALIZATION-LIVE-QUALIFICATION-01",
       "original_verdict": "PASS_LIVE_NORMALIZATION_QUALIFIED",
       "epic_id": null,
@@ -2638,6 +5235,7 @@
       "reconciliation": "CONFLICTING"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-TRACE-DECISION-SUFFICIENCY-RECON01",
       "original_verdict": "PASS_RECON_WITH_GAPS",
       "epic_id": null,
@@ -2654,6 +5252,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-TRACE-DECISION-SUFFICIENCY-RECON01-CORRECTION01-SUCCESSOR-CONTRACT",
       "original_verdict": "HALT_SUCCESSOR_CONTRACT_FALSE_CARDINALITY",
       "epic_id": null,
@@ -2663,13 +5262,14 @@
         {
           "path": ".factory/epic-board.md",
           "start_line": 34392,
-          "end_line": 35522,
+          "end_line": 34495,
           "sha256": "91368e0f3d48ae9a40ab01c54c0793007089cbe18ac1f0ce7551b3904a7bff44"
         }
       ],
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-UPSTREAM-DIVERGENCE-AND-INTEGRATION-RECON01",
       "original_verdict": "PASS_RECON",
       "epic_id": null,
@@ -2686,6 +5286,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-UPSTREAM-LIVE-HUB-CROSSCLIENT-QUALIFICATION01",
       "original_verdict": "PASS_PARTIAL_LIVE_PENDING",
       "epic_id": null,
@@ -2702,6 +5303,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-UPSTREAM-VSCODE-PROVIDER-RECONCILE01",
       "original_verdict": "PASS_NO_CHANGE_NEEDED",
       "epic_id": null,
@@ -2718,6 +5320,7 @@
       "reconciliation": "UNAMBIGUOUS"
     },
     {
+      "schema_version": 1,
       "act_id": "ACT-CLINEMM-WORKING-AFTER-COMPLETION-DISCRIMINATOR01",
       "original_verdict": "CAPTURE_INSUFFICIENT",
       "epic_id": null,
@@ -2729,6 +5332,313 @@
           "start_line": 37004,
           "end_line": 37394,
           "sha256": "40b472d2c056c04071d180c58894798930ae42f900f10979a9665b7e0eaef5e2"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-CLINEMM02-A2A-SESSION-BOUND-MCP-ENV01",
+      "original_verdict": "OPEN",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 20580,
+          "end_line": 20723,
+          "sha256": "f5a5d93935163fabb2cb056ec16fc11fc25cbc7745137aae42c0c71237725d25"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-MYC-CLINEMM-AUTOMATIC-PRIME-ACQUISITION-FAILURE01",
+      "original_verdict": "PASS_DIAGNOSTIC_EXPANSION",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 23468,
+          "end_line": 23641,
+          "sha256": "9c4076e395c6e5fa1020ece45168b0b1ca8f73b3fafd0e472f376a0eee503ed4"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-MYC-CLINEMM-AUTOMATIC-PRIME-INJECTION01",
+      "original_verdict": "HALT_LIVE_RED_MISCLASSIFIED",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 22903,
+          "end_line": 23018,
+          "sha256": "bf96720b6dd6874e82f1b956307c48b1c3783fd05b93e83b72a46b81b9e37d30"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-MYC-CLINEMM-AUTOMATIC-PRIME-LIVE-BOUNDARY-CAPTURE01",
+      "original_verdict": "PENDING_LIVE_RUN",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 23019,
+          "end_line": 23119,
+          "sha256": "e4b33acbdb7cb5413f1a95c8c0effdcb5faf5604f0c897b4ccc750eba5ed49c5"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-MYC-CLINEMM-AUTOMATIC-PRIME-MCP-TOOL-CALL-REPAIR01",
+      "original_verdict": "PASS_TYPED_TOOL_CALL_FAILURE_DISCRIMINATOR",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 23979,
+          "end_line": 24054,
+          "sha256": "3dd76bf88f072123dcf71469589faabcf627b9cf56741f9a5a1f7831b761ece2"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-MYC-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE01",
+      "original_verdict": "VERDICT=PASS_MYC_DOGFOOD_DIAGNOSTIC_PROFILE",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 22370,
+          "end_line": 22477,
+          "sha256": "e559d2dd912e9f8c90be2b390146baa3df12d8d65a911e5b6bbfdfcda5a4dc1b"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-MYC-CLINEMM-MCP-SESSION-AUTOSTART01",
+      "original_verdict": "PASS_SESSION_BOUND_MCP_AUTOSTART",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 22478,
+          "end_line": 22822,
+          "sha256": "bc1887a46419dd782d8a0c68d07d6117cd243e08f23cbd8f68472b13c6f93f62"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-MYC-CLINEMM-PRIME-LIVE-DIAG-READOUT01",
+      "original_verdict": "PASS_READOUT_INSTALLED",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 23120,
+          "end_line": 23244,
+          "sha256": "0a23842b468b9549c91402b3a82bff98db06a0c06118b8a753ef31305a675559"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-MYC-CLINEMM-PRIME-LIVE-DIAG-READOUT01-CORRECTION01",
+      "original_verdict": "PASS_READOUT_PARENT_MATERIALIZATION",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 23245,
+          "end_line": 23328,
+          "sha256": "1bb5338fe176e8d6c31c2fa9b7d6802a1e32ff5cb4696e873ce29af000f0dc33"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-MYC-CLINEMM-PRIME-LIVE-DIAG-READOUT01-CORRECTION02",
+      "original_verdict": "PASS_READOUT_SERIALIZED",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 23329,
+          "end_line": 23467,
+          "sha256": "24fb50b18bd35bff6482d2b1231f1c2d6bc446eac6051ca0759d76a3ddfdbc21"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01",
+      "original_verdict": "CORRECTION03 (LIVE-GO)",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 7010,
+          "end_line": 7092,
+          "sha256": "714191e7e119a2e26a91ca391de6804b2c488cf0c0b2afaf7dde0d57d3697dfa"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 7093,
+          "end_line": 7168,
+          "sha256": "786361b63d30eb5bea9831741a4ecc33138867744668cd2713e9bb859612edf2"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 7169,
+          "end_line": 7300,
+          "sha256": "b71f25cf6d34ff695a8f1a3ce4a06378bd3ccf751b88aacd8d5a6a4b263a0a12"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 7301,
+          "end_line": 7356,
+          "sha256": "893867943a7e00163cbfacbb80c68e527ffcf9a40e99140400e886e1278994fe"
+        }
+      ],
+      "reconciliation": "CONFLICTING"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-MYC-CLINEMM02-C",
+      "original_verdict": "PASS_PRIME_AUTOMATION",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 7908,
+          "end_line": 7964,
+          "sha256": "f7584b996ccd491b3530c8c13215cb8b18e5becec284ca442dc612e0d20cabb0"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-MYC-CLINEMM02-C-CORRECTION01",
+      "original_verdict": "PASS_PRIME_AUTOMATION_VISIBLE",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 7859,
+          "end_line": 7907,
+          "sha256": "05981f3218db5613daaeabc56ae61eb03e64ee62063d6de11af0b52d039baa95"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-MYC-CLINEMM02-C-CORRECTION02",
+      "original_verdict": "PASS_IDENTITY_JOIN_PROVEN_AND_BOUNDED",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 7700,
+          "end_line": 7858,
+          "sha256": "c5a8c485e4718a79f9b3f1fbed2d991f86ca857561051f4846c9dc787b3a5efc"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-MYC-CLINEMM03-AUTOMATIC-PRIME-TOOL-NAME-REPAIR01",
+      "original_verdict": "PASS_TOOL_NAME_MISMATCH_RESOLVED",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 26696,
+          "end_line": 26843,
+          "sha256": "28e2dd4944bc8c0637e691f722ace68635627ae4d1cc86d3c0fc1f9aada35f84"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-MYC-CLINEMM03-LIVE-DIAG01",
+      "original_verdict": "PASS_LIVE_DIAG_SCAFFOLD_BUILT",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 7637,
+          "end_line": 7699,
+          "sha256": "2230073810638489b7d3fd97c7aaf3d05083160f72772e9bb72faedc10ca1a11"
+        }
+      ],
+      "reconciliation": "UNAMBIGUOUS"
+    },
+    {
+      "schema_version": 1,
+      "act_id": "ACT-MYC-CLINEMM04-LIVE-QUALIFICATION",
+      "original_verdict": "INCOMPLETE_LIVE_AWAITING_OPERATOR",
+      "epic_id": null,
+      "work_item_ids": [],
+      "evidence_locators": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 21744,
+          "end_line": 21923,
+          "sha256": "e5d992dd5a3f510596c0e350b481c6e207d72bd49a5e051803c03893a4b7c048"
         }
       ],
       "reconciliation": "UNAMBIGUOUS"

@@ -10,7 +10,8 @@
   ],
   "items": [
     {
-      "item_id": "EPIC-CLINEMM-TASK-CONTROL-LIVENESS/R3-R4-ADVERSARIAL-SCHEDULES",
+      "schema_version": 1,
+      "item_id": "R3-R4-ADVERSARIAL-SCHEDULES",
       "title": "R3/R4 task-control adversarial schedules",
       "description": "Deferred adversarial schedule hunting for the R3 / R4 task-control lane. The board's Deferred / hold table records this item as consciously postponed; the source states the current frontier for this domain is post-sharding review.",
       "workstream": "task-control-liveness",

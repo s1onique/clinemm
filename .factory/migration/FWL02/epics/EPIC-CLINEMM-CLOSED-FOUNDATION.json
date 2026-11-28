@@ -4,7 +4,7 @@
   "title": "Closed foundation",
   "original_status": "CLOSED (historical)",
   "lifecycle": "TERMINAL",
-  "priority": "P3 / reference-only",
+  "priority": "P3",
   "exit_criteria": [
     "See `task-presentation.md` and `webview-seam-aop.md` for in-flight work that builds on this substrate."
   ],

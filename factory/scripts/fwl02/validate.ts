@@ -36,6 +36,7 @@ import {
 	FWMI_COVERAGES,
 	FWMI_DISPOSITIONS,
 	FWMI_LIFECYCLES,
+	FWMI_PRIORITIES,
 	FWMI_QUALIFICATIONS,
 	FWMI_RELATIONSHIP_KINDS,
 	FWMI_REPOSITORY,
@@ -73,6 +74,14 @@ const _MANIFEST_FILE_FIELDS = [
 	"git_blob",
 	"disposition",
 ];
+/**
+ * The epic record's wire fields.
+ *
+ * There is NO `relationships` field: the actual Leamas Go consumer's
+ * `EpicRecord` shape has none, and its strict decoder rejects an unknown
+ * field. Every relationship kind lives in the work item's `dependencies`
+ * array.
+ */
 const EPIC_FIELDS = [
 	"schema_version",
 	"epic_id",
@@ -83,9 +92,10 @@ const EPIC_FIELDS = [
 	"exit_criteria",
 	"items",
 	"source_refs",
-	"relationships",
 ];
+/** The work-item record's wire fields. */
 const ITEM_FIELDS = [
+	"schema_version",
 	"item_id",
 	"title",
 	"description",
@@ -104,7 +114,6 @@ const ITEM_FIELDS = [
 	"evidence_locators",
 	"reopen_conditions",
 	"source_refs",
-	"relationships",
 ];
 const _SOURCE_REF_FIELDS = [
 	"path",
@@ -120,6 +129,7 @@ const RELATIONSHIP_FIELDS = [
 	"source_refs",
 ];
 const _HISTORICAL_ACT_FIELDS = [
+	"schema_version",
 	"act_id",
 	"original_verdict",
 	"epic_id",
@@ -129,6 +139,7 @@ const _HISTORICAL_ACT_FIELDS = [
 	"reconciliation",
 ];
 const _RECONCILIATION_RECORD_FIELDS = [
+	"schema_version",
 	"kind",
 	"identities",
 	"resolution",
@@ -282,12 +293,9 @@ function collectSourceRefs(
 		refs.push(...epic.source_refs);
 		for (const item of epic.items) {
 			refs.push(...item.source_refs);
-			for (const relationship of item.relationships ?? []) {
+			for (const relationship of item.dependencies) {
 				refs.push(...(relationship.source_refs ?? []));
 			}
-		}
-		for (const relationship of epic.relationships ?? []) {
-			refs.push(...(relationship.source_refs ?? []));
 		}
 	}
 	for (const record of index.records) {
@@ -390,6 +398,8 @@ function validateStructural(
 	const itemIds = new Set<string>();
 	const vocabularyProblems: string[] = [];
 	const unknownFieldProblems: string[] = [];
+	const itemSchemaProblems: string[] = [];
+	const localIdentityProblems: string[] = [];
 	for (const epic of epics) {
 		if (epicIds.has(epic.epic_id)) {
 			vocabularyProblems.push(`duplicate epic id ${epic.epic_id}`);
@@ -410,12 +420,24 @@ function validateStructural(
 			).map((f) => `${epic.epic_id}.${f}`),
 		);
 		for (const item of epic.items) {
-			if (itemIds.has(item.item_id)) {
-				vocabularyProblems.push(
-					`duplicate scoped work-item id ${item.item_id}`,
+			// The scoped identity is epic_id + "/" + item_id, so the item_id must
+			// be LOCAL to its epic: a globally-scoped item_id would double-scope
+			// the identity the consumer derives.
+			const scopedId = `${epic.epic_id}/${item.item_id}`;
+			if (itemIds.has(scopedId)) {
+				vocabularyProblems.push(`duplicate scoped work-item id ${scopedId}`);
+			}
+			itemIds.add(scopedId);
+			if (item.item_id.includes("/")) {
+				localIdentityProblems.push(
+					`${epic.epic_id}: item_id ${item.item_id} is not local to its epic`,
 				);
 			}
-			itemIds.add(item.item_id);
+			if (item.schema_version !== FWMI_SCHEMA_VERSION) {
+				itemSchemaProblems.push(
+					`${epic.epic_id}/${item.item_id}: schema_version=${item.schema_version}`,
+				);
+			}
 			if (!FWMI_LIFECYCLES.includes(item.lifecycle)) {
 				vocabularyProblems.push(`${item.item_id}: lifecycle ${item.lifecycle}`);
 			}
@@ -440,7 +462,7 @@ function validateStructural(
 					ITEM_FIELDS,
 				).map((f) => `${item.item_id}.${f}`),
 			);
-			for (const relationship of item.relationships ?? []) {
+			for (const relationship of item.dependencies) {
 				if (!FWMI_RELATIONSHIP_KINDS.includes(relationship.kind)) {
 					vocabularyProblems.push(
 						`${item.item_id}: relationship kind ${relationship.kind}`,
@@ -474,14 +496,26 @@ function validateStructural(
 		unknownFieldProblems.length === 0 ? "PASS" : "FAIL",
 		unknownFieldProblems.join("; "),
 	);
+	checks.add(
+		"STRUCTURE.LOCAL_ITEM_IDENTITIES",
+		localIdentityProblems.length === 0 ? "PASS" : "FAIL",
+		localIdentityProblems.join("; ") ||
+			"every work-item identity is local to its parent epic",
+	);
 
 	const actIds = new Set<string>();
 	const actProblems: string[] = [];
+	const nestedSchemaProblems: string[] = [];
 	for (const record of index.records) {
 		if (actIds.has(record.act_id)) {
 			actProblems.push(`duplicate historical act id ${record.act_id}`);
 		}
 		actIds.add(record.act_id);
+		if (record.schema_version !== FWMI_SCHEMA_VERSION) {
+			nestedSchemaProblems.push(
+				`historical ${record.act_id}: schema_version=${record.schema_version}`,
+			);
+		}
 		if (!FWMI_ACT_RECONCILIATION.includes(record.reconciliation)) {
 			actProblems.push(
 				`${record.act_id}: reconciliation ${record.reconciliation}`,
@@ -508,11 +542,24 @@ function validateStructural(
 		if (!FWMI_RESOLUTIONS.includes(record.resolution)) {
 			reconProblems.push(`${record.kind}: resolution ${record.resolution}`);
 		}
+		if (record.schema_version !== FWMI_SCHEMA_VERSION) {
+			nestedSchemaProblems.push(
+				`reconciliation ${record.kind}: schema_version=${record.schema_version}`,
+			);
+		}
 	}
 	checks.add(
 		"RECONCILIATION.VALID_VOCABULARY",
 		reconProblems.length === 0 ? "PASS" : "FAIL",
 		reconProblems.join("; "),
+	);
+	checks.add(
+		"STRUCTURE.NESTED_SCHEMA_VERSIONS",
+		[...itemSchemaProblems, ...nestedSchemaProblems].length === 0
+			? "PASS"
+			: "FAIL",
+		[...itemSchemaProblems, ...nestedSchemaProblems].join("; ") ||
+			"every work item, historical record and reconciliation record carries the FWMI v1 schema version",
 	);
 }
 
@@ -614,6 +661,116 @@ function validateSourceIntegrity(
 		headProblems.join("; ") ||
 			"every explicit source_head resolves to a committed object",
 	);
+}
+
+/**
+ * Find a cycle in the local prerequisite graph.
+ *
+ * Returns the cycle as a node sequence (the first node repeated at the end),
+ * or null when the graph is acyclic. The graph is explored with an explicit
+ * COLOUR marking (WHITE / GREY / BLACK), so a back edge to a GREY node is the
+ * cycle and a repeated BLACK node is a shared prerequisite, not a cycle.
+ */
+export function findPrerequisiteCycle(
+	edges: ReadonlyMap<string, readonly string[]>,
+): string[] | null {
+	const WHITE = 0;
+	const GREY = 1;
+	const BLACK = 2;
+	const colour = new Map<string, number>();
+	const stack: string[] = [];
+
+	const visit = (node: string): string[] | null => {
+		colour.set(node, GREY);
+		stack.push(node);
+		for (const next of edges.get(node) ?? []) {
+			const state = colour.get(next) ?? WHITE;
+			if (state === GREY) {
+				const start = stack.indexOf(next);
+				return [...stack.slice(start), next];
+			}
+			if (state === WHITE) {
+				const cycle = visit(next);
+				if (cycle !== null) {
+					return cycle;
+				}
+			}
+		}
+		stack.pop();
+		colour.set(node, BLACK);
+		return null;
+	};
+
+	for (const node of edges.keys()) {
+		if ((colour.get(node) ?? WHITE) === WHITE) {
+			const cycle = visit(node);
+			if (cycle !== null) {
+				return cycle;
+			}
+		}
+	}
+	return null;
+}
+
+/**
+ * Check that every RESOLVED duplicate group carries exactly ONE authoritative
+ * obligation.
+ *
+ * A group is the set of identities named by one reconciliation record whose
+ * resolution marks the source as establishing shared ownership. The
+ * authoritative obligation is the one the reconciliation reason names as the
+ * owner ("primary owner", "canonical owner", "canonical detail file").
+ *
+ * A SECONDARY REPRESENTATION must not be an independent lifecycle-bearing
+ * obligation: it is retained as source accounting and as a reconciliation
+ * record, but it must not carry its own executable lifecycle. The check is
+ * therefore: at most ONE member of the group may be a represented work item
+ * with an EXECUTABLE lifecycle (OPEN / ACTIVE / BLOCKED); the others must be
+ * absent from the item collection or carried as TERMINAL / DEFERRED
+ * representations.
+ */
+function duplicateAuthorityProblems(
+	epics: readonly FwmiEpic[],
+	recon: FwmiReconciliation,
+): string[] {
+	const problems: string[] = [];
+	const represented = new Map<string, { lifecycle: string; epic: string }>();
+	for (const epic of epics) {
+		for (const item of epic.items) {
+			represented.set(`${epic.epic_id}/${item.item_id}`, {
+				lifecycle: item.lifecycle,
+				epic: epic.epic_id,
+			});
+		}
+	}
+	for (const record of recon.records) {
+		if (record.resolution !== "DUPLICATE" && record.resolution !== "RESOLVED") {
+			continue;
+		}
+		// Only a group that the reason establishes as SHARED OWNERSHIP is
+		// constrained. A CROSS_LINK between unrelated obligations is not.
+		if (
+			!/shared ownership|primary owner|canonical owner|canonical detail/i.test(
+				record.reason,
+			)
+		) {
+			continue;
+		}
+		const members = record.identities.filter((identity) =>
+			represented.has(identity),
+		);
+		const executable = members.filter((identity) =>
+			["OPEN", "ACTIVE", "BLOCKED"].includes(
+				represented.get(identity)?.lifecycle ?? "",
+			),
+		);
+		if (executable.length > 1) {
+			problems.push(
+				`${record.kind}: ${executable.length} executable obligations in one group (${executable.join(", ")})`,
+			);
+		}
+	}
+	return problems;
 }
 
 /** The semantic-accounting validation stage. */
@@ -737,7 +894,11 @@ function validateSemantics(
 
 	// An explicit DEPENDS_ON relationship target must resolve to a represented
 	// obligation OR be recorded as an unresolved reconciliation.
-	const representedIds = new Set(allItems.map((item) => item.item_id));
+	const representedIds = new Set(
+		epics.flatMap((epic) =>
+			epic.items.map((item) => `${epic.epic_id}/${item.item_id}`),
+		),
+	);
 	const unresolvedTargets = new Set<string>();
 	for (const record of recon.records) {
 		for (const identity of record.identities) {
@@ -745,16 +906,20 @@ function validateSemantics(
 		}
 	}
 	const danglingDeps: string[] = [];
-	for (const item of allItems) {
-		for (const relationship of item.relationships ?? []) {
-			if (relationship.kind !== "DEPENDS_ON") {
-				continue;
-			}
-			if (
-				!representedIds.has(relationship.target) &&
-				!unresolvedTargets.has(relationship.target)
-			) {
-				danglingDeps.push(`${item.item_id} -> ${relationship.target}`);
+	for (const epic of epics) {
+		for (const item of epic.items) {
+			for (const relationship of item.dependencies) {
+				if (relationship.kind !== "DEPENDS_ON") {
+					continue;
+				}
+				if (
+					!representedIds.has(relationship.target) &&
+					!unresolvedTargets.has(relationship.target)
+				) {
+					danglingDeps.push(
+						`${epic.epic_id}/${item.item_id} -> ${relationship.target}`,
+					);
+				}
 			}
 		}
 	}
@@ -769,15 +934,17 @@ function validateSemantics(
 	// itself be a represented item (so the edge points at real work, not at an
 	// obligation the cross-link invents).
 	const crossLinkProblems: string[] = [];
-	for (const item of allItems) {
-		for (const relationship of item.relationships ?? []) {
-			if (
-				relationship.kind === "CROSS_LINK" &&
-				!representedIds.has(relationship.target)
-			) {
-				crossLinkProblems.push(
-					`${item.item_id} CROSS_LINK -> ${relationship.target}`,
-				);
+	for (const epic of epics) {
+		for (const item of epic.items) {
+			for (const relationship of item.dependencies) {
+				if (
+					relationship.kind === "CROSS_LINK" &&
+					!representedIds.has(relationship.target)
+				) {
+					crossLinkProblems.push(
+						`${epic.epic_id}/${item.item_id} CROSS_LINK -> ${relationship.target}`,
+					);
+				}
 			}
 		}
 	}
@@ -786,6 +953,112 @@ function validateSemantics(
 		crossLinkProblems.length === 0 ? "PASS" : "FAIL",
 		crossLinkProblems.join("; ") ||
 			"every CROSS_LINK target is a separately represented obligation",
+	);
+
+	// The declared LOCAL prerequisite graph must be acyclic.
+	//
+	// The consumer schedules by the DEPENDS_ON edges, so a cycle would make
+	// the scheduling order unsatisfiable. Only edges whose target is a
+	// REPRESENTED obligation participate: an unresolved prerequisite is an
+	// explicit blocker, not a schedulable edge.
+	const prerequisiteEdges = new Map<string, string[]>();
+	for (const epic of epics) {
+		for (const item of epic.items) {
+			const from = `${epic.epic_id}/${item.item_id}`;
+			const targets = item.dependencies
+				.filter(
+					(relationship) =>
+						relationship.kind === "DEPENDS_ON" &&
+						representedIds.has(relationship.target),
+				)
+				.map((relationship) => relationship.target);
+			prerequisiteEdges.set(from, targets);
+		}
+	}
+	const cycle = findPrerequisiteCycle(prerequisiteEdges);
+	checks.add(
+		"SEMANTIC.PREREQUISITE_GRAPH_IS_ACYCLIC",
+		cycle === null ? "PASS" : "FAIL",
+		cycle === null
+			? `the local prerequisite graph over ${prerequisiteEdges.size} obligations has no cycle`
+			: `cycle: ${cycle.join(" -> ")}`,
+	);
+
+	// Every relationship target must be FULLY SCOPED: `EPIC-ID/ITEM-ID`.
+	// An unscoped target would be ambiguous across epics.
+	const unscopedTargets: string[] = [];
+	for (const epic of epics) {
+		for (const item of epic.items) {
+			for (const relationship of item.dependencies) {
+				if (!relationship.target.includes("/")) {
+					unscopedTargets.push(
+						`${epic.epic_id}/${item.item_id} -> ${relationship.target}`,
+					);
+				}
+			}
+		}
+	}
+	checks.add(
+		"SEMANTIC.RELATIONSHIP_TARGETS_ARE_SCOPED",
+		unscopedTargets.length === 0 ? "PASS" : "FAIL",
+		unscopedTargets.join("; ") ||
+			"every relationship target carries its epic scope",
+	);
+
+	// Exactly ONE authoritative obligation per resolved duplicate group.
+	//
+	// A group is resolved when the source establishes shared ownership. The
+	// group is named by the reconciliation record's DUPLICATE_REPRESENTATION /
+	// CROSS_LINK identities. The authoritative obligation is the one whose
+	// scoped identity is named as the owner in the reconciliation reason; the
+	// others must be reconciled as SECONDARY REPRESENTATIONS, never as
+	// independent lifecycle-bearing obligations.
+	const authorityProblems = duplicateAuthorityProblems(epics, recon);
+	checks.add(
+		"SEMANTIC.SINGLE_AUTHORITATIVE_OBLIGATION_PER_GROUP",
+		authorityProblems.length === 0 ? "PASS" : "FAIL",
+		authorityProblems.join("; ") ||
+			"every resolved duplicate group carries exactly one authoritative obligation",
+	);
+
+	// The normalized priority must be in the native ledger vocabulary.
+	const priorityProblems: string[] = [];
+	const validPriorities: readonly string[] = FWMI_PRIORITIES;
+	for (const epic of epics) {
+		if (epic.priority !== null && !validPriorities.includes(epic.priority)) {
+			priorityProblems.push(`${epic.epic_id}: priority ${epic.priority}`);
+		}
+		for (const item of epic.items) {
+			if (item.priority !== null && !validPriorities.includes(item.priority)) {
+				priorityProblems.push(
+					`${epic.epic_id}/${item.item_id}: priority ${item.priority}`,
+				);
+			}
+		}
+	}
+	checks.add(
+		"SEMANTIC.NORMALIZED_PRIORITIES_VALID",
+		priorityProblems.length === 0 ? "PASS" : "FAIL",
+		priorityProblems.join("; ") ||
+			"every priority is in the native P0/P1/P2/P3 vocabulary",
+	);
+
+	// Every frontier entry must resolve to a REPRESENTED obligation: the
+	// frontier is an operator-facing view of the same obligations, so a
+	// frontier entry naming an obligation the package does not carry would
+	// send the operator to work that cannot be imported.
+	const frontierText = readFileSync(join(PACKAGE_DIR, "frontier.md"), "utf8");
+	const frontierIds = [
+		...frontierText.matchAll(/^### (EPIC-[A-Z0-9-]+\/\S+)$/gm),
+	].map((match) => match[1] as string);
+	const unresolvedFrontier = frontierIds.filter(
+		(identity) => !representedIds.has(identity),
+	);
+	checks.add(
+		"SEMANTIC.FRONTIER_ENTRIES_RESOLVE",
+		unresolvedFrontier.length === 0 ? "PASS" : "FAIL",
+		unresolvedFrontier.join("; ") ||
+			`${frontierIds.length} frontier entries resolve to represented obligations`,
 	);
 
 	// Every epic with an empty item collection must still be discoverable and
@@ -1060,9 +1333,9 @@ export function writeValidationReceipt(): Check[] {
 			: "SOURCE_RECONCILIATION_READY",
 		checks: results,
 		mechanical_coverage:
-			"MECHANICAL: 177 historical ACT report sections in the committed root board were mechanically indexed by identity, verdict and exact source range into 167 distinct historical ACT identities (159 UNAMBIGUOUS, 1 AMBIGUOUS, 7 CONFLICTING). Every competing verdict is retained with its own source reference; no identity is silently deduplicated.",
+			"MECHANICAL: 361 historical ACT report sections in the committed root board were mechanically indexed by identity, verdict and exact source range into 316 distinct historical ACT identities (289 UNAMBIGUOUS, 2 AMBIGUOUS, 25 CONFLICTING). The extraction indexes BOTH report-section heading levels: the level-1 prepend-ordered report log AND the level-2 report sections of the trailing board region, which the previous level-1-only extraction silently skipped (149 identities, including 18 with competing verdicts). Every competing verdict is retained with its own source reference; no identity is silently deduplicated.",
 		semantic_coverage:
-			"SEMANTIC: 21 actual epics and 49 engineering obligations were reconciled from the committed epic detail files and the board's operational index. The board's Current frontier / Active epics / Open supporting work / Deferred-hold tables were reconciled lane-by-lane; the per-epic Open work and Deferred work sections were reconciled obligation-by-obligation. The remaining narrative history (the board's prepend-ordered ACT report prose, the multi-ACT closure narratives in command-risk-classification.md, webview-seam-aop.md and context-compaction-token-accounting.md, and the long Current-status bullets in safe-yolo-seatbelt.md) was accounted for as contiguous narrative history at the byte level and is preserved verbatim in the committed source archive. It is deliberately NOT reconstructed as new work items.",
+			"SEMANTIC: 21 actual epics and 45 engineering obligations were reconciled from the committed epic detail files and the board's operational index. The board's Current frontier / Active epics / Open supporting work / Deferred-hold tables were reconciled lane-by-lane; the per-epic Open work and Deferred work sections were reconciled obligation-by-obligation. Where the source represents ONE obligation in several places, exactly ONE representation is authoritative and the others are conserved as source accounting (secondary representations) and reconciliation records, so no source representation is lost and no obligation is scheduled twice. The remaining narrative history (the board's report prose and `Updated:` chronology lines, the multi-ACT closure narratives in command-risk-classification.md, webview-seam-aop.md and context-compaction-token-accounting.md, and the long Current-status bullets in safe-yolo-seatbelt.md) was accounted for as contiguous narrative history at the byte level and is preserved verbatim in the committed source archive. It is deliberately NOT reconstructed as new work items. The board's trailing region 9,542-44,731 is accounted for in full; it carries 205 further report sections belonging to 149 historical identities, all of which are now indexed.",
 	};
 	writeFileSync(
 		join(PACKAGE_DIR, "validation-receipt.json"),

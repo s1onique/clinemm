@@ -37,6 +37,13 @@ export interface HistoricalActSection {
  *
  *   `# ACT-CLINEMM-... — VERDICT — 2026-11-27`
  *   `# ACT-CLINEMM-... — VERDICT - 2026-10-15`
+ *   `## ACT-CLINEMM-... — VERDICT — 2026-09-18`
+ *
+ * The board carries report sections at TWO heading levels: the level-1 (`#`)
+ * sections form the prepend-ordered report log, and the level-2 (`##`) sections
+ * are the report bodies appended in the trailing region of the board. Both
+ * levels are ACT REPORT SECTIONS and both must be indexed: a level-1-only
+ * extraction silently drops every level-2 report section.
  *
  * Some headers carry a parenthetical qualifier in the ACT id, e.g.
  * `# ACT-CLINEMM-OBS05-RUNTIME-DURATION-ACCOUNTING-01 (CORRECTION-01) — ...`.
@@ -44,7 +51,7 @@ export interface HistoricalActSection {
  * preserved verbatim.
  */
 const HEADER_PATTERN =
-	/^#\s+(ACT-[A-Za-z0-9._()-]+)\s+[—-]\s+(.+?)\s+[—-]\s+\d{4}-\d{2}-\d{2}/;
+	/^#{1,2}\s+(ACT-[A-Za-z0-9._()-]+)\s+[—-]\s+(.+?)\s+[—-]\s+\d{4}-\d{2}-\d{2}/;
 
 /**
  * Extract every historical ACT section header from the committed board.

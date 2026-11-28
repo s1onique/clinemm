@@ -2,13 +2,14 @@
   "schema_version": 1,
   "records": [
     {
+      "schema_version": 1,
       "kind": "DUPLICATE_REPRESENTATION",
       "identities": [
         "EPIC-CLINEMM-SAFE-YOLO-SEATBELT/TEMP-INTERNAL-CONTROL-CLEANUP",
         "EPIC-CLINEMM-PRODUCT-CONFIG-BRANDING/TEMP-INTERNAL-CONTROL-CLEANUP"
       ],
       "resolution": "DUPLICATE",
-      "reason": "W4 Candidate 1 RESOLVED by source inspection. The source establishes ONE engineering obligation represented twice. safe-yolo-seatbelt.md labels its row \"TEMP-INTERNAL-CONTROL-CLEANUP (primary owner)\" and states \"This is the primary owner of the temporary / internal control cleanup inventory; the cross-cutting child in product-config-branding.md Deferred work is the secondary row because the eventual replacement is a settings surface.\" product-config-branding.md labels its row \"TEMP-INTERNAL-CONTROL-CLEANUP (cross-cutting child of settings-parity)\" and states \"The primary owner is safe-yolo-seatbelt.md (the env controls are owned by the seatbelt substrate); this row in product-config-branding.md is a cross-link because the eventual replacement is a settings surface that lives in EPIC-CLINEMM-BRANDING01-adjacent settings UI.\" Both rows carry the SAME working label, the SAME proposed-ACT-ID doctrine, the SAME priority (P2 / DEFER), the SAME state (FUTURE / DEFER) and the SAME classification list. The migration therefore keeps the safe-yolo-seatbelt record as the primary owner and retains the product-config-branding record as an explicit CROSS_LINK — the obligation is NOT duplicated, and the cross-link does not silently duplicate it. The two records remain distinct rows so the source's two representations stay discoverable.",
+      "reason": "W4 Candidate 1 RESOLVED by source inspection, and CONSOLIDATED to a single authoritative obligation. The source establishes ONE engineering obligation represented twice. safe-yolo-seatbelt.md labels its row \"TEMP-INTERNAL-CONTROL-CLEANUP (primary owner)\" and states \"This is the primary owner of the temporary / internal control cleanup inventory; the cross-cutting child in product-config-branding.md Deferred work is the secondary row because the eventual replacement is a settings surface.\" product-config-branding.md labels its row \"TEMP-INTERNAL-CONTROL-CLEANUP (cross-cutting child of settings-parity)\" and states \"The primary owner is safe-yolo-seatbelt.md (the env controls are owned by the seatbelt substrate); this row in product-config-branding.md is a cross-link because the eventual replacement is a settings surface that lives in EPIC-CLINEMM-BRANDING01-adjacent settings UI.\" Both rows carry the SAME working label, the SAME proposed-ACT-ID doctrine, the SAME priority (P2 / DEFER), the SAME state (FUTURE / DEFER) and the SAME classification list. The source therefore establishes SHARED OWNERSHIP with an unambiguous primary owner. The migration keeps ONLY `EPIC-CLINEMM-SAFE-YOLO-SEATBELT/TEMP-INTERNAL-CONTROL-CLEANUP` as the authoritative, lifecycle-bearing obligation. The product-config-branding.md representation is NOT represented as an independent work item and carries NO lifecycle authority: it is preserved HERE, in this reconciliation record, and in the supplemental source accounting (`source-accounting.json`), so the source's second representation stays discoverable and source-referenced without becoming a second schedulable obligation. The prior treatment — retaining both records and suppressing the duplicate with a CROSS_LINK — is withdrawn: a CROSS_LINK is an ordinary relationship, not an alias-lifecycle mechanism, and two lifecycle-bearing records for one obligation let the consumer schedule the same work twice.",
       "source_refs": [
         {
           "path": ".factory/epics/safe-yolo-seatbelt.md",
@@ -31,6 +32,7 @@
       ]
     },
     {
+      "schema_version": 1,
       "kind": "SOURCE_CONFLICT",
       "identities": [
         "ACT-CLINEMM-UPSTREAM-SETTINGS-SURFACE-PARITY-RECON01"
@@ -53,6 +55,7 @@
       ]
     },
     {
+      "schema_version": 1,
       "kind": "OPERATOR_JUDGEMENT",
       "identities": [
         "ACT-CLINEMM-UPSTREAM-SETTINGS-SURFACE-PARITY-RECON01"
@@ -75,14 +78,15 @@
       ]
     },
     {
-      "kind": "CROSS_LINK",
+      "schema_version": 1,
+      "kind": "DUPLICATE_REPRESENTATION",
       "identities": [
         "EPIC-CLINEMM-SAFE-YOLO-SEATBELT/HOST-TEST-RUNNER",
         "EPIC-CLINEMM-APPROVAL-PROTECTION/HOST-TEST-RUNNER",
         "EPIC-CLINEMM-HOST-TEST-INFRASTRUCTURE/HOST-TEST-RUNNER"
       ],
-      "resolution": "RESOLVED",
-      "reason": "One engineering obligation with THREE source representations, and the source establishes the ownership explicitly: safe-yolo-seatbelt.md and approval-protection.md both point at board row 18 as the working-label home, while host-test-infrastructure.md is the canonical detail file that \"gives the working label a canonical detail file so the lane has durable backlog rather than a single-row reference\". The source also states the cross-epic requirement: \"Author as a new ACT ... do NOT roll the runner into an existing closed ACT (would invalidate closure evidence)\". The migration keeps the host-test-infrastructure record as the canonical owner (it owns the durable detail file) and retains the safe-yolo and approval-protection representations as explicit CROSS_LINKs. The obligation is NOT triplicated.",
+      "resolution": "DUPLICATE",
+      "reason": "One engineering obligation with THREE source representations, and the source establishes the ownership explicitly: safe-yolo-seatbelt.md Open work states the row is \"the working label\" and names the full open-work description; approval-protection.md Open work states \"See `.factory/epics/safe-yolo-seatbelt.md` for the full open-work description\" — i.e. approval-protection DELEGATES its representation to safe-yolo; and host-test-infrastructure.md is the canonical detail file that \"gives the working label a canonical detail file so the lane has durable backlog rather than a single-row reference\" and carries the authoring requirements (runner binary / script, corpus/result schema, one minimal invocation per dependent ACT, audit-log contract). The source also states the cross-epic requirement: \"Author as a new ACT ... do NOT roll the runner into an existing closed ACT (would invalidate closure evidence)\". The migration therefore keeps ONLY `EPIC-CLINEMM-HOST-TEST-INFRASTRUCTURE/HOST-TEST-RUNNER` as the authoritative, lifecycle-bearing obligation — it owns the durable detail file and the authoring contract. The safe-yolo-seatbelt.md and approval-protection.md representations are NOT represented as independent work items and carry NO lifecycle authority: they are preserved HERE, in this reconciliation record, and in the supplemental source accounting (`source-accounting.json`). The prior treatment — retaining all three records and suppressing the duplication with CROSS_LINK edges — is withdrawn: a CROSS_LINK is an ordinary relationship, not an alias-lifecycle mechanism, and three lifecycle-bearing records for one obligation let the consumer schedule the same runner three times.",
       "source_refs": [
         {
           "path": ".factory/epics/safe-yolo-seatbelt.md",
@@ -95,17 +99,24 @@
           "start_line": 38,
           "end_line": 40,
           "sha256": "d792617a9e25b0b7047354765b69ce2b16ed4808f059868e62c130b1f2f07e97"
+        },
+        {
+          "path": ".factory/epics/approval-protection.md",
+          "start_line": 42,
+          "end_line": 42,
+          "sha256": "16172bdcbe99cae25b06155cce0d53985b4e3fe6cf9d2efd95888a30739058fc"
         }
       ]
     },
     {
+      "schema_version": 1,
       "kind": "DUPLICATE_REPRESENTATION",
       "identities": [
         "EPIC-CLINEMM-SAFE-YOLO-SEATBELT/CLASSIC-PROTECTION-RECON01",
         "EPIC-CLINEMM-APPROVAL-PROTECTION/CLASSIC-PROTECTION-RECON01"
       ],
       "resolution": "DUPLICATE",
-      "reason": "One engineering obligation with two source representations. safe-yolo-seatbelt.md Open work and approval-protection.md Open work both name `ACT-CLINEMM-CLASSIC-PROTECTION-RECON01` with the same status (OPEN / HIGH), the same unblocking condition (`SEATBELT-DEFAULT-ON01` closure now satisfied), and the same first-deliverable description (characterize the path-authority / command-policy / network-read surfaces that take over when Seatbelt is OFF, and compare them to the Seatbelt-confined boundaries to identify any drift). The board's Current frontier table carries the lane once (`Approval / classic | P1 | OPEN | CLASSIC-PROTECTION-RECON01`). Both source representations are retained so each epic's frontier stays complete; the obligation itself is represented once per epic with an explicit RELATED_TO edge between them.",
+      "reason": "One engineering obligation with two source representations, and the source establishes SHARED OWNERSHIP with an unambiguous authoritative owner. safe-yolo-seatbelt.md Open work names `ACT-CLINEMM-CLASSIC-PROTECTION-RECON01` with the status `OPEN / HIGH`, the unblocking condition (`SEATBELT-DEFAULT-ON01` closure now satisfied) and the same first-deliverable description (characterize the path-authority / command-policy / network-read surfaces that take over when Seatbelt is OFF, and compare them to the Seatbelt-confined boundaries to identify any drift); it points at the safe-yolo NEXT pointer at row 16. approval-protection.md Open work names the same ACT with the same status and the same description. The board's Current frontier table carries the lane ONCE — `Approval / classic | P1 | OPEN | CLASSIC-PROTECTION-RECON01` — and its Detail link points at `approval-protection.md`, which is the authoritative placement. The migration therefore keeps ONLY `EPIC-CLINEMM-APPROVAL-PROTECTION/CLASSIC-PROTECTION-RECON01` as the lifecycle-bearing obligation. The safe-yolo-seatbelt.md representation is NOT an independent work item and carries NO lifecycle authority: it is preserved HERE and in the supplemental source accounting (`source-accounting.json`), so the source's second representation stays discoverable and source-referenced. The prior treatment — retaining both records and linking them with a RELATED_TO edge — is withdrawn: a RELATED_TO edge is an ordinary relationship, not an alias-lifecycle mechanism, and two lifecycle-bearing records for one obligation let the consumer schedule the same recon twice.",
       "source_refs": [
         {
           "path": ".factory/epics/safe-yolo-seatbelt.md",
@@ -118,17 +129,24 @@
           "start_line": 43,
           "end_line": 43,
           "sha256": "75da7fb7460e4515d97be73a3738fb38ddd690ab4ebad3c00665b1fdf7588fa1"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 9359,
+          "end_line": 9359,
+          "sha256": "4127d597870b4bb15cc6743fbfa6b82f2a3e53538fa90523e895e6aff71e7cc1"
         }
       ]
     },
     {
+      "schema_version": 1,
       "kind": "DUPLICATE_REPRESENTATION",
       "identities": [
         "EPIC-CLINEMM-APPROVAL-PROTECTION/EDITOR-TOOL-APPROVAL-FRICTION-RECON01",
         "EPIC-CLINEMM-RUNTIME-TASK-PROGRESSION/EDITOR-TOOL-APPROVAL-FRICTION-RECON01"
       ],
       "resolution": "DUPLICATE",
-      "reason": "One engineering obligation with two source representations. approval-protection.md Open work names `ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01` as row 19 (NEXT / HIGH); runtime-task-progression.md Open work names the same ACT as restored to NEXT with the same completion-authority prerequisite (SATISFIED per `SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01` CLOSED / UPSTREAM_SUPERSEDED at `15c7e3374`) and the same remaining gates (operator-driven live editor/non-command specimen + host/Aqua availability). The board's Current frontier table carries the lane once (`Approval / editor-tool | P1 | HOLD | EDITOR-TOOL-APPROVAL-FRICTION-RECON01`). Both representations are retained with an explicit RELATED_TO edge.",
+      "reason": "One engineering obligation with two source representations, and the source establishes SHARED OWNERSHIP with an unambiguous authoritative owner. approval-protection.md Open work names `ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01` as row 19 (NEXT / HIGH); runtime-task-progression.md Open work names the same ACT as restored to NEXT with the same completion-authority prerequisite (SATISFIED per `SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01` CLOSED / UPSTREAM_SUPERSEDED at `15c7e3374`) and the same remaining gates (operator-driven live editor/non-command specimen + host/Aqua availability). The board's Current frontier table carries the lane ONCE — `Approval / editor-tool | P1 | HOLD | EDITOR-TOOL-APPROVAL-FRICTION-RECON01` — and its Detail link points at `approval-protection.md`, which is the authoritative placement. The migration therefore keeps ONLY `EPIC-CLINEMM-APPROVAL-PROTECTION/EDITOR-TOOL-APPROVAL-FRICTION-RECON01` as the lifecycle-bearing obligation. The runtime-task-progression.md representation is NOT an independent work item and carries NO lifecycle authority: it is preserved HERE and in the supplemental source accounting (`source-accounting.json`). The prior treatment — retaining both records and linking them with a RELATED_TO edge — is withdrawn: a RELATED_TO edge is an ordinary relationship, not an alias-lifecycle mechanism, and two lifecycle-bearing records for one obligation let the consumer schedule the same recon twice.",
       "source_refs": [
         {
           "path": ".factory/epics/approval-protection.md",
@@ -141,10 +159,17 @@
           "start_line": 78,
           "end_line": 78,
           "sha256": "89c4c8708b94dabbf859e4a3deea8f79f17af256ebfe38e4869ad6ff86e674db"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 9358,
+          "end_line": 9358,
+          "sha256": "661acaf1b2a8523523e2ed5d06b3142f9178846ac410103d9d0fb51dedddf587"
         }
       ]
     },
     {
+      "schema_version": 1,
       "kind": "SOURCE_CONFLICT",
       "identities": [
         "EPIC-CLINEMM-APPROVAL-PROTECTION/EDITOR-TOOL-APPROVAL-FRICTION-RECON01"
@@ -173,6 +198,7 @@
       ]
     },
     {
+      "schema_version": 1,
       "kind": "CROSS_LINK",
       "identities": [
         "EPIC-CLINEMM-QUALITY-SUBSTRATE/TYPECHECK-ZERO-BASELINE01",
@@ -196,6 +222,7 @@
       ]
     },
     {
+      "schema_version": 1,
       "kind": "CROSS_LINK",
       "identities": [
         "EPIC-CLINEMM-ARCHITECTURE/E8",
@@ -220,6 +247,7 @@
       ]
     },
     {
+      "schema_version": 1,
       "kind": "SUPERSEDED",
       "identities": [
         "ACT-CLINEMM-FWL02-INTERCHANGE-IMPORT-ADAPTER01"
@@ -242,6 +270,7 @@
       ]
     },
     {
+      "schema_version": 1,
       "kind": "MISSING_INFORMATION",
       "identities": [
         "EPIC-CLINEMM-IECR"
@@ -264,6 +293,7 @@
       ]
     },
     {
+      "schema_version": 1,
       "kind": "MISSING_INFORMATION",
       "identities": [
         "EPIC-CLINEMM-ARCHITECTURE/E7"
@@ -286,6 +316,7 @@
       ]
     },
     {
+      "schema_version": 1,
       "kind": "MISSING_INFORMATION",
       "identities": [
         "EPIC-CLINEMM-SAFE-YOLO-SEATBELT/SEATBELT-ALL-R0-EXECUTION-OBLIGATION-PROPAGATION"
@@ -302,6 +333,7 @@
       ]
     },
     {
+      "schema_version": 1,
       "kind": "INCOMPLETE_COVERAGE",
       "identities": [
         ".factory/epic-board.md"
@@ -330,6 +362,7 @@
       ]
     },
     {
+      "schema_version": 1,
       "kind": "INCOMPLETE_COVERAGE",
       "identities": [
         ".factory/epics/command-risk-classification.md"
@@ -346,6 +379,7 @@
       ]
     },
     {
+      "schema_version": 1,
       "kind": "INCOMPLETE_COVERAGE",
       "identities": [
         ".factory/epics/webview-seam-aop.md"
@@ -362,6 +396,7 @@
       ]
     },
     {
+      "schema_version": 1,
       "kind": "INCOMPLETE_COVERAGE",
       "identities": [
         ".factory/epics/context-compaction-token-accounting.md"
@@ -384,6 +419,7 @@
       ]
     },
     {
+      "schema_version": 1,
       "kind": "INCOMPLETE_COVERAGE",
       "identities": [
         ".factory/epics/safe-yolo-seatbelt.md"
@@ -400,6 +436,7 @@
       ]
     },
     {
+      "schema_version": 1,
       "kind": "SOURCE_CONFLICT",
       "identities": [
         "ACT-CLINEMM-CANCEL-LIVENESS-DISCRIMINATOR01",
@@ -458,6 +495,7 @@
       ]
     },
     {
+      "schema_version": 1,
       "kind": "SOURCE_CONFLICT",
       "identities": [
         "ACT-CLINEMM-LIFECYCLE-TRACEABILITY-01-CORRECTION01"
@@ -476,6 +514,171 @@
           "start_line": 4579,
           "end_line": 4579,
           "sha256": "c915b66b887163996b07b090dd7e08ca61e2131ca09f54ec71e2a786da1b5593"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "kind": "SOURCE_CONFLICT",
+      "identities": [
+        "ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01",
+        "ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01",
+        "ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION01",
+        "ACT-CLINEMM-BACKGROUND-EXEC-SIGNAL-AUTHORITY-BOUNDARY-RECON02",
+        "ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01",
+        "ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SEAM01-CORRECTION01-REAL-ELM-PROVIDER",
+        "ACT-CLINEMM-COMPLETION-AUTHORITY-SESSION-LIFECYCLE01-CALLER-REASON-DISCRIMINATOR",
+        "ACT-CLINEMM-COMPLETION-AUTHORITY-SESSION-LIFECYCLE01-CORRECTION03-MCP-TOOL-RESTART-CAUSAL-REPRODUCTION",
+        "ACT-CLINEMM-CONTINUATION-CARDINALITY-CORRELATION-LOSS01",
+        "ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01",
+        "ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01",
+        "ACT-CLINEMM-HELPER-SUPERVISED-COMMAND-CONTAINMENT01",
+        "ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01",
+        "ACT-CLINEMM-SW-CM01-SKILL-TRIGGER-EVALS01",
+        "ACT-CLINEMM-SW-CM04-CONTINUATION-PATHOLOGICAL-CORPUS01",
+        "ACT-CLINEMM-TART-P4.1-C1-GO-NATIVE-HELPER-ATOMIC-BUILD01",
+        "ACT-CLINEMM-TESTBED-TART-P1-SUBSTRATE01",
+        "ACT-MYC-CLINEMM-TASK-HEADER-TELEMETRY01"
+      ],
+      "resolution": "CONFLICT",
+      "reason": "Competing HISTORICAL VERDICTS for eighteen ACT identities, discovered by the corrected report-section extraction, preserved explicitly and NOT silently deduplicated. These identities were previously INVISIBLE to the reconciliation: the level-1-only header pattern matched only the prepend-ordered report log and skipped every level-2 report section, so 149 distinct historical identities — including these eighteen conflicting ones — carried no disposition at all. The corrected extraction indexes BOTH heading levels, which raises the historical index from 167 to 316 distinct identities and exposes these eighteen as carrying competing verdicts across their report sections. Each identity is recorded ONCE in `historical-index.json` with `reconciliation: CONFLICTING` and carries EVERY competing source reference, so the competing claims remain individually addressable. These are HISTORICAL ASSERTIONS: no competing verdict establishes engineering acceptance, and the migration does not select one as authoritative. The migration did not need to reconstruct any of these reports semantically: they are accounted for at the COLD level — identity, verdict and exact source range — with their complete original bytes preserved verbatim in the committed source archive. The identity list is deliberately exhaustive and is NOT tuned to reproduce any previous count.",
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 9753,
+          "end_line": 9753,
+          "sha256": "a9ddf1120e37da4370e49fae5dbcf2a0828e84131fe2fd6376945e8cf26feff1"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 10040,
+          "end_line": 10040,
+          "sha256": "fd4b07dab2b6dc5297dcdceb06f65fff6b30ad638a4c0049b361cfa5f9c9b72c"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 10366,
+          "end_line": 10366,
+          "sha256": "e3c60f55515ebae167af22dcfcfce27e1ab640dd11002a46dfcb2993c0e47eaa"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 13770,
+          "end_line": 13770,
+          "sha256": "bc6e0838ab4bf82f5bbf1ac893e8bd0ae3ddf4c6606b19c9eb53f7b398f52cbe"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 14645,
+          "end_line": 14645,
+          "sha256": "6a5e099bc235f5502f4d8500a70fa7cd37ecccaeac05dd8683565a273e701066"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 17082,
+          "end_line": 17082,
+          "sha256": "c6b28338acb5a60c3e64cd251227dbfa1b306916d3fe8dbce7c274d948921e0a"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 19040,
+          "end_line": 19040,
+          "sha256": "bc5a130835e644ddaf398175cb3faeaa31c3f63cdc8a88d293b475145b398c4d"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 20180,
+          "end_line": 20180,
+          "sha256": "f04d992c95cd3988e953a9bb273f9107f3d8a37b440f9cddf1e05c3bc0ca54b1"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 20433,
+          "end_line": 20433,
+          "sha256": "0477f4baac8d0ce625b6921aecb8503e82b4a6063bd0c85e710cf0d709f11a72"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 20724,
+          "end_line": 20724,
+          "sha256": "adfc509c23ed047e863617d88297d69cb0421cd867d5a5165fb5129768efad65"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 21012,
+          "end_line": 21012,
+          "sha256": "a864e869024e6eef93b2d478db0f09b47f1e2c42b3d141d8c27ed5c5f782bb80"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 24570,
+          "end_line": 24570,
+          "sha256": "40e93c4fd0f7334e11b7a6524bb921bf06f5427ec757c229424599ce4337c796"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 25800,
+          "end_line": 25800,
+          "sha256": "6b8f34cebd79a4e3f56819fb702404b67c1b71cd538b12d582c33c7e35abbaf9"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 25975,
+          "end_line": 25975,
+          "sha256": "880ed3a180fe8d90c1b96a6164d1af32e26c4290723921b67e822ecb15ed45ff"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 32658,
+          "end_line": 32658,
+          "sha256": "3280abddb238c13bf6ea16a1827b7f88400985b531b2b4de7251431eae12cb49"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 34822,
+          "end_line": 34822,
+          "sha256": "0ff1fc0bb23f2dc819eee1edf88ddf8ec809028161088eb7577a8204e4f70ed1"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 6882,
+          "end_line": 6882,
+          "sha256": "95011f697f22c735329499b108f3de76161153c756648c559ea332f413a67bfd"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 7010,
+          "end_line": 7010,
+          "sha256": "8ab418ac1cadeffb2588d33ab0a50d6fff334dbbb27cb8eca70d47ad1a3f0620"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "kind": "INCOMPLETE_COVERAGE",
+      "identities": [
+        ".factory/epic-board.md"
+      ],
+      "resolution": "RESOLVED",
+      "reason": "The root epic board is 44,731 lines at SOURCE_HEAD and is a PREPEND-ORDERED historical ACT-report log. The trailing range 9,542-44,731 — the region the previous accounting stopped at — was NOT narrative-only: it carries 205 further ACT report sections at heading level 2 (`## ACT-... — VERDICT — date`), belonging to 149 distinct historical ACT identities that the level-1-only extraction had silently skipped. The corrected extraction therefore indexes 361 report sections carrying 316 distinct identities, against the 177 sections / 167 identities previously claimed. Every one of those 316 identities is now mechanically indexed by identity, verdict and exact source range into `historical-index.json` with its own disposition; 25 carry competing verdicts and are surfaced by the SOURCE_CONFLICT records. The remaining prose — the `Updated:` chronology lines and the per-ACT report bodies — is accounted for as CONTIGUOUS NARRATIVE HISTORY at the byte level and is preserved verbatim through the committed source archive; it is deliberately NOT reconstructed paragraph-by-paragraph as new work items. The claimed 167 identities therefore did NOT cover the complete intended historical source, and the count was not tuned to preserve it: the corrected index reports what the source actually contains.",
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 9542,
+          "end_line": 9542,
+          "sha256": "6fe69872b198ce51f0d1b5b76d38a0cd3dbf0950d680334d54102bc063d6922a"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 9636,
+          "end_line": 9636,
+          "sha256": "48bbb2addc7970f2abf0a0fed90d19ce8962fce380062b5dbd33de9f8eac650e"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 44731,
+          "end_line": 44731,
+          "sha256": "fa2c3b53ffff4244cb0ea8bd8736ba8a39e003327e49362e68cb94c1d9943aad"
         }
       ]
     }

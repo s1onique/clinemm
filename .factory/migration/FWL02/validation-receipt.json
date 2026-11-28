@@ -14,7 +14,7 @@
     {
       "id": "HISTORICAL_INDEX.NO_DUPLICATE_JSON_MEMBERS",
       "status": "PASS",
-      "detail": "87055 bytes scanned"
+      "detail": "180249 bytes scanned"
     },
     {
       "id": "HISTORICAL_INDEX.VALID_JSON",
@@ -23,7 +23,7 @@
     {
       "id": "RECONCILIATION.NO_DUPLICATE_JSON_MEMBERS",
       "status": "PASS",
-      "detail": "31639 bytes scanned"
+      "detail": "44681 bytes scanned"
     },
     {
       "id": "RECONCILIATION.VALID_JSON",
@@ -32,7 +32,7 @@
     {
       "id": "EPIC_FILE:EPIC-CLINEMM-APPROVAL-MCP-AUTHORITY.json.NO_DUPLICATE_JSON_MEMBERS",
       "status": "PASS",
-      "detail": "2525 bytes scanned"
+      "detail": "2488 bytes scanned"
     },
     {
       "id": "EPIC_FILE:EPIC-CLINEMM-APPROVAL-MCP-AUTHORITY.json.VALID_JSON",
@@ -41,7 +41,7 @@
     {
       "id": "EPIC_FILE:EPIC-CLINEMM-APPROVAL-PROTECTION.json.NO_DUPLICATE_JSON_MEMBERS",
       "status": "PASS",
-      "detail": "14859 bytes scanned"
+      "detail": "12170 bytes scanned"
     },
     {
       "id": "EPIC_FILE:EPIC-CLINEMM-APPROVAL-PROTECTION.json.VALID_JSON",
@@ -50,7 +50,7 @@
     {
       "id": "EPIC_FILE:EPIC-CLINEMM-ARCHITECTURE.json.NO_DUPLICATE_JSON_MEMBERS",
       "status": "PASS",
-      "detail": "6587 bytes scanned"
+      "detail": "6063 bytes scanned"
     },
     {
       "id": "EPIC_FILE:EPIC-CLINEMM-ARCHITECTURE.json.VALID_JSON",
@@ -59,7 +59,7 @@
     {
       "id": "EPIC_FILE:EPIC-CLINEMM-AUTHENTICATED-DEV-CAPABILITIES.json.NO_DUPLICATE_JSON_MEMBERS",
       "status": "PASS",
-      "detail": "3301 bytes scanned"
+      "detail": "3284 bytes scanned"
     },
     {
       "id": "EPIC_FILE:EPIC-CLINEMM-AUTHENTICATED-DEV-CAPABILITIES.json.VALID_JSON",
@@ -68,7 +68,7 @@
     {
       "id": "EPIC_FILE:EPIC-CLINEMM-CLOSED-FOUNDATION.json.NO_DUPLICATE_JSON_MEMBERS",
       "status": "PASS",
-      "detail": "775 bytes scanned"
+      "detail": "758 bytes scanned"
     },
     {
       "id": "EPIC_FILE:EPIC-CLINEMM-CLOSED-FOUNDATION.json.VALID_JSON",
@@ -86,7 +86,7 @@
     {
       "id": "EPIC_FILE:EPIC-CLINEMM-CONTEXT-COMPACTION-TOKEN-ACCOUNTING.json.NO_DUPLICATE_JSON_MEMBERS",
       "status": "PASS",
-      "detail": "4931 bytes scanned"
+      "detail": "4909 bytes scanned"
     },
     {
       "id": "EPIC_FILE:EPIC-CLINEMM-CONTEXT-COMPACTION-TOKEN-ACCOUNTING.json.VALID_JSON",
@@ -95,7 +95,7 @@
     {
       "id": "EPIC_FILE:EPIC-CLINEMM-DISTRIBUTION-CI.json.NO_DUPLICATE_JSON_MEMBERS",
       "status": "PASS",
-      "detail": "6450 bytes scanned"
+      "detail": "6442 bytes scanned"
     },
     {
       "id": "EPIC_FILE:EPIC-CLINEMM-DISTRIBUTION-CI.json.VALID_JSON",
@@ -104,7 +104,7 @@
     {
       "id": "EPIC_FILE:EPIC-CLINEMM-DYNAMIC-EDITING-BACKENDS.json.NO_DUPLICATE_JSON_MEMBERS",
       "status": "PASS",
-      "detail": "5127 bytes scanned"
+      "detail": "5078 bytes scanned"
     },
     {
       "id": "EPIC_FILE:EPIC-CLINEMM-DYNAMIC-EDITING-BACKENDS.json.VALID_JSON",
@@ -113,7 +113,7 @@
     {
       "id": "EPIC_FILE:EPIC-CLINEMM-FACTORY-INFRASTRUCTURE.json.NO_DUPLICATE_JSON_MEMBERS",
       "status": "PASS",
-      "detail": "11425 bytes scanned"
+      "detail": "11387 bytes scanned"
     },
     {
       "id": "EPIC_FILE:EPIC-CLINEMM-FACTORY-INFRASTRUCTURE.json.VALID_JSON",
@@ -122,7 +122,7 @@
     {
       "id": "EPIC_FILE:EPIC-CLINEMM-FILE-TOOL-WORKSPACE-REALPATH-AUTHORITY.json.NO_DUPLICATE_JSON_MEMBERS",
       "status": "PASS",
-      "detail": "4213 bytes scanned"
+      "detail": "4188 bytes scanned"
     },
     {
       "id": "EPIC_FILE:EPIC-CLINEMM-FILE-TOOL-WORKSPACE-REALPATH-AUTHORITY.json.VALID_JSON",
@@ -131,7 +131,7 @@
     {
       "id": "EPIC_FILE:EPIC-CLINEMM-HOST-TEST-INFRASTRUCTURE.json.NO_DUPLICATE_JSON_MEMBERS",
       "status": "PASS",
-      "detail": "3787 bytes scanned"
+      "detail": "3328 bytes scanned"
     },
     {
       "id": "EPIC_FILE:EPIC-CLINEMM-HOST-TEST-INFRASTRUCTURE.json.VALID_JSON",
@@ -140,7 +140,7 @@
     {
       "id": "EPIC_FILE:EPIC-CLINEMM-PRODUCT-CONFIG-BRANDING.json.NO_DUPLICATE_JSON_MEMBERS",
       "status": "PASS",
-      "detail": "15927 bytes scanned"
+      "detail": "12608 bytes scanned"
     },
     {
       "id": "EPIC_FILE:EPIC-CLINEMM-PRODUCT-CONFIG-BRANDING.json.VALID_JSON",
@@ -149,7 +149,7 @@
     {
       "id": "EPIC_FILE:EPIC-CLINEMM-QUALITY-SUBSTRATE.json.NO_DUPLICATE_JSON_MEMBERS",
       "status": "PASS",
-      "detail": "4617 bytes scanned"
+      "detail": "4580 bytes scanned"
     },
     {
       "id": "EPIC_FILE:EPIC-CLINEMM-QUALITY-SUBSTRATE.json.VALID_JSON",
@@ -158,7 +158,7 @@
     {
       "id": "EPIC_FILE:EPIC-CLINEMM-RUNTIME-TASK-PROGRESSION.json.NO_DUPLICATE_JSON_MEMBERS",
       "status": "PASS",
-      "detail": "10225 bytes scanned"
+      "detail": "8032 bytes scanned"
     },
     {
       "id": "EPIC_FILE:EPIC-CLINEMM-RUNTIME-TASK-PROGRESSION.json.VALID_JSON",
@@ -167,7 +167,7 @@
     {
       "id": "EPIC_FILE:EPIC-CLINEMM-SAFE-YOLO-SEATBELT.json.NO_DUPLICATE_JSON_MEMBERS",
       "status": "PASS",
-      "detail": "19504 bytes scanned"
+      "detail": "13666 bytes scanned"
     },
     {
       "id": "EPIC_FILE:EPIC-CLINEMM-SAFE-YOLO-SEATBELT.json.VALID_JSON",
@@ -176,7 +176,7 @@
     {
       "id": "EPIC_FILE:EPIC-CLINEMM-TASK-CONTROL-LIVENESS.json.NO_DUPLICATE_JSON_MEMBERS",
       "status": "PASS",
-      "detail": "2415 bytes scanned"
+      "detail": "2407 bytes scanned"
     },
     {
       "id": "EPIC_FILE:EPIC-CLINEMM-TASK-CONTROL-LIVENESS.json.VALID_JSON",
@@ -194,7 +194,7 @@
     {
       "id": "EPIC_FILE:EPIC-CLINEMM-TOOL-RUNTIME-RELIABILITY.json.NO_DUPLICATE_JSON_MEMBERS",
       "status": "PASS",
-      "detail": "3642 bytes scanned"
+      "detail": "3627 bytes scanned"
     },
     {
       "id": "EPIC_FILE:EPIC-CLINEMM-TOOL-RUNTIME-RELIABILITY.json.VALID_JSON",
@@ -203,7 +203,7 @@
     {
       "id": "EPIC_FILE:EPIC-CLINEMM-UPSTREAM-INTAKE.json.NO_DUPLICATE_JSON_MEMBERS",
       "status": "PASS",
-      "detail": "5438 bytes scanned"
+      "detail": "5430 bytes scanned"
     },
     {
       "id": "EPIC_FILE:EPIC-CLINEMM-UPSTREAM-INTAKE.json.VALID_JSON",
@@ -259,6 +259,11 @@
       "detail": ""
     },
     {
+      "id": "STRUCTURE.LOCAL_ITEM_IDENTITIES",
+      "status": "PASS",
+      "detail": "every work-item identity is local to its parent epic"
+    },
+    {
       "id": "HISTORICAL_INDEX.UNIQUE_IDENTITIES",
       "status": "PASS",
       "detail": ""
@@ -274,6 +279,11 @@
       "detail": ""
     },
     {
+      "id": "STRUCTURE.NESTED_SCHEMA_VERSIONS",
+      "status": "PASS",
+      "detail": "every work item, historical record and reconciliation record carries the FWMI v1 schema version"
+    },
+    {
       "id": "SOURCE.SOURCE_HEAD_RESOLVES",
       "status": "PASS",
       "detail": "source_head=e196d0e6243f40ebfd76d2cf0db7bda74e97d6d6 resolved=e196d0e6243f40ebfd76d2cf0db7bda74e97d6d6"
@@ -286,7 +296,7 @@
     {
       "id": "SOURCE.REF_RANGES_AND_DIGESTS",
       "status": "PASS",
-      "detail": "344 source references verified against committed bytes"
+      "detail": "534 source references verified against committed bytes"
     },
     {
       "id": "SOURCE.EFFECTIVE_HEAD_RESOLVED",
@@ -306,7 +316,7 @@
     {
       "id": "SEMANTIC.LIFECYCLE_DISTINCTNESS",
       "status": "PASS",
-      "detail": "OPEN=23 ACTIVE=5 BLOCKED=5 DEFERRED=15 TERMINAL=2 UNRESOLVED=0"
+      "detail": "OPEN=20 ACTIVE=4 BLOCKED=5 DEFERRED=14 TERMINAL=2 UNRESOLVED=0"
     },
     {
       "id": "SEMANTIC.UNKNOWN_STATUS_NOT_DEFERRED",
@@ -334,6 +344,31 @@
       "detail": "every CROSS_LINK target is a separately represented obligation"
     },
     {
+      "id": "SEMANTIC.PREREQUISITE_GRAPH_IS_ACYCLIC",
+      "status": "PASS",
+      "detail": "the local prerequisite graph over 45 obligations has no cycle"
+    },
+    {
+      "id": "SEMANTIC.RELATIONSHIP_TARGETS_ARE_SCOPED",
+      "status": "PASS",
+      "detail": "every relationship target carries its epic scope"
+    },
+    {
+      "id": "SEMANTIC.SINGLE_AUTHORITATIVE_OBLIGATION_PER_GROUP",
+      "status": "PASS",
+      "detail": "every resolved duplicate group carries exactly one authoritative obligation"
+    },
+    {
+      "id": "SEMANTIC.NORMALIZED_PRIORITIES_VALID",
+      "status": "PASS",
+      "detail": "every priority is in the native P0/P1/P2/P3 vocabulary"
+    },
+    {
+      "id": "SEMANTIC.FRONTIER_ENTRIES_RESOLVE",
+      "status": "PASS",
+      "detail": "19 frontier entries resolve to represented obligations"
+    },
+    {
       "id": "SEMANTIC.EMPTY_EPICS_REMAIN_DISCOVERABLE",
       "status": "PASS",
       "detail": "4 epics with no open items retain exit criteria and source refs"
@@ -341,7 +376,7 @@
     {
       "id": "SEMANTIC.CONFLICTS_HAVE_DISPOSITIONS",
       "status": "PASS",
-      "detail": "7/7 conflicting historical identities carry an explicit reconciliation disposition"
+      "detail": "25/25 conflicting historical identities carry an explicit reconciliation disposition"
     },
     {
       "id": "SEMANTIC.NO_PROMOTED_ACCEPTANCE",
@@ -351,7 +386,7 @@
     {
       "id": "SEMANTIC.HISTORICAL_ACTS_ACCOUNTED",
       "status": "PASS",
-      "detail": "167 historical ACT identities indexed"
+      "detail": "316 historical ACT identities indexed"
     },
     {
       "id": "ADVERSARIAL.MODIFIED_SOURCE_DIGEST_DETECTED",
@@ -386,9 +421,9 @@
     {
       "id": "ADVERSARIAL.CONFLICTING_HISTORICAL_IDENTITY_DETECTED",
       "status": "PASS",
-      "detail": "7 conflicting identities; 7 retain their competing source references"
+      "detail": "25 conflicting identities; 25 retain their competing source references"
     }
   ],
-  "mechanical_coverage": "MECHANICAL: 177 historical ACT report sections in the committed root board were mechanically indexed by identity, verdict and exact source range into 167 distinct historical ACT identities (159 UNAMBIGUOUS, 1 AMBIGUOUS, 7 CONFLICTING). Every competing verdict is retained with its own source reference; no identity is silently deduplicated.",
-  "semantic_coverage": "SEMANTIC: 21 actual epics and 49 engineering obligations were reconciled from the committed epic detail files and the board's operational index. The board's Current frontier / Active epics / Open supporting work / Deferred-hold tables were reconciled lane-by-lane; the per-epic Open work and Deferred work sections were reconciled obligation-by-obligation. The remaining narrative history (the board's prepend-ordered ACT report prose, the multi-ACT closure narratives in command-risk-classification.md, webview-seam-aop.md and context-compaction-token-accounting.md, and the long Current-status bullets in safe-yolo-seatbelt.md) was accounted for as contiguous narrative history at the byte level and is preserved verbatim in the committed source archive. It is deliberately NOT reconstructed as new work items."
+  "mechanical_coverage": "MECHANICAL: 361 historical ACT report sections in the committed root board were mechanically indexed by identity, verdict and exact source range into 316 distinct historical ACT identities (289 UNAMBIGUOUS, 2 AMBIGUOUS, 25 CONFLICTING). The extraction indexes BOTH report-section heading levels: the level-1 prepend-ordered report log AND the level-2 report sections of the trailing board region, which the previous level-1-only extraction silently skipped (149 identities, including 18 with competing verdicts). Every competing verdict is retained with its own source reference; no identity is silently deduplicated.",
+  "semantic_coverage": "SEMANTIC: 21 actual epics and 45 engineering obligations were reconciled from the committed epic detail files and the board's operational index. The board's Current frontier / Active epics / Open supporting work / Deferred-hold tables were reconciled lane-by-lane; the per-epic Open work and Deferred work sections were reconciled obligation-by-obligation. Where the source represents ONE obligation in several places, exactly ONE representation is authoritative and the others are conserved as source accounting (secondary representations) and reconciliation records, so no source representation is lost and no obligation is scheduled twice. The remaining narrative history (the board's report prose and `Updated:` chronology lines, the multi-ACT closure narratives in command-risk-classification.md, webview-seam-aop.md and context-compaction-token-accounting.md, and the long Current-status bullets in safe-yolo-seatbelt.md) was accounted for as contiguous narrative history at the byte level and is preserved verbatim in the committed source archive. It is deliberately NOT reconstructed as new work items. The board's trailing region 9,542-44,731 is accounted for in full; it carries 205 further report sections belonging to 149 historical identities, all of which are now indexed."
 }

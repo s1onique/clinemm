@@ -10,7 +10,8 @@
   ],
   "items": [
     {
-      "item_id": "EPIC-CLINEMM-FACTORY-INFRASTRUCTURE/GIT-SAFETY-LOCAL-FORCE-PUSH-GUARD01",
+      "schema_version": 1,
+      "item_id": "GIT-SAFETY-LOCAL-FORCE-PUSH-GUARD01",
       "title": "ACT-CLINEMM-GIT-SAFETY-LOCAL-FORCE-PUSH-GUARD01 — local pre-push force-push guard",
       "description": "Defense-in-depth local pre-push hook. The remote-side protection is the GitHub ruleset `cline-- protect published history` (`id=21037630`); the local guard is the second line. Status: OPEN (P2, non-blocking).",
       "workstream": "factory-infrastructure",
@@ -47,7 +48,8 @@
       ]
     },
     {
-      "item_id": "EPIC-CLINEMM-FACTORY-INFRASTRUCTURE/FWL02-FWMI-V1-MIGRATION-INTERCHANGE",
+      "schema_version": 1,
+      "item_id": "FWL02-FWMI-V1-MIGRATION-INTERCHANGE",
       "title": "FWL02 — FWMI v1 migration interchange (producer side)",
       "description": "The producer emits a source-bound FWMI v1 interchange package (source manifest, epic records, historical index, reconciliation manifest). The operator runs the shadow migration EXTERNALLY, against the real package, in the Leamas repository, once both sides are ready. The consumer side is owned by Leamas and is NOT implemented here. The exchange contract is documented at `docs/factory/work-ledger-interchange.md` in the Leamas repository. Leamas is the SOLE implementation owner of the Factory Work Ledger and of its FWMI v1 import consumer; the consumer lives in the existing Go ledger domain, importer, transaction store, evidence authority and rendering mechanisms of the Leamas repository. There is no second ledger implementation in ClineMM, no universal Markdown parser and no architectural expansion. The `ACT-CLINEMM-FWL02-INTERCHANGE-IMPORT-ADAPTER01` adapter was an experiment in the wrong repository. It was removed; the evidence package of that ACT is retained as the historical record of the experiment, not as a canonical implementation.",
       "workstream": "factory-infrastructure",
@@ -96,7 +98,8 @@
       ]
     },
     {
-      "item_id": "EPIC-CLINEMM-FACTORY-INFRASTRUCTURE/HUSKY-TOOLCHAIN-PATH-PORTABILITY01",
+      "schema_version": 1,
+      "item_id": "HUSKY-TOOLCHAIN-PATH-PORTABILITY01",
       "title": "HUSKY-TOOLCHAIN-PATH-PORTABILITY01 — repository hook tool discovery portability",
       "description": "Make repository hooks reliably discover required developer tools across Apple Silicon Homebrew, Intel Homebrew, Linuxbrew, Nix / GUI / non-login environments. Current state (do NOT touch in this backlog ACT): `.husky/pre-commit` enumerates Homebrew prefixes for darwin-arm64, darwin-x86_64, and Linuxbrew for the gitleaks binary; the gitleaks branch fails CLOSED if gitleaks cannot be located. The `cd apps/vscode && bunx lint-staged` step does NOT enumerate prefixes; bun / bunx are operator-side PATH-injected. Constraints carried into any future ACT: recon first; no machine-specific tracked symlinks; no broad global PATH mutation unless evidence justifies it; prefer bounded per-tool discovery if opened (e.g. `command -v` chain with documented fallbacks); do NOT silently weaken the gitleaks requirement.",
       "workstream": "factory-infrastructure",
@@ -128,13 +131,14 @@
       ]
     },
     {
-      "item_id": "EPIC-CLINEMM-FACTORY-INFRASTRUCTURE/UPSTREAM-CATCHUP-RECON01",
+      "schema_version": 1,
+      "item_id": "UPSTREAM-CATCHUP-RECON01",
       "title": "ACT-CLINEMM-UPSTREAM-CATCHUP-RECON01 — upstream fork-distance catch-up",
       "description": "Reduce fork-from-upstream distance deliberately, without sacrificing ClineMM-specific architecture. Operate the upstream-sync cadence that `docs/factory/upstream-sync.md` already establishes as doctrine but does NOT yet own as a backlog ACT. Doctrinal substrate (already exists; do not duplicate): upstream = https://github.com/cline/cline.git (immutable); origin = s1onique/clinemm; ClineMM consumes upstream via MERGE, never rebase; conflict evidence contract `docs/factory/sync/<YYYY-MM-DD>/{upstream_commit.txt,merge_commit.txt,conflict_report.md}`; branch topology factory/*, product/* (reserved), sync/* (transient); divergence measurement `factory/inventories/repository.json#upstream.{commit_oid,tree_oid,merge_base_with_upstream,ahead,behind}`; release tags `factory/inventories/repository.json#tags.nearest`. Historical baseline snapshot (frozen at ACT-CLINEMM-FORK-BASELINE01-CORRECTION02; the future ACT must refresh this): upstream.commit_oid = c564045d8135c0c1c330b21d47b68b74917ce614; merge_base_with_upstream = c564045d8135c0c1c330b21d47b68b74917ce614; working_copy.ahead = 17; working_copy.behind = 0. User-visible (NON-AUTHORITATIVE) divergence snapshot: FORK_AHEAD_OF_UPSTREAM = 861 commits; UPSTREAM_AHEAD_OF_FORK = 176 commits; LABEL = OBSERVED_UI_SNAPSHOT; SOURCE = GitHub UI compare / pull-request page; DATE_OBSERVED = 2026-08-29; CANONICAL_GIT_DIVERGENCE = NOT_MEASURED_IN_THIS_ACT. Strategy (carried into the new ACT): progressive bounded sync slices, NOT a 176-commit blind mega-merge — per upstream cluster choose MERGE_UPSTREAM_SLICE / PORT_THEMATIC_SERIES / MANUAL_PORT / DO_NOT_IMPORT. Hard invariants: preserve ClineMM Seatbelt / Safe-YOLO semantics; preserve explicit completion authority (per the ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-CONTRACT01 family); preserve Factory evidence tooling; NO silent regression to upstream plain-YOLO semantics; NO wholesale replacement of ClineMM-specific runtime seams. Forbidden: NO `git merge upstream/main` as the first operation; NO giant rebase without conflict inventory; NO semantic conflict resolution based solely on \"prefer ours/theirs\"; NO deleting fork-specific functionality merely to make sync easy. Constraints: no actual upstream merge / rebase / cherry-pick in this backlog ACT; no upstream remote is configured in this clone, so the future ACT must start by configuring the canonical upstream remote (or document that the operator declined to do so).",
       "workstream": "factory-infrastructure",
       "original_status": "FUTURE / UNIMPLEMENTED",
       "lifecycle": "DEFERRED",
-      "priority": "HIGH",
+      "priority": "P1",
       "qualification": "UNKNOWN",
       "criteria": [],
       "criteria_coverage": "UNKNOWN",

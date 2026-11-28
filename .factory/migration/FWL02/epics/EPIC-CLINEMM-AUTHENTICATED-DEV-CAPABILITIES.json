@@ -12,7 +12,8 @@
   ],
   "items": [
     {
-      "item_id": "EPIC-CLINEMM-AUTHENTICATED-DEV-CAPABILITIES/AUTH-DEV-CAP-DESIGN01",
+      "schema_version": 1,
+      "item_id": "AUTH-DEV-CAP-DESIGN01",
       "title": "AUTH-DEV-CAP-DESIGN01 — per-family credential-capability design",
       "description": "Design space only. The deliverable is a markdown document under `.factory/epics/authenticated-dev-capabilities.md` that names: each credential family, the proposed host-side executor pattern, the audit-log contract, and an explicit **per-family opt-in surface** the user would toggle. No source code, no credential bytes, no live invocation in the design ACT. The V1 sensitive-read confinement contract was deliberately scoped to SSH / GnuPG / macOS-keychain and EXCLUDED `~/.aws/`, `~/.kube/`, `~/.docker/config.json`, `~/.config/gh/hosts.yml`; the design ACT must propose how to handle the excluded surfaces without breaking the V1 boundary. The four per-family implementation ACTs (`AUTH-DEV-CAP-AWS01`, `AUTH-DEV-CAP-KUBE01`, `AUTH-DEV-CAP-DOCKER01`, `AUTH-DEV-CAP-GH01`) are all explicitly DEFER on the design ACT landing.",
       "workstream": "authenticated-dev-capabilities",

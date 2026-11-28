@@ -11,7 +11,8 @@
   ],
   "items": [
     {
-      "item_id": "EPIC-CLINEMM-DYNAMIC-EDITING-BACKENDS/DIRAC-EDITING-RECON01",
+      "schema_version": 1,
+      "item_id": "DIRAC-EDITING-RECON01",
       "title": "DIRAC-EDITING-RECON01 — Dirac-style editing-backend recon",
       "description": "Working-label recon. Must characterize: the current edit path (which calls, which authority, which audit), which Dirac-style mechanics are *actually* needed (not all of them), and the minimum abstraction surface required to plug a non-native backend. Do not implement anything in this ACT. Target modes are `cline-native`, `dirac`, `auto`; `auto` selects per-file using the backend's claimed suitability for the file class. The Cline-native edit path is the safety baseline: no new backend may widen filesystem authority, weaken approval semantics, or skip the existing audit trail; the Cline-native path remains the default unless the user explicitly opts in. Hash-anchored / AST-aware mechanics are a *candidate* capability, not a *proven* one — every claim must come from a bounded recon, not a marketing description. Conservative-first ordering: recon first, abstraction second, backend integration third, qualification fourth.",
       "workstream": "dynamic-editing-backends",
@@ -40,7 +41,8 @@
       ]
     },
     {
-      "item_id": "EPIC-CLINEMM-DYNAMIC-EDITING-BACKENDS/EDIT-BACKEND-ABSTRACTION01",
+      "schema_version": 1,
+      "item_id": "EDIT-BACKEND-ABSTRACTION01",
       "title": "EDIT-BACKEND-ABSTRACTION01 — editing-backend abstraction",
       "description": "Define the backend interface + capability declaration; do NOT integrate any non-native backend in this ACT. The backend interface must be capability-based (declare what you support, not what you are); allow per-session and per-call override; preserve audit-trail parity. BLOCKED on the recon.",
       "workstream": "dynamic-editing-backends",
@@ -50,7 +52,21 @@
       "qualification": "UNKNOWN",
       "criteria": [],
       "criteria_coverage": "UNKNOWN",
-      "dependencies": [],
+      "dependencies": [
+        {
+          "kind": "DEPENDS_ON",
+          "target": "EPIC-CLINEMM-DYNAMIC-EDITING-BACKENDS/DIRAC-EDITING-RECON01",
+          "source_refs": [
+            {
+              "path": ".factory/epics/dynamic-editing-backends.md",
+              "start_line": 25,
+              "end_line": 25,
+              "sha256": "831fe3c04df7a9636704897ab8a76cc59f773c34bfa6860f2a2c02e60a033832"
+            }
+          ],
+          "required_outcome": "The recon lands and scopes the minimum abstraction surface"
+        }
+      ],
       "dependency_coverage": "COMPLETE",
       "blockers": [
         "BLOCKED on `DIRAC-EDITING-RECON01`."
@@ -67,21 +83,6 @@
           "start_line": 36,
           "end_line": 36,
           "sha256": "6004a6024ada23104f2f68d7624ef2b04c2736cefff097290648bac4bd0d3471"
-        }
-      ],
-      "relationships": [
-        {
-          "kind": "DEPENDS_ON",
-          "target": "EPIC-CLINEMM-DYNAMIC-EDITING-BACKENDS/DIRAC-EDITING-RECON01",
-          "source_refs": [
-            {
-              "path": ".factory/epics/dynamic-editing-backends.md",
-              "start_line": 25,
-              "end_line": 25,
-              "sha256": "831fe3c04df7a9636704897ab8a76cc59f773c34bfa6860f2a2c02e60a033832"
-            }
-          ],
-          "required_outcome": "The recon lands and scopes the minimum abstraction surface"
         }
       ]
     }

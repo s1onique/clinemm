@@ -40,7 +40,8 @@ export const EPIC_RUNTIME_TASK_PROGRESSION: ReconciledEpic = {
 	original_status:
 		"OPEN — fresh epic opened at FUTURE-BACKLOG-CENSUS01-CORRECTION01. The canonical ACT `ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01` is OPEN with OWN01 RED reproduced at HEAD `f106bc63d` and OWN02-OWN03-RECON at CAPTURE_INSUFFICIENT.",
 	lifecycle: "OPEN",
-	priority: "HIGH",
+	priority: "P1",
+	source_priority: "HIGH",
 	exit_criteria: [
 		"A new user-visible non-progressing-task symptom is reproduced at the local canonical seam (→ reopen `RUNTIME-TASK-PROGRESSION-RECON01` or open a per-symptom ACT).",
 		"A `RUNTIME_THINKING_STALL` upstream issue graduates from RADAR to IMPORT against this epic (requires a strict destination-contract test against the recon evidence).",
@@ -52,8 +53,7 @@ export const EPIC_RUNTIME_TASK_PROGRESSION: ReconciledEpic = {
 	],
 	items: [
 		{
-			item_id:
-				"EPIC-CLINEMM-RUNTIME-TASK-PROGRESSION/RUNTIME-TASK-PROGRESSION-RECON01",
+			item_id: "RUNTIME-TASK-PROGRESSION-RECON01",
 			title:
 				"ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01 — runtime progression recon",
 			description:
@@ -61,11 +61,12 @@ export const EPIC_RUNTIME_TASK_PROGRESSION: ReconciledEpic = {
 			workstream: "runtime-task-progression",
 			original_status: "HIGH",
 			lifecycle: "OPEN",
-			priority: "HIGH",
+			priority: "P1",
+			source_priority: "HIGH",
+			relationships: [],
 			qualification: "UNKNOWN",
 			criteria: [],
 			criteria_coverage: "UNKNOWN",
-			dependencies: [],
 			dependency_coverage: "COMPLETE",
 			blockers: [],
 			current_act: "ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01",
@@ -83,8 +84,7 @@ export const EPIC_RUNTIME_TASK_PROGRESSION: ReconciledEpic = {
 			source_refs: [{ path: RUNTIME, lines: [73, 73] }],
 		},
 		{
-			item_id:
-				"EPIC-CLINEMM-RUNTIME-TASK-PROGRESSION/CANCEL-AFFORDANCE-AUTHORITY-RECON",
+			item_id: "CANCEL-AFFORDANCE-AUTHORITY-RECON",
 			title:
 				"CANCEL-AFFORDANCE-AUTHORITY-RECON — Cancel-affordance authority recon",
 			description:
@@ -92,7 +92,9 @@ export const EPIC_RUNTIME_TASK_PROGRESSION: ReconciledEpic = {
 			workstream: "runtime-task-progression",
 			original_status: "HIGH — partial",
 			lifecycle: "OPEN",
-			priority: "HIGH",
+			priority: "P1",
+			source_priority: "HIGH",
+			relationships: [],
 			qualification: "INSUFFICIENT",
 			criteria: [
 				"C04_CURRENT_CANCEL_OWNER_IDENTIFIED = PASS (SdkTaskControlCoordinator.cancelTask).",
@@ -109,7 +111,6 @@ export const EPIC_RUNTIME_TASK_PROGRESSION: ReconciledEpic = {
 				"C24_LIVE_CANCEL_EFFECTIVE = NOT_TESTED.",
 			],
 			criteria_coverage: "COMPLETE",
-			dependencies: [],
 			dependency_coverage: "COMPLETE",
 			blockers: [
 				"The LIVE four-value capture half is outstanding; the static source-seam map half is already bound.",
@@ -129,40 +130,7 @@ export const EPIC_RUNTIME_TASK_PROGRESSION: ReconciledEpic = {
 			],
 		},
 		{
-			item_id:
-				"EPIC-CLINEMM-RUNTIME-TASK-PROGRESSION/EDITOR-TOOL-APPROVAL-FRICTION-RECON01",
-			title:
-				"ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01 — restored NEXT in the runtime lane",
-			description:
-				"NEXT / HIGH — completion-authority prerequisite SATISFIED per `SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01` CLOSED / UPSTREAM_SUPERSEDED at `15c7e3374`; remaining gates = operator-driven live editor/non-command specimen + host/Aqua availability as applicable, NOT blocked by a completion-authority dependency. This ACT was previously deferred for exactly one bounded cycle to allow LIVENESS02 + CONTRACT01 to finish; the prior IMPLEMENTATION01 blocker was removed when the upstream integration retired that prerequisite.",
-			workstream: "runtime-task-progression",
-			original_status: "NEXT / HIGH",
-			lifecycle: "ACTIVE",
-			priority: "HIGH",
-			qualification: "UNKNOWN",
-			criteria: [],
-			criteria_coverage: "UNKNOWN",
-			dependencies: [],
-			dependency_coverage: "COMPLETE",
-			blockers: [
-				"Operator-driven live editor/non-command specimen plus host/Aqua availability as applicable.",
-			],
-			current_act: "ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01",
-			related_acts: ["ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01"],
-			evidence_locators: [],
-			reopen_conditions: [],
-			source_refs: [{ path: RUNTIME, lines: [78, 78] }],
-			relationships: [
-				{
-					kind: "RELATED_TO",
-					target:
-						"EPIC-CLINEMM-APPROVAL-PROTECTION/EDITOR-TOOL-APPROVAL-FRICTION-RECON01",
-					source_refs: [{ path: RUNTIME, lines: [78, 78] }],
-				},
-			],
-		},
-		{
-			item_id: "EPIC-CLINEMM-RUNTIME-TASK-PROGRESSION/CLOSED-LIVE-UPGRADE",
+			item_id: "CLOSED-LIVE-UPGRADE",
 			title: "RUNTIME-TASK-PROGRESSION `CLOSED_LIVE` upgrade",
 			description:
 				"The optional future `CLOSED_LIVE` upgrade of `RUNTIME-TASK-PROGRESSION01`, deferred until a live ClineMM recurrence is available. The board's Deferred / hold table records it as consciously postponed.",
@@ -170,10 +138,11 @@ export const EPIC_RUNTIME_TASK_PROGRESSION: ReconciledEpic = {
 			original_status: "DEFER",
 			lifecycle: "DEFERRED",
 			priority: "P1",
+			source_priority: "P1",
+			relationships: [],
 			qualification: "UNKNOWN",
 			criteria: [],
 			criteria_coverage: "UNKNOWN",
-			dependencies: [],
 			dependency_coverage: "COMPLETE",
 			blockers: [],
 			current_act: null,
@@ -202,6 +171,7 @@ export const EPIC_CONTEXT_COMPACTION: ReconciledEpic = {
 		"DISCRIMINATOR EXECUTED + FORM-REVIEW HARDENED + REVIEWER-DISPOSITION PASS_WITH_ONE_P1_FIX + C1: GO. Recon ACT is CLOSED_WITH_RESIDUE (CASE_A — Cross-scale ratio-transfer mismatch REPRODUCED, LIKELY_CAUSE = CROSS_SCALE_RATIO_TRANSFER_ASSUMPTION, ROOT_CAUSE = NOT_YET_PROMOTED).",
 	lifecycle: "ACTIVE",
 	priority: "P1",
+	source_priority: "P1",
 	exit_criteria: [
 		"The three admissible header-bar contracts are classified by the recon: C1 (bar = last provider observation, label fix only), C2 (bar = working-context estimate, projection fix), C3 (bar changes semantic source after compaction, wire-contract fix).",
 	],
@@ -211,8 +181,7 @@ export const EPIC_CONTEXT_COMPACTION: ReconciledEpic = {
 	],
 	items: [
 		{
-			item_id:
-				"EPIC-CLINEMM-CONTEXT-COMPACTION-TOKEN-ACCOUNTING/COMPACTION-HEADER-BAR-FRESHNESS-RECON01",
+			item_id: "COMPACTION-HEADER-BAR-FRESHNESS-RECON01",
 			title:
 				"ACT-CLINEMM-COMPACTION-HEADER-BAR-FRESHNESS-RECON01 — post-compaction header-bar freshness recon",
 			description:
@@ -221,6 +190,8 @@ export const EPIC_CONTEXT_COMPACTION: ReconciledEpic = {
 			original_status: "OPEN 2026-09-02; RECON_ONLY",
 			lifecycle: "ACTIVE",
 			priority: "P1",
+			source_priority: "P1",
+			relationships: [],
 			qualification: "PARTIAL",
 			criteria: [
 				"ACT body committed with `OPEN / RECON_ONLY` status.",
@@ -235,7 +206,6 @@ export const EPIC_CONTEXT_COMPACTION: ReconciledEpic = {
 				"No PR; this ACT is recon-only and the closure path is the verdict, not a code merge.",
 			],
 			criteria_coverage: "COMPLETE",
-			dependencies: [],
 			dependency_coverage: "COMPLETE",
 			blockers: [
 				"The recon MUST author the real RED only after the C1/C2/C3 semantic contract is frozen.",
@@ -276,6 +246,7 @@ export const EPIC_FILE_TOOL_REALPATH: ReconciledEpic = {
 	original_status: "OPEN (RECON lane)",
 	lifecycle: "ACTIVE",
 	priority: "P0",
+	source_priority: "P0",
 	exit_criteria: [
 		"Q1 endpoint enumeration + Q2/Q3 sanitization regime + Q3 base-directory authority + Q4 lowest composition seam + Q5 RED matrix with A/B/C/D controls must complete before any repair is authorized.",
 	],
@@ -286,8 +257,7 @@ export const EPIC_FILE_TOOL_REALPATH: ReconciledEpic = {
 	],
 	items: [
 		{
-			item_id:
-				"EPIC-CLINEMM-FILE-TOOL-WORKSPACE-REALPATH-AUTHORITY/FILE-TOOL-WORKSPACE-REALPATH-AUTHORITY-RECON01",
+			item_id: "FILE-TOOL-WORKSPACE-REALPATH-AUTHORITY-RECON01",
 			title:
 				"ACT-CLINEMM-FILE-TOOL-WORKSPACE-REALPATH-AUTHORITY-RECON01 — file-tool workspace-escape authority recon",
 			description:
@@ -296,10 +266,11 @@ export const EPIC_FILE_TOOL_REALPATH: ReconciledEpic = {
 			original_status: "OPEN / RECON_LANE_AUTHORIZED / NO_LIVE_FAIL_BIND_YET",
 			lifecycle: "ACTIVE",
 			priority: "P0",
+			source_priority: "P0",
+			relationships: [],
 			qualification: "UNQUALIFIED",
 			criteria: [],
 			criteria_coverage: "UNKNOWN",
-			dependencies: [],
 			dependency_coverage: "COMPLETE",
 			blockers: [],
 			current_act: "ACT-CLINEMM-FILE-TOOL-WORKSPACE-REALPATH-AUTHORITY-RECON01",
@@ -329,6 +300,7 @@ export const EPIC_DISTRIBUTION_CI: ReconciledEpic = {
 	original_status: "ACTIVE — all 3 items open",
 	lifecycle: "ACTIVE",
 	priority: "P2",
+	source_priority: "P2",
 	exit_criteria: [
 		"Artifact trust binding: every published artifact must carry `SOURCE_HEAD`, `VERSION`, `PATH`, `BYTE_SIZE`, `SHA256`, and (where relevant) `installed version`.",
 	],
@@ -338,7 +310,7 @@ export const EPIC_DISTRIBUTION_CI: ReconciledEpic = {
 	],
 	items: [
 		{
-			item_id: "EPIC-CLINEMM-DISTRIBUTION-CI/GITHUB-ACTIONS01",
+			item_id: "GITHUB-ACTIONS01",
 			title: "EPIC-CLINEMM-GITHUB-ACTIONS01 — GitHub Actions recon",
 			description:
 				"First ACT: `ACT-CLINEMM-GITHUB-ACTIONS-RECON01` — recon existing workflows, actual failing jobs, package-manager topology, typecheck / test / build gates, VSIX packaging, permissions / secrets, release triggers. **GitHub Actions recon first, repair never** — the first ACT is a recon, not a repair. No repair in this board ACT.",
@@ -346,10 +318,11 @@ export const EPIC_DISTRIBUTION_CI: ReconciledEpic = {
 			original_status: "OPEN",
 			lifecycle: "OPEN",
 			priority: "P2",
+			source_priority: "P2",
+			relationships: [],
 			qualification: "UNQUALIFIED",
 			criteria: [],
 			criteria_coverage: "UNKNOWN",
-			dependencies: [],
 			dependency_coverage: "COMPLETE",
 			blockers: [],
 			current_act: "ACT-CLINEMM-GITHUB-ACTIONS-RECON01",
@@ -359,7 +332,7 @@ export const EPIC_DISTRIBUTION_CI: ReconciledEpic = {
 			source_refs: [{ path: DIST, lines: [37, 37] }],
 		},
 		{
-			item_id: "EPIC-CLINEMM-DISTRIBUTION-CI/GITHUB-DISTRIBUTION01",
+			item_id: "GITHUB-DISTRIBUTION01",
 			title: "EPIC-CLINEMM-GITHUB-DISTRIBUTION01 — GitHub distribution",
 			description:
 				"Two distinct questions, do not conflate: (A) publish a Cline-- distributable artifact to GitHub (likely primary artifact: VSIX via GitHub Release asset); (B) determine whether any package genuinely belongs in GitHub Packages. Artifact trust binding: `SOURCE_HEAD`, `VERSION`, `PATH`, `BYTE_SIZE`, `SHA256`, installed version where relevant. Rule: do not rebuild a supposedly identical release artifact after qualification unless reproducibility is separately proven.",
@@ -367,10 +340,11 @@ export const EPIC_DISTRIBUTION_CI: ReconciledEpic = {
 			original_status: "OPEN",
 			lifecycle: "OPEN",
 			priority: "P2",
+			source_priority: "P2",
+			relationships: [],
 			qualification: "UNQUALIFIED",
 			criteria: [],
 			criteria_coverage: "UNKNOWN",
-			dependencies: [],
 			dependency_coverage: "COMPLETE",
 			blockers: [],
 			current_act: null,
@@ -380,7 +354,7 @@ export const EPIC_DISTRIBUTION_CI: ReconciledEpic = {
 			source_refs: [{ path: DIST, lines: [38, 38] }],
 		},
 		{
-			item_id: "EPIC-CLINEMM-DISTRIBUTION-CI/DOGFOOD-SINGLE-WORKTREE-CLEANUP01",
+			item_id: "DOGFOOD-SINGLE-WORKTREE-CLEANUP01",
 			title:
 				"ACT-CLINEMM-DOGFOOD-SINGLE-WORKTREE-CLEANUP01 — drop the detached dogfood worktree",
 			description:
@@ -389,10 +363,11 @@ export const EPIC_DISTRIBUTION_CI: ReconciledEpic = {
 			original_status: "OPEN (P2)",
 			lifecycle: "OPEN",
 			priority: "P2",
+			source_priority: "P2",
+			relationships: [],
 			qualification: "UNQUALIFIED",
 			criteria: [],
 			criteria_coverage: "UNKNOWN",
-			dependencies: [],
 			dependency_coverage: "COMPLETE",
 			blockers: [],
 			current_act: "ACT-CLINEMM-DOGFOOD-SINGLE-WORKTREE-CLEANUP01",
@@ -402,7 +377,7 @@ export const EPIC_DISTRIBUTION_CI: ReconciledEpic = {
 			source_refs: [{ path: DIST, lines: [39, 39] }],
 		},
 		{
-			item_id: "EPIC-CLINEMM-DISTRIBUTION-CI/EXTENSION-PUBLISHING01",
+			item_id: "EXTENSION-PUBLISHING01",
 			title:
 				"EPIC-CLINEMM-EXTENSION-PUBLISHING01 — publish to VS Code Marketplace + Open VSX",
 			description:
@@ -411,10 +386,11 @@ export const EPIC_DISTRIBUTION_CI: ReconciledEpic = {
 			original_status: "OPEN",
 			lifecycle: "OPEN",
 			priority: "P1",
+			source_priority: "P1",
+			relationships: [],
 			qualification: "UNQUALIFIED",
 			criteria: [],
 			criteria_coverage: "UNKNOWN",
-			dependencies: [],
 			dependency_coverage: "COMPLETE",
 			blockers: [],
 			current_act: null,
@@ -445,6 +421,7 @@ export const EPIC_DYNAMIC_EDITING: ReconciledEpic = {
 		"ACTIVE — fresh epic opened at FUTURE-BACKLOG-CENSUS01 (2026-08-27). No ACT authored yet; the items below are working labels (canonical ACT IDs are assigned per FACT-001 in `.factory/epics/factory-infrastructure.md`).",
 	lifecycle: "ACTIVE",
 	priority: "P1",
+	source_priority: "P1",
 	exit_criteria: [
 		"A user-visible benefit of a non-native backend is reproduced in production-equivalent tests against the Cline-native path (→ the BLOCK on `EDIT-BACKEND-ABSTRACTION01` is reconsidered).",
 		"The Cline-native edit path widens authority / weakens approval / skips the audit trail (→ HOLD all backend work until repaired).",
@@ -455,7 +432,7 @@ export const EPIC_DYNAMIC_EDITING: ReconciledEpic = {
 	],
 	items: [
 		{
-			item_id: "EPIC-CLINEMM-DYNAMIC-EDITING-BACKENDS/DIRAC-EDITING-RECON01",
+			item_id: "DIRAC-EDITING-RECON01",
 			title: "DIRAC-EDITING-RECON01 — Dirac-style editing-backend recon",
 			description:
 				"Working-label recon. Must characterize: the current edit path (which calls, which authority, which audit), which Dirac-style mechanics are *actually* needed (not all of them), and the minimum abstraction surface required to plug a non-native backend. Do not implement anything in this ACT. Target modes are `cline-native`, `dirac`, `auto`; `auto` selects per-file using the backend's claimed suitability for the file class. The Cline-native edit path is the safety baseline: no new backend may widen filesystem authority, weaken approval semantics, or skip the existing audit trail; the Cline-native path remains the default unless the user explicitly opts in. Hash-anchored / AST-aware mechanics are a *candidate* capability, not a *proven* one — every claim must come from a bounded recon, not a marketing description. Conservative-first ordering: recon first, abstraction second, backend integration third, qualification fourth.",
@@ -463,10 +440,11 @@ export const EPIC_DYNAMIC_EDITING: ReconciledEpic = {
 			original_status: "OPEN",
 			lifecycle: "OPEN",
 			priority: "P1",
+			source_priority: "P1",
+			relationships: [],
 			qualification: "UNQUALIFIED",
 			criteria: [],
 			criteria_coverage: "UNKNOWN",
-			dependencies: [],
 			dependency_coverage: "COMPLETE",
 			blockers: [],
 			current_act: null,
@@ -478,8 +456,7 @@ export const EPIC_DYNAMIC_EDITING: ReconciledEpic = {
 			source_refs: [{ path: DYNAMIC, lines: [35, 35] }],
 		},
 		{
-			item_id:
-				"EPIC-CLINEMM-DYNAMIC-EDITING-BACKENDS/EDIT-BACKEND-ABSTRACTION01",
+			item_id: "EDIT-BACKEND-ABSTRACTION01",
 			title: "EDIT-BACKEND-ABSTRACTION01 — editing-backend abstraction",
 			description:
 				"Define the backend interface + capability declaration; do NOT integrate any non-native backend in this ACT. The backend interface must be capability-based (declare what you support, not what you are); allow per-session and per-call override; preserve audit-trail parity. BLOCKED on the recon.",
@@ -487,10 +464,10 @@ export const EPIC_DYNAMIC_EDITING: ReconciledEpic = {
 			original_status: "BLOCKED on recon",
 			lifecycle: "BLOCKED",
 			priority: "P1",
+			source_priority: "P1",
 			qualification: "UNKNOWN",
 			criteria: [],
 			criteria_coverage: "UNKNOWN",
-			dependencies: [],
 			dependency_coverage: "COMPLETE",
 			blockers: ["BLOCKED on `DIRAC-EDITING-RECON01`."],
 			current_act: null,
@@ -523,7 +500,8 @@ export const EPIC_TOOL_RUNTIME_RELIABILITY: ReconciledEpic = {
 	original_status:
 		"OPEN — fresh epic opened at FUTURE-BACKLOG-CENSUS01-CORRECTION01. No ACT authored yet; the items below are working labels (canonical ACT IDs are assigned per FACT-001 in `.factory/epics/factory-infrastructure.md`).",
 	lifecycle: "OPEN",
-	priority: "HIGH",
+	priority: "P1",
+	source_priority: "HIGH",
 	exit_criteria: [
 		"A cluster reproduces at the local canonical seam (→ the cluster ACT gets unblocked and authored as a bounded repair ACT).",
 		"An upstream `RELATED_TOOL_RUNTIME` issue graduates from RADAR to IMPORT against this epic.",
@@ -535,8 +513,7 @@ export const EPIC_TOOL_RUNTIME_RELIABILITY: ReconciledEpic = {
 	],
 	items: [
 		{
-			item_id:
-				"EPIC-CLINEMM-TOOL-RUNTIME-RELIABILITY/TOOL-RUNTIME-RELIABILITY-RECON01",
+			item_id: "TOOL-RUNTIME-RELIABILITY-RECON01",
 			title:
 				"TOOL-RUNTIME-RELIABILITY-RECON01 — tool/command runtime-correctness recon",
 			description:
@@ -544,11 +521,12 @@ export const EPIC_TOOL_RUNTIME_RELIABILITY: ReconciledEpic = {
 			workstream: "tool-runtime-reliability",
 			original_status: "HIGH",
 			lifecycle: "OPEN",
-			priority: "HIGH",
+			priority: "P1",
+			source_priority: "HIGH",
+			relationships: [],
 			qualification: "UNKNOWN",
 			criteria: [],
 			criteria_coverage: "UNKNOWN",
-			dependencies: [],
 			dependency_coverage: "COMPLETE",
 			blockers: [],
 			current_act: null,
@@ -578,6 +556,7 @@ export const EPIC_TASK_PRESENTATION: ReconciledEpic = {
 	original_status: "ACTIVE — closed substrate + closed frontier",
 	lifecycle: "ACTIVE",
 	priority: "P1",
+	source_priority: "P1",
 	exit_criteria: [
 		"New compaction authority appears that bypasses `COMPACTION-STATE-AUTHORITY01`.",
 		"Context accounting observed diverging between producer and any consumer.",
@@ -601,6 +580,7 @@ export const EPIC_TASK_CONTROL_LIVENESS: ReconciledEpic = {
 		'CLOSED family (the generation-fence repair is bounded; the queued-prompt integrity work is bounded; the bug-family closure is a structural statement of how to recognize this class of bug in future reviews. The "live" qualification against a live Cline-- extension host is not asserted here — the source-verbatim is "bounded generation-fence repair landed"; exact-head LIVE qualification = pending).',
 	lifecycle: "TERMINAL",
 	priority: "P1",
+	source_priority: "P1",
 	exit_criteria: [
 		"Any new message-coordinator invariant violation should be evaluated against the bug-family signature before starting a fresh ACT.",
 	],
@@ -610,7 +590,7 @@ export const EPIC_TASK_CONTROL_LIVENESS: ReconciledEpic = {
 	],
 	items: [
 		{
-			item_id: "EPIC-CLINEMM-TASK-CONTROL-LIVENESS/R3-R4-ADVERSARIAL-SCHEDULES",
+			item_id: "R3-R4-ADVERSARIAL-SCHEDULES",
 			title: "R3/R4 task-control adversarial schedules",
 			description:
 				"Deferred adversarial schedule hunting for the R3 / R4 task-control lane. The board's Deferred / hold table records this item as consciously postponed; the source states the current frontier for this domain is post-sharding review.",
@@ -618,10 +598,11 @@ export const EPIC_TASK_CONTROL_LIVENESS: ReconciledEpic = {
 			original_status: "DEFER",
 			lifecycle: "DEFERRED",
 			priority: "P1",
+			source_priority: "P1",
+			relationships: [],
 			qualification: "UNKNOWN",
 			criteria: [],
 			criteria_coverage: "UNKNOWN",
-			dependencies: [],
 			dependency_coverage: "COMPLETE",
 			blockers: [],
 			current_act: null,
@@ -644,6 +625,7 @@ export const EPIC_UPSTREAM_INTAKE: ReconciledEpic = {
 		"CLOSED (the closed-substrate / first-triage / four-corrections cycle is complete and the cumulative invariant holds: 12 surviving EXACT_MAPs and 5 IMPORTs satisfy the binding rule)",
 	lifecycle: "TERMINAL",
 	priority: "P2",
+	source_priority: "P2",
 	exit_criteria: [
 		"A new upstream intake cycle is needed (substrate is re-runnable; this is normal and not a defect).",
 		"A new lexical-overlap defect class is identified in a future triage cycle.",
@@ -655,7 +637,7 @@ export const EPIC_UPSTREAM_INTAKE: ReconciledEpic = {
 	],
 	items: [
 		{
-			item_id: "EPIC-CLINEMM-UPSTREAM-INTAKE/CHECKPOINT-RELIABILITY01",
+			item_id: "CHECKPOINT-RELIABILITY01",
 			title: "EPIC-CLINEMM-CHECKPOINT-RELIABILITY01 — checkpoint reliability",
 			description:
 				'Cross-cutting supporting work recorded as OPEN on the board\'s "Open supporting work" table, owned by the upstream-intake detail file. The board states the dependency as n/a.',
@@ -663,10 +645,11 @@ export const EPIC_UPSTREAM_INTAKE: ReconciledEpic = {
 			original_status: "OPEN",
 			lifecycle: "OPEN",
 			priority: "P1",
+			source_priority: "P1",
+			relationships: [],
 			qualification: "UNKNOWN",
 			criteria: [],
 			criteria_coverage: "UNKNOWN",
-			dependencies: [],
 			dependency_coverage: "COMPLETE",
 			blockers: [],
 			current_act: null,
@@ -676,7 +659,7 @@ export const EPIC_UPSTREAM_INTAKE: ReconciledEpic = {
 			source_refs: [{ path: BOARD, lines: [9417, 9417] }],
 		},
 		{
-			item_id: "EPIC-CLINEMM-UPSTREAM-INTAKE/MCP-PROCESS-LIFECYCLE01",
+			item_id: "MCP-PROCESS-LIFECYCLE01",
 			title: "EPIC-CLINEMM-MCP-PROCESS-LIFECYCLE01 — MCP process lifecycle",
 			description:
 				'Cross-cutting supporting work recorded as OPEN on the board\'s "Open supporting work" table, owned by the upstream-intake detail file. The board states the dependency as n/a. The tool-runtime-reliability epic cross-references it as a durable sibling for the MCP routing / approval / validation cluster (3 issues) and does NOT subsume it.',
@@ -684,10 +667,11 @@ export const EPIC_UPSTREAM_INTAKE: ReconciledEpic = {
 			original_status: "OPEN",
 			lifecycle: "OPEN",
 			priority: "P1",
+			source_priority: "P1",
+			relationships: [],
 			qualification: "UNKNOWN",
 			criteria: [],
 			criteria_coverage: "UNKNOWN",
-			dependencies: [],
 			dependency_coverage: "COMPLETE",
 			blockers: [],
 			current_act: null,
@@ -697,7 +681,7 @@ export const EPIC_UPSTREAM_INTAKE: ReconciledEpic = {
 			source_refs: [{ path: BOARD, lines: [9418, 9418] }],
 		},
 		{
-			item_id: "EPIC-CLINEMM-UPSTREAM-INTAKE/CLINEIGNORE-FILTERING01",
+			item_id: "CLINEIGNORE-FILTERING01",
 			title: "EPIC-CLINEMM-CLINEIGNORE-FILTERING01 — .clineignore filtering",
 			description:
 				'Cross-cutting supporting work recorded as OPEN on the board\'s "Open supporting work" table, owned by the upstream-intake detail file. The board states the dependency as n/a.',
@@ -705,10 +689,11 @@ export const EPIC_UPSTREAM_INTAKE: ReconciledEpic = {
 			original_status: "OPEN",
 			lifecycle: "OPEN",
 			priority: "P2",
+			source_priority: "P2",
+			relationships: [],
 			qualification: "UNKNOWN",
 			criteria: [],
 			criteria_coverage: "UNKNOWN",
-			dependencies: [],
 			dependency_coverage: "COMPLETE",
 			blockers: [],
 			current_act: null,
@@ -718,7 +703,7 @@ export const EPIC_UPSTREAM_INTAKE: ReconciledEpic = {
 			source_refs: [{ path: BOARD, lines: [9419, 9419] }],
 		},
 		{
-			item_id: "EPIC-CLINEMM-UPSTREAM-INTAKE/PROVIDER-MODEL-DISCOVERY01",
+			item_id: "PROVIDER-MODEL-DISCOVERY01",
 			title:
 				"EPIC-CLINEMM-PROVIDER-MODEL-DISCOVERY01 — provider model discovery",
 			description:
@@ -727,10 +712,11 @@ export const EPIC_UPSTREAM_INTAKE: ReconciledEpic = {
 			original_status: "OPEN",
 			lifecycle: "OPEN",
 			priority: "P2",
+			source_priority: "P2",
+			relationships: [],
 			qualification: "UNKNOWN",
 			criteria: [],
 			criteria_coverage: "UNKNOWN",
-			dependencies: [],
 			dependency_coverage: "COMPLETE",
 			blockers: [],
 			current_act: null,
@@ -749,7 +735,8 @@ export const EPIC_CLOSED_FOUNDATION: ReconciledEpic = {
 	title: "Closed foundation",
 	original_status: "CLOSED (historical)",
 	lifecycle: "TERMINAL",
-	priority: "P3 / reference-only",
+	priority: "P3",
+	source_priority: "P3 / reference-only",
 	exit_criteria: [
 		"See `task-presentation.md` and `webview-seam-aop.md` for in-flight work that builds on this substrate.",
 	],
@@ -769,6 +756,7 @@ export const EPIC_WEBVIEW_SEAM_AOP: ReconciledEpic = {
 		"CLOSED (all sub-ACTs landed; family is historical substrate)",
 	lifecycle: "TERMINAL",
 	priority: "P2",
+	source_priority: "P2",
 	exit_criteria: [
 		"The RESULT01 sub-ACT (`…LIVE-CAPTURE01-RESULT01`) is `AWAITING_DOGFOOD` — when it lands, it will be recorded in the epic detail file.",
 	],
@@ -788,6 +776,7 @@ export const EPIC_COMMAND_RISK_CLASSIFICATION: ReconciledEpic = {
 		"CLOSED framework (V1 GREEN, V2 framework with HALT_SHIPPING posture; V2-READONLY-COMPOSITION01 STRUCTURAL and shipped as bounded auto-approve for safe `&&` chains)",
 	lifecycle: "TERMINAL",
 	priority: "P1",
+	source_priority: "P1",
 	exit_criteria: [
 		"Further rules / expansion is deferred pending a fresh ACT (see the V2 ACT ledger row).",
 	],
@@ -807,6 +796,7 @@ export const EPIC_AUTHENTICATED_DEV_CAPABILITIES: ReconciledEpic = {
 		"DEFER (intentionally not current execution debt; do **not** auto-promote without a fresh ACT — see reopen conditions below).",
 	lifecycle: "DEFERRED",
 	priority: "P1",
+	source_priority: "P1",
 	exit_criteria: [
 		"The user asks for an authenticated capability that the current ClineMM cannot provide safely (→ the design ACT gets prioritized).",
 		"An upstream Cline-- change exposes a credential surface that conflicts with the V1 boundary (→ the design ACT must precede any bridge ACT).",
@@ -818,8 +808,7 @@ export const EPIC_AUTHENTICATED_DEV_CAPABILITIES: ReconciledEpic = {
 	],
 	items: [
 		{
-			item_id:
-				"EPIC-CLINEMM-AUTHENTICATED-DEV-CAPABILITIES/AUTH-DEV-CAP-DESIGN01",
+			item_id: "AUTH-DEV-CAP-DESIGN01",
 			title: "AUTH-DEV-CAP-DESIGN01 — per-family credential-capability design",
 			description:
 				"Design space only. The deliverable is a markdown document under `.factory/epics/authenticated-dev-capabilities.md` that names: each credential family, the proposed host-side executor pattern, the audit-log contract, and an explicit **per-family opt-in surface** the user would toggle. No source code, no credential bytes, no live invocation in the design ACT. The V1 sensitive-read confinement contract was deliberately scoped to SSH / GnuPG / macOS-keychain and EXCLUDED `~/.aws/`, `~/.kube/`, `~/.docker/config.json`, `~/.config/gh/hosts.yml`; the design ACT must propose how to handle the excluded surfaces without breaking the V1 boundary. The four per-family implementation ACTs (`AUTH-DEV-CAP-AWS01`, `AUTH-DEV-CAP-KUBE01`, `AUTH-DEV-CAP-DOCKER01`, `AUTH-DEV-CAP-GH01`) are all explicitly DEFER on the design ACT landing.",
@@ -827,10 +816,11 @@ export const EPIC_AUTHENTICATED_DEV_CAPABILITIES: ReconciledEpic = {
 			original_status: "DEFER",
 			lifecycle: "DEFERRED",
 			priority: "P1",
+			source_priority: "P1",
+			relationships: [],
 			qualification: "UNKNOWN",
 			criteria: [],
 			criteria_coverage: "UNKNOWN",
-			dependencies: [],
 			dependency_coverage: "COMPLETE",
 			blockers: [],
 			current_act: null,

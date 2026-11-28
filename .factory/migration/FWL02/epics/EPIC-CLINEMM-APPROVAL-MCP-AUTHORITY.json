@@ -4,19 +4,20 @@
   "title": "Approval / MCP authority",
   "original_status": "OPEN — recon ACT has not yet been opened",
   "lifecycle": "OPEN",
-  "priority": "P0-if-reproduced",
+  "priority": "P1",
   "exit_criteria": [
     "Sequenced after this ACT (gated on its verdict): a bounded repair ACT only if recon proves a defect, or `SUPERSEDED` closure if recon exonerates."
   ],
   "items": [
     {
-      "item_id": "EPIC-CLINEMM-APPROVAL-MCP-AUTHORITY/MCP-AUTOAPPROVE-OFF-AUTHORITY-RECON01",
+      "schema_version": 1,
+      "item_id": "MCP-AUTOAPPROVE-OFF-AUTHORITY-RECON01",
       "title": "ACT-CLINEMM-MCP-AUTOAPPROVE-OFF-AUTHORITY-RECON01 — MCP auto-approval-off authority recon",
       "description": "Read-only recon of the MCP auto-approval-off authority boundary (upstream #10499). No production change until the recon resolves the live-vs-structural question. Per the factory causal reviewer (2026-09-01): \"Give it its own authority owner.\" The upstream defect says execution proceeds without approval, which is a fail-closed-against-the-user violation — hence `P0-if-reproduced` (deterministic security boundary). Blocked by: n/a. Sequenced after this ACT (gated on its verdict): a bounded repair ACT only if recon proves a defect, or `SUPERSEDED` closure if recon exonerates.",
       "workstream": "approval-mcp-authority",
       "original_status": "OPEN",
       "lifecycle": "OPEN",
-      "priority": "P0-if-reproduced",
+      "priority": "P1",
       "qualification": "UNQUALIFIED",
       "criteria": [],
       "criteria_coverage": "UNKNOWN",

@@ -4,7 +4,7 @@
   "title": "Runtime task progression",
   "original_status": "OPEN — fresh epic opened at FUTURE-BACKLOG-CENSUS01-CORRECTION01. The canonical ACT `ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01` is OPEN with OWN01 RED reproduced at HEAD `f106bc63d` and OWN02-OWN03-RECON at CAPTURE_INSUFFICIENT.",
   "lifecycle": "OPEN",
-  "priority": "HIGH",
+  "priority": "P1",
   "exit_criteria": [
     "A new user-visible non-progressing-task symptom is reproduced at the local canonical seam (→ reopen `RUNTIME-TASK-PROGRESSION-RECON01` or open a per-symptom ACT).",
     "A `RUNTIME_THINKING_STALL` upstream issue graduates from RADAR to IMPORT against this epic (requires a strict destination-contract test against the recon evidence).",
@@ -12,13 +12,14 @@
   ],
   "items": [
     {
-      "item_id": "EPIC-CLINEMM-RUNTIME-TASK-PROGRESSION/RUNTIME-TASK-PROGRESSION-RECON01",
+      "schema_version": 1,
+      "item_id": "RUNTIME-TASK-PROGRESSION-RECON01",
       "title": "ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01 — runtime progression recon",
       "description": "First ACT: bounded RECON + exact live RED. The deliverable is a markdown document that (a) characterizes the failure modes observed in our local recurrence, (b) maps each observed mode to one or more upstream signals (RADAR), (c) proposes a bounded RED-family test seam (not implementation), (d) does NOT pre-classify cause. Do not implement any production change in this ACT. The umbrella ACT is OPEN with OWN01 RED reproduced at HEAD `f106bc63d` and OWN02-OWN03-RECON at CAPTURE_INSUFFICIENT; the producer-side recon successor `ACT-CLINEMM-RUNTIME-FINISH-SEMANTICS-RECON01` is CLOSED / VERDICT_AMENDED / NOT_LIVE_CAUSE. Strongest preserved structural findings: `agent-runtime.ts:1371` IS a real latent defect under `requireCompletionTool=true`; the downstream AgentFinishReason collapse is a real latent defect; neither is the live cause.",
       "workstream": "runtime-task-progression",
       "original_status": "HIGH",
       "lifecycle": "OPEN",
-      "priority": "HIGH",
+      "priority": "P1",
       "qualification": "UNKNOWN",
       "criteria": [],
       "criteria_coverage": "UNKNOWN",
@@ -47,13 +48,14 @@
       ]
     },
     {
-      "item_id": "EPIC-CLINEMM-RUNTIME-TASK-PROGRESSION/CANCEL-AFFORDANCE-AUTHORITY-RECON",
+      "schema_version": 1,
+      "item_id": "CANCEL-AFFORDANCE-AUTHORITY-RECON",
       "title": "CANCEL-AFFORDANCE-AUTHORITY-RECON — Cancel-affordance authority recon",
       "description": "HIGH — partial. The static source-seam map half is bound by `ACT-CLINEMM-TASK-CANCEL-UI-RECON01` (CLOSED / RECON_ONLY / CAPTURE_INSUFFICIENT at `162dfb137` over `15c7e3374`): proves `turnState.phase === \"streaming\"` is the predicate, `SdkTaskControlCoordinator.cancelTask` is the SDK owner, and upstream-vs-ClineMM Cancel button structure is byte-identical (no removal in either source). The LIVE capture half remains open: the four-value capture (`turnState.phase`, `foregroundCommandRunning`, `backgroundCommandRunning`, lastMessage.{type, say, ask, partial}) discriminates `UI_RENDER_DEFECT` from `TURN_STATE_PROJECTION_DEFECT` from benign non-streaming phases. First deliverable on resumption: a regression that fails when the invariant is violated in either direction (idle+Cancel visible, or active+Cancel absent). Do not invent a third authority; the invariant is already durable.",
       "workstream": "runtime-task-progression",
       "original_status": "HIGH — partial",
       "lifecycle": "OPEN",
-      "priority": "HIGH",
+      "priority": "P1",
       "qualification": "INSUFFICIENT",
       "criteria": [
         "C04_CURRENT_CANCEL_OWNER_IDENTIFIED = PASS (SdkTaskControlCoordinator.cancelTask).",
@@ -99,52 +101,8 @@
       ]
     },
     {
-      "item_id": "EPIC-CLINEMM-RUNTIME-TASK-PROGRESSION/EDITOR-TOOL-APPROVAL-FRICTION-RECON01",
-      "title": "ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01 — restored NEXT in the runtime lane",
-      "description": "NEXT / HIGH — completion-authority prerequisite SATISFIED per `SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01` CLOSED / UPSTREAM_SUPERSEDED at `15c7e3374`; remaining gates = operator-driven live editor/non-command specimen + host/Aqua availability as applicable, NOT blocked by a completion-authority dependency. This ACT was previously deferred for exactly one bounded cycle to allow LIVENESS02 + CONTRACT01 to finish; the prior IMPLEMENTATION01 blocker was removed when the upstream integration retired that prerequisite.",
-      "workstream": "runtime-task-progression",
-      "original_status": "NEXT / HIGH",
-      "lifecycle": "ACTIVE",
-      "priority": "HIGH",
-      "qualification": "UNKNOWN",
-      "criteria": [],
-      "criteria_coverage": "UNKNOWN",
-      "dependencies": [],
-      "dependency_coverage": "COMPLETE",
-      "blockers": [
-        "Operator-driven live editor/non-command specimen plus host/Aqua availability as applicable."
-      ],
-      "current_act": "ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01",
-      "related_acts": [
-        "ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01"
-      ],
-      "evidence_locators": [],
-      "reopen_conditions": [],
-      "source_refs": [
-        {
-          "path": ".factory/epics/runtime-task-progression.md",
-          "start_line": 78,
-          "end_line": 78,
-          "sha256": "89c4c8708b94dabbf859e4a3deea8f79f17af256ebfe38e4869ad6ff86e674db"
-        }
-      ],
-      "relationships": [
-        {
-          "kind": "RELATED_TO",
-          "target": "EPIC-CLINEMM-APPROVAL-PROTECTION/EDITOR-TOOL-APPROVAL-FRICTION-RECON01",
-          "source_refs": [
-            {
-              "path": ".factory/epics/runtime-task-progression.md",
-              "start_line": 78,
-              "end_line": 78,
-              "sha256": "89c4c8708b94dabbf859e4a3deea8f79f17af256ebfe38e4869ad6ff86e674db"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "item_id": "EPIC-CLINEMM-RUNTIME-TASK-PROGRESSION/CLOSED-LIVE-UPGRADE",
+      "schema_version": 1,
+      "item_id": "CLOSED-LIVE-UPGRADE",
       "title": "RUNTIME-TASK-PROGRESSION `CLOSED_LIVE` upgrade",
       "description": "The optional future `CLOSED_LIVE` upgrade of `RUNTIME-TASK-PROGRESSION01`, deferred until a live ClineMM recurrence is available. The board's Deferred / hold table records it as consciously postponed.",
       "workstream": "runtime-task-progression",

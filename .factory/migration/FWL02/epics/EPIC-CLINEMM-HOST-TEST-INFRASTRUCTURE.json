@@ -11,13 +11,14 @@
   ],
   "items": [
     {
-      "item_id": "EPIC-CLINEMM-HOST-TEST-INFRASTRUCTURE/HOST-TEST-RUNNER",
+      "schema_version": 1,
+      "item_id": "HOST-TEST-RUNNER",
       "title": "HOST-TEST RUNNER — author the host-orchestrated runner",
       "description": "Authoring ACT must ship: (a) the runner binary / script, (b) the corpus/result schema, (c) at least one minimal invocation per dependent ACT (real-kernel Seatbelt probe + fresh VSIX dogfood + live approval-UI capture), (d) the audit-log contract (ACT ID, source HEAD, corpus file path, runner version, host OS / kernel, start/end wall time, full result; appended to `.factory/evidence/<ACT>/`). No widening of authority: the runner runs as the host user, does not gain Seatbelt privileges the user lacks, and is not a covert YOLO bypass. A separate ACT is also required (NOT part of the runner ACT) to reclassify prior per-test Vitest `skipIf(!HAS_SUBSTRATE)` callers from `SKIP` to `HOST_REQUIRED` via the runner.",
       "workstream": "host-test-infrastructure",
       "original_status": "OPEN / HIGH",
       "lifecycle": "OPEN",
-      "priority": "HIGH",
+      "priority": "P1",
       "qualification": "UNQUALIFIED",
       "criteria": [],
       "criteria_coverage": "UNKNOWN",
@@ -43,20 +44,6 @@
           "start_line": 38,
           "end_line": 46,
           "sha256": "87d948f119c58256f2c5177f6e82b0bd1a67f7b7266957b7790418bc22b1998a"
-        }
-      ],
-      "relationships": [
-        {
-          "kind": "CROSS_LINK",
-          "target": "EPIC-CLINEMM-SAFE-YOLO-SEATBELT/HOST-TEST-RUNNER",
-          "source_refs": [
-            {
-              "path": ".factory/epics/host-test-infrastructure.md",
-              "start_line": 38,
-              "end_line": 40,
-              "sha256": "d792617a9e25b0b7047354765b69ce2b16ed4808f059868e62c130b1f2f07e97"
-            }
-          ]
         }
       ]
     }

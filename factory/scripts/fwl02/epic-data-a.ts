@@ -36,6 +36,7 @@ export const EPIC_SAFE_YOLO_SEATBELT: ReconciledEpic = {
 	original_status: "ACTIVE",
 	lifecycle: "ACTIVE",
 	priority: "P0",
+	source_priority: "P0",
 	exit_criteria: [
 		"A Seatbelt-default-ON regression breaks the selector contract (`SeatbeltSandboxBackendExperimental` no longer the canonical selector on Darwin when the OS-level sandbox feature is enabled).",
 		"Real-kernel host qualification remains `HOST_REQUIRED` where applicable: any ACT that asserts a real-kernel Seatbelt property must include a `host_test_runner` artifact or explicitly mark `HOST_REQUIRED` in the verdict.",
@@ -46,79 +47,7 @@ export const EPIC_SAFE_YOLO_SEATBELT: ReconciledEpic = {
 	],
 	items: [
 		{
-			item_id: "EPIC-CLINEMM-SAFE-YOLO-SEATBELT/HOST-TEST-RUNNER",
-			title: "HOST-TEST RUNNER — host-orchestrated end-to-end test runner",
-			description:
-				"A separate, host-orchestrated test runner that lets a ClineMM authoring process ask the host to run a bounded corpus of commands / tests / live captures and return machine-readable results. It is the natural next layer above the substrate probes: it replaces per-test `skipIf(!HAS_SUBSTRATE)` caveats with explicit `HOST_REQUIRED` qualification. Inputs are a declared corpus (commands + expected exit codes + optional timeouts), never arbitrary shell from the agent. Outputs are machine-readable with classified failures. Every invocation logs ACT ID, source HEAD, corpus path, runner version, host OS/kernel, start/end wall time and full result. The runner runs as the host user and must not gain Seatbelt privileges the user lacks, nor serve as a covert YOLO bypass. Author as a NEW ACT — do NOT roll the runner into an existing closed ACT, which would invalidate closure evidence.",
-			workstream: "safe-yolo-seatbelt",
-			original_status: "OPEN",
-			lifecycle: "OPEN",
-			priority: "HIGH",
-			qualification: "UNQUALIFIED",
-			criteria: [],
-			criteria_coverage: "UNKNOWN",
-			dependencies: [],
-			dependency_coverage: "UNKNOWN",
-			blockers: [],
-			current_act: null,
-			related_acts: [],
-			evidence_locators: [],
-			reopen_conditions: [
-				"A Seatbelt / approval / classic-protection ACT needs host-only evidence and the runner does not yet cover the required corpus (→ new runner ACT scoped).",
-				"The runner is observed widening authority / leaking secrets / being used as a covert bypass (→ HALT the runner ACT and any consumer).",
-			],
-			source_refs: [
-				{ path: SAFE, lines: [44, 44] },
-				{ path: HOSTTEST, lines: [38, 40] },
-				{ path: HOSTTEST, lines: [31, 36] },
-			],
-			relationships: [
-				{
-					kind: "CROSS_LINK",
-					target: "EPIC-CLINEMM-HOST-TEST-INFRASTRUCTURE/HOST-TEST-RUNNER",
-					source_refs: [{ path: SAFE, lines: [44, 44] }],
-				},
-				{
-					kind: "RELATED_TO",
-					target: "EPIC-CLINEMM-APPROVAL-PROTECTION/CLASSIC-PROTECTION-RECON01",
-					source_refs: [{ path: SAFE, lines: [44, 44] }],
-				},
-			],
-		},
-		{
-			item_id: "EPIC-CLINEMM-SAFE-YOLO-SEATBELT/CLASSIC-PROTECTION-RECON01",
-			title:
-				"ACT-CLINEMM-CLASSIC-PROTECTION-RECON01 — classic (non-Seatbelt) approval protection recon",
-			description:
-				"Classic (non-Seatbelt) approval protection recon — the next-frontier after Safe-YOLO is fully closed. Unblocked by `SEATBELT-DEFAULT-ON01` closure (now satisfied). Likely first deliverable: observe whether the Seatbelt-confined `$HOME`/network/secret boundaries are also enforced when Seatbelt is OFF, where the host's path-authority / command-policy surface takes over, and compare those surfaces to the Seatbelt-confined boundaries to identify any drift.",
-			workstream: "safe-yolo-seatbelt",
-			original_status: "OPEN",
-			lifecycle: "OPEN",
-			priority: "HIGH",
-			qualification: "UNQUALIFIED",
-			criteria: [],
-			criteria_coverage: "UNKNOWN",
-			dependencies: [],
-			dependency_coverage: "COMPLETE",
-			blockers: [],
-			current_act: "ACT-CLINEMM-CLASSIC-PROTECTION-RECON01",
-			related_acts: [],
-			evidence_locators: [],
-			reopen_conditions: [
-				"A new classic (non-Seatbelt) approval protection recon ACT lands — append to this file's ACT ledger row.",
-			],
-			source_refs: [{ path: SAFE, lines: [45, 45] }],
-			relationships: [
-				{
-					kind: "RELATED_TO",
-					target: "EPIC-CLINEMM-APPROVAL-PROTECTION/CLASSIC-PROTECTION-RECON01",
-					source_refs: [{ path: SAFE, lines: [45, 45] }],
-				},
-			],
-		},
-		{
-			item_id:
-				"EPIC-CLINEMM-SAFE-YOLO-SEATBELT/SEATBELT-ALL-OUTSIDE-READ-POLICY-RECON01",
+			item_id: "SEATBELT-ALL-OUTSIDE-READ-POLICY-RECON01",
 			title:
 				"ACT-CLINEMM-SEATBELT-ALL-OUTSIDE-READ-POLICY-RECON01 — outside-read policy reconciliation",
 			description:
@@ -127,10 +56,11 @@ export const EPIC_SAFE_YOLO_SEATBELT: ReconciledEpic = {
 			original_status: "CLOSED / PASS_RECON_NO_DEFECT_FOUND_V1",
 			lifecycle: "TERMINAL",
 			priority: "P0",
+			source_priority: "P0",
+			relationships: [],
 			qualification: "LIVE_QUALIFIED",
 			criteria: [],
 			criteria_coverage: "UNKNOWN",
-			dependencies: [],
 			dependency_coverage: "COMPLETE",
 			blockers: [],
 			current_act: null,
@@ -148,7 +78,7 @@ export const EPIC_SAFE_YOLO_SEATBELT: ReconciledEpic = {
 			source_refs: [{ path: SAFE, lines: [46, 46] }],
 		},
 		{
-			item_id: "EPIC-CLINEMM-SAFE-YOLO-SEATBELT/R5-MANUAL-APPROVAL-LANE",
+			item_id: "R5-MANUAL-APPROVAL-LANE",
 			title: "R5 manual approval lane — open R5 defect trigger",
 			description:
 				'The `R5_MANUAL_APPROVAL_LANE` stays OPEN with a sharp `NEXT_R5_TRIGGER`: the next genuine R5 defect must satisfy `mode=all + mandatorySeatbelt=true + all path-bearing operands INSIDE authorized workspace roots + no explicit deny / hard floor / missing evidence` BUT `finalDecision=ask AND approval UI published`. After `f56e87af0+` lands, dogfood should watch for "an unexpected prompt on a fully-authorized, all-inside request." This is not a separate ACT; it is a standing trigger that reopens the R5 lane.',
@@ -156,10 +86,11 @@ export const EPIC_SAFE_YOLO_SEATBELT: ReconciledEpic = {
 			original_status: "OPEN",
 			lifecycle: "OPEN",
 			priority: "P0",
+			source_priority: "P0",
+			relationships: [],
 			qualification: "UNQUALIFIED",
 			criteria: [],
 			criteria_coverage: "UNKNOWN",
-			dependencies: [],
 			dependency_coverage: "COMPLETE",
 			blockers: [],
 			current_act: null,
@@ -171,7 +102,7 @@ export const EPIC_SAFE_YOLO_SEATBELT: ReconciledEpic = {
 			source_refs: [{ path: SAFE, lines: [46, 46] }],
 		},
 		{
-			item_id: "EPIC-CLINEMM-SAFE-YOLO-SEATBELT/TEMP-INTERNAL-CONTROL-CLEANUP",
+			item_id: "TEMP-INTERNAL-CONTROL-CLEANUP",
 			title:
 				"TEMP-INTERNAL-CONTROL-CLEANUP — temporary / internal control inventory and classification",
 			description:
@@ -180,10 +111,10 @@ export const EPIC_SAFE_YOLO_SEATBELT: ReconciledEpic = {
 			original_status: "FUTURE / DEFER",
 			lifecycle: "DEFERRED",
 			priority: "P2",
+			source_priority: "P2",
 			qualification: "UNKNOWN",
 			criteria: [],
 			criteria_coverage: "UNKNOWN",
-			dependencies: [],
 			dependency_coverage: "COMPLETE",
 			blockers: [],
 			current_act: null,
@@ -195,18 +126,23 @@ export const EPIC_SAFE_YOLO_SEATBELT: ReconciledEpic = {
 				"A future ACT is opened whose mission is the temporary / internal control inventory; the inventory must be produced before any cleanup ACT is opened.",
 			],
 			source_refs: [{ path: SAFE, lines: [110, 157] }],
-			relationships: [
-				{
-					kind: "CROSS_LINK",
-					target:
-						"EPIC-CLINEMM-PRODUCT-CONFIG-BRANDING/TEMP-INTERNAL-CONTROL-CLEANUP",
-					source_refs: [{ path: SAFE, lines: [118, 122] }],
-				},
-			],
+			/**
+			 * No CROSS_LINK edge.
+			 *
+			 * This epic is the PRIMARY OWNER of the
+			 * TEMP-INTERNAL-CONTROL-CLEANUP obligation: the source states
+			 * "This is the PRIMARY owner of the temporary / internal control
+			 * cleanup inventory". The product-config-branding.md row was a
+			 * SECOND REPRESENTATION of the same obligation (a cross-cutting
+			 * child row); it is preserved in `reconciliation.json` and in the
+			 * supplemental source accounting, and it does not become an
+			 * independent lifecycle-bearing obligation, so there is no edge
+			 * to it.
+			 */
+			relationships: [],
 		},
 		{
-			item_id:
-				"EPIC-CLINEMM-SAFE-YOLO-SEATBELT/SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01",
+			item_id: "SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01",
 			title:
 				"ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01 — SSH-agent credential authority implementation",
 			description:
@@ -215,6 +151,8 @@ export const EPIC_SAFE_YOLO_SEATBELT: ReconciledEpic = {
 			original_status: "CLOSED / PASS_SEATBELT_SSH_AGENT_AUTHORITY_V1",
 			lifecycle: "TERMINAL",
 			priority: "P0",
+			source_priority: "P0",
+			relationships: [],
 			qualification: "LIVE_QUALIFIED",
 			criteria: [
 				'`CommandCapability.sshAuthenticationAuthority` field present with the closed union `undefined | { mode: "agent", resolvedAuthSock }`.',
@@ -226,7 +164,6 @@ export const EPIC_SAFE_YOLO_SEATBELT: ReconciledEpic = {
 				"No launchd socket parent directory is added to any filesystem grant list.",
 			],
 			criteria_coverage: "COMPLETE",
-			dependencies: [],
 			dependency_coverage: "COMPLETE",
 			blockers: [],
 			current_act: null,
@@ -252,8 +189,7 @@ export const EPIC_SAFE_YOLO_SEATBELT: ReconciledEpic = {
 			],
 		},
 		{
-			item_id:
-				"EPIC-CLINEMM-SAFE-YOLO-SEATBELT/SINGLE-R0-EXECUTION-OBLIGATION-PROPAGATION",
+			item_id: "SINGLE-R0-EXECUTION-OBLIGATION-PROPAGATION",
 			title:
 				"ACT-CLINEMM-SEATBELT-ALL-R0-EXECUTION-OBLIGATION-RECON01 — R0 execution-obligation propagation",
 			description:
@@ -262,10 +198,11 @@ export const EPIC_SAFE_YOLO_SEATBELT: ReconciledEpic = {
 			original_status: "DEFER / NOT_STARTED / RECON_REQUIRED",
 			lifecycle: "DEFERRED",
 			priority: "P1",
+			source_priority: "P1",
+			relationships: [],
 			qualification: "UNKNOWN",
 			criteria: [],
 			criteria_coverage: "UNKNOWN",
-			dependencies: [],
 			dependency_coverage: "COMPLETE",
 			blockers: [],
 			current_act: null,
@@ -275,7 +212,7 @@ export const EPIC_SAFE_YOLO_SEATBELT: ReconciledEpic = {
 			source_refs: [{ path: SAFE, lines: [159, 172] }],
 		},
 		{
-			item_id: "EPIC-CLINEMM-SAFE-YOLO-SEATBELT/NETWORK-POLICY-HARDENING",
+			item_id: "NETWORK-POLICY-HARDENING",
 			title: "Network-policy hardening / allowlisting (post-V1)",
 			description:
 				"Post-V1 network-policy hardening and allowlisting. The board's Deferred / hold table records this item as consciously postponed; the epic detail file carries the WHY.",
@@ -283,10 +220,11 @@ export const EPIC_SAFE_YOLO_SEATBELT: ReconciledEpic = {
 			original_status: "DEFER",
 			lifecycle: "DEFERRED",
 			priority: "P0",
+			source_priority: "P0",
+			relationships: [],
 			qualification: "UNKNOWN",
 			criteria: [],
 			criteria_coverage: "UNKNOWN",
-			dependencies: [],
 			dependency_coverage: "UNKNOWN",
 			blockers: [],
 			current_act: null,

@@ -29,6 +29,7 @@
 import type {
 	FwmiCoverage,
 	FwmiLifecycle,
+	FwmiPriority,
 	FwmiQualification,
 	FwmiRelationship,
 } from "./contract.ts";
@@ -42,7 +43,14 @@ export interface Bound {
 	readonly lines: readonly [number, number];
 }
 
-/** A reconciled work item, pre-serialization. */
+/**
+ * A reconciled work item, pre-serialization.
+ *
+ * The `item_id` is LOCAL to the parent epic. The consumer derives the scoped
+ * identity as `epic_id + "/" + item_id`, so the producer stores the local part
+ * and the generator composes the scoped identity where the consumer needs one
+ * (the historical index's `work_item_ids`).
+ */
 export interface ReconciledItem {
 	readonly item_id: string;
 	readonly title: string;
@@ -50,11 +58,28 @@ export interface ReconciledItem {
 	readonly workstream: string | null;
 	readonly original_status: string | null;
 	readonly lifecycle: FwmiLifecycle;
-	readonly priority: string | null;
+	/** The NORMALIZED priority (P0/P1/P2/P3), or null when the source states none. */
+	readonly priority: FwmiPriority | null;
+	/**
+	 * The source's OWN priority wording, VERBATIM.
+	 *
+	 * The source states priorities as `HIGH`, `MED`, `LOW`, `DEMO / LOW`,
+	 * `P0-if-reproduced`, `P1`, `P2` and `P3`. The normalized `priority` is a
+	 * mapping of that wording; this field preserves the wording itself so the
+	 * normalization is never silent.
+	 */
+	readonly source_priority: string | null;
 	readonly qualification: FwmiQualification;
 	readonly criteria: readonly string[];
 	readonly criteria_coverage: FwmiCoverage;
-	readonly dependencies: readonly string[];
+	/**
+	 * Every known relationship of this item.
+	 *
+	 * ALL kinds live here, not only prerequisites: the consumer's wire shape
+	 * has a single `dependencies` array of relationships and no separate
+	 * relationship field.
+	 */
+	readonly relationships: readonly ReconciledRelationship[];
 	readonly dependency_coverage: FwmiCoverage;
 	readonly blockers: readonly string[];
 	readonly current_act: string | null;
@@ -62,10 +87,14 @@ export interface ReconciledItem {
 	readonly evidence_locators: readonly string[];
 	readonly reopen_conditions: readonly string[];
 	readonly source_refs: readonly Bound[];
-	readonly relationships?: readonly ReconciledRelationship[];
 }
 
-/** A reconciled relationship, pre-serialization. */
+/**
+ * A reconciled relationship, pre-serialization.
+ *
+ * `target` is a SCOPED identity (`EPIC-ID/ITEM-ID`) so a relationship that
+ * crosses an epic boundary stays unambiguous.
+ */
 export interface ReconciledRelationship {
 	readonly kind: FwmiRelationship["kind"];
 	readonly target: string;
@@ -79,11 +108,13 @@ export interface ReconciledEpic {
 	readonly title: string;
 	readonly original_status: string | null;
 	readonly lifecycle: FwmiLifecycle;
-	readonly priority: string | null;
+	/** The NORMALIZED priority (P0/P1/P2/P3), or null when the source states none. */
+	readonly priority: FwmiPriority | null;
+	/** The source's OWN priority wording, VERBATIM. */
+	readonly source_priority: string | null;
 	readonly exit_criteria: readonly string[];
 	readonly items: readonly ReconciledItem[];
 	readonly source_refs: readonly Bound[];
-	readonly relationships?: readonly ReconciledRelationship[];
 	/** The source file this epic was recovered from. */
 	readonly source_file: string;
 }

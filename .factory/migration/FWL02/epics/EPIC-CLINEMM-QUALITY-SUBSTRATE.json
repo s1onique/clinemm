@@ -13,7 +13,8 @@
   ],
   "items": [
     {
-      "item_id": "EPIC-CLINEMM-QUALITY-SUBSTRATE/TYPECHECK-ZERO-BASELINE01",
+      "schema_version": 1,
+      "item_id": "TYPECHECK-ZERO-BASELINE01",
       "title": "TYPECHECK-ZERO-BASELINE01 — typecheck zero-diagnostic baseline (CI parity leg)",
       "description": "Status: CLOSED at the local canonical seam (canonical `tsc --noEmit -p apps/vscode/tsconfig.json` exits 0 with 0 diagnostics); OPEN at CI parity (PARITY=PARTIAL — `apps/vscode/package.json:check-types` is the local gate; `.github/workflows/ext-vscode-test.yml` does not currently gate the canonical tsc command). The CI-parity leg is tracked under `EPIC-CLINEMM-GITHUB-ACTIONS01` for a future ACT.",
       "workstream": "quality-substrate",
@@ -23,7 +24,21 @@
       "qualification": "PARTIAL",
       "criteria": [],
       "criteria_coverage": "UNKNOWN",
-      "dependencies": [],
+      "dependencies": [
+        {
+          "kind": "DEPENDS_ON",
+          "target": "EPIC-CLINEMM-DISTRIBUTION-CI/GITHUB-ACTIONS01",
+          "source_refs": [
+            {
+              "path": ".factory/epics/quality-substrate.md",
+              "start_line": 38,
+              "end_line": 38,
+              "sha256": "b279ac533984cfb2a4fefff3fbbbf552a406680455cf01b2aba234701784073a"
+            }
+          ],
+          "required_outcome": "CI parity leg closed by the GitHub Actions recon/repair ACT"
+        }
+      ],
       "dependency_coverage": "COMPLETE",
       "blockers": [
         "The CI-parity leg is tracked under `EPIC-CLINEMM-GITHUB-ACTIONS01`; the workflow does not currently gate the canonical tsc command."
@@ -41,31 +56,17 @@
           "end_line": 38,
           "sha256": "b279ac533984cfb2a4fefff3fbbbf552a406680455cf01b2aba234701784073a"
         }
-      ],
-      "relationships": [
-        {
-          "kind": "DEPENDS_ON",
-          "target": "EPIC-CLINEMM-DISTRIBUTION-CI/GITHUB-ACTIONS01",
-          "source_refs": [
-            {
-              "path": ".factory/epics/quality-substrate.md",
-              "start_line": 38,
-              "end_line": 38,
-              "sha256": "b279ac533984cfb2a4fefff3fbbbf552a406680455cf01b2aba234701784073a"
-            }
-          ],
-          "required_outcome": "CI parity leg closed by the GitHub Actions recon/repair ACT"
-        }
       ]
     },
     {
-      "item_id": "EPIC-CLINEMM-QUALITY-SUBSTRATE/CODE-COVERAGE-BASELINE01",
+      "schema_version": 1,
+      "item_id": "CODE-COVERAGE-BASELINE01",
       "title": "CODE-COVERAGE-BASELINE01 — code-coverage baseline",
       "description": "Status: OPEN / HIGH. The ratchet ACT (`CODE-COVERAGE-RATCHET01`) is closed and ready to enforce non-regression once the baseline is set; the baseline itself is not yet fixed.",
       "workstream": "quality-substrate",
       "original_status": "OPEN / HIGH",
       "lifecycle": "OPEN",
-      "priority": "HIGH",
+      "priority": "P1",
       "qualification": "UNQUALIFIED",
       "criteria": [],
       "criteria_coverage": "UNKNOWN",

@@ -73,3 +73,37 @@ the CURRENT source head, so the FWL02 producer-side obligation is represented as
 current work item rather than being absent. The first shadow migration's counts
 are NOT target values for this package; the recovered inventory is reported from
 the actual source.
+
+## The CORRECTION-02 correction of the reconciled inventory
+
+This package is the CORRECTED successor of the original FWL02 producer package.
+The correction changed the PRODUCER's reconciliation, not the source: the source
+head is unchanged at `e196d0e6243f40ebfd76d2cf0db7bda74e97d6d6`, and every
+assertion is still bound to the exact committed bytes it was derived from.
+
+Four bounded defects were corrected:
+
+1. **Wire compatibility.** The package emitted a `relationships` field that the
+   actual Leamas Go consumer does not have, omitted the nested `schema_version` on
+   every work item, historical record and reconciliation record, and used a
+   globally-scoped `item_id`. The consumer's strict decoder rejected all three.
+   All relationship kinds now live in the `dependencies` array, every nested record
+   carries `schema_version: 1`, and every item identity is local to its epic.
+2. **Prerequisite direction.** The architecture package emitted E8 DEPENDS_ON E9
+   alongside E9 DEPENDS_ON E8, a cycle that contradicted the recovered `E7 -> E8
+   -> E9 -> ELMIZATION02` ordering. The reversed edge is withdrawn; E7 remains an
+   explicit blocker on E8 and is not invented as an obligation.
+3. **One authoritative obligation per identity.** Four duplicate groups carried
+   independent lifecycle-bearing records. Each group now has exactly one
+   authoritative obligation; the secondary representations are conserved in the
+   reconciliation records and in `source-accounting.json`.
+4. **Historical source accounting.** The board's trailing region 9,542-44,731 was
+   assumed to be narrative history. It is not: it carries 205 further ACT report
+   sections at heading level 2, belonging to 149 distinct historical identities
+   the level-1-only extraction had skipped. The corrected extraction indexes 361
+   report sections carrying 316 distinct identities.
+
+The corrected inventory is therefore NOT the previous one: 45 obligations (not 50)
+and 316 historical identities (not 167). Neither count was tuned to reproduce a
+previous value; both are what the actual source yields under the corrected
+reconciliation.

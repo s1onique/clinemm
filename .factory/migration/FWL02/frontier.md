@@ -31,7 +31,8 @@
 - **Title.** MCP auto-approval-off authority recon
 - **Workstream.** approval-mcp-authority
 - **Lifecycle.** OPEN
-- **Priority.** P0-if-reproduced
+- **Priority.** P1
+- **Source priority (verbatim).** P0-if-reproduced
 - **Original status (verbatim).** OPEN
 - **Historical qualification.** UNQUALIFIED
 - **Current ACT.** ACT-CLINEMM-MCP-AUTOAPPROVE-OFF-AUTHORITY-RECON01
@@ -43,7 +44,8 @@
 - **Title.** Editor/tool YOLO confirmation-UI recon
 - **Workstream.** approval-protection
 - **Lifecycle.** ACTIVE
-- **Priority.** HIGH
+- **Priority.** P1
+- **Source priority (verbatim).** HIGH
 - **Original status (verbatim).** NEXT / HIGH
 - **Historical qualification.** UNKNOWN
 - **Current ACT.** ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01
@@ -56,24 +58,26 @@
 - **Title.** Classic (non-Seatbelt) approval protection recon
 - **Workstream.** approval-protection
 - **Lifecycle.** OPEN
-- **Priority.** HIGH
+- **Priority.** P1
+- **Source priority (verbatim).** HIGH
 - **Original status (verbatim).** OPEN / HIGH
 - **Historical qualification.** UNQUALIFIED
 - **Current ACT.** ACT-CLINEMM-CLASSIC-PROTECTION-RECON01
 - **Note.** The next-frontier after Safe-YOLO is fully closed. Unblocked by `SEATBELT-DEFAULT-ON01` closure (now satisfied) — the source states the blocker is resolved, so this is NOT blocked.
 - **Source.** `.factory/epics/approval-protection.md`, `.factory/epics/safe-yolo-seatbelt.md`
 
-### EPIC-CLINEMM-SAFE-YOLO-SEATBELT/HOST-TEST-RUNNER
+### EPIC-CLINEMM-HOST-TEST-INFRASTRUCTURE/HOST-TEST-RUNNER
 
 - **Title.** HOST-TEST RUNNER — host-orchestrated end-to-end test runner
-- **Workstream.** safe-yolo-seatbelt
+- **Workstream.** host-test-infrastructure
 - **Lifecycle.** OPEN
-- **Priority.** HIGH
+- **Priority.** P1
+- **Source priority (verbatim).** HIGH
 - **Original status (verbatim).** OPEN / HIGH
 - **Historical qualification.** UNQUALIFIED
 - **Current ACT.** (none — no ACT is currently executing)
-- **Note.** Board row 18, `HOST_REQUIRED`. The canonical detail file is host-test-infrastructure.md; the safe-yolo and approval-protection rows are explicit cross-links to the same obligation. Must be authored as a NEW ACT — do NOT roll the runner into an existing closed ACT, which would invalidate closure evidence.
-- **Source.** `.factory/epics/safe-yolo-seatbelt.md`, `.factory/epics/host-test-infrastructure.md`
+- **Note.** Board row 18, `HOST_REQUIRED`. The canonical detail file — and therefore the AUTHORITATIVE owner of this obligation — is host-test-infrastructure.md; the safe-yolo and approval-protection rows are SECOND REPRESENTATIONS of the same obligation, preserved in the reconciliation record and the source accounting, and they carry no separate lifecycle authority. Must be authored as a NEW ACT — do NOT roll the runner into an existing closed ACT, which would invalidate closure evidence.
+- **Source.** `.factory/epics/host-test-infrastructure.md`, `.factory/epics/safe-yolo-seatbelt.md`, `.factory/epics/approval-protection.md`
 
 ### EPIC-CLINEMM-SAFE-YOLO-SEATBELT/R5-MANUAL-APPROVAL-LANE
 
@@ -92,7 +96,8 @@
 - **Title.** Runtime task progression recon
 - **Workstream.** runtime-task-progression
 - **Lifecycle.** OPEN
-- **Priority.** HIGH
+- **Priority.** P1
+- **Source priority (verbatim).** HIGH
 - **Original status (verbatim).** HIGH
 - **Historical qualification.** UNKNOWN
 - **Current ACT.** ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01
@@ -104,7 +109,8 @@
 - **Title.** Cancel-affordance authority recon
 - **Workstream.** runtime-task-progression
 - **Lifecycle.** OPEN
-- **Priority.** HIGH
+- **Priority.** P1
+- **Source priority (verbatim).** HIGH
 - **Original status (verbatim).** HIGH — partial
 - **Historical qualification.** INSUFFICIENT
 - **Current ACT.** (none — no ACT is currently executing)
@@ -130,7 +136,8 @@
 - **Title.** Code-coverage baseline
 - **Workstream.** quality-substrate
 - **Lifecycle.** OPEN
-- **Priority.** HIGH
+- **Priority.** P1
+- **Source priority (verbatim).** HIGH
 - **Original status (verbatim).** OPEN / HIGH
 - **Historical qualification.** UNQUALIFIED
 - **Current ACT.** ACT-CLINEMM-CODE-COVERAGE-BASELINE01
@@ -220,7 +227,8 @@
 - **Title.** Tool/command runtime-correctness recon
 - **Workstream.** tool-runtime-reliability
 - **Lifecycle.** OPEN
-- **Priority.** HIGH
+- **Priority.** P1
+- **Source priority (verbatim).** HIGH
 - **Original status (verbatim).** HIGH
 - **Historical qualification.** UNKNOWN
 - **Current ACT.** (none — no ACT is currently executing)
@@ -255,21 +263,20 @@
 
 Deferred work is explicitly postponed by the source. It is represented in the epic records with `lifecycle: DEFERRED` and is NOT part of the current execution frontier. Unknown source status is never represented as DEFERRED — it is represented as UNRESOLVED.
 
-- `EPIC-CLINEMM-APPROVAL-PROTECTION/BYPASS01` — BYPASS01 — temporary YOLO bypass (de-queued) (DEFER).
-- `EPIC-CLINEMM-APPROVAL-PROTECTION/DESTRUCTIVE-SCOPE-REFINEMENT-RECON` — ACT-CLINEMM-DESTRUCTIVE-SCOPE-REFINEMENT-RECON01 — destructive scope refinement (FUTURE / UNIMPLEMENTED).
-- `EPIC-CLINEMM-APPROVAL-PROTECTION/APPROVAL-TRANSACTION-RECORDER-FUTURE-WORK` — Approval transaction recorder — future work (FUTURE / UNIMPLEMENTED).
-- `EPIC-CLINEMM-ARCHITECTURE/E8` — E8 — legacy writer retirement (HOLD).
-- `EPIC-CLINEMM-ARCHITECTURE/E9` — E9 — effect interpreter (HOLD).
-- `EPIC-CLINEMM-AUTHENTICATED-DEV-CAPABILITIES/AUTH-DEV-CAP-DESIGN01` — AUTH-DEV-CAP-DESIGN01 — per-family credential-capability design (DEFER).
-- `EPIC-CLINEMM-FACTORY-INFRASTRUCTURE/HUSKY-TOOLCHAIN-PATH-PORTABILITY01` — HUSKY-TOOLCHAIN-PATH-PORTABILITY01 — repository hook tool discovery portability (FUTURE / DEFER).
-- `EPIC-CLINEMM-FACTORY-INFRASTRUCTURE/UPSTREAM-CATCHUP-RECON01` — ACT-CLINEMM-UPSTREAM-CATCHUP-RECON01 — upstream fork-distance catch-up (FUTURE / UNIMPLEMENTED).
-- `EPIC-CLINEMM-PRODUCT-CONFIG-BRANDING/TEMP-INTERNAL-CONTROL-CLEANUP` — TEMP-INTERNAL-CONTROL-CLEANUP — cross-cutting child of settings-parity (FUTURE / DEFER).
-- `EPIC-CLINEMM-PRODUCT-CONFIG-BRANDING/BRANDING-DEMO-JAN1-ICON` — ACT-CLINEMM-BRANDING-DEMO-JAN1-ICON01 — January 1 demo icon decoration (FUTURE / UNIMPLEMENTED).
-- `EPIC-CLINEMM-RUNTIME-TASK-PROGRESSION/CLOSED-LIVE-UPGRADE` — RUNTIME-TASK-PROGRESSION `CLOSED_LIVE` upgrade (DEFER).
-- `EPIC-CLINEMM-SAFE-YOLO-SEATBELT/TEMP-INTERNAL-CONTROL-CLEANUP` — TEMP-INTERNAL-CONTROL-CLEANUP — temporary / internal control inventory and classification (FUTURE / DEFER).
-- `EPIC-CLINEMM-SAFE-YOLO-SEATBELT/SINGLE-R0-EXECUTION-OBLIGATION-PROPAGATION` — ACT-CLINEMM-SEATBELT-ALL-R0-EXECUTION-OBLIGATION-RECON01 — R0 execution-obligation propagation (DEFER / NOT_STARTED / RECON_REQUIRED).
-- `EPIC-CLINEMM-SAFE-YOLO-SEATBELT/NETWORK-POLICY-HARDENING` — Network-policy hardening / allowlisting (post-V1) (DEFER).
-- `EPIC-CLINEMM-TASK-CONTROL-LIVENESS/R3-R4-ADVERSARIAL-SCHEDULES` — R3/R4 task-control adversarial schedules (DEFER).
+- `BYPASS01` — BYPASS01 — temporary YOLO bypass (de-queued) (DEFER).
+- `DESTRUCTIVE-SCOPE-REFINEMENT-RECON` — ACT-CLINEMM-DESTRUCTIVE-SCOPE-REFINEMENT-RECON01 — destructive scope refinement (FUTURE / UNIMPLEMENTED).
+- `APPROVAL-TRANSACTION-RECORDER-FUTURE-WORK` — Approval transaction recorder — future work (FUTURE / UNIMPLEMENTED).
+- `E8` — E8 — legacy writer retirement (HOLD).
+- `E9` — E9 — effect interpreter (HOLD).
+- `AUTH-DEV-CAP-DESIGN01` — AUTH-DEV-CAP-DESIGN01 — per-family credential-capability design (DEFER).
+- `HUSKY-TOOLCHAIN-PATH-PORTABILITY01` — HUSKY-TOOLCHAIN-PATH-PORTABILITY01 — repository hook tool discovery portability (FUTURE / DEFER).
+- `UPSTREAM-CATCHUP-RECON01` — ACT-CLINEMM-UPSTREAM-CATCHUP-RECON01 — upstream fork-distance catch-up (FUTURE / UNIMPLEMENTED).
+- `BRANDING-DEMO-JAN1-ICON` — ACT-CLINEMM-BRANDING-DEMO-JAN1-ICON01 — January 1 demo icon decoration (FUTURE / UNIMPLEMENTED).
+- `CLOSED-LIVE-UPGRADE` — RUNTIME-TASK-PROGRESSION `CLOSED_LIVE` upgrade (DEFER).
+- `TEMP-INTERNAL-CONTROL-CLEANUP` — TEMP-INTERNAL-CONTROL-CLEANUP — temporary / internal control inventory and classification (FUTURE / DEFER).
+- `SINGLE-R0-EXECUTION-OBLIGATION-PROPAGATION` — ACT-CLINEMM-SEATBELT-ALL-R0-EXECUTION-OBLIGATION-RECON01 — R0 execution-obligation propagation (DEFER / NOT_STARTED / RECON_REQUIRED).
+- `NETWORK-POLICY-HARDENING` — Network-policy hardening / allowlisting (post-V1) (DEFER).
+- `R3-R4-ADVERSARIAL-SCHEDULES` — R3/R4 task-control adversarial schedules (DEFER).
 
 ## Unresolved engineering interpretation
 

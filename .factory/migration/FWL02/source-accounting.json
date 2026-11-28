@@ -13,12 +13,12 @@
         "historical_execution",
         "narrative_history"
       ],
-      "note": "Prepend-ordered historical ACT report log. 177 report sections were mechanically indexed by identity, verdict and exact source range into `historical-index.json` (167 distinct identities; 7 with competing verdicts, 1 with repeated identical verdicts). The per-ACT prose bodies and the `Updated:` chronology lines are contiguous narrative history, preserved verbatim in the committed source archive and deliberately not reconstructed as work items."
+      "note": "Prepend-ordered historical ACT report log at heading level 1. 177 report sections were mechanically indexed by identity, verdict and exact source range into `historical-index.json`. The per-ACT prose bodies and the `Updated:` chronology lines are contiguous narrative history, preserved verbatim in the committed source archive and deliberately not reconstructed as work items."
     },
     {
       "path": ".factory/epic-board.md",
       "start_line": 9344,
-      "end_line": 9350,
+      "end_line": 9351,
       "dispositions": [
         "navigation_or_metadata"
       ],
@@ -27,7 +27,7 @@
     {
       "path": ".factory/epic-board.md",
       "start_line": 9352,
-      "end_line": 9377,
+      "end_line": 9380,
       "dispositions": [
         "current_obligation",
         "navigation_or_metadata"
@@ -37,7 +37,7 @@
     {
       "path": ".factory/epic-board.md",
       "start_line": 9381,
-      "end_line": 9402,
+      "end_line": 9405,
       "dispositions": [
         "current_obligation",
         "navigation_or_metadata",
@@ -48,7 +48,7 @@
     {
       "path": ".factory/epic-board.md",
       "start_line": 9406,
-      "end_line": 9421,
+      "end_line": 9424,
       "dispositions": [
         "current_obligation",
         "cross_link"
@@ -58,7 +58,7 @@
     {
       "path": ".factory/epic-board.md",
       "start_line": 9425,
-      "end_line": 9439,
+      "end_line": 9442,
       "dispositions": [
         "deferred_obligation"
       ],
@@ -73,6 +73,16 @@
         "historical_execution"
       ],
       "note": "The Historical task census — a conservation-only ACT-ID listing grouped by family, explicitly \"an audit trail, not a status report\". The identities it lists are already covered by the historical ACT index; the region is accounted for as narrative history plus the already-indexed ACT identities."
+    },
+    {
+      "path": ".factory/epic-board.md",
+      "start_line": 9542,
+      "end_line": 44731,
+      "dispositions": [
+        "historical_execution",
+        "narrative_history"
+      ],
+      "note": "The TRAILING region of the board — the range the previous source accounting stopped at. It is NOT narrative-only: it carries the board's maintenance contract, its status / priority vocabulary, its size invariant and, above all, 205 further ACT report sections at heading level 2 (`## ACT-... — VERDICT — date`). Those 205 sections belong to 149 DISTINCT historical ACT identities that the level-1-only extraction had silently skipped, which is why the previous accounting reported 167 identities. Every one of those identities is now mechanically indexed by identity, verdict and exact source range into `historical-index.json` with its own disposition (289 UNAMBIGUOUS, 2 AMBIGUOUS, 25 CONFLICTING over 316 distinct identities in total). The 25 conflicting identities are surfaced by the SOURCE_CONFLICT reconciliation records; the remainder are accounted for at the COLD level — identity, verdict and exact source range — with their complete original bytes preserved verbatim in the committed source archive. The report bodies and `Updated:` chronology lines inside this range are accounted for as contiguous narrative history at the byte level and are deliberately NOT reconstructed paragraph-by-paragraph as new work items. No outstanding obligation was found in this range that the operational index and the per-epic detail files do not already own; the 149 identities are historical EXECUTIONS, not current obligations."
     },
     {
       "path": ".factory/epics/_index-contract.md",
@@ -365,6 +375,90 @@
         "narrative_history"
       ],
       "note": "The closed historical foundation. Retained as a TERMINAL epic with an empty item collection so the closed substrate remains discoverable."
+    }
+  ],
+  "secondary_representations": [
+    {
+      "authoritative_obligation": "EPIC-CLINEMM-HOST-TEST-INFRASTRUCTURE/HOST-TEST-RUNNER",
+      "secondary_representation": "EPIC-CLINEMM-SAFE-YOLO-SEATBELT/HOST-TEST-RUNNER",
+      "represented_in_epic": "EPIC-CLINEMM-SAFE-YOLO-SEATBELT",
+      "ownership_basis": "safe-yolo-seatbelt.md Open work carries the row as `HOST-TEST RUNNER` (row 18) with the status OPEN / HIGH and the full open-work description; host-test-infrastructure.md is the canonical detail file that gives the working label a durable detail file.",
+      "source_ranges": [
+        {
+          "path": ".factory/epics/safe-yolo-seatbelt.md",
+          "lines": [
+            44,
+            44
+          ]
+        }
+      ]
+    },
+    {
+      "authoritative_obligation": "EPIC-CLINEMM-HOST-TEST-INFRASTRUCTURE/HOST-TEST-RUNNER",
+      "secondary_representation": "EPIC-CLINEMM-APPROVAL-PROTECTION/HOST-TEST-RUNNER",
+      "represented_in_epic": "EPIC-CLINEMM-APPROVAL-PROTECTION",
+      "ownership_basis": "approval-protection.md Open work carries the row as row 18 and explicitly defers to safe-yolo-seatbelt.md: `See .factory/epics/safe-yolo-seatbelt.md for the full open-work description`.",
+      "source_ranges": [
+        {
+          "path": ".factory/epics/approval-protection.md",
+          "lines": [
+            42,
+            42
+          ]
+        }
+      ]
+    },
+    {
+      "authoritative_obligation": "EPIC-CLINEMM-APPROVAL-PROTECTION/CLASSIC-PROTECTION-RECON01",
+      "secondary_representation": "EPIC-CLINEMM-SAFE-YOLO-SEATBELT/CLASSIC-PROTECTION-RECON01",
+      "represented_in_epic": "EPIC-CLINEMM-SAFE-YOLO-SEATBELT",
+      "ownership_basis": "safe-yolo-seatbelt.md Open work carries the same ACT with the same status, unblocking condition and first-deliverable description; the board's Current frontier lane `Approval / classic` names approval-protection.md as the Detail link, which is the authoritative placement.",
+      "source_ranges": [
+        {
+          "path": ".factory/epics/safe-yolo-seatbelt.md",
+          "lines": [
+            45,
+            45
+          ]
+        }
+      ]
+    },
+    {
+      "authoritative_obligation": "EPIC-CLINEMM-APPROVAL-PROTECTION/EDITOR-TOOL-APPROVAL-FRICTION-RECON01",
+      "secondary_representation": "EPIC-CLINEMM-RUNTIME-TASK-PROGRESSION/EDITOR-TOOL-APPROVAL-FRICTION-RECON01",
+      "represented_in_epic": "EPIC-CLINEMM-RUNTIME-TASK-PROGRESSION",
+      "ownership_basis": "runtime-task-progression.md Open work names the same ACT as restored to NEXT with the same completion-authority prerequisite and the same remaining gates; the board's Current frontier lane `Approval / editor-tool` names approval-protection.md as the Detail link, which is the authoritative placement.",
+      "source_ranges": [
+        {
+          "path": ".factory/epics/runtime-task-progression.md",
+          "lines": [
+            78,
+            78
+          ]
+        }
+      ]
+    },
+    {
+      "authoritative_obligation": "EPIC-CLINEMM-SAFE-YOLO-SEATBELT/TEMP-INTERNAL-CONTROL-CLEANUP",
+      "secondary_representation": "EPIC-CLINEMM-PRODUCT-CONFIG-BRANDING/TEMP-INTERNAL-CONTROL-CLEANUP",
+      "represented_in_epic": "EPIC-CLINEMM-PRODUCT-CONFIG-BRANDING",
+      "ownership_basis": "product-config-branding.md carries the row as the cross-cutting child and states the ownership explicitly: `The primary owner is safe-yolo-seatbelt.md (the env controls are owned by the seatbelt substrate)`.",
+      "source_ranges": [
+        {
+          "path": ".factory/epics/product-config-branding.md",
+          "lines": [
+            93,
+            100
+          ]
+        },
+        {
+          "path": ".factory/epics/product-config-branding.md",
+          "lines": [
+            131,
+            140
+          ]
+        }
+      ]
     }
   ]
 }

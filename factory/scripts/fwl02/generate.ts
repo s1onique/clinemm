@@ -115,9 +115,16 @@ function resolveRelationship(
 		: { ...base, required_outcome: relationship.required_outcome };
 }
 
-/** Resolve a reconciled item into its wire shape. */
+/**
+ * Resolve a reconciled item into its wire shape.
+ *
+ * The item identity is LOCAL to its epic: the consumer derives the scoped
+ * identity itself. Every relationship kind is carried in the `dependencies`
+ * array, because the consumer's wire shape has no separate relationship field.
+ */
 function resolveItem(item: ReconciledItem, effectiveHead: string): FwmiItem {
-	const base = {
+	return {
+		schema_version: FWMI_SCHEMA_VERSION,
 		item_id: item.item_id,
 		title: item.title,
 		description: item.description,
@@ -128,7 +135,9 @@ function resolveItem(item: ReconciledItem, effectiveHead: string): FwmiItem {
 		qualification: item.qualification,
 		criteria: item.criteria,
 		criteria_coverage: item.criteria_coverage,
-		dependencies: item.dependencies,
+		dependencies: item.relationships.map((relationship) =>
+			resolveRelationship(relationship, effectiveHead),
+		),
 		dependency_coverage: item.dependency_coverage,
 		blockers: item.blockers,
 		current_act: item.current_act,
@@ -137,19 +146,11 @@ function resolveItem(item: ReconciledItem, effectiveHead: string): FwmiItem {
 		reopen_conditions: item.reopen_conditions,
 		source_refs: resolveBounds(item.source_refs, effectiveHead),
 	};
-	return item.relationships === undefined
-		? base
-		: {
-				...base,
-				relationships: item.relationships.map((r) =>
-					resolveRelationship(r, effectiveHead),
-				),
-			};
 }
 
 /** Resolve a reconciled epic into its wire shape. */
 function resolveEpic(epic: ReconciledEpic, effectiveHead: string): FwmiEpic {
-	const base = {
+	return {
 		schema_version: FWMI_SCHEMA_VERSION,
 		epic_id: epic.epic_id,
 		title: epic.title,
@@ -160,14 +161,6 @@ function resolveEpic(epic: ReconciledEpic, effectiveHead: string): FwmiEpic {
 		items: epic.items.map((item) => resolveItem(item, effectiveHead)),
 		source_refs: resolveBounds(epic.source_refs, effectiveHead),
 	};
-	return epic.relationships === undefined
-		? base
-		: {
-				...base,
-				relationships: epic.relationships.map((r) =>
-					resolveRelationship(r, effectiveHead),
-				),
-			};
 }
 
 /** Serialize one JSON document deterministically with a trailing newline. */
@@ -241,6 +234,7 @@ function buildHistoricalIndex(): FwmiHistoricalAct[] {
 			),
 		);
 		return {
+			schema_version: FWMI_SCHEMA_VERSION,
 			act_id: group.act_id,
 			original_verdict: group.original_verdict,
 			epic_id: null,
@@ -255,6 +249,7 @@ function buildHistoricalIndex(): FwmiHistoricalAct[] {
 /** Build the reconciliation manifest. */
 function buildReconciliation(): FwmiReconciliationRecord[] {
 	return RECONCILIATION_RECORDS.map((record) => ({
+		schema_version: FWMI_SCHEMA_VERSION,
 		kind: record.kind,
 		identities: record.identities,
 		resolution: record.resolution,

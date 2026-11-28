@@ -10,7 +10,8 @@
   ],
   "items": [
     {
-      "item_id": "EPIC-CLINEMM-CONTEXT-COMPACTION-TOKEN-ACCOUNTING/COMPACTION-HEADER-BAR-FRESHNESS-RECON01",
+      "schema_version": 1,
+      "item_id": "COMPACTION-HEADER-BAR-FRESHNESS-RECON01",
       "title": "ACT-CLINEMM-COMPACTION-HEADER-BAR-FRESHNESS-RECON01 — post-compaction header-bar freshness recon",
       "description": "RECON_ONLY / option α (narrow recon) chosen over option β (wire-contract `kind` discriminator); production delta ZERO; no new review round. Defect A (cross-scale arithmetic) and Defect B (post-restore publication) remain CLOSED at HEAD (`cb5b52239` + `sdk-compaction-coordinator.ts:365-396` trailing postStateToWebview). Defect C (post-compaction header-bar staleness) is a LIVE consumer-level witness; FULL_UI_PRODUCTION_SEAM_REPRODUCTION = NOT YET per the empirical P1 (the 2/2 test exercises the shared metrics consumer, NOT the actual ChatView → ContextWindow/TaskHeader render chain; the recon MUST author the real RED only after the C1/C2/C3 semantic contract is frozen). Recon question: what does the header bar represent immediately after compaction and before the next API request? WIRE_KIND_CHANGE = NOT_AUTHORIZED_YET (option β deferred until recon proves C3). Downstream repair ladder NOT pre-decided: C1 → ACT-CLINEMM-COMPACTION-HEADER-LABEL-REPAIR01; C2 → ACT-CLINEMM-COMPACTION-HEADER-PROJECTION-REPAIR01; C3 → ACT-CLINEMM-COMPACTION-WIRE-CONTRACT-REPAIR01.",
       "workstream": "context-compaction-token-accounting",

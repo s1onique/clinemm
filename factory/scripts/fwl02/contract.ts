@@ -92,6 +92,24 @@ export const FWMI_RELATIONSHIP_KINDS = [
 ] as const;
 export type FwmiRelationshipKind = (typeof FWMI_RELATIONSHIP_KINDS)[number];
 
+/**
+ * The normalized priority vocabulary of the native ledger.
+ *
+ * The source board and the source epic files state priorities in their own
+ * words (`HIGH`, `MED`, `LOW`, `DEMO / LOW`, `P0-if-reproduced`, `P1`, `P2`,
+ * `P3`). The FWMI wire carries the NORMALIZED value; the source's own wording
+ * is preserved verbatim in the record's `original_status` and in the
+ * supplemental source accounting, never rewritten in place.
+ *
+ * The normalization is a mapping of the SOURCE's stated priority, not an
+ * assertion of the current operational priority: a source that says
+ * `P0-if-reproduced` is not a confirmed current P0 and is therefore carried as
+ * `P1` with its conditional wording preserved, because the condition is not
+ * established.
+ */
+export const FWMI_PRIORITIES = ["P0", "P1", "P2", "P3"] as const;
+export type FwmiPriority = (typeof FWMI_PRIORITIES)[number];
+
 /** Reconciliation resolutions used by reconciliation records. */
 export const FWMI_RESOLUTIONS = [
 	"UNRESOLVED",
@@ -153,8 +171,21 @@ export interface FwmiSourceManifest {
  * One reconciled work-item record. A work item is a PERSISTENT ENGINEERING
  * OBLIGATION. An ACT is an EXECUTION ATTEMPT — several ACTs may address one
  * obligation, and one ACT may address several obligations.
+ *
+ * WIRE COMPATIBILITY (against the actual Leamas Go consumer):
+ *
+ *   - `item_id` is LOCAL to its parent epic. The consumer derives the scoped
+ *     identity as `epic_id + "/" + item_id`, so a globally-scoped `item_id`
+ *     would double-scope the identity and break the consumer's duplicate
+ *     detection.
+ *   - `dependencies` carries EVERY relationship kind, not only prerequisites.
+ *     The consumer's `WorkItem` shape has no separate `relationships` field
+ *     and its strict decoder rejects an unknown field.
+ *   - `schema_version` is REQUIRED on the nested work item.
  */
 export interface FwmiItem {
+	readonly schema_version: number;
+	/** The item identity, LOCAL to its parent epic (e.g. "E8"). */
 	readonly item_id: string;
 	readonly title: string;
 	readonly description: string;
@@ -167,7 +198,7 @@ export interface FwmiItem {
 	readonly qualification: FwmiQualification;
 	readonly criteria: readonly string[];
 	readonly criteria_coverage: FwmiCoverage;
-	readonly dependencies: readonly string[];
+	readonly dependencies: readonly FwmiRelationship[];
 	readonly dependency_coverage: FwmiCoverage;
 	readonly blockers: readonly string[];
 	readonly current_act: string | null;
@@ -175,8 +206,6 @@ export interface FwmiItem {
 	readonly evidence_locators: readonly string[];
 	readonly reopen_conditions: readonly string[];
 	readonly source_refs: readonly FwmiSourceRef[];
-	/** Known relationships beyond the dependency list. */
-	readonly relationships?: readonly FwmiRelationship[];
 }
 
 /** One epic record. */
@@ -190,12 +219,11 @@ export interface FwmiEpic {
 	readonly exit_criteria: readonly string[];
 	readonly items: readonly FwmiItem[];
 	readonly source_refs: readonly FwmiSourceRef[];
-	/** Known relationships beyond the item level (e.g. epic-to-epic edges). */
-	readonly relationships?: readonly FwmiRelationship[];
 }
 
 /** One historical ACT index entry. */
 export interface FwmiHistoricalAct {
+	readonly schema_version: number;
 	readonly act_id: string;
 	/** The original verdict. Competing verdicts are retained separately. */
 	readonly original_verdict: string | null;
@@ -214,6 +242,7 @@ export interface FwmiHistoricalIndex {
 
 /** One reconciliation record: a duplicate, conflict, gap or cross-link. */
 export interface FwmiReconciliationRecord {
+	readonly schema_version: number;
 	readonly kind: string;
 	readonly identities: readonly string[];
 	readonly resolution: FwmiResolution;

@@ -14,11 +14,14 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import {
 	FWMI_COVERAGES,
 	FWMI_LIFECYCLES,
+	FWMI_PRIORITIES,
 	FWMI_QUALIFICATIONS,
 	FWMI_RELATIONSHIP_KINDS,
 	FWMI_RESOLUTIONS,
@@ -36,7 +39,11 @@ import {
 	splitCommittedLines,
 	verifySourceRef,
 } from "./source-refs.ts";
-import { findDuplicateJsonMembers, validatePackage } from "./validate.ts";
+import {
+	findDuplicateJsonMembers,
+	findPrerequisiteCycle,
+	validatePackage,
+} from "./validate.ts";
 
 const REPO_ROOT = resolve(import.meta.dir, "../../..");
 const PACKAGE_DIR = join(REPO_ROOT, ".factory/migration/FWL02");
@@ -142,7 +149,7 @@ describe("FWL02 migration package — structural validity", () => {
 				expect(FWMI_COVERAGES).toContain(
 					item.dependency_coverage as FwmiCoverage,
 				);
-				for (const relationship of (item.relationships ?? []) as Array<{
+				for (const relationship of (item.dependencies ?? []) as Array<{
 					kind: string;
 				}>) {
 					expect(FWMI_RELATIONSHIP_KINDS).toContain(
@@ -184,7 +191,7 @@ describe("FWL02 migration package — source integrity", () => {
 			refs.push(...(epic.source_refs as Array<Record<string, unknown>>));
 			for (const item of epic.items as Array<Record<string, unknown>>) {
 				refs.push(...(item.source_refs as Array<Record<string, unknown>>));
-				for (const relationship of (item.relationships ?? []) as Array<
+				for (const relationship of (item.dependencies ?? []) as Array<
 					Record<string, unknown>
 				>) {
 					refs.push(
@@ -234,6 +241,225 @@ describe("FWL02 migration package — source integrity", () => {
 		expect(
 			verifySourceRef(ref as never, manifest.source_head, REPO_ROOT).length,
 		).toBeGreaterThan(0);
+	});
+});
+
+describe("FWL02 migration package — actual consumer wire compatibility", () => {
+	/**
+	 * The wire fields of the ACTUAL Leamas Go consumer, transcribed from
+	 * `internal/ledger/fwmi/records.go`.
+	 *
+	 * The consumer's loader uses `DisallowUnknownFields`, so an extra field is
+	 * a REJECTION, not a warning.
+	 */
+	const CONSUMER_EPIC_FIELDS = [
+		"schema_version",
+		"epic_id",
+		"title",
+		"original_status",
+		"lifecycle",
+		"priority",
+		"exit_criteria",
+		"items",
+		"source_refs",
+	];
+	const CONSUMER_ITEM_FIELDS = [
+		"schema_version",
+		"item_id",
+		"title",
+		"description",
+		"workstream",
+		"original_status",
+		"lifecycle",
+		"priority",
+		"qualification",
+		"criteria",
+		"criteria_coverage",
+		"dependencies",
+		"dependency_coverage",
+		"blockers",
+		"current_act",
+		"related_acts",
+		"evidence_locators",
+		"reopen_conditions",
+		"source_refs",
+	];
+	const CONSUMER_HISTORICAL_FIELDS = [
+		"schema_version",
+		"act_id",
+		"original_verdict",
+		"epic_id",
+		"work_item_ids",
+		"evidence_locators",
+		"source_refs",
+		"reconciliation",
+	];
+	const CONSUMER_RECONCILIATION_FIELDS = [
+		"schema_version",
+		"kind",
+		"identities",
+		"resolution",
+		"reason",
+		"source_refs",
+	];
+
+	test("no artifact carries a field the consumer's strict decoder rejects", () => {
+		for (const epic of loadEpics()) {
+			for (const key of Object.keys(epic)) {
+				expect(CONSUMER_EPIC_FIELDS).toContain(key);
+			}
+			for (const item of epic.items as Array<Record<string, unknown>>) {
+				for (const key of Object.keys(item)) {
+					expect(CONSUMER_ITEM_FIELDS).toContain(key);
+				}
+			}
+		}
+		for (const record of index.records as Array<Record<string, unknown>>) {
+			for (const key of Object.keys(record)) {
+				expect(CONSUMER_HISTORICAL_FIELDS).toContain(key);
+			}
+		}
+		for (const record of recon.records as Array<Record<string, unknown>>) {
+			for (const key of Object.keys(record)) {
+				expect(CONSUMER_RECONCILIATION_FIELDS).toContain(key);
+			}
+		}
+	});
+
+	test("no epic or work item carries a separate relationships field", () => {
+		for (const epic of loadEpics()) {
+			expect(epic).not.toHaveProperty("relationships");
+			for (const item of epic.items as Array<Record<string, unknown>>) {
+				expect(item).not.toHaveProperty("relationships");
+			}
+		}
+	});
+
+	test("every nested record carries the FWMI v1 schema version", () => {
+		for (const epic of loadEpics()) {
+			for (const item of epic.items as Array<{ schema_version: number }>) {
+				expect(item.schema_version).toBe(FWMI_SCHEMA_VERSION);
+			}
+		}
+		for (const record of index.records as Array<{ schema_version: number }>) {
+			expect(record.schema_version).toBe(FWMI_SCHEMA_VERSION);
+		}
+		for (const record of recon.records as Array<{
+			schema_version: number;
+		}>) {
+			expect(record.schema_version).toBe(FWMI_SCHEMA_VERSION);
+		}
+	});
+
+	test("every work-item identity is local to its parent epic", () => {
+		for (const epic of loadEpics()) {
+			for (const item of epic.items as Array<{ item_id: string }>) {
+				expect(item.item_id).not.toContain("/");
+				expect(item.item_id.length).toBeGreaterThan(0);
+			}
+		}
+	});
+
+	test("the scoped work-item identity is unique across the package", () => {
+		const scoped = loadEpics().flatMap((epic) =>
+			(epic.items as Array<{ item_id: string }>).map(
+				(item) => `${epic.epic_id as string}/${item.item_id}`,
+			),
+		);
+		expect(new Set(scoped).size).toBe(scoped.length);
+	});
+
+	test("every relationship target carries its epic scope and resolves", () => {
+		const represented = new Set(
+			loadEpics().flatMap((epic) =>
+				(epic.items as Array<{ item_id: string }>).map(
+					(item) => `${epic.epic_id as string}/${item.item_id}`,
+				),
+			),
+		);
+		for (const epic of loadEpics()) {
+			for (const item of epic.items as Array<{
+				dependencies?: Array<{ target: string }>;
+			}>) {
+				for (const relationship of item.dependencies ?? []) {
+					expect(relationship.target).toContain("/");
+					expect(represented.has(relationship.target)).toBe(true);
+				}
+			}
+		}
+	});
+});
+
+describe("FWL02 migration package — prerequisite graph", () => {
+	/** The local prerequisite edges of the package. */
+	function prerequisiteEdges(): Map<string, string[]> {
+		const edges = new Map<string, string[]>();
+		for (const epic of loadEpics()) {
+			for (const item of epic.items as Array<{
+				item_id: string;
+				dependencies?: Array<{ kind: string; target: string }>;
+			}>) {
+				edges.set(
+					`${epic.epic_id as string}/${item.item_id}`,
+					(item.dependencies ?? [])
+						.filter((r) => r.kind === "DEPENDS_ON")
+						.map((r) => r.target),
+				);
+			}
+		}
+		return edges;
+	}
+
+	test("the declared prerequisite graph has no cycle", () => {
+		expect(findPrerequisiteCycle(prerequisiteEdges())).toBeNull();
+	});
+
+	test("the architecture prerequisite order is E8 then E9 then ELMIZATION02", () => {
+		const edges = prerequisiteEdges();
+		expect(edges.get("EPIC-CLINEMM-ARCHITECTURE/E8")).toEqual([]);
+		expect(edges.get("EPIC-CLINEMM-ARCHITECTURE/E9")).toEqual([
+			"EPIC-CLINEMM-ARCHITECTURE/E8",
+		]);
+		expect(edges.get("EPIC-CLINEMM-ARCHITECTURE/ELMIZATION02")).toEqual([
+			"EPIC-CLINEMM-ARCHITECTURE/E9",
+		]);
+	});
+
+	test("the unresolved E7 prerequisite remains an explicit blocker on E8", () => {
+		const architecture = loadEpics().find(
+			(epic) => epic.epic_id === "EPIC-CLINEMM-ARCHITECTURE",
+		);
+		const e8 = (
+			architecture?.items as Array<{
+				item_id: string;
+				blockers: string[];
+			}>
+		).find((item) => item.item_id === "E8");
+		expect(e8).toBeDefined();
+		expect(e8?.blockers.join(" ")).toContain("E7");
+		// E7 is NOT invented as an obligation.
+		const all = loadEpics().flatMap((epic) =>
+			(epic.items as Array<{ item_id: string }>).map((item) => item.item_id),
+		);
+		expect(all).not.toContain("E7");
+	});
+
+	test("the cycle detector actually detects a cycle", () => {
+		const cyclic = new Map<string, string[]>([
+			["A", ["B"]],
+			["B", ["C"]],
+			["C", ["A"]],
+		]);
+		expect(findPrerequisiteCycle(cyclic)).not.toBeNull();
+	});
+
+	test("a shared prerequisite is not mistaken for a cycle", () => {
+		const shared = new Map<string, string[]>([
+			["A", ["C"]],
+			["B", ["C"]],
+			["C", []],
+		]);
+		expect(findPrerequisiteCycle(shared)).toBeNull();
 	});
 });
 
@@ -300,15 +526,17 @@ describe("FWL02 migration package — semantic accounting", () => {
 	test("a cross-link never carries an obligation of its own", () => {
 		const represented = new Set(
 			loadEpics().flatMap((epic) =>
-				(epic.items as Array<{ item_id: string }>).map((item) => item.item_id),
+				(epic.items as Array<{ item_id: string }>).map(
+					(item) => `${epic.epic_id as string}/${item.item_id}`,
+				),
 			),
 		);
 		for (const epic of loadEpics()) {
 			for (const item of epic.items as Array<{
 				item_id: string;
-				relationships?: Array<{ kind: string; target: string }>;
+				dependencies?: Array<{ kind: string; target: string }>;
 			}>) {
-				for (const relationship of item.relationships ?? []) {
+				for (const relationship of item.dependencies ?? []) {
 					if (relationship.kind === "CROSS_LINK") {
 						expect(represented.has(relationship.target)).toBe(true);
 					}
@@ -433,6 +661,219 @@ describe("FWL02 migration package — adversarial negative controls", () => {
 	});
 });
 
+describe("FWL02 migration package — duplicate authority and priority", () => {
+	/** The scoped identities of every represented obligation. */
+	function scopedItems(): Map<string, string> {
+		const items = new Map<string, string>();
+		for (const epic of loadEpics()) {
+			for (const item of epic.items as Array<{
+				item_id: string;
+				lifecycle: string;
+			}>) {
+				items.set(`${epic.epic_id as string}/${item.item_id}`, item.lifecycle);
+			}
+		}
+		return items;
+	}
+
+	test("each resolved duplicate group carries exactly one executable obligation", () => {
+		const items = scopedItems();
+		const groups = (
+			recon.records as Array<{
+				kind: string;
+				resolution: string;
+				reason: string;
+				identities: string[];
+			}>
+		).filter(
+			(record) =>
+				(record.resolution === "DUPLICATE" ||
+					record.resolution === "RESOLVED") &&
+				/shared ownership|primary owner|canonical owner|canonical detail/i.test(
+					record.reason,
+				),
+		);
+		expect(groups.length).toBeGreaterThan(0);
+		for (const group of groups) {
+			const executable = group.identities.filter((identity) =>
+				["OPEN", "ACTIVE", "BLOCKED"].includes(items.get(identity) ?? ""),
+			);
+			expect(executable.length).toBeLessThanOrEqual(1);
+		}
+	});
+
+	test("the four consolidated duplicate groups keep one authoritative obligation each", () => {
+		const items = scopedItems();
+		// HOST-TEST-RUNNER: three representations, one owner.
+		expect(
+			items.has("EPIC-CLINEMM-HOST-TEST-INFRASTRUCTURE/HOST-TEST-RUNNER"),
+		).toBe(true);
+		expect(items.has("EPIC-CLINEMM-SAFE-YOLO-SEATBELT/HOST-TEST-RUNNER")).toBe(
+			false,
+		);
+		expect(items.has("EPIC-CLINEMM-APPROVAL-PROTECTION/HOST-TEST-RUNNER")).toBe(
+			false,
+		);
+		// CLASSIC-PROTECTION-RECON01: two representations, one owner.
+		expect(
+			items.has("EPIC-CLINEMM-APPROVAL-PROTECTION/CLASSIC-PROTECTION-RECON01"),
+		).toBe(true);
+		expect(
+			items.has("EPIC-CLINEMM-SAFE-YOLO-SEATBELT/CLASSIC-PROTECTION-RECON01"),
+		).toBe(false);
+		// EDITOR-TOOL-APPROVAL-FRICTION-RECON01: two representations, one owner.
+		expect(
+			items.has(
+				"EPIC-CLINEMM-APPROVAL-PROTECTION/EDITOR-TOOL-APPROVAL-FRICTION-RECON01",
+			),
+		).toBe(true);
+		expect(
+			items.has(
+				"EPIC-CLINEMM-RUNTIME-TASK-PROGRESSION/EDITOR-TOOL-APPROVAL-FRICTION-RECON01",
+			),
+		).toBe(false);
+		// TEMP-INTERNAL-CONTROL-CLEANUP: two representations, one owner.
+		expect(
+			items.has(
+				"EPIC-CLINEMM-SAFE-YOLO-SEATBELT/TEMP-INTERNAL-CONTROL-CLEANUP",
+			),
+		).toBe(true);
+		expect(
+			items.has(
+				"EPIC-CLINEMM-PRODUCT-CONFIG-BRANDING/TEMP-INTERNAL-CONTROL-CLEANUP",
+			),
+		).toBe(false);
+	});
+
+	test("every dropped secondary representation is accounted for in the source accounting", () => {
+		const accounting = JSON.parse(
+			readFileSync(join(PACKAGE_DIR, "source-accounting.json"), "utf8"),
+		);
+		const secondary = accounting.secondary_representations as Array<{
+			authoritative_obligation: string;
+			secondary_representation: string;
+			source_ranges: Array<{ path: string; lines: [number, number] }>;
+		}>;
+		expect(secondary.length).toBeGreaterThan(0);
+		const items = scopedItems();
+		for (const entry of secondary) {
+			// The secondary representation carries NO lifecycle authority.
+			expect(items.has(entry.secondary_representation)).toBe(false);
+			// The authoritative obligation IS represented.
+			expect(items.has(entry.authoritative_obligation)).toBe(true);
+			// It is source-referenced.
+			expect(entry.source_ranges.length).toBeGreaterThan(0);
+		}
+	});
+
+	test("every normalized priority is in the native ledger vocabulary", () => {
+		for (const epic of loadEpics()) {
+			if (epic.priority !== null) {
+				expect(FWMI_PRIORITIES).toContain(epic.priority as never);
+			}
+			for (const item of epic.items as Array<{ priority: string | null }>) {
+				if (item.priority !== null) {
+					expect(FWMI_PRIORITIES).toContain(item.priority as never);
+				}
+			}
+		}
+	});
+
+	test("a conditional P0 is not promoted to a confirmed current P0", () => {
+		const mcp = loadEpics().find(
+			(epic) => epic.epic_id === "EPIC-CLINEMM-APPROVAL-MCP-AUTHORITY",
+		);
+		const item = (
+			mcp?.items as Array<{
+				item_id: string;
+				priority: string | null;
+				description: string;
+			}>
+		)[0];
+		expect(item?.priority).toBe("P1");
+		// The conditional wording survives verbatim in the source-derived text.
+		expect(item?.description).toContain("P0-if-reproduced");
+	});
+});
+
+describe("FWL02 migration package — source coverage", () => {
+	test("the source accounting covers the whole root board", () => {
+		const accounting = JSON.parse(
+			readFileSync(join(PACKAGE_DIR, "source-accounting.json"), "utf8"),
+		);
+		const sections = accounting.section_dispositions as Array<{
+			path: string;
+			start_line: number;
+			end_line: number;
+		}>;
+		const board = sections.filter(
+			(section) => section.path === ".factory/epic-board.md",
+		);
+		expect(board.length).toBeGreaterThan(0);
+		// The board regions are CONTIGUOUS and cover every line.
+		const sorted = [...board].sort(
+			(left, right) => left.start_line - right.start_line,
+		);
+		expect(sorted[0]?.start_line).toBe(1);
+		expect(sorted[sorted.length - 1]?.end_line).toBe(44731);
+		for (let index = 1; index < sorted.length; index++) {
+			expect(sorted[index]?.start_line).toBe(
+				(sorted[index - 1]?.end_line ?? 0) + 1,
+			);
+		}
+	});
+
+	test("the historical index covers every ACT report section of the board", () => {
+		const board = readCommittedBytes(
+			".factory/epic-board.md",
+			manifest.source_head,
+			REPO_ROOT,
+		).toString("utf8");
+		// The SAME shape the extractor matches: a level-1 OR level-2 heading
+		// naming an ACT, a verdict and an ISO date.
+		const headerPattern =
+			/^#{1,2}\s+(ACT-[A-Za-z0-9._()-]+)\s+[—-]\s+(.+?)\s+[—-]\s+\d{4}-\d{2}-\d{2}/gm;
+		const distinct = new Set<string>();
+		let sections = 0;
+		for (const match of board.matchAll(headerPattern)) {
+			sections += 1;
+			distinct.add(match[1] as string);
+		}
+		const identities = new Set(
+			(index.records as Array<{ act_id: string }>).map(
+				(record) => record.act_id,
+			),
+		);
+		expect(sections).toBeGreaterThan(0);
+		expect(distinct.size).toBe(identities.size);
+		// Every identity the board reports is indexed, and every indexed
+		// identity comes from the board.
+		for (const identity of identities) {
+			expect(distinct.has(identity)).toBe(true);
+		}
+	});
+
+	test("every conflicting historical identity carries an explicit disposition", () => {
+		const conflicting = (
+			index.records as Array<{
+				act_id: string;
+				reconciliation: string;
+				source_refs: unknown[];
+			}>
+		).filter((record) => record.reconciliation === "CONFLICTING");
+		expect(conflicting.length).toBeGreaterThan(0);
+		const known = new Set(
+			(recon.records as Array<{ identities: string[] }>).flatMap(
+				(record) => record.identities,
+			),
+		);
+		for (const record of conflicting) {
+			expect(known.has(record.act_id)).toBe(true);
+			expect(record.source_refs.length).toBeGreaterThan(1);
+		}
+	});
+});
+
 describe("FWL02 migration package — validation receipt", () => {
 	test("every executed check in the receipt is PASS", () => {
 		const failures = (
@@ -451,5 +892,64 @@ describe("FWL02 migration package — validation receipt", () => {
 		const results = validatePackage();
 		const failures = results.filter((result) => result.status === "FAIL");
 		expect(failures).toEqual([]);
+	}, 60_000);
+});
+
+describe("FWL02 migration package — reproducible regeneration", () => {
+	/**
+	 * The digest of every GENERATOR-PRODUCED artifact, keyed by its relative
+	 * path.
+	 *
+	 * The generator owns `source-manifest.json`, `epics/*.json`,
+	 * `historical-index.json`, `reconciliation.json` and `frontier.md`. The
+	 * supplemental artifacts (`source-accounting.json`,
+	 * `decisions-and-knowledge-index.json`, `source-delta.md`) and the
+	 * validation receipt are written by OTHER writers and are compared
+	 * separately.
+	 */
+	const GENERATOR_ARTIFACTS = [
+		"source-manifest.json",
+		"historical-index.json",
+		"reconciliation.json",
+		"frontier.md",
+	];
+
+	function packageDigests(): Map<string, string> {
+		const digests = new Map<string, string>();
+		for (const name of GENERATOR_ARTIFACTS) {
+			digests.set(
+				name,
+				createHash("sha256")
+					.update(readFileSync(join(PACKAGE_DIR, name)))
+					.digest("hex"),
+			);
+		}
+		for (const name of readdirSync(join(PACKAGE_DIR, "epics")).sort()) {
+			digests.set(
+				`epics/${name}`,
+				createHash("sha256")
+					.update(readFileSync(join(PACKAGE_DIR, "epics", name)))
+					.digest("hex"),
+			);
+		}
+		return digests;
+	}
+
+	test("regeneration from the frozen source head is byte-identical", () => {
+		const before = packageDigests();
+		// The generator resolves the FROZEN source head, never `HEAD`, so the
+		// regeneration is reproducible even after the publication commit
+		// advances HEAD.
+		const result = spawnSync(
+			"bun",
+			[join(REPO_ROOT, "factory/scripts/fwl02/generate.ts")],
+			{ cwd: REPO_ROOT, encoding: "utf8" },
+		);
+		expect(result.status).toBe(0);
+		const after = packageDigests();
+		expect(after.size).toBe(before.size);
+		for (const [path, digest] of before) {
+			expect(after.get(path)).toBe(digest);
+		}
 	}, 60_000);
 });

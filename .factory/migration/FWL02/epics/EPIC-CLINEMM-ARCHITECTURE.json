@@ -13,7 +13,8 @@
   ],
   "items": [
     {
-      "item_id": "EPIC-CLINEMM-ARCHITECTURE/E8",
+      "schema_version": 1,
+      "item_id": "E8",
       "title": "E8 — legacy writer retirement",
       "description": "Retire the remaining legacy writer authority, but only when E7 evidence and dependencies justify it. Explicitly HELD: no action in this board ACT. Reopen condition: E7 evidence and dependencies justify legacy writer retirement.",
       "workstream": "architecture",
@@ -47,11 +48,24 @@
           "end_line": 9432,
           "sha256": "c47196971c3978b2981c168f5b3094c44749a3d23a0551708267104f7116abdc"
         }
-      ],
-      "relationships": [
+      ]
+    },
+    {
+      "schema_version": 1,
+      "item_id": "E9",
+      "title": "E9 — effect interpreter",
+      "description": "Bounded effect execution / interpreter work, sequenced AFTER E8. Explicitly HELD: no action in this board ACT. Reopen condition: E8 unblocks E9, at which point the effect interpreter work begins.",
+      "workstream": "architecture",
+      "original_status": "HOLD",
+      "lifecycle": "DEFERRED",
+      "priority": "P2",
+      "qualification": "UNKNOWN",
+      "criteria": [],
+      "criteria_coverage": "UNKNOWN",
+      "dependencies": [
         {
           "kind": "DEPENDS_ON",
-          "target": "EPIC-CLINEMM-ARCHITECTURE/E9",
+          "target": "EPIC-CLINEMM-ARCHITECTURE/E8",
           "source_refs": [
             {
               "path": ".factory/epics/architecture.md",
@@ -62,20 +76,7 @@
           ],
           "required_outcome": "E8 completion unblocks E9"
         }
-      ]
-    },
-    {
-      "item_id": "EPIC-CLINEMM-ARCHITECTURE/E9",
-      "title": "E9 — effect interpreter",
-      "description": "Bounded effect execution / interpreter work, sequenced AFTER E8. Explicitly HELD: no action in this board ACT. Reopen condition: E8 unblocks E9, at which point the effect interpreter work begins.",
-      "workstream": "architecture",
-      "original_status": "HOLD",
-      "lifecycle": "DEFERRED",
-      "priority": "P2",
-      "qualification": "UNKNOWN",
-      "criteria": [],
-      "criteria_coverage": "UNKNOWN",
-      "dependencies": [],
+      ],
       "dependency_coverage": "COMPLETE",
       "blockers": [
         "E8 (legacy writer retirement) must complete before E9 (effect interpreter) begins."
@@ -99,25 +100,11 @@
           "end_line": 9433,
           "sha256": "e1a2a7b7e0a7ee1af073d138379a4010264dc2808f27de3a1359b01fbf889592"
         }
-      ],
-      "relationships": [
-        {
-          "kind": "DEPENDS_ON",
-          "target": "EPIC-CLINEMM-ARCHITECTURE/E8",
-          "source_refs": [
-            {
-              "path": ".factory/epics/architecture.md",
-              "start_line": 44,
-              "end_line": 44,
-              "sha256": "8233cad318874dd1ddc075cb6a1b17df7b095d167482d05eaddb677ad15c9cc9"
-            }
-          ],
-          "required_outcome": "E8 completion unblocks E9"
-        }
       ]
     },
     {
-      "item_id": "EPIC-CLINEMM-ARCHITECTURE/ELMIZATION02",
+      "schema_version": 1,
+      "item_id": "ELMIZATION02",
       "title": "EPIC-CLINEMM-ELMIZATION02 — authority-domain migration",
       "description": "Migrate deterministic behavioral authority where doing so reduces duplicated state/policy decisions. Target direction: Elm → deterministic state transitions / policy / projections; TypeScript → VS Code APIs + effects; React → rendering / DOM/event adaptation. Forbidden goal: \"Rewrite everything in Elm\". First post-E9 action: authority-domain recon. Gated on E9.",
       "workstream": "architecture",
@@ -127,7 +114,21 @@
       "qualification": "UNKNOWN",
       "criteria": [],
       "criteria_coverage": "UNKNOWN",
-      "dependencies": [],
+      "dependencies": [
+        {
+          "kind": "DEPENDS_ON",
+          "target": "EPIC-CLINEMM-ARCHITECTURE/E9",
+          "source_refs": [
+            {
+              "path": ".factory/epics/architecture.md",
+              "start_line": 45,
+              "end_line": 45,
+              "sha256": "46fd5731eed478e0af099b2882b842090221658b9838f357d602f36a6ca2e37b"
+            }
+          ],
+          "required_outcome": "E9 completion unblocks ELMIZATION02"
+        }
+      ],
       "dependency_coverage": "COMPLETE",
       "blockers": [
         "E9 (effect interpreter) must complete before ELMIZATION02's authority-domain recon starts."
@@ -144,21 +145,6 @@
           "start_line": 40,
           "end_line": 40,
           "sha256": "794c3fe679213ec4c70e16b89ffd1eca4ef6122bb76e0f94a182fbdf9dab1ee0"
-        }
-      ],
-      "relationships": [
-        {
-          "kind": "DEPENDS_ON",
-          "target": "EPIC-CLINEMM-ARCHITECTURE/E9",
-          "source_refs": [
-            {
-              "path": ".factory/epics/architecture.md",
-              "start_line": 45,
-              "end_line": 45,
-              "sha256": "46fd5731eed478e0af099b2882b842090221658b9838f357d602f36a6ca2e37b"
-            }
-          ],
-          "required_outcome": "E9 completion unblocks ELMIZATION02"
         }
       ]
     }
