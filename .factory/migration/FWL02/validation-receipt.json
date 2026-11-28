@@ -1,0 +1,394 @@
+{
+  "schema_version": 1,
+  "verdict": "SOURCE_RECONCILIATION_READY",
+  "checks": [
+    {
+      "id": "MANIFEST.NO_DUPLICATE_JSON_MEMBERS",
+      "status": "PASS",
+      "detail": "6707 bytes scanned"
+    },
+    {
+      "id": "MANIFEST.VALID_JSON",
+      "status": "PASS"
+    },
+    {
+      "id": "HISTORICAL_INDEX.NO_DUPLICATE_JSON_MEMBERS",
+      "status": "PASS",
+      "detail": "87055 bytes scanned"
+    },
+    {
+      "id": "HISTORICAL_INDEX.VALID_JSON",
+      "status": "PASS"
+    },
+    {
+      "id": "RECONCILIATION.NO_DUPLICATE_JSON_MEMBERS",
+      "status": "PASS",
+      "detail": "31639 bytes scanned"
+    },
+    {
+      "id": "RECONCILIATION.VALID_JSON",
+      "status": "PASS"
+    },
+    {
+      "id": "EPIC_FILE:EPIC-CLINEMM-APPROVAL-MCP-AUTHORITY.json.NO_DUPLICATE_JSON_MEMBERS",
+      "status": "PASS",
+      "detail": "2525 bytes scanned"
+    },
+    {
+      "id": "EPIC_FILE:EPIC-CLINEMM-APPROVAL-MCP-AUTHORITY.json.VALID_JSON",
+      "status": "PASS"
+    },
+    {
+      "id": "EPIC_FILE:EPIC-CLINEMM-APPROVAL-PROTECTION.json.NO_DUPLICATE_JSON_MEMBERS",
+      "status": "PASS",
+      "detail": "14859 bytes scanned"
+    },
+    {
+      "id": "EPIC_FILE:EPIC-CLINEMM-APPROVAL-PROTECTION.json.VALID_JSON",
+      "status": "PASS"
+    },
+    {
+      "id": "EPIC_FILE:EPIC-CLINEMM-ARCHITECTURE.json.NO_DUPLICATE_JSON_MEMBERS",
+      "status": "PASS",
+      "detail": "6587 bytes scanned"
+    },
+    {
+      "id": "EPIC_FILE:EPIC-CLINEMM-ARCHITECTURE.json.VALID_JSON",
+      "status": "PASS"
+    },
+    {
+      "id": "EPIC_FILE:EPIC-CLINEMM-AUTHENTICATED-DEV-CAPABILITIES.json.NO_DUPLICATE_JSON_MEMBERS",
+      "status": "PASS",
+      "detail": "3301 bytes scanned"
+    },
+    {
+      "id": "EPIC_FILE:EPIC-CLINEMM-AUTHENTICATED-DEV-CAPABILITIES.json.VALID_JSON",
+      "status": "PASS"
+    },
+    {
+      "id": "EPIC_FILE:EPIC-CLINEMM-CLOSED-FOUNDATION.json.NO_DUPLICATE_JSON_MEMBERS",
+      "status": "PASS",
+      "detail": "775 bytes scanned"
+    },
+    {
+      "id": "EPIC_FILE:EPIC-CLINEMM-CLOSED-FOUNDATION.json.VALID_JSON",
+      "status": "PASS"
+    },
+    {
+      "id": "EPIC_FILE:EPIC-CLINEMM-COMMAND-RISK-CLASSIFICATION.json.NO_DUPLICATE_JSON_MEMBERS",
+      "status": "PASS",
+      "detail": "926 bytes scanned"
+    },
+    {
+      "id": "EPIC_FILE:EPIC-CLINEMM-COMMAND-RISK-CLASSIFICATION.json.VALID_JSON",
+      "status": "PASS"
+    },
+    {
+      "id": "EPIC_FILE:EPIC-CLINEMM-CONTEXT-COMPACTION-TOKEN-ACCOUNTING.json.NO_DUPLICATE_JSON_MEMBERS",
+      "status": "PASS",
+      "detail": "4931 bytes scanned"
+    },
+    {
+      "id": "EPIC_FILE:EPIC-CLINEMM-CONTEXT-COMPACTION-TOKEN-ACCOUNTING.json.VALID_JSON",
+      "status": "PASS"
+    },
+    {
+      "id": "EPIC_FILE:EPIC-CLINEMM-DISTRIBUTION-CI.json.NO_DUPLICATE_JSON_MEMBERS",
+      "status": "PASS",
+      "detail": "6450 bytes scanned"
+    },
+    {
+      "id": "EPIC_FILE:EPIC-CLINEMM-DISTRIBUTION-CI.json.VALID_JSON",
+      "status": "PASS"
+    },
+    {
+      "id": "EPIC_FILE:EPIC-CLINEMM-DYNAMIC-EDITING-BACKENDS.json.NO_DUPLICATE_JSON_MEMBERS",
+      "status": "PASS",
+      "detail": "5127 bytes scanned"
+    },
+    {
+      "id": "EPIC_FILE:EPIC-CLINEMM-DYNAMIC-EDITING-BACKENDS.json.VALID_JSON",
+      "status": "PASS"
+    },
+    {
+      "id": "EPIC_FILE:EPIC-CLINEMM-FACTORY-INFRASTRUCTURE.json.NO_DUPLICATE_JSON_MEMBERS",
+      "status": "PASS",
+      "detail": "11425 bytes scanned"
+    },
+    {
+      "id": "EPIC_FILE:EPIC-CLINEMM-FACTORY-INFRASTRUCTURE.json.VALID_JSON",
+      "status": "PASS"
+    },
+    {
+      "id": "EPIC_FILE:EPIC-CLINEMM-FILE-TOOL-WORKSPACE-REALPATH-AUTHORITY.json.NO_DUPLICATE_JSON_MEMBERS",
+      "status": "PASS",
+      "detail": "4213 bytes scanned"
+    },
+    {
+      "id": "EPIC_FILE:EPIC-CLINEMM-FILE-TOOL-WORKSPACE-REALPATH-AUTHORITY.json.VALID_JSON",
+      "status": "PASS"
+    },
+    {
+      "id": "EPIC_FILE:EPIC-CLINEMM-HOST-TEST-INFRASTRUCTURE.json.NO_DUPLICATE_JSON_MEMBERS",
+      "status": "PASS",
+      "detail": "3787 bytes scanned"
+    },
+    {
+      "id": "EPIC_FILE:EPIC-CLINEMM-HOST-TEST-INFRASTRUCTURE.json.VALID_JSON",
+      "status": "PASS"
+    },
+    {
+      "id": "EPIC_FILE:EPIC-CLINEMM-PRODUCT-CONFIG-BRANDING.json.NO_DUPLICATE_JSON_MEMBERS",
+      "status": "PASS",
+      "detail": "15927 bytes scanned"
+    },
+    {
+      "id": "EPIC_FILE:EPIC-CLINEMM-PRODUCT-CONFIG-BRANDING.json.VALID_JSON",
+      "status": "PASS"
+    },
+    {
+      "id": "EPIC_FILE:EPIC-CLINEMM-QUALITY-SUBSTRATE.json.NO_DUPLICATE_JSON_MEMBERS",
+      "status": "PASS",
+      "detail": "4617 bytes scanned"
+    },
+    {
+      "id": "EPIC_FILE:EPIC-CLINEMM-QUALITY-SUBSTRATE.json.VALID_JSON",
+      "status": "PASS"
+    },
+    {
+      "id": "EPIC_FILE:EPIC-CLINEMM-RUNTIME-TASK-PROGRESSION.json.NO_DUPLICATE_JSON_MEMBERS",
+      "status": "PASS",
+      "detail": "10225 bytes scanned"
+    },
+    {
+      "id": "EPIC_FILE:EPIC-CLINEMM-RUNTIME-TASK-PROGRESSION.json.VALID_JSON",
+      "status": "PASS"
+    },
+    {
+      "id": "EPIC_FILE:EPIC-CLINEMM-SAFE-YOLO-SEATBELT.json.NO_DUPLICATE_JSON_MEMBERS",
+      "status": "PASS",
+      "detail": "19504 bytes scanned"
+    },
+    {
+      "id": "EPIC_FILE:EPIC-CLINEMM-SAFE-YOLO-SEATBELT.json.VALID_JSON",
+      "status": "PASS"
+    },
+    {
+      "id": "EPIC_FILE:EPIC-CLINEMM-TASK-CONTROL-LIVENESS.json.NO_DUPLICATE_JSON_MEMBERS",
+      "status": "PASS",
+      "detail": "2415 bytes scanned"
+    },
+    {
+      "id": "EPIC_FILE:EPIC-CLINEMM-TASK-CONTROL-LIVENESS.json.VALID_JSON",
+      "status": "PASS"
+    },
+    {
+      "id": "EPIC_FILE:EPIC-CLINEMM-TASK-PRESENTATION.json.NO_DUPLICATE_JSON_MEMBERS",
+      "status": "PASS",
+      "detail": "1225 bytes scanned"
+    },
+    {
+      "id": "EPIC_FILE:EPIC-CLINEMM-TASK-PRESENTATION.json.VALID_JSON",
+      "status": "PASS"
+    },
+    {
+      "id": "EPIC_FILE:EPIC-CLINEMM-TOOL-RUNTIME-RELIABILITY.json.NO_DUPLICATE_JSON_MEMBERS",
+      "status": "PASS",
+      "detail": "3642 bytes scanned"
+    },
+    {
+      "id": "EPIC_FILE:EPIC-CLINEMM-TOOL-RUNTIME-RELIABILITY.json.VALID_JSON",
+      "status": "PASS"
+    },
+    {
+      "id": "EPIC_FILE:EPIC-CLINEMM-UPSTREAM-INTAKE.json.NO_DUPLICATE_JSON_MEMBERS",
+      "status": "PASS",
+      "detail": "5438 bytes scanned"
+    },
+    {
+      "id": "EPIC_FILE:EPIC-CLINEMM-UPSTREAM-INTAKE.json.VALID_JSON",
+      "status": "PASS"
+    },
+    {
+      "id": "EPIC_FILE:EPIC-CLINEMM-WEBVIEW-SEAM-AOP.json.NO_DUPLICATE_JSON_MEMBERS",
+      "status": "PASS",
+      "detail": "826 bytes scanned"
+    },
+    {
+      "id": "EPIC_FILE:EPIC-CLINEMM-WEBVIEW-SEAM-AOP.json.VALID_JSON",
+      "status": "PASS"
+    },
+    {
+      "id": "MANIFEST.SCHEMA_VERSION",
+      "status": "PASS",
+      "detail": "schema_version=1"
+    },
+    {
+      "id": "MANIFEST.REPOSITORY",
+      "status": "PASS",
+      "detail": "repository=clinemm"
+    },
+    {
+      "id": "MANIFEST.NO_UNKNOWN_WIRE_FIELDS",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "HISTORICAL_INDEX.SCHEMA_VERSION",
+      "status": "PASS",
+      "detail": "schema_version=1"
+    },
+    {
+      "id": "RECONCILIATION.SCHEMA_VERSION",
+      "status": "PASS",
+      "detail": "schema_version=1"
+    },
+    {
+      "id": "STRUCTURE.UNIQUE_IDENTITIES",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "STRUCTURE.VALID_VOCABULARY",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "STRUCTURE.NO_UNKNOWN_WIRE_FIELDS",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "HISTORICAL_INDEX.UNIQUE_IDENTITIES",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "HISTORICAL_INDEX.VALID_VOCABULARY",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "RECONCILIATION.VALID_VOCABULARY",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "SOURCE.SOURCE_HEAD_RESOLVES",
+      "status": "PASS",
+      "detail": "source_head=e196d0e6243f40ebfd76d2cf0db7bda74e97d6d6 resolved=e196d0e6243f40ebfd76d2cf0db7bda74e97d6d6"
+    },
+    {
+      "id": "MANIFEST.MATCHES_COMMITTED_SOURCE",
+      "status": "PASS",
+      "detail": "23 files verified against committed blobs"
+    },
+    {
+      "id": "SOURCE.REF_RANGES_AND_DIGESTS",
+      "status": "PASS",
+      "detail": "344 source references verified against committed bytes"
+    },
+    {
+      "id": "SOURCE.EFFECTIVE_HEAD_RESOLVED",
+      "status": "PASS",
+      "detail": "every explicit source_head resolves to a committed object"
+    },
+    {
+      "id": "SEMANTIC.ALL_SOURCE_FILES_ACCOUNTED",
+      "status": "PASS",
+      "detail": "22 epic-directory files accounted for"
+    },
+    {
+      "id": "SEMANTIC.INDEX_CONTRACT_IS_NOT_AN_EPIC",
+      "status": "PASS",
+      "detail": "disposition=navigation; epic=false"
+    },
+    {
+      "id": "SEMANTIC.LIFECYCLE_DISTINCTNESS",
+      "status": "PASS",
+      "detail": "OPEN=23 ACTIVE=5 BLOCKED=5 DEFERRED=15 TERMINAL=2 UNRESOLVED=0"
+    },
+    {
+      "id": "SEMANTIC.UNKNOWN_STATUS_NOT_DEFERRED",
+      "status": "PASS",
+      "detail": "no unknown-status item was represented as DEFERRED"
+    },
+    {
+      "id": "SEMANTIC.COVERAGE_DISTINCTNESS",
+      "status": "PASS",
+      "detail": "empty+COMPLETE and populated+UNKNOWN are distinguished"
+    },
+    {
+      "id": "SEMANTIC.BLOCKED_ITEMS_NAME_BLOCKERS",
+      "status": "PASS",
+      "detail": "every BLOCKED item names its blocker"
+    },
+    {
+      "id": "SEMANTIC.DEPENDENCY_TARGETS_RESOLVE",
+      "status": "PASS",
+      "detail": "every DEPENDS_ON target resolves to a represented obligation or a reconciliation record"
+    },
+    {
+      "id": "SEMANTIC.CROSS_LINKS_DO_NOT_DUPLICATE_OBLIGATIONS",
+      "status": "PASS",
+      "detail": "every CROSS_LINK target is a separately represented obligation"
+    },
+    {
+      "id": "SEMANTIC.EMPTY_EPICS_REMAIN_DISCOVERABLE",
+      "status": "PASS",
+      "detail": "4 epics with no open items retain exit criteria and source refs"
+    },
+    {
+      "id": "SEMANTIC.CONFLICTS_HAVE_DISPOSITIONS",
+      "status": "PASS",
+      "detail": "7/7 conflicting historical identities carry an explicit reconciliation disposition"
+    },
+    {
+      "id": "SEMANTIC.NO_PROMOTED_ACCEPTANCE",
+      "status": "PASS",
+      "detail": "no item carries a promoted ACCEPTED qualification"
+    },
+    {
+      "id": "SEMANTIC.HISTORICAL_ACTS_ACCOUNTED",
+      "status": "PASS",
+      "detail": "167 historical ACT identities indexed"
+    },
+    {
+      "id": "ADVERSARIAL.MODIFIED_SOURCE_DIGEST_DETECTED",
+      "status": "PASS",
+      "detail": ".factory/epic-board.md:1-1: digest mismatch (expected 0000000000000000000000000000000000000000000000000000000000000000, actual ca75543a50f2a4995031600f6730d094297199f36933c2c8fe02398a585f30f4)"
+    },
+    {
+      "id": "ADVERSARIAL.INVALID_LINE_RANGE_DETECTED",
+      "status": "PASS",
+      "detail": ".factory/epic-board.md: end_line 9999999 exceeds file line count 44731"
+    },
+    {
+      "id": "ADVERSARIAL.DUPLICATE_WORK_ITEM_IDENTITY_DETECTED",
+      "status": "PASS",
+      "detail": "an isolated fixture with a duplicated scoped item id is detected"
+    },
+    {
+      "id": "ADVERSARIAL.UNRESOLVED_DEPENDENCY_DETECTED",
+      "status": "PASS",
+      "detail": "a DEPENDS_ON target that is neither represented nor reconciled is detected"
+    },
+    {
+      "id": "ADVERSARIAL.MISSING_SOURCE_FILE_DETECTED",
+      "status": "PASS",
+      "detail": ".factory/epics/THIS-FILE-DOES-NOT-EXIST.md@e196d0e6243f40ebfd76d2cf0db7bda74e97d6d6: file does not resolve at that revision"
+    },
+    {
+      "id": "ADVERSARIAL.DUPLICATE_HISTORICAL_IDENTITY_DETECTED",
+      "status": "PASS",
+      "detail": "an isolated fixture with a duplicated historical ACT identity is detected"
+    },
+    {
+      "id": "ADVERSARIAL.CONFLICTING_HISTORICAL_IDENTITY_DETECTED",
+      "status": "PASS",
+      "detail": "7 conflicting identities; 7 retain their competing source references"
+    }
+  ],
+  "mechanical_coverage": "MECHANICAL: 177 historical ACT report sections in the committed root board were mechanically indexed by identity, verdict and exact source range into 167 distinct historical ACT identities (159 UNAMBIGUOUS, 1 AMBIGUOUS, 7 CONFLICTING). Every competing verdict is retained with its own source reference; no identity is silently deduplicated.",
+  "semantic_coverage": "SEMANTIC: 21 actual epics and 49 engineering obligations were reconciled from the committed epic detail files and the board's operational index. The board's Current frontier / Active epics / Open supporting work / Deferred-hold tables were reconciled lane-by-lane; the per-epic Open work and Deferred work sections were reconciled obligation-by-obligation. The remaining narrative history (the board's prepend-ordered ACT report prose, the multi-ACT closure narratives in command-risk-classification.md, webview-seam-aop.md and context-compaction-token-accounting.md, and the long Current-status bullets in safe-yolo-seatbelt.md) was accounted for as contiguous narrative history at the byte level and is preserved verbatim in the committed source archive. It is deliberately NOT reconstructed as new work items."
+}

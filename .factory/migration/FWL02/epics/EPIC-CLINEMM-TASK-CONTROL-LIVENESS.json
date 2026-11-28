@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "epic_id": "EPIC-CLINEMM-TASK-CONTROL-LIVENESS",
+  "title": "Task control liveness",
+  "original_status": "CLOSED family (the generation-fence repair is bounded; the queued-prompt integrity work is bounded; the bug-family closure is a structural statement of how to recognize this class of bug in future reviews. The \"live\" qualification against a live Cline-- extension host is not asserted here — the source-verbatim is \"bounded generation-fence repair landed\"; exact-head LIVE qualification = pending).",
+  "lifecycle": "TERMINAL",
+  "priority": "P1",
+  "exit_criteria": [
+    "Any new message-coordinator invariant violation should be evaluated against the bug-family signature before starting a fresh ACT."
+  ],
+  "items": [
+    {
+      "item_id": "EPIC-CLINEMM-TASK-CONTROL-LIVENESS/R3-R4-ADVERSARIAL-SCHEDULES",
+      "title": "R3/R4 task-control adversarial schedules",
+      "description": "Deferred adversarial schedule hunting for the R3 / R4 task-control lane. The board's Deferred / hold table records this item as consciously postponed; the source states the current frontier for this domain is post-sharding review.",
+      "workstream": "task-control-liveness",
+      "original_status": "DEFER",
+      "lifecycle": "DEFERRED",
+      "priority": "P1",
+      "qualification": "UNKNOWN",
+      "criteria": [],
+      "criteria_coverage": "UNKNOWN",
+      "dependencies": [],
+      "dependency_coverage": "COMPLETE",
+      "blockers": [],
+      "current_act": null,
+      "related_acts": [],
+      "evidence_locators": [],
+      "reopen_conditions": [
+        "Any new message-coordinator invariant violation should be evaluated against the bug-family signature before starting a fresh ACT."
+      ],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 9438,
+          "end_line": 9438,
+          "sha256": "348665fddb660cd0c7ed17650621643670ac5bf017f035f536cae09c2493e951"
+        }
+      ]
+    }
+  ],
+  "source_refs": [
+    {
+      "path": ".factory/epics/task-control-liveness.md",
+      "start_line": 5,
+      "end_line": 11,
+      "sha256": "2093594528523b78c8e3832304e7a8159062bc38bf63082773c347565acd1cae"
+    },
+    {
+      "path": ".factory/epics/task-control-liveness.md",
+      "start_line": 27,
+      "end_line": 34,
+      "sha256": "be7311ede5b9aa4ec69e69d968efb5af6839d04f2799d43749a437fd72652bde"
+    }
+  ]
+}

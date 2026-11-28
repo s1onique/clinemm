@@ -1,0 +1,137 @@
+{
+  "schema_version": 1,
+  "epic_id": "EPIC-CLINEMM-UPSTREAM-INTAKE",
+  "title": "Upstream intake",
+  "original_status": "CLOSED (the closed-substrate / first-triage / four-corrections cycle is complete and the cumulative invariant holds: 12 surviving EXACT_MAPs and 5 IMPORTs satisfy the binding rule)",
+  "lifecycle": "TERMINAL",
+  "priority": "P2",
+  "exit_criteria": [
+    "A new upstream intake cycle is needed (substrate is re-runnable; this is normal and not a defect).",
+    "A new lexical-overlap defect class is identified in a future triage cycle.",
+    "The binding invariant is violated by a future cycle (an upstream issue is cited as evidence for a canonical epic whose failure contract it does not reproduce)."
+  ],
+  "items": [
+    {
+      "item_id": "EPIC-CLINEMM-UPSTREAM-INTAKE/CHECKPOINT-RELIABILITY01",
+      "title": "EPIC-CLINEMM-CHECKPOINT-RELIABILITY01 — checkpoint reliability",
+      "description": "Cross-cutting supporting work recorded as OPEN on the board's \"Open supporting work\" table, owned by the upstream-intake detail file. The board states the dependency as n/a.",
+      "workstream": "upstream-intake",
+      "original_status": "OPEN",
+      "lifecycle": "OPEN",
+      "priority": "P1",
+      "qualification": "UNKNOWN",
+      "criteria": [],
+      "criteria_coverage": "UNKNOWN",
+      "dependencies": [],
+      "dependency_coverage": "COMPLETE",
+      "blockers": [],
+      "current_act": null,
+      "related_acts": [],
+      "evidence_locators": [],
+      "reopen_conditions": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 9417,
+          "end_line": 9417,
+          "sha256": "da39da4f5ab2b5018236943375f7e06254960df535aaf7c907930471c565368e"
+        }
+      ]
+    },
+    {
+      "item_id": "EPIC-CLINEMM-UPSTREAM-INTAKE/MCP-PROCESS-LIFECYCLE01",
+      "title": "EPIC-CLINEMM-MCP-PROCESS-LIFECYCLE01 — MCP process lifecycle",
+      "description": "Cross-cutting supporting work recorded as OPEN on the board's \"Open supporting work\" table, owned by the upstream-intake detail file. The board states the dependency as n/a. The tool-runtime-reliability epic cross-references it as a durable sibling for the MCP routing / approval / validation cluster (3 issues) and does NOT subsume it.",
+      "workstream": "upstream-intake",
+      "original_status": "OPEN",
+      "lifecycle": "OPEN",
+      "priority": "P1",
+      "qualification": "UNKNOWN",
+      "criteria": [],
+      "criteria_coverage": "UNKNOWN",
+      "dependencies": [],
+      "dependency_coverage": "COMPLETE",
+      "blockers": [],
+      "current_act": null,
+      "related_acts": [],
+      "evidence_locators": [],
+      "reopen_conditions": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 9418,
+          "end_line": 9418,
+          "sha256": "ae41c3321d1b70e59f2cd0376a89fa70819d060a793e534763c7f7cf1a56c8b0"
+        }
+      ]
+    },
+    {
+      "item_id": "EPIC-CLINEMM-UPSTREAM-INTAKE/CLINEIGNORE-FILTERING01",
+      "title": "EPIC-CLINEMM-CLINEIGNORE-FILTERING01 — .clineignore filtering",
+      "description": "Cross-cutting supporting work recorded as OPEN on the board's \"Open supporting work\" table, owned by the upstream-intake detail file. The board states the dependency as n/a.",
+      "workstream": "upstream-intake",
+      "original_status": "OPEN",
+      "lifecycle": "OPEN",
+      "priority": "P2",
+      "qualification": "UNKNOWN",
+      "criteria": [],
+      "criteria_coverage": "UNKNOWN",
+      "dependencies": [],
+      "dependency_coverage": "COMPLETE",
+      "blockers": [],
+      "current_act": null,
+      "related_acts": [],
+      "evidence_locators": [],
+      "reopen_conditions": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 9419,
+          "end_line": 9419,
+          "sha256": "36da4aa2164ffe0e0ba7117a3da019aea534d61c7c529158a0f3164898de539d"
+        }
+      ]
+    },
+    {
+      "item_id": "EPIC-CLINEMM-UPSTREAM-INTAKE/PROVIDER-MODEL-DISCOVERY01",
+      "title": "EPIC-CLINEMM-PROVIDER-MODEL-DISCOVERY01 — provider model discovery",
+      "description": "Cross-cutting supporting work recorded as OPEN on the board's \"Open supporting work\" table, owned by the upstream-intake detail file. The board states the dependency as n/a.",
+      "workstream": "upstream-intake",
+      "original_status": "OPEN",
+      "lifecycle": "OPEN",
+      "priority": "P2",
+      "qualification": "UNKNOWN",
+      "criteria": [],
+      "criteria_coverage": "UNKNOWN",
+      "dependencies": [],
+      "dependency_coverage": "COMPLETE",
+      "blockers": [],
+      "current_act": null,
+      "related_acts": [],
+      "evidence_locators": [],
+      "reopen_conditions": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 9420,
+          "end_line": 9420,
+          "sha256": "1ef9e28cfe09860ddbc13223e891b641229d59dd62857c4bbe2b157745342b87"
+        }
+      ]
+    }
+  ],
+  "source_refs": [
+    {
+      "path": ".factory/epics/upstream-intake.md",
+      "start_line": 5,
+      "end_line": 11,
+      "sha256": "4ca510f5cbbb15d06a453ce7f64ac3bc8c17d2a875fbf4e93ffb51483c29c8ec"
+    },
+    {
+      "path": ".factory/epics/upstream-intake.md",
+      "start_line": 30,
+      "end_line": 72,
+      "sha256": "d2e9c2b8406b491d03429635198d4ca3430682bb0fe49038e957fc45fbb45621"
+    }
+  ]
+}

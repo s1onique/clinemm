@@ -1,0 +1,191 @@
+{
+  "schema_version": 1,
+  "repository": "clinemm",
+  "source_head": "e196d0e6243f40ebfd76d2cf0db7bda74e97d6d6",
+  "files": [
+    {
+      "path": ".factory/epic-board.md",
+      "bytes": 3571338,
+      "lines": 44731,
+      "sha256": "2700b1a19afe3c497505355ffff88c02fa8f93f23a88632e098e83fb8a3258f0",
+      "git_blob": "76fba9d08eb46dd3ff2dfb7c739a9e10cc0b3220",
+      "disposition": "indexed"
+    },
+    {
+      "path": ".factory/epics/_index-contract.md",
+      "bytes": 9407,
+      "lines": 181,
+      "sha256": "09cc608a7a14adc5e5ee48e08a555abe04ba704fb603e9dce111d9f3167c9027",
+      "git_blob": "59faece94c27825fb236e01e3c1821c105d333b7",
+      "disposition": "navigation"
+    },
+    {
+      "path": ".factory/epics/approval-mcp-authority.md",
+      "bytes": 2142,
+      "lines": 21,
+      "sha256": "ce35d6b309fd4274264c5dd5f088dca18a1bf746bb24c3db84970038b6cfc61e",
+      "git_blob": "9ae55c049b12e8e9891228965c6f0c70d9cd86c9",
+      "disposition": "epic"
+    },
+    {
+      "path": ".factory/epics/approval-protection.md",
+      "bytes": 26834,
+      "lines": 181,
+      "sha256": "75da7fb7460e4515d97be73a3738fb38ddd690ab4ebad3c00665b1fdf7588fa1",
+      "git_blob": "ac5a23428c860f1c2a9ff98966b2d6eb62d5e6ad",
+      "disposition": "epic"
+    },
+    {
+      "path": ".factory/epics/architecture.md",
+      "bytes": 5112,
+      "lines": 98,
+      "sha256": "032f489ce1ccc7f6e6f621fba1eabe1c4f3ceb2d40198d4d27f4e1ac2cfae98e",
+      "git_blob": "f9768b8466e249c761a5a3cee386e3c1f5a0531b",
+      "disposition": "epic"
+    },
+    {
+      "path": ".factory/epics/authenticated-dev-capabilities.md",
+      "bytes": 5955,
+      "lines": 63,
+      "sha256": "dc50c4eee8e737eacd9a277165a2d31dab43f18a570dbdea3847849e9ac13a83",
+      "git_blob": "b279f85c1ee3229adcfc883736f159c8fe9bd348",
+      "disposition": "epic"
+    },
+    {
+      "path": ".factory/epics/closed-foundation.md",
+      "bytes": 5191,
+      "lines": 103,
+      "sha256": "d7ceae3a2af9702becc31dc420afcca442534c8e3fc30cecca804d66bdeea3eb",
+      "git_blob": "005c83fae203f2ec6beedae3bb7b0d443eeaa648",
+      "disposition": "epic"
+    },
+    {
+      "path": ".factory/epics/command-risk-classification.md",
+      "bytes": 460166,
+      "lines": 1860,
+      "sha256": "8a335c5459ec2383d68dbbb419542b4aed9b13b575d94a7b1c9f72dcd119254e",
+      "git_blob": "5bdc2cb33c1f2d7d0500a1fc81f60a227c0d4f88",
+      "disposition": "epic"
+    },
+    {
+      "path": ".factory/epics/context-compaction-token-accounting.md",
+      "bytes": 55610,
+      "lines": 1174,
+      "sha256": "3fd0add5a9966fa4ee99e3cec8e8a4f04596a1a96623855a11c43a35a834c905",
+      "git_blob": "0c747cc3e7e15d39c984f663fe13c9d79c8d05f6",
+      "disposition": "epic"
+    },
+    {
+      "path": ".factory/epics/distribution-ci.md",
+      "bytes": 6318,
+      "lines": 102,
+      "sha256": "e24d95bd84e431b496cba9dcfbcd8aee9f0c225dd6b8020329528f287683d12c",
+      "git_blob": "b4dde9dbf80752b9e4aeb97b2e7ad8fea9c6523d",
+      "disposition": "epic"
+    },
+    {
+      "path": ".factory/epics/dynamic-editing-backends.md",
+      "bytes": 4142,
+      "lines": 49,
+      "sha256": "80e1fd9467af1e2b37d1ecb93d72376ea4b48bf82cc688b40f0ba43852afab55",
+      "git_blob": "e7c098a46d73e8d3f6d3bffe0c917f3afe9b1033",
+      "disposition": "epic"
+    },
+    {
+      "path": ".factory/epics/factory-infrastructure.md",
+      "bytes": 18757,
+      "lines": 353,
+      "sha256": "81b0e737b575f0c46e40d176236e30593a301d33316088d1bbe57da499d98d64",
+      "git_blob": "8088ea17e1021d195d205ac85cf1276d0da83db2",
+      "disposition": "epic"
+    },
+    {
+      "path": ".factory/epics/file-tool-workspace-realpath-authority.md",
+      "bytes": 6212,
+      "lines": 166,
+      "sha256": "44369d8dbb44ec653760ecac6cb192b86ea9a362cfb8811798f4da4fa9200975",
+      "git_blob": "6bb6b6dc615cd9e10ac5685c490625f20760bd72",
+      "disposition": "epic"
+    },
+    {
+      "path": ".factory/epics/host-test-infrastructure.md",
+      "bytes": 4930,
+      "lines": 62,
+      "sha256": "8f3a08c4b272afc991ca7f470d1e4bf22fb1af21756eb7d919d75144382c8649",
+      "git_blob": "180d713162e5116d25fa81a7c6140f92df6fee26",
+      "disposition": "epic"
+    },
+    {
+      "path": ".factory/epics/product-config-branding.md",
+      "bytes": 44230,
+      "lines": 541,
+      "sha256": "48f5b83547154a68c666e342dddf1e3ea9d5fb45340abbd2d9ddf78e2e4c22bf",
+      "git_blob": "04775c99ad219a31623a6282092a39671cc55787",
+      "disposition": "epic"
+    },
+    {
+      "path": ".factory/epics/quality-substrate.md",
+      "bytes": 22354,
+      "lines": 265,
+      "sha256": "22320a1fa0c62406d6ebd4d18e31a9623005adf447e73901f40c97731258257b",
+      "git_blob": "2e42638872cd276a74221bb87562c03db75ae98f",
+      "disposition": "epic"
+    },
+    {
+      "path": ".factory/epics/runtime-task-progression.md",
+      "bytes": 59460,
+      "lines": 125,
+      "sha256": "3c6da39fa83157d9a537b7743dc456ef1ffe8b6cbfc3c180ff03c77bc883e39a",
+      "git_blob": "c58e676f5aaa55440749213cd9e3c4aa14ebaf51",
+      "disposition": "epic"
+    },
+    {
+      "path": ".factory/epics/safe-yolo-seatbelt.md",
+      "bytes": 49311,
+      "lines": 257,
+      "sha256": "4f8b9fe3966eb46f6d5990f790be18c5bf737b9c8806a6dd4e21cf7fa85f3a0b",
+      "git_blob": "c4e57a3aa24d8bf9d148ad771d1016f59e659d40",
+      "disposition": "epic"
+    },
+    {
+      "path": ".factory/epics/task-control-liveness.md",
+      "bytes": 28967,
+      "lines": 373,
+      "sha256": "2b9757c8af44f98b2f53398d433733347f986a3b8400b617b1bf5ed59f448df3",
+      "git_blob": "be433e6c9d4890204d187dcfa14acd82b58ba7c4",
+      "disposition": "epic"
+    },
+    {
+      "path": ".factory/epics/task-presentation.md",
+      "bytes": 36793,
+      "lines": 290,
+      "sha256": "b4c7693e4b8f7f1da0cc2853af794f35c4e95c8633b77aa333afc1aefe3f9625",
+      "git_blob": "2b4cd20466a5a3c5f74d5d80f10b96656a7ab9f0",
+      "disposition": "epic"
+    },
+    {
+      "path": ".factory/epics/tool-runtime-reliability.md",
+      "bytes": 8511,
+      "lines": 89,
+      "sha256": "92045d5a2b4b099f78978c2d02c538a553737d1845ef37ccc797673a405b6888",
+      "git_blob": "e1bcf18943b50e9f12a8ff71ff11e46831a10c91",
+      "disposition": "epic"
+    },
+    {
+      "path": ".factory/epics/upstream-intake.md",
+      "bytes": 26872,
+      "lines": 278,
+      "sha256": "499fb2393227117f1c4208547ca8b4ee4172b35aa58909a9d6ca4e77071820ab",
+      "git_blob": "0387d50945a7fa547f4d7d54904944320bac26c8",
+      "disposition": "epic"
+    },
+    {
+      "path": ".factory/epics/webview-seam-aop.md",
+      "bytes": 159285,
+      "lines": 2822,
+      "sha256": "a7e83270f6f6efd42a319ead512c578e94dc5990e0e2b56b3df5fb17a11c67cd",
+      "git_blob": "3d7c8b1498723ae2b7b4bd14aced56fc6483a963",
+      "disposition": "epic"
+    }
+  ]
+}

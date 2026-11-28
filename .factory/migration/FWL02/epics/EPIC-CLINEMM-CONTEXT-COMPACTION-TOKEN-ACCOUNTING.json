@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "epic_id": "EPIC-CLINEMM-CONTEXT-COMPACTION-TOKEN-ACCOUNTING",
+  "title": "Context / compaction",
+  "original_status": "DISCRIMINATOR EXECUTED + FORM-REVIEW HARDENED + REVIEWER-DISPOSITION PASS_WITH_ONE_P1_FIX + C1: GO. Recon ACT is CLOSED_WITH_RESIDUE (CASE_A — Cross-scale ratio-transfer mismatch REPRODUCED, LIKELY_CAUSE = CROSS_SCALE_RATIO_TRANSFER_ASSUMPTION, ROOT_CAUSE = NOT_YET_PROMOTED).",
+  "lifecycle": "ACTIVE",
+  "priority": "P1",
+  "exit_criteria": [
+    "The three admissible header-bar contracts are classified by the recon: C1 (bar = last provider observation, label fix only), C2 (bar = working-context estimate, projection fix), C3 (bar changes semantic source after compaction, wire-contract fix)."
+  ],
+  "items": [
+    {
+      "item_id": "EPIC-CLINEMM-CONTEXT-COMPACTION-TOKEN-ACCOUNTING/COMPACTION-HEADER-BAR-FRESHNESS-RECON01",
+      "title": "ACT-CLINEMM-COMPACTION-HEADER-BAR-FRESHNESS-RECON01 — post-compaction header-bar freshness recon",
+      "description": "RECON_ONLY / option α (narrow recon) chosen over option β (wire-contract `kind` discriminator); production delta ZERO; no new review round. Defect A (cross-scale arithmetic) and Defect B (post-restore publication) remain CLOSED at HEAD (`cb5b52239` + `sdk-compaction-coordinator.ts:365-396` trailing postStateToWebview). Defect C (post-compaction header-bar staleness) is a LIVE consumer-level witness; FULL_UI_PRODUCTION_SEAM_REPRODUCTION = NOT YET per the empirical P1 (the 2/2 test exercises the shared metrics consumer, NOT the actual ChatView → ContextWindow/TaskHeader render chain; the recon MUST author the real RED only after the C1/C2/C3 semantic contract is frozen). Recon question: what does the header bar represent immediately after compaction and before the next API request? WIRE_KIND_CHANGE = NOT_AUTHORIZED_YET (option β deferred until recon proves C3). Downstream repair ladder NOT pre-decided: C1 → ACT-CLINEMM-COMPACTION-HEADER-LABEL-REPAIR01; C2 → ACT-CLINEMM-COMPACTION-HEADER-PROJECTION-REPAIR01; C3 → ACT-CLINEMM-COMPACTION-WIRE-CONTRACT-REPAIR01.",
+      "workstream": "context-compaction-token-accounting",
+      "original_status": "OPEN 2026-09-02; RECON_ONLY",
+      "lifecycle": "ACTIVE",
+      "priority": "P1",
+      "qualification": "PARTIAL",
+      "criteria": [
+        "ACT body committed with `OPEN / RECON_ONLY` status.",
+        "Entry-freeze committed.",
+        "**One** compact `semantic-contract.md` committed (not seven evidence files).",
+        "Decisive matrix in that file filled in with the C1/C2/C3 verdict.",
+        "`semantic-contract.md` names the chain-of-trust for the verdict and a single short recommendation (one of: HALT_NO_INTENT_FROZEN / C1 → bounded label ACT / C2 → bounded projection ACT / C3 → bounded wire-contract ACT). The recommendation is NOT pre-decided.",
+        "`bun run check-types` clean on `apps/vscode`.",
+        "`bun run test:vitest` clean on the `src/sdk/**` and `src/shared/**` scopes (the suites that pin defect A closure).",
+        "`bun test src/shared/__tests__/getApiMetrics.test.ts` continues to be 24/24 GREEN.",
+        "No production code change.",
+        "No PR; this ACT is recon-only and the closure path is the verdict, not a code merge."
+      ],
+      "criteria_coverage": "COMPLETE",
+      "dependencies": [],
+      "dependency_coverage": "COMPLETE",
+      "blockers": [
+        "The recon MUST author the real RED only after the C1/C2/C3 semantic contract is frozen."
+      ],
+      "current_act": "ACT-CLINEMM-COMPACTION-HEADER-BAR-FRESHNESS-RECON01",
+      "related_acts": [
+        "ACT-CLINEMM-COMPACTION-HEADER-BAR-FRESHNESS-RECON01",
+        "ACT-CLINEMM-COMPACTION-PRESENTATION-FRESHNESS-EMPIRICAL01"
+      ],
+      "evidence_locators": [
+        ".factory/evidence/ACT-CLINEMM-COMPACTION-HEADER-BAR-FRESHNESS-RECON01/entry-freeze.txt",
+        ".factory/evidence/ACT-CLINEMM-COMPACTION-PRESENTATION-FRESHNESS-EMPIRICAL01/findings.md"
+      ],
+      "reopen_conditions": [],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 9377,
+          "end_line": 9377,
+          "sha256": "5119b0b83b892024fbd26bbb9754725271f7c90ec1c084d85d696173225c36a4"
+        },
+        {
+          "path": ".factory/acts/ACT-CLINEMM-COMPACTION-HEADER-BAR-FRESHNESS-RECON01.md",
+          "start_line": 538,
+          "end_line": 560,
+          "sha256": "2c8362a91b4cdb345a75211586309dcebf1d6957f9fb5986aeabf991128af1e5"
+        }
+      ]
+    }
+  ],
+  "source_refs": [
+    {
+      "path": ".factory/epics/context-compaction-token-accounting.md",
+      "start_line": 23,
+      "end_line": 112,
+      "sha256": "209cefb8b34fa7e7157b9f976c7ccc90ab35a6bdd6d60cd0cb51ff79c5ae53b5"
+    },
+    {
+      "path": ".factory/epic-board.md",
+      "start_line": 9377,
+      "end_line": 9377,
+      "sha256": "5119b0b83b892024fbd26bbb9754725271f7c90ec1c084d85d696173225c36a4"
+    }
+  ]
+}

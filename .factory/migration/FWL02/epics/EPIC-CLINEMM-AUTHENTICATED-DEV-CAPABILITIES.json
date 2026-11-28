@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "epic_id": "EPIC-CLINEMM-AUTHENTICATED-DEV-CAPABILITIES",
+  "title": "Authenticated dev capabilities",
+  "original_status": "DEFER (intentionally not current execution debt; do **not** auto-promote without a fresh ACT — see reopen conditions below).",
+  "lifecycle": "DEFERRED",
+  "priority": "P1",
+  "exit_criteria": [
+    "The user asks for an authenticated capability that the current ClineMM cannot provide safely (→ the design ACT gets prioritized).",
+    "An upstream Cline-- change exposes a credential surface that conflicts with the V1 boundary (→ the design ACT must precede any bridge ACT).",
+    "A bounded credential-helper integration is proven safe in another ClineMM epic and can be reused (→ unblock the corresponding per-family ACT)."
+  ],
+  "items": [
+    {
+      "item_id": "EPIC-CLINEMM-AUTHENTICATED-DEV-CAPABILITIES/AUTH-DEV-CAP-DESIGN01",
+      "title": "AUTH-DEV-CAP-DESIGN01 — per-family credential-capability design",
+      "description": "Design space only. The deliverable is a markdown document under `.factory/epics/authenticated-dev-capabilities.md` that names: each credential family, the proposed host-side executor pattern, the audit-log contract, and an explicit **per-family opt-in surface** the user would toggle. No source code, no credential bytes, no live invocation in the design ACT. The V1 sensitive-read confinement contract was deliberately scoped to SSH / GnuPG / macOS-keychain and EXCLUDED `~/.aws/`, `~/.kube/`, `~/.docker/config.json`, `~/.config/gh/hosts.yml`; the design ACT must propose how to handle the excluded surfaces without breaking the V1 boundary. The four per-family implementation ACTs (`AUTH-DEV-CAP-AWS01`, `AUTH-DEV-CAP-KUBE01`, `AUTH-DEV-CAP-DOCKER01`, `AUTH-DEV-CAP-GH01`) are all explicitly DEFER on the design ACT landing.",
+      "workstream": "authenticated-dev-capabilities",
+      "original_status": "DEFER",
+      "lifecycle": "DEFERRED",
+      "priority": "P1",
+      "qualification": "UNKNOWN",
+      "criteria": [],
+      "criteria_coverage": "UNKNOWN",
+      "dependencies": [],
+      "dependency_coverage": "COMPLETE",
+      "blockers": [],
+      "current_act": null,
+      "related_acts": [],
+      "evidence_locators": [],
+      "reopen_conditions": [
+        "The user asks for an authenticated capability that the current ClineMM cannot provide safely.",
+        "An upstream Cline-- change exposes a credential surface that conflicts with the V1 boundary.",
+        "A bounded credential-helper integration is proven safe in another ClineMM epic and can be reused."
+      ],
+      "source_refs": [
+        {
+          "path": ".factory/epics/authenticated-dev-capabilities.md",
+          "start_line": 47,
+          "end_line": 56,
+          "sha256": "d6e5081089639e47f59c9b310ff74d252c03e0f68a925b99e0a3e0a889fa250d"
+        }
+      ]
+    }
+  ],
+  "source_refs": [
+    {
+      "path": ".factory/epics/authenticated-dev-capabilities.md",
+      "start_line": 5,
+      "end_line": 11,
+      "sha256": "a5f444ec61b2fe48ad9468e5b64d09e73bdf6184d78cfc2f4a5e2e286ff0b987"
+    },
+    {
+      "path": ".factory/epics/authenticated-dev-capabilities.md",
+      "start_line": 37,
+      "end_line": 60,
+      "sha256": "a3992ebe74db2f07913663f81bf32ce21621ec45de2d3fc1f7139204c42a8b06"
+    }
+  ]
+}

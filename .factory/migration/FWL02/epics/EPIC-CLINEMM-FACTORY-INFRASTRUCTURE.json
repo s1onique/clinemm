@@ -1,0 +1,174 @@
+{
+  "schema_version": 1,
+  "epic_id": "EPIC-CLINEMM-FACTORY-INFRASTRUCTURE",
+  "title": "Factory infrastructure",
+  "original_status": "ACTIVE (substrate-level rules)",
+  "lifecycle": "ACTIVE",
+  "priority": "P0",
+  "exit_criteria": [
+    "Git safety: repository ruleset `cline-- protect published history` (`id=21037630`) blocks force pushes to `main`. `BYPASS_ACTOR_COUNT = 0`. Reopen conditions: ruleset disabled; `non_fast_forward` removed; any bypass actor added; branch protection changed to allow force pushes; default branch moves out of `refs/heads/main`; ownership/topology changes."
+  ],
+  "items": [
+    {
+      "item_id": "EPIC-CLINEMM-FACTORY-INFRASTRUCTURE/GIT-SAFETY-LOCAL-FORCE-PUSH-GUARD01",
+      "title": "ACT-CLINEMM-GIT-SAFETY-LOCAL-FORCE-PUSH-GUARD01 — local pre-push force-push guard",
+      "description": "Defense-in-depth local pre-push hook. The remote-side protection is the GitHub ruleset `cline-- protect published history` (`id=21037630`); the local guard is the second line. Status: OPEN (P2, non-blocking).",
+      "workstream": "factory-infrastructure",
+      "original_status": "OPEN (P2, non-blocking)",
+      "lifecycle": "OPEN",
+      "priority": "P2",
+      "qualification": "UNQUALIFIED",
+      "criteria": [],
+      "criteria_coverage": "UNKNOWN",
+      "dependencies": [],
+      "dependency_coverage": "COMPLETE",
+      "blockers": [],
+      "current_act": "ACT-CLINEMM-GIT-SAFETY-LOCAL-FORCE-PUSH-GUARD01",
+      "related_acts": [
+        "ACT-CLINEMM-GIT-SAFETY-LOCAL-FORCE-PUSH-GUARD01"
+      ],
+      "evidence_locators": [],
+      "reopen_conditions": [
+        "Git safety: repository ruleset `cline-- protect published history` (`id=21037630`) blocks force pushes to `main`. `BYPASS_ACTOR_COUNT = 0`. Reopen conditions: ruleset disabled; `non_fast_forward` removed; any bypass actor added; branch protection changed to allow force pushes; default branch moves out of `refs/heads/main`; ownership/topology changes."
+      ],
+      "source_refs": [
+        {
+          "path": ".factory/epics/factory-infrastructure.md",
+          "start_line": 24,
+          "end_line": 24,
+          "sha256": "1cfa97ec3883e9a4b6da968879e7b6343c2df86ebd3b3653660925ad2b7d6eec"
+        },
+        {
+          "path": ".factory/epics/factory-infrastructure.md",
+          "start_line": 47,
+          "end_line": 47,
+          "sha256": "7408492fa16b3a7ddc0bf5c85975230cc2a9b76b48cae8c28758cb3b017aecbc"
+        }
+      ]
+    },
+    {
+      "item_id": "EPIC-CLINEMM-FACTORY-INFRASTRUCTURE/FWL02-FWMI-V1-MIGRATION-INTERCHANGE",
+      "title": "FWL02 — FWMI v1 migration interchange (producer side)",
+      "description": "The producer emits a source-bound FWMI v1 interchange package (source manifest, epic records, historical index, reconciliation manifest). The operator runs the shadow migration EXTERNALLY, against the real package, in the Leamas repository, once both sides are ready. The consumer side is owned by Leamas and is NOT implemented here. The exchange contract is documented at `docs/factory/work-ledger-interchange.md` in the Leamas repository. Leamas is the SOLE implementation owner of the Factory Work Ledger and of its FWMI v1 import consumer; the consumer lives in the existing Go ledger domain, importer, transaction store, evidence authority and rendering mechanisms of the Leamas repository. There is no second ledger implementation in ClineMM, no universal Markdown parser and no architectural expansion. The `ACT-CLINEMM-FWL02-INTERCHANGE-IMPORT-ADAPTER01` adapter was an experiment in the wrong repository. It was removed; the evidence package of that ACT is retained as the historical record of the experiment, not as a canonical implementation.",
+      "workstream": "factory-infrastructure",
+      "original_status": "OPEN",
+      "lifecycle": "ACTIVE",
+      "priority": "P1",
+      "qualification": "UNKNOWN",
+      "criteria": [],
+      "criteria_coverage": "UNKNOWN",
+      "dependencies": [],
+      "dependency_coverage": "COMPLETE",
+      "blockers": [],
+      "current_act": "ACT-CLINEMM-FWL02-B-HISTORICAL-RECONCILIATION-01",
+      "related_acts": [
+        "ACT-CLINEMM-FWL02-INTERCHANGE-IMPORT-ADAPTER01"
+      ],
+      "evidence_locators": [
+        "docs/closure-plans/ACT-CLINEMM-FWL02-INTERCHANGE-IMPORT-ADAPTER01.json"
+      ],
+      "reopen_conditions": [],
+      "source_refs": [
+        {
+          "path": ".factory/epics/factory-infrastructure.md",
+          "start_line": 26,
+          "end_line": 26,
+          "sha256": "86255883769e5f0da622dc792afc1b88e0092ee8137dff23134e29315c1b3f5e"
+        },
+        {
+          "path": ".factory/epics/factory-infrastructure.md",
+          "start_line": 28,
+          "end_line": 44,
+          "sha256": "7864fc9fe0053ed3923dad557634e7faeffe2b560ea960f46f9d72599ac72a91"
+        },
+        {
+          "path": ".factory/epics/factory-infrastructure.md",
+          "start_line": 48,
+          "end_line": 54,
+          "sha256": "a74f9c055cfe64553a60d7e4e5bc464f3cd1a882d064e417ef465857f448521b"
+        },
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 9421,
+          "end_line": 9421,
+          "sha256": "64c7def12f04f2e24d1ab13220b230c3e1293b1afde5736dfedec94363ec6697"
+        }
+      ]
+    },
+    {
+      "item_id": "EPIC-CLINEMM-FACTORY-INFRASTRUCTURE/HUSKY-TOOLCHAIN-PATH-PORTABILITY01",
+      "title": "HUSKY-TOOLCHAIN-PATH-PORTABILITY01 — repository hook tool discovery portability",
+      "description": "Make repository hooks reliably discover required developer tools across Apple Silicon Homebrew, Intel Homebrew, Linuxbrew, Nix / GUI / non-login environments. Current state (do NOT touch in this backlog ACT): `.husky/pre-commit` enumerates Homebrew prefixes for darwin-arm64, darwin-x86_64, and Linuxbrew for the gitleaks binary; the gitleaks branch fails CLOSED if gitleaks cannot be located. The `cd apps/vscode && bunx lint-staged` step does NOT enumerate prefixes; bun / bunx are operator-side PATH-injected. Constraints carried into any future ACT: recon first; no machine-specific tracked symlinks; no broad global PATH mutation unless evidence justifies it; prefer bounded per-tool discovery if opened (e.g. `command -v` chain with documented fallbacks); do NOT silently weaken the gitleaks requirement.",
+      "workstream": "factory-infrastructure",
+      "original_status": "FUTURE / DEFER",
+      "lifecycle": "DEFERRED",
+      "priority": "P2",
+      "qualification": "UNKNOWN",
+      "criteria": [],
+      "criteria_coverage": "UNKNOWN",
+      "dependencies": [],
+      "dependency_coverage": "COMPLETE",
+      "blockers": [],
+      "current_act": null,
+      "related_acts": [],
+      "evidence_locators": [
+        ".factory/evidence/ACT-CLINEMM-THREAD-FUTURE-WORK-BACKLOG-NORMALIZATION01/reconciliation.md (FW-06, recorded 2026-08-29 by the thread-future-work normalization ACT)"
+      ],
+      "reopen_conditions": [
+        "Another operator / CI environment reproduces the failure (a new hook-related tool dropped from PATH on a fresh checkout).",
+        "Factory decides developer-tool portability warrants proactive work (e.g. a cluster of PATH-shadowing findings that would benefit from a unified resolution)."
+      ],
+      "source_refs": [
+        {
+          "path": ".factory/epics/factory-infrastructure.md",
+          "start_line": 58,
+          "end_line": 100,
+          "sha256": "ec84f6f7dd696849c9c0b6831e6a62b2f5d6e53f3c8614a891aaa905ab526b5a"
+        }
+      ]
+    },
+    {
+      "item_id": "EPIC-CLINEMM-FACTORY-INFRASTRUCTURE/UPSTREAM-CATCHUP-RECON01",
+      "title": "ACT-CLINEMM-UPSTREAM-CATCHUP-RECON01 — upstream fork-distance catch-up",
+      "description": "Reduce fork-from-upstream distance deliberately, without sacrificing ClineMM-specific architecture. Operate the upstream-sync cadence that `docs/factory/upstream-sync.md` already establishes as doctrine but does NOT yet own as a backlog ACT. Doctrinal substrate (already exists; do not duplicate): upstream = https://github.com/cline/cline.git (immutable); origin = s1onique/clinemm; ClineMM consumes upstream via MERGE, never rebase; conflict evidence contract `docs/factory/sync/<YYYY-MM-DD>/{upstream_commit.txt,merge_commit.txt,conflict_report.md}`; branch topology factory/*, product/* (reserved), sync/* (transient); divergence measurement `factory/inventories/repository.json#upstream.{commit_oid,tree_oid,merge_base_with_upstream,ahead,behind}`; release tags `factory/inventories/repository.json#tags.nearest`. Historical baseline snapshot (frozen at ACT-CLINEMM-FORK-BASELINE01-CORRECTION02; the future ACT must refresh this): upstream.commit_oid = c564045d8135c0c1c330b21d47b68b74917ce614; merge_base_with_upstream = c564045d8135c0c1c330b21d47b68b74917ce614; working_copy.ahead = 17; working_copy.behind = 0. User-visible (NON-AUTHORITATIVE) divergence snapshot: FORK_AHEAD_OF_UPSTREAM = 861 commits; UPSTREAM_AHEAD_OF_FORK = 176 commits; LABEL = OBSERVED_UI_SNAPSHOT; SOURCE = GitHub UI compare / pull-request page; DATE_OBSERVED = 2026-08-29; CANONICAL_GIT_DIVERGENCE = NOT_MEASURED_IN_THIS_ACT. Strategy (carried into the new ACT): progressive bounded sync slices, NOT a 176-commit blind mega-merge — per upstream cluster choose MERGE_UPSTREAM_SLICE / PORT_THEMATIC_SERIES / MANUAL_PORT / DO_NOT_IMPORT. Hard invariants: preserve ClineMM Seatbelt / Safe-YOLO semantics; preserve explicit completion authority (per the ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-CONTRACT01 family); preserve Factory evidence tooling; NO silent regression to upstream plain-YOLO semantics; NO wholesale replacement of ClineMM-specific runtime seams. Forbidden: NO `git merge upstream/main` as the first operation; NO giant rebase without conflict inventory; NO semantic conflict resolution based solely on \"prefer ours/theirs\"; NO deleting fork-specific functionality merely to make sync easy. Constraints: no actual upstream merge / rebase / cherry-pick in this backlog ACT; no upstream remote is configured in this clone, so the future ACT must start by configuring the canonical upstream remote (or document that the operator declined to do so).",
+      "workstream": "factory-infrastructure",
+      "original_status": "FUTURE / UNIMPLEMENTED",
+      "lifecycle": "DEFERRED",
+      "priority": "HIGH",
+      "qualification": "UNKNOWN",
+      "criteria": [],
+      "criteria_coverage": "UNKNOWN",
+      "dependencies": [],
+      "dependency_coverage": "COMPLETE",
+      "blockers": [],
+      "current_act": null,
+      "related_acts": [],
+      "evidence_locators": [
+        ".factory/evidence/ACT-CLINEMM-UPSTREAM-PARITY-AND-SETTINGS-BACKLOG-REFINEMENT01/reconciliation.md (Track B, recorded 2026-08-29 by this ACT)"
+      ],
+      "reopen_conditions": [],
+      "source_refs": [
+        {
+          "path": ".factory/epics/factory-infrastructure.md",
+          "start_line": 102,
+          "end_line": 212,
+          "sha256": "369196baef8d68a41876c1c7769d866f407ce808f240a95dbcc734440ea5f98a"
+        }
+      ]
+    }
+  ],
+  "source_refs": [
+    {
+      "path": ".factory/epics/factory-infrastructure.md",
+      "start_line": 5,
+      "end_line": 18,
+      "sha256": "118db1f2afd180f78286e8f8ec42fee771b336145c458811a65668d9e761b192"
+    },
+    {
+      "path": ".factory/epics/factory-infrastructure.md",
+      "start_line": 19,
+      "end_line": 55,
+      "sha256": "bc23e5f8c648cd6f1df9b08c1605c4caf6a7cc84c920648d744186561285568e"
+    }
+  ]
+}

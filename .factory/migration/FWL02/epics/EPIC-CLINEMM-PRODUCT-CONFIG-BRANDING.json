@@ -1,0 +1,252 @@
+{
+  "schema_version": 1,
+  "epic_id": "EPIC-CLINEMM-PRODUCT-CONFIG-BRANDING",
+  "title": "Product config / branding",
+  "original_status": "ACTIVE — closed cost/consolidation substrate + 2 open product fronts",
+  "lifecycle": "ACTIVE",
+  "priority": "P2",
+  "exit_criteria": [
+    "Cost display observed diverging from the canonical cost source.",
+    "Main branch loses the consolidated state (i.e. a non-canonical branch re-emerges as a long-lived side).",
+    "A new visible-branding ACT lands that supersedes `ACT-CLINEMM-BRANDING-ACTIVITYBAR-ICON01`.",
+    "`ACT-CLINEMM-UPSTREAM-SETTINGS-SURFACE-PARITY-RECON01` §11 decides to spawn `EPIC-CLINEMM-SETTINGS-SUBSTRATE01` — at that point this row migrates to the new epic detail file and this row collapses to a durable cross-reference link."
+  ],
+  "items": [
+    {
+      "item_id": "EPIC-CLINEMM-PRODUCT-CONFIG-BRANDING/TOOL-EXECUTION-SEMANTICS01",
+      "title": "EPIC-CLINEMM-TOOL-EXECUTION-SEMANTICS01 — tool-execution semantics telemetry umbrella",
+      "description": "The umbrella epic is board row 20. Its first ACT `TOOL-EXECUTION-SEMANTICS-RECON01` already closed `PASS_RECON`. The bounded implementation slice `ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-IMPLEMENTATION01` (= working label `TES-IMPL-01`) landed the mechanism-only TaskHeader projection. The V2 outcome slice `ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-OUTCOME-PROJECTION01` (= working label `TES-OUT-01`) closed `PASS_STRUCTURAL_ONLY` and adds the bounded RUNTIME-OUTCOME projection (`✓ / ✕ / … / ?`) next to the unchanged mechanism strip. Per the recon verdict, mechanism/outcome/duration are REAL; `purpose` is `UNAVAILABLE_FROM_TRACE` and must remain UNAVAILABLE in the projection. Do NOT infer semantic purpose from command/tool arguments — classify only from the canonical registered tool identity (`apply_patch` / native write tool → EDIT; `run_commands` / `execute_command` → COMMAND; native read/search → READ/SEARCH; `mcp_*` → MCP; structurally unknown → OTHER/UNKNOWN). Still deferred under this epic: subprocess-terminal exit statuses, tool duration aggregation, effect classification, retry/recovery deduplication, and any new model-behavior events.",
+      "workstream": "product-config-branding",
+      "original_status": "OPEN",
+      "lifecycle": "OPEN",
+      "priority": "P2",
+      "qualification": "STRUCTURAL_ONLY",
+      "criteria": [],
+      "criteria_coverage": "UNKNOWN",
+      "dependencies": [],
+      "dependency_coverage": "COMPLETE",
+      "blockers": [],
+      "current_act": null,
+      "related_acts": [
+        "ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-RECON01",
+        "ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-IMPLEMENTATION01",
+        "ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-OUTCOME-PROJECTION01"
+      ],
+      "evidence_locators": [
+        "docs/architecture/elm/task-state-tes01-tool-execution-semantics-recon-evidence.md"
+      ],
+      "reopen_conditions": [
+        "Main branch loses the consolidated state (i.e. a non-canonical branch re-emerges as a long-lived side)."
+      ],
+      "source_refs": [
+        {
+          "path": ".factory/epics/product-config-branding.md",
+          "start_line": 36,
+          "end_line": 36,
+          "sha256": "5275838c2c98fea7c96b9754b5270c536a37c853a3a2d576c92302f1bb18d443"
+        }
+      ]
+    },
+    {
+      "item_id": "EPIC-CLINEMM-PRODUCT-CONFIG-BRANDING/BRANDING01",
+      "title": "EPIC-CLINEMM-BRANDING01 — visible branding umbrella",
+      "description": "The umbrella epic is board row 21. Its first bounded slice is `ACT-CLINEMM-BRANDING-ACTIVITYBAR-ICON01` (board row 24, `NEXT / MED`). Icon: `‖ → --`. Preserve VS Code monochrome / theming behavior.",
+      "workstream": "product-config-branding",
+      "original_status": "OPEN",
+      "lifecycle": "OPEN",
+      "priority": "P2",
+      "qualification": "UNQUALIFIED",
+      "criteria": [],
+      "criteria_coverage": "UNKNOWN",
+      "dependencies": [],
+      "dependency_coverage": "COMPLETE",
+      "blockers": [],
+      "current_act": "ACT-CLINEMM-BRANDING-ACTIVITYBAR-ICON01",
+      "related_acts": [
+        "ACT-CLINEMM-BRANDING-ACTIVITYBAR-ICON01"
+      ],
+      "evidence_locators": [],
+      "reopen_conditions": [
+        "A new visible-branding ACT lands that supersedes `ACT-CLINEMM-BRANDING-ACTIVITYBAR-ICON01`."
+      ],
+      "source_refs": [
+        {
+          "path": ".factory/epics/product-config-branding.md",
+          "start_line": 37,
+          "end_line": 37,
+          "sha256": "48f5b83547154a68c666e342dddf1e3ea9d5fb45340abbd2d9ddf78e2e4c22bf"
+        }
+      ]
+    },
+    {
+      "item_id": "EPIC-CLINEMM-PRODUCT-CONFIG-BRANDING/TASK-COST-TRUTH-RECON01",
+      "title": "ACT-CLINEMM-TASK-COST-TRUTH-RECON01 — two-layer cost-provenance recon",
+      "description": "Recon-only; binds `TASK_DISPLAYED_COST` to authoritative per-request cost evidence AND to a truthful billing-semantic label. Authored 2026-08-27 at the launch commit (Layer-1 arithmetic recon) and re-framed 2026-08-27 (Layer-2 billing-semantic layer added in response to an expert product/accounting review against a real MiniMax Ultra Token Plan task). The reframe DID NOT supersede `EPIC-CLINEMM-COST-DISPLAY-TRUTH01` (CLOSED) — the Layer-2 framework adds a NEW presentation-truth layer ABOVE the closed display-source contract. The closing condition is `(Layer-1, Layer-2)`: `(C, I)` → C1 GO (`COST_PROVENANCE_ARITHMETIC_VERIFIED`); `(A/B/D/E, *)` → RED-LAYER-1 + accumulator-repair ACT; `(C, II)` (the canonical MiniMax Ultra case) → RED-LAYER-2 + `PASS_COST_PROVENANCE_PRESENTATION_REPAIR_V1`; `(C, III)` and `(*, H)` → corresponding Layer-2-G / Layer-2-H presentation-repair ACTs. Until §3 produces a specimen, `CORRECTNESS = UNKNOWN` and the dollar amount is NEVER the stop rule. HELD until the operational frontier (`EDITOR-TOOL-APPROVAL-FRICTION-RECON01`, `OPEN / WAITING_FOR_LIVE_SPECIMEN`) is bound; sequenced next after that.",
+      "workstream": "product-config-branding",
+      "original_status": "OPEN / HOLD_FOR_EXECUTION",
+      "lifecycle": "BLOCKED",
+      "priority": "P1",
+      "qualification": "UNKNOWN",
+      "criteria": [],
+      "criteria_coverage": "UNKNOWN",
+      "dependencies": [],
+      "dependency_coverage": "COMPLETE",
+      "blockers": [
+        "Held until the operational frontier (`EDITOR-TOOL-APPROVAL-FRICTION-RECON01`, `OPEN / WAITING_FOR_LIVE_SPECIMEN`) is bound; sequenced next after that."
+      ],
+      "current_act": "ACT-CLINEMM-TASK-COST-TRUTH-RECON01",
+      "related_acts": [
+        "ACT-CLINEMM-TASK-COST-TRUTH-RECON01"
+      ],
+      "evidence_locators": [
+        ".factory/evidence/ACT-CLINEMM-TASK-COST-TRUTH-RECON01/probe-minimax-ultra-billing-semantics.md"
+      ],
+      "reopen_conditions": [
+        "Cost display observed diverging from the canonical cost source."
+      ],
+      "source_refs": [
+        {
+          "path": ".factory/epics/product-config-branding.md",
+          "start_line": 38,
+          "end_line": 38,
+          "sha256": "5580cdff2c86261d74e11ef24711075a247a31ba3712b0fc0669f59b83f955f2"
+        }
+      ]
+    },
+    {
+      "item_id": "EPIC-CLINEMM-PRODUCT-CONFIG-BRANDING/UPSTREAM-SETTINGS-SURFACE-PARITY-RECON01",
+      "title": "ACT-CLINEMM-UPSTREAM-SETTINGS-SURFACE-PARITY-RECON01 — upstream settings-surface parity recon",
+      "description": "Status: tentative epic placement pending the ACT's §11 owning-epic decision tree. If the candidate restore list (§5) has ≥ 3 entries spanning distinct categories, the ACT will spawn `EPIC-CLINEMM-SETTINGS-SUBSTRATE01`; otherwise this row's detail file link is the durable answer. Authored 2026-08-27 at the launch commit; recon §2 `PASS_RECON_SURFACE_MAPPED` at authorship, §3 inventory deferred. Three epistemic guards held by the ACT: NO wholesale upstream copy (`GUARD_NO_WHOLESALE_UPSTREAM_COPY`), preserve deliberate fork divergence (`GUARD_PRESERVE_DELIBERATE_DIVERGENCE` — Seatbelted-YOLO possibly replacing upstream plain-YOLO is a candidate supersession requiring §6 evidence, not an assumption), NO bespoke PTAD tab (`GUARD_NO_PTAD_TAB` — PTAD may fold into an existing Advanced/Diagnostics section, but never a top-level tab). The recon MUST classify each missing setting as `MISSING_ACCIDENTALLY` / `REMOVED_INTENTIONALLY` / `SUPERSEDED_BY_CLINEMM` / `UPSTREAM_NOT_APPLICABLE` / `PRESENT_IN_BOTH`; only the first class drives a candidate restore. HELD until the operational frontier is bound; sequenced after `TASK-COST-TRUTH-RECON01`.",
+      "workstream": "product-config-branding",
+      "original_status": "OPEN / HOLD_FOR_EXECUTION",
+      "lifecycle": "BLOCKED",
+      "priority": "P2",
+      "qualification": "PARTIAL",
+      "criteria": [],
+      "criteria_coverage": "UNKNOWN",
+      "dependencies": [],
+      "dependency_coverage": "COMPLETE",
+      "blockers": [
+        "Held until the operational frontier is bound; sequenced after `TASK-COST-TRUTH-RECON01`."
+      ],
+      "current_act": "ACT-CLINEMM-UPSTREAM-SETTINGS-SURFACE-PARITY-RECON01",
+      "related_acts": [
+        "ACT-CLINEMM-UPSTREAM-SETTINGS-SURFACE-PARITY-RECON01"
+      ],
+      "evidence_locators": [],
+      "reopen_conditions": [
+        "`ACT-CLINEMM-UPSTREAM-SETTINGS-SURFACE-PARITY-RECON01` §11 decides to spawn `EPIC-CLINEMM-SETTINGS-SUBSTRATE01` — at that point this row migrates to the new epic detail file and this row collapses to a durable cross-reference link."
+      ],
+      "source_refs": [
+        {
+          "path": ".factory/epics/product-config-branding.md",
+          "start_line": 39,
+          "end_line": 39,
+          "sha256": "360aa8d565566e3168c417ab4d4a5d6f6e4412628b4ec136c55af54f56d106b1"
+        }
+      ],
+      "relationships": [
+        {
+          "kind": "RELATED_TO",
+          "target": "EPIC-CLINEMM-SAFE-YOLO-SEATBELT/TEMP-INTERNAL-CONTROL-CLEANUP",
+          "source_refs": [
+            {
+              "path": ".factory/epics/product-config-branding.md",
+              "start_line": 39,
+              "end_line": 39,
+              "sha256": "360aa8d565566e3168c417ab4d4a5d6f6e4412628b4ec136c55af54f56d106b1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "item_id": "EPIC-CLINEMM-PRODUCT-CONFIG-BRANDING/TEMP-INTERNAL-CONTROL-CLEANUP",
+      "title": "TEMP-INTERNAL-CONTROL-CLEANUP — cross-cutting child of settings-parity",
+      "description": "This is the SECONDARY cross-cutting row; the primary owner is safe-yolo-seatbelt.md (the env controls are owned by the seatbelt substrate). This row is a cross-link because the eventual replacement is a settings surface that lives in EPIC-CLINEMM-BRANDING01-adjacent settings UI. See safe-yolo-seatbelt.md Deferred work for the primary row. It is an inventory + classification task: each temporary / internal control must be classified as KEEP_INTERNAL / REPLACE_WITH_SETTING / REMOVE_AFTER_SUCCESSOR / DEBUG_ONLY before any cleanup ACT can be opened. No inventory exists yet; opening a \"cleanup\" ACT without the inventory would be premature. Ideal long-term shape: upstream Settings remain recognizable + ClineMM-only section(s) are additive, minimizing future upstream sync cost. Cross-links to existing substrate (do NOT duplicate): safe-yolo-seatbelt.md Deferred FW-05 (seatbelt-user-facing settings surface cross-link); safe-yolo-seatbelt.md Deferred FW-11 (TEMP-INTERNAL-CONTROL-CLEANUP primary owner); product-config-branding.md Deferred FW-11 (cross-link); ACT-CLINEMM-PTAD-ENV-OPTIN01 ledger (PTAD env var history); ACT-CLINEMM-SEATBELT-DEFAULT-ON01 ledger (default-ON posture); ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-RECON01 §15 (frozen SSH credential authority contract — settings surface must NOT renegotiate). Constraints: no implementation in this backlog ACT; no env-var removal; no Seatbelt behavior change; no SSH-agent code change; the env controls remain valid until a stable settings surface can fully cover them.",
+      "workstream": "product-config-branding",
+      "original_status": "FUTURE / DEFER",
+      "lifecycle": "DEFERRED",
+      "priority": "P2",
+      "qualification": "UNKNOWN",
+      "criteria": [],
+      "criteria_coverage": "UNKNOWN",
+      "dependencies": [],
+      "dependency_coverage": "COMPLETE",
+      "blockers": [],
+      "current_act": null,
+      "related_acts": [],
+      "evidence_locators": [
+        ".factory/evidence/ACT-CLINEMM-UPSTREAM-PARITY-AND-SETTINGS-BACKLOG-REFINEMENT01/reconciliation.md (Track C, recorded 2026-08-29 by this ACT)"
+      ],
+      "reopen_conditions": [
+        "A future ACT is opened whose mission is the temporary / internal control inventory; the inventory must be produced before any cleanup ACT is opened."
+      ],
+      "source_refs": [
+        {
+          "path": ".factory/epics/product-config-branding.md",
+          "start_line": 93,
+          "end_line": 152,
+          "sha256": "0c9592f38b661f8553fc2019d0513b34b9567d3479c34b75a557862dc738ac6a"
+        }
+      ],
+      "relationships": [
+        {
+          "kind": "CROSS_LINK",
+          "target": "EPIC-CLINEMM-SAFE-YOLO-SEATBELT/TEMP-INTERNAL-CONTROL-CLEANUP",
+          "source_refs": [
+            {
+              "path": ".factory/epics/product-config-branding.md",
+              "start_line": 131,
+              "end_line": 136,
+              "sha256": "6711ed747f8951ef332e942af60644d8acbd3630dd50ecd780549493bd1c8e34"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "item_id": "EPIC-CLINEMM-PRODUCT-CONFIG-BRANDING/BRANDING-DEMO-JAN1-ICON",
+      "title": "ACT-CLINEMM-BRANDING-DEMO-JAN1-ICON01 — January 1 demo icon decoration",
+      "description": "On January 1, make the ClineMM extension icon subtly shiny / festive. This is a deliberately tiny end-to-end demo task for product / UI release plumbing. Why a deferred row (not an ACT yet): no existing backlog entry owns date-driven icon decoration; the existing EPIC-CLINEMM-BRANDING01 umbrella's first bounded slice is the icon-replacement ACT (different concern: `‖ → --`); adding a DEMO/LOW backlog row under the umbrella epic keeps the eventual ACT visible without promoting it to NEXT. Constraints carried into any future ACT: deterministic date seam (e.g. `Date.now()` within a configurable date range, or a build-time `JAN1_DEMO_ENABLED` flag — NOT a clock-driven side effect without an explicit toggle); testable without waiting for January 1; no external network dependency; no large branding redesign (single decorative treatment on Jan 1 only; preserve the normal icon on every other date); easy revert / removal. This is a demo task, not product-critical work; the DEMO/LOW priority is intentional and must not be promoted ahead of any P0 / P1 work.",
+      "workstream": "product-config-branding",
+      "original_status": "FUTURE / UNIMPLEMENTED",
+      "lifecycle": "DEFERRED",
+      "priority": "DEMO / LOW",
+      "qualification": "UNKNOWN",
+      "criteria": [],
+      "criteria_coverage": "UNKNOWN",
+      "dependencies": [],
+      "dependency_coverage": "COMPLETE",
+      "blockers": [],
+      "current_act": null,
+      "related_acts": [],
+      "evidence_locators": [
+        ".factory/evidence/ACT-CLINEMM-THREAD-FUTURE-WORK-BACKLOG-NORMALIZATION01/reconciliation.md (FW-09, recorded 2026-08-29 by the thread-future-work normalization ACT)"
+      ],
+      "reopen_conditions": [],
+      "source_refs": [
+        {
+          "path": ".factory/epics/product-config-branding.md",
+          "start_line": 51,
+          "end_line": 90,
+          "sha256": "2d25293bf939361086fef1f90bc5329659e30aef6c3ffe5e28a16b3190de9855"
+        }
+      ]
+    }
+  ],
+  "source_refs": [
+    {
+      "path": ".factory/epics/product-config-branding.md",
+      "start_line": 5,
+      "end_line": 11,
+      "sha256": "6892e58c27be681ea181787e5744a71b7ddc22393699535a0adca1ba9d665791"
+    },
+    {
+      "path": ".factory/epics/product-config-branding.md",
+      "start_line": 34,
+      "end_line": 49,
+      "sha256": "60e5b0a5c7f3f4d4c0a2a4e138338ad1df3d3a97e0984e48a0c552dacba68840"
+    }
+  ]
+}

@@ -1,0 +1,190 @@
+{
+  "schema_version": 1,
+  "epic_id": "EPIC-CLINEMM-RUNTIME-TASK-PROGRESSION",
+  "title": "Runtime task progression",
+  "original_status": "OPEN — fresh epic opened at FUTURE-BACKLOG-CENSUS01-CORRECTION01. The canonical ACT `ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01` is OPEN with OWN01 RED reproduced at HEAD `f106bc63d` and OWN02-OWN03-RECON at CAPTURE_INSUFFICIENT.",
+  "lifecycle": "OPEN",
+  "priority": "HIGH",
+  "exit_criteria": [
+    "A new user-visible non-progressing-task symptom is reproduced at the local canonical seam (→ reopen `RUNTIME-TASK-PROGRESSION-RECON01` or open a per-symptom ACT).",
+    "A `RUNTIME_THINKING_STALL` upstream issue graduates from RADAR to IMPORT against this epic (requires a strict destination-contract test against the recon evidence).",
+    "A Cancel-affordance authority defect is reproduced at the local canonical seam (→ unblock `CANCEL-AFFORDANCE-AUTHORITY-RECON`)."
+  ],
+  "items": [
+    {
+      "item_id": "EPIC-CLINEMM-RUNTIME-TASK-PROGRESSION/RUNTIME-TASK-PROGRESSION-RECON01",
+      "title": "ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01 — runtime progression recon",
+      "description": "First ACT: bounded RECON + exact live RED. The deliverable is a markdown document that (a) characterizes the failure modes observed in our local recurrence, (b) maps each observed mode to one or more upstream signals (RADAR), (c) proposes a bounded RED-family test seam (not implementation), (d) does NOT pre-classify cause. Do not implement any production change in this ACT. The umbrella ACT is OPEN with OWN01 RED reproduced at HEAD `f106bc63d` and OWN02-OWN03-RECON at CAPTURE_INSUFFICIENT; the producer-side recon successor `ACT-CLINEMM-RUNTIME-FINISH-SEMANTICS-RECON01` is CLOSED / VERDICT_AMENDED / NOT_LIVE_CAUSE. Strongest preserved structural findings: `agent-runtime.ts:1371` IS a real latent defect under `requireCompletionTool=true`; the downstream AgentFinishReason collapse is a real latent defect; neither is the live cause.",
+      "workstream": "runtime-task-progression",
+      "original_status": "HIGH",
+      "lifecycle": "OPEN",
+      "priority": "HIGH",
+      "qualification": "UNKNOWN",
+      "criteria": [],
+      "criteria_coverage": "UNKNOWN",
+      "dependencies": [],
+      "dependency_coverage": "COMPLETE",
+      "blockers": [],
+      "current_act": "ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01",
+      "related_acts": [
+        "ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01",
+        "ACT-CLINEMM-RUNTIME-FINISH-SEMANTICS-RECON01"
+      ],
+      "evidence_locators": [
+        ".factory/evidence/ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01/OWN02-OWN03-RECON/recon-report.md",
+        ".factory/evidence/ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01/background-job-authority-topology.md"
+      ],
+      "reopen_conditions": [
+        "A new user-visible non-progressing-task symptom is reproduced at the local canonical seam."
+      ],
+      "source_refs": [
+        {
+          "path": ".factory/epics/runtime-task-progression.md",
+          "start_line": 73,
+          "end_line": 73,
+          "sha256": "3c6da39fa83157d9a537b7743dc456ef1ffe8b6cbfc3c180ff03c77bc883e39a"
+        }
+      ]
+    },
+    {
+      "item_id": "EPIC-CLINEMM-RUNTIME-TASK-PROGRESSION/CANCEL-AFFORDANCE-AUTHORITY-RECON",
+      "title": "CANCEL-AFFORDANCE-AUTHORITY-RECON — Cancel-affordance authority recon",
+      "description": "HIGH — partial. The static source-seam map half is bound by `ACT-CLINEMM-TASK-CANCEL-UI-RECON01` (CLOSED / RECON_ONLY / CAPTURE_INSUFFICIENT at `162dfb137` over `15c7e3374`): proves `turnState.phase === \"streaming\"` is the predicate, `SdkTaskControlCoordinator.cancelTask` is the SDK owner, and upstream-vs-ClineMM Cancel button structure is byte-identical (no removal in either source). The LIVE capture half remains open: the four-value capture (`turnState.phase`, `foregroundCommandRunning`, `backgroundCommandRunning`, lastMessage.{type, say, ask, partial}) discriminates `UI_RENDER_DEFECT` from `TURN_STATE_PROJECTION_DEFECT` from benign non-streaming phases. First deliverable on resumption: a regression that fails when the invariant is violated in either direction (idle+Cancel visible, or active+Cancel absent). Do not invent a third authority; the invariant is already durable.",
+      "workstream": "runtime-task-progression",
+      "original_status": "HIGH — partial",
+      "lifecycle": "OPEN",
+      "priority": "HIGH",
+      "qualification": "INSUFFICIENT",
+      "criteria": [
+        "C04_CURRENT_CANCEL_OWNER_IDENTIFIED = PASS (SdkTaskControlCoordinator.cancelTask).",
+        "C05_CURRENT_RENDER_PREDICATE_IDENTIFIED = PASS (streaming-phase-only).",
+        "C07_UPSTREAM_COMPARISON = PASS (byte-identical Cancel).",
+        "C09_LIVE_RENDER_INPUTS_CAPTURED = NOT_CAPTURED (no turnState dump; phase unknown).",
+        "C10_FIRST_BROKEN_BOUNDARY = UNBOUND (two candidates remain; requires LIVE phase capture).",
+        "C12_CAUSAL_DISCRIMINATOR = NOT_APPLICABLE (requires LIVE phase to discriminate).",
+        "C14_CANCEL_AUTOAPPROVE_INDEPENDENCE = PASS (predicate independent).",
+        "C15_CANCEL_NOT_COMPLETION = PASS (cancel does NOT emit task.completed).",
+        "C16_CANCEL_NOT_CLEAR = PASS (cancel ≠ clearTask).",
+        "C17_LONG_RUNNING_CANCEL = PASS (foreground_command_running config exposes Cancel + Proceed).",
+        "C23_LIVE_CANCEL_VISIBLE = NOT_TESTED (would require LIVE UI).",
+        "C24_LIVE_CANCEL_EFFECTIVE = NOT_TESTED."
+      ],
+      "criteria_coverage": "COMPLETE",
+      "dependencies": [],
+      "dependency_coverage": "COMPLETE",
+      "blockers": [
+        "The LIVE four-value capture half is outstanding; the static source-seam map half is already bound."
+      ],
+      "current_act": null,
+      "related_acts": [
+        "ACT-CLINEMM-TASK-CANCEL-UI-RECON01"
+      ],
+      "evidence_locators": [],
+      "reopen_conditions": [
+        "A Cancel-affordance authority defect is reproduced at the local canonical seam (→ unblock `CANCEL-AFFORDANCE-AUTHORITY-RECON`)."
+      ],
+      "source_refs": [
+        {
+          "path": ".factory/epics/runtime-task-progression.md",
+          "start_line": 74,
+          "end_line": 74,
+          "sha256": "02c2ea5252ecdbeb23d9f938f10f8bf2db65218821eb6ab19eb876e6f035db79"
+        },
+        {
+          "path": ".factory/acts/ACT-CLINEMM-TASK-CANCEL-UI-RECON01.md",
+          "start_line": 479,
+          "end_line": 506,
+          "sha256": "e39f2da31987dbde402dd68f76a51cfde8b698d836a8fd66496adb0ffde42197"
+        }
+      ]
+    },
+    {
+      "item_id": "EPIC-CLINEMM-RUNTIME-TASK-PROGRESSION/EDITOR-TOOL-APPROVAL-FRICTION-RECON01",
+      "title": "ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01 — restored NEXT in the runtime lane",
+      "description": "NEXT / HIGH — completion-authority prerequisite SATISFIED per `SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01` CLOSED / UPSTREAM_SUPERSEDED at `15c7e3374`; remaining gates = operator-driven live editor/non-command specimen + host/Aqua availability as applicable, NOT blocked by a completion-authority dependency. This ACT was previously deferred for exactly one bounded cycle to allow LIVENESS02 + CONTRACT01 to finish; the prior IMPLEMENTATION01 blocker was removed when the upstream integration retired that prerequisite.",
+      "workstream": "runtime-task-progression",
+      "original_status": "NEXT / HIGH",
+      "lifecycle": "ACTIVE",
+      "priority": "HIGH",
+      "qualification": "UNKNOWN",
+      "criteria": [],
+      "criteria_coverage": "UNKNOWN",
+      "dependencies": [],
+      "dependency_coverage": "COMPLETE",
+      "blockers": [
+        "Operator-driven live editor/non-command specimen plus host/Aqua availability as applicable."
+      ],
+      "current_act": "ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01",
+      "related_acts": [
+        "ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01"
+      ],
+      "evidence_locators": [],
+      "reopen_conditions": [],
+      "source_refs": [
+        {
+          "path": ".factory/epics/runtime-task-progression.md",
+          "start_line": 78,
+          "end_line": 78,
+          "sha256": "89c4c8708b94dabbf859e4a3deea8f79f17af256ebfe38e4869ad6ff86e674db"
+        }
+      ],
+      "relationships": [
+        {
+          "kind": "RELATED_TO",
+          "target": "EPIC-CLINEMM-APPROVAL-PROTECTION/EDITOR-TOOL-APPROVAL-FRICTION-RECON01",
+          "source_refs": [
+            {
+              "path": ".factory/epics/runtime-task-progression.md",
+              "start_line": 78,
+              "end_line": 78,
+              "sha256": "89c4c8708b94dabbf859e4a3deea8f79f17af256ebfe38e4869ad6ff86e674db"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "item_id": "EPIC-CLINEMM-RUNTIME-TASK-PROGRESSION/CLOSED-LIVE-UPGRADE",
+      "title": "RUNTIME-TASK-PROGRESSION `CLOSED_LIVE` upgrade",
+      "description": "The optional future `CLOSED_LIVE` upgrade of `RUNTIME-TASK-PROGRESSION01`, deferred until a live ClineMM recurrence is available. The board's Deferred / hold table records it as consciously postponed.",
+      "workstream": "runtime-task-progression",
+      "original_status": "DEFER",
+      "lifecycle": "DEFERRED",
+      "priority": "P1",
+      "qualification": "UNKNOWN",
+      "criteria": [],
+      "criteria_coverage": "UNKNOWN",
+      "dependencies": [],
+      "dependency_coverage": "COMPLETE",
+      "blockers": [],
+      "current_act": null,
+      "related_acts": [],
+      "evidence_locators": [],
+      "reopen_conditions": [
+        "Only after a fresh live ClineMM recurrence."
+      ],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 9434,
+          "end_line": 9434,
+          "sha256": "363d167ae3ec09d72695e1055eaf8a66ad4bdc180848d1c1b4f5e841b8aed8d4"
+        }
+      ]
+    }
+  ],
+  "source_refs": [
+    {
+      "path": ".factory/epics/runtime-task-progression.md",
+      "start_line": 5,
+      "end_line": 13,
+      "sha256": "8746a9d99f7b132deee681a4bee6f503448c4bd27a4f6d0dc76aaf32ed4a0409"
+    },
+    {
+      "path": ".factory/epics/runtime-task-progression.md",
+      "start_line": 72,
+      "end_line": 86,
+      "sha256": "d7106f08eed810b5cef38b33218c5e751d8bf328852051303f2a65bb4249068a"
+    }
+  ]
+}

@@ -1,0 +1,370 @@
+{
+  "schema_version": 1,
+  "kind": "FWL02_SUPPLEMENTAL_MIGRATION_EVIDENCE",
+  "note": "Supplemental migration evidence, NOT canonical ledger state and NOT a machine-consumed FWMI v1 input. It carries the per-section source accounting the FWMI v1 wire schema has no field for.",
+  "source_head": "e196d0e6243f40ebfd76d2cf0db7bda74e97d6d6",
+  "first_shadow_migration_head": "29774ba05851f9dd5a46a33a90d963ff3ef286d5",
+  "section_dispositions": [
+    {
+      "path": ".factory/epic-board.md",
+      "start_line": 1,
+      "end_line": 9343,
+      "dispositions": [
+        "historical_execution",
+        "narrative_history"
+      ],
+      "note": "Prepend-ordered historical ACT report log. 177 report sections were mechanically indexed by identity, verdict and exact source range into `historical-index.json` (167 distinct identities; 7 with competing verdicts, 1 with repeated identical verdicts). The per-ACT prose bodies and the `Updated:` chronology lines are contiguous narrative history, preserved verbatim in the committed source archive and deliberately not reconstructed as work items."
+    },
+    {
+      "path": ".factory/epic-board.md",
+      "start_line": 9344,
+      "end_line": 9350,
+      "dispositions": [
+        "navigation_or_metadata"
+      ],
+      "note": "Board provenance header: the source-of-truth statement (`Source-of-truth: .factory/epics/*.md` — the per-epic detail files. **This board is a navigation index, not an archive.**), the contract link, the conservation anchor `5e96cfd3a`, and the size cap. Navigation and metadata, not an epic."
+    },
+    {
+      "path": ".factory/epic-board.md",
+      "start_line": 9352,
+      "end_line": 9377,
+      "dispositions": [
+        "current_obligation",
+        "navigation_or_metadata"
+      ],
+      "note": "The Current frontier table — 21 lanes with their state and NEXT. This is the operational index the migration's frontier records are reconciled from. Lanes recorded CLOSED / CLOSED_STRUCTURAL / CLOSED_V2 carry no current obligation; lanes recorded OPEN / HOLD / ACTIVE do."
+    },
+    {
+      "path": ".factory/epic-board.md",
+      "start_line": 9381,
+      "end_line": 9402,
+      "dispositions": [
+        "current_obligation",
+        "navigation_or_metadata",
+        "historical_terminal_obligation"
+      ],
+      "note": "The Active epics table — 16 rows. Every epic with an ACTIVE family-level state is represented as an epic record, including the ones whose Frontier column is `(none)`. CLOSED epics are represented as TERMINAL epics and remain discoverable."
+    },
+    {
+      "path": ".factory/epic-board.md",
+      "start_line": 9406,
+      "end_line": 9421,
+      "dispositions": [
+        "current_obligation",
+        "cross_link"
+      ],
+      "note": "The Open supporting work table — 9 cross-cutting rows plus the FWL02 producer row. Each row's Detail link determines the owning epic; the rows are represented in their owning epic's item collection."
+    },
+    {
+      "path": ".factory/epic-board.md",
+      "start_line": 9425,
+      "end_line": 9439,
+      "dispositions": [
+        "deferred_obligation"
+      ],
+      "note": "The Deferred / hold table — 9 rows. Every row is represented with `lifecycle: DEFERRED` in its owning epic. A DEFERRED row is work the source explicitly postponed; it is not part of the operational frontier."
+    },
+    {
+      "path": ".factory/epic-board.md",
+      "start_line": 9443,
+      "end_line": 9541,
+      "dispositions": [
+        "narrative_history",
+        "historical_execution"
+      ],
+      "note": "The Historical task census — a conservation-only ACT-ID listing grouped by family, explicitly \"an audit trail, not a status report\". The identities it lists are already covered by the historical ACT index; the region is accounted for as narrative history plus the already-indexed ACT identities."
+    },
+    {
+      "path": ".factory/epics/_index-contract.md",
+      "start_line": 1,
+      "end_line": 177,
+      "dispositions": [
+        "navigation_or_metadata",
+        "decision"
+      ],
+      "note": "The frozen maintenance contract: authority hierarchy, closed-class status vocabulary, priority semantics, frontier rules, conservation rules, human-readability rules and link rules. It is NAVIGATION and METADATA — it never becomes an independent epic — but it is the authority for the status vocabulary this migration normalizes against, and its `HOST_REQUIRED` rule is a decision the migration preserves."
+    },
+    {
+      "path": ".factory/epics/safe-yolo-seatbelt.md",
+      "start_line": 5,
+      "end_line": 11,
+      "dispositions": [
+        "current_obligation",
+        "historical_terminal_obligation",
+        "decision"
+      ],
+      "note": "A single very long Current-status bullet enumerating the closed substrate contracts AND the still-open R5 manual-approval lane, AND the `RETURN_TO_SSH_LIVE_QUALIFICATION` operational action. Split: the closed contracts are historical terminal obligations (indexed through the historical ACT index); the R5 lane is a current obligation."
+    },
+    {
+      "path": ".factory/epics/safe-yolo-seatbelt.md",
+      "start_line": 42,
+      "end_line": 58,
+      "dispositions": [
+        "current_obligation",
+        "historical_terminal_obligation",
+        "reusable_finding"
+      ],
+      "note": "The Open work section. The `WORKSPACE_IS_DATA_AUTHORITY_BOUNDARY` policy conclusion and the `NEXT_R5_TRIGGER` predicate are REUSABLE FINDINGS carried into the R5 lane's description."
+    },
+    {
+      "path": ".factory/epics/safe-yolo-seatbelt.md",
+      "start_line": 60,
+      "end_line": 176,
+      "dispositions": [
+        "deferred_obligation",
+        "reusable_finding"
+      ],
+      "note": "The Deferred work section — the seatbelt-user-facing settings surface cross-link (FW-05), the TEMP-INTERNAL-CONTROL-CLEANUP primary-owner row (FW-11), the SINGLE-R0 execution-obligation sibling and the network-policy hardening row."
+    },
+    {
+      "path": ".factory/epics/architecture.md",
+      "start_line": 34,
+      "end_line": 52,
+      "dispositions": [
+        "current_obligation",
+        "deferred_obligation",
+        "cross_link"
+      ],
+      "note": "The Open work section — E8 (legacy writer retirement), E9 (effect interpreter) and EPIC-CLINEMM-ELMIZATION02. These are the W4 Candidate 3 records: the source states their actual engineering meanings and their explicit unblocking chain, which the migration recovers."
+    },
+    {
+      "path": ".factory/epics/product-config-branding.md",
+      "start_line": 34,
+      "end_line": 49,
+      "dispositions": [
+        "current_obligation",
+        "cross_link",
+        "unresolved"
+      ],
+      "note": "The Open work section — the tool-execution-semantics umbrella, the branding umbrella, TASK-COST-TRUTH-RECON01, and the W4 Candidate 2 record `ACT-CLINEMM-UPSTREAM-SETTINGS-SURFACE-PARITY-RECON01` whose epic placement is explicitly tentative."
+    },
+    {
+      "path": ".factory/epics/product-config-branding.md",
+      "start_line": 50,
+      "end_line": 299,
+      "dispositions": [
+        "deferred_obligation",
+        "cross_link",
+        "unresolved"
+      ],
+      "note": "The Deferred work section — the branding demo row, the TEMP-INTERNAL-CONTROL-CLEANUP cross-cutting child row (W4 Candidate 1) and the settings-surface-parity backlog row."
+    },
+    {
+      "path": ".factory/epics/approval-protection.md",
+      "start_line": 42,
+      "end_line": 66,
+      "dispositions": [
+        "current_obligation",
+        "historical_terminal_obligation",
+        "cross_link",
+        "decision"
+      ],
+      "note": "The Open work section — HOST-TEST RUNNER, CLASSIC-PROTECTION-RECON01, EDITOR-TOOL-APPROVAL-FRICTION-RECON01 and the closed R5 contract row. The 2026-08-31 product-policy decision (E3 resolution: `SESSION_OVERRIDE=ALL` + effective Seatbelt confinement ⇒ ALL means ALL for native editor tools) is a DECISION and is preserved verbatim."
+    },
+    {
+      "path": ".factory/epics/approval-protection.md",
+      "start_line": 67,
+      "end_line": 168,
+      "dispositions": [
+        "deferred_obligation",
+        "reusable_finding"
+      ],
+      "note": "The Deferred work section — the DESTRUCTIVE-SCOPE-REFINEMENT recon (with its `BROAD_MUTATION != AUTHORIZED_MUTATION` doctrine) and the approval-transaction-recorder future work. Both carry reusable findings into their item descriptions."
+    },
+    {
+      "path": ".factory/epics/runtime-task-progression.md",
+      "start_line": 5,
+      "end_line": 13,
+      "dispositions": [
+        "current_obligation",
+        "historical_terminal_obligation",
+        "reusable_finding"
+      ],
+      "note": "The Current status block. It records the OPERATIONAL ACTION (`RETURN_TO_SSH_LIVE_QUALIFICATION`), the explicit DO-NOT (`DO NOT open ACT-CLINEMM-RUNTIME-FINISH-SEMANTICS-REPAIR01`), and the preserved structural findings (the two latent defects that are NOT the live cause). These are reusable findings."
+    },
+    {
+      "path": ".factory/epics/runtime-task-progression.md",
+      "start_line": 72,
+      "end_line": 86,
+      "dispositions": [
+        "current_obligation",
+        "historical_terminal_obligation",
+        "unresolved"
+      ],
+      "note": "The Open work section — the umbrella recon, the CANCEL-AFFORDANCE recon (LIVE capture half still open), the closed LIVENESS02 / CONTRACT01 / IMPLEMENTATION01 records and the restored EDITOR-TOOL-APPROVAL-FRICTION NEXT."
+    },
+    {
+      "path": ".factory/epics/factory-infrastructure.md",
+      "start_line": 28,
+      "end_line": 44,
+      "dispositions": [
+        "decision",
+        "historical_terminal_obligation"
+      ],
+      "note": "The Ownership section — the DECISION that Leamas is the sole implementation owner of the ledger and its FWMI consumer, and that ClineMM is the producer. The superseded experimental adapter's disposition is preserved here and in the reconciliation manifest."
+    },
+    {
+      "path": ".factory/epics/quality-substrate.md",
+      "start_line": 36,
+      "end_line": 53,
+      "dispositions": [
+        "current_obligation",
+        "cross_link"
+      ],
+      "note": "The Open work section — the typecheck umbrella (CLOSED at the local seam, OPEN at CI parity) and the code-coverage baseline. The CI-parity dependency on `EPIC-CLINEMM-GITHUB-ACTIONS01` is an explicit source-stated DEPENDS_ON."
+    },
+    {
+      "path": ".factory/epics/context-compaction-token-accounting.md",
+      "start_line": 23,
+      "end_line": 112,
+      "dispositions": [
+        "current_obligation",
+        "historical_terminal_obligation",
+        "reusable_finding"
+      ],
+      "note": "The Current status block — the discriminator result, the BROKEN_CONSUMER_SEAM and the three admissible header-bar contracts. The reusable finding (cross-scale ratio transfer is invalid for working contexts large enough to engage buildForApi's truncation budgets) is preserved in the item description."
+    },
+    {
+      "path": ".factory/epics/command-risk-classification.md",
+      "start_line": 1,
+      "end_line": 460166,
+      "dispositions": [
+        "narrative_history",
+        "historical_execution",
+        "reusable_finding",
+        "decision"
+      ],
+      "note": "The closed V1/V2 command-risk framework with its full ACT closure narratives. The framework's durable contract conclusions (the risk tiers, the HALT_SHIPPING posture) are RECLAIMABLE reusable findings; the per-ACT closure narratives are accounted for at the COLD level."
+    },
+    {
+      "path": ".factory/epics/webview-seam-aop.md",
+      "start_line": 1,
+      "end_line": 159285,
+      "dispositions": [
+        "narrative_history",
+        "historical_execution",
+        "reusable_finding"
+      ],
+      "note": "The closed AOP substrate with its full ACT closure narratives. The AOP extension-point contract is a reusable finding; the per-ACT closure narratives are accounted for at the COLD level."
+    },
+    {
+      "path": ".factory/epics/upstream-intake.md",
+      "start_line": 30,
+      "end_line": 72,
+      "dispositions": [
+        "historical_terminal_obligation",
+        "reusable_finding",
+        "decision"
+      ],
+      "note": "The ACT ledger and the cumulative disposition table. The four triage dispositions (IMPORT / MAP_EXISTING / RADAR / REJECT) and the binding invariant are DECISIONS; the snapshot contract and the size policy are reusable findings."
+    },
+    {
+      "path": ".factory/epics/approval-mcp-authority.md",
+      "start_line": 11,
+      "end_line": 18,
+      "dispositions": [
+        "current_obligation",
+        "decision"
+      ],
+      "note": "The Current status block — the `P0-if-reproduced` priority (conditional, NOT a current confirmed P0) and the factory causal reviewer's DECISION: \"Give it its own authority owner.\" This is why the lane has its own epic record rather than being folded into approval-protection."
+    },
+    {
+      "path": ".factory/epics/file-tool-workspace-realpath-authority.md",
+      "start_line": 6,
+      "end_line": 160,
+      "dispositions": [
+        "current_obligation",
+        "decision",
+        "reusable_finding"
+      ],
+      "note": "The security lane's own detail file. The CORRECTED invariant (every model-controlled mutation must remain inside the writable root(s) explicitly authorized for THAT tool invocation, NOT a global workspace root) is a DECISION; the Q5 RED matrix with its A/B/C/D controls is the reusable finding bound to the obligation."
+    },
+    {
+      "path": ".factory/epics/distribution-ci.md",
+      "start_line": 20,
+      "end_line": 46,
+      "dispositions": [
+        "current_obligation",
+        "decision",
+        "reusable_finding"
+      ],
+      "note": "The ACT ledger and Open work. The two distinct distribution questions, the artifact trust binding and the reproducibility rule are DECISIONS and reusable findings."
+    },
+    {
+      "path": ".factory/epics/host-test-infrastructure.md",
+      "start_line": 5,
+      "end_line": 59,
+      "dispositions": [
+        "current_obligation",
+        "decision",
+        "cross_link"
+      ],
+      "note": "The canonical detail file for the HOST-TEST RUNNER lane. The trust model, the bounded-inputs rule, the machine-readable-output rule and the audit-trail contract are DECISIONS bound to the obligation."
+    },
+    {
+      "path": ".factory/epics/dynamic-editing-backends.md",
+      "start_line": 5,
+      "end_line": 46,
+      "dispositions": [
+        "current_obligation",
+        "decision",
+        "reusable_finding"
+      ],
+      "note": "The Dirac-style editing-backend lane. The target modes, the Cline-native safety baseline and the conservative-first ordering are DECISIONS and reusable findings bound to the recon obligation."
+    },
+    {
+      "path": ".factory/epics/tool-runtime-reliability.md",
+      "start_line": 5,
+      "end_line": 86,
+      "dispositions": [
+        "current_obligation",
+        "decision",
+        "reusable_finding"
+      ],
+      "note": "The tool/command runtime-correctness lane. The three-way scope boundary (runtime correctness vs. task progression vs. telemetry classification) is a DECISION; the 7-cluster Correction-03 inventory is a reusable finding."
+    },
+    {
+      "path": ".factory/epics/task-presentation.md",
+      "start_line": 5,
+      "end_line": 99,
+      "dispositions": [
+        "current_obligation",
+        "historical_terminal_obligation",
+        "reusable_finding"
+      ],
+      "note": "The presentation substrate. Its Current status states **no open work**; the epic record is retained with an empty item collection so the closed substrate remains discoverable. The reopen conditions are preserved as the epic's exit criteria."
+    },
+    {
+      "path": ".factory/epics/task-control-liveness.md",
+      "start_line": 5,
+      "end_line": 43,
+      "dispositions": [
+        "deferred_obligation",
+        "historical_terminal_obligation",
+        "reusable_finding"
+      ],
+      "note": "The closed bug-family with the deferred R3/R4 adversarial schedules. The bug-family signature is a reusable finding preserved in the epic's exit criteria."
+    },
+    {
+      "path": ".factory/epics/authenticated-dev-capabilities.md",
+      "start_line": 5,
+      "end_line": 60,
+      "dispositions": [
+        "deferred_obligation",
+        "decision",
+        "reusable_finding"
+      ],
+      "note": "The deferred credential-capability family. The V1 sensitive-read confinement scope (SSH / GnuPG / macOS-keychain INCLUDED; `~/.aws/`, `~/.kube/`, `~/.docker/config.json`, `~/.config/gh/hosts.yml` EXCLUDED) is a DECISION and a reusable finding."
+    },
+    {
+      "path": ".factory/epics/closed-foundation.md",
+      "start_line": 1,
+      "end_line": 47,
+      "dispositions": [
+        "historical_terminal_obligation",
+        "narrative_history"
+      ],
+      "note": "The closed historical foundation. Retained as a TERMINAL epic with an empty item collection so the closed substrate remains discoverable."
+    }
+  ]
+}

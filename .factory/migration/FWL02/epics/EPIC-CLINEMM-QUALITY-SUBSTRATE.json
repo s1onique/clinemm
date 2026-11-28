@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "epic_id": "EPIC-CLINEMM-QUALITY-SUBSTRATE",
+  "title": "Quality substrate",
+  "original_status": "ACTIVE — closed substrate + open frontier (typecheck umbrella partially open at CI parity + code-coverage baseline still open)",
+  "lifecycle": "ACTIVE",
+  "priority": "P1",
+  "exit_criteria": [
+    "Vitest baseline regresses (any failure count > 0).",
+    "Runtime-task-progression defect reproduces at the canonical seam.",
+    "Typecheck baseline regresses on the canonical `tsc --noEmit -p apps/vscode/tsconfig.json` (the gate is GREEN twice on prior commit; future runs must also exit 0 with 0 diagnostics).",
+    "Code-coverage baseline moves without an explicit ACT authorizing the move."
+  ],
+  "items": [
+    {
+      "item_id": "EPIC-CLINEMM-QUALITY-SUBSTRATE/TYPECHECK-ZERO-BASELINE01",
+      "title": "TYPECHECK-ZERO-BASELINE01 — typecheck zero-diagnostic baseline (CI parity leg)",
+      "description": "Status: CLOSED at the local canonical seam (canonical `tsc --noEmit -p apps/vscode/tsconfig.json` exits 0 with 0 diagnostics); OPEN at CI parity (PARITY=PARTIAL — `apps/vscode/package.json:check-types` is the local gate; `.github/workflows/ext-vscode-test.yml` does not currently gate the canonical tsc command). The CI-parity leg is tracked under `EPIC-CLINEMM-GITHUB-ACTIONS01` for a future ACT.",
+      "workstream": "quality-substrate",
+      "original_status": "CLOSED at local canonical seam; OPEN at CI parity",
+      "lifecycle": "BLOCKED",
+      "priority": "P1",
+      "qualification": "PARTIAL",
+      "criteria": [],
+      "criteria_coverage": "UNKNOWN",
+      "dependencies": [],
+      "dependency_coverage": "COMPLETE",
+      "blockers": [
+        "The CI-parity leg is tracked under `EPIC-CLINEMM-GITHUB-ACTIONS01`; the workflow does not currently gate the canonical tsc command."
+      ],
+      "current_act": null,
+      "related_acts": [],
+      "evidence_locators": [],
+      "reopen_conditions": [
+        "Typecheck baseline regresses on the canonical `tsc --noEmit -p apps/vscode/tsconfig.json`."
+      ],
+      "source_refs": [
+        {
+          "path": ".factory/epics/quality-substrate.md",
+          "start_line": 38,
+          "end_line": 38,
+          "sha256": "b279ac533984cfb2a4fefff3fbbbf552a406680455cf01b2aba234701784073a"
+        }
+      ],
+      "relationships": [
+        {
+          "kind": "DEPENDS_ON",
+          "target": "EPIC-CLINEMM-DISTRIBUTION-CI/GITHUB-ACTIONS01",
+          "source_refs": [
+            {
+              "path": ".factory/epics/quality-substrate.md",
+              "start_line": 38,
+              "end_line": 38,
+              "sha256": "b279ac533984cfb2a4fefff3fbbbf552a406680455cf01b2aba234701784073a"
+            }
+          ],
+          "required_outcome": "CI parity leg closed by the GitHub Actions recon/repair ACT"
+        }
+      ]
+    },
+    {
+      "item_id": "EPIC-CLINEMM-QUALITY-SUBSTRATE/CODE-COVERAGE-BASELINE01",
+      "title": "CODE-COVERAGE-BASELINE01 — code-coverage baseline",
+      "description": "Status: OPEN / HIGH. The ratchet ACT (`CODE-COVERAGE-RATCHET01`) is closed and ready to enforce non-regression once the baseline is set; the baseline itself is not yet fixed.",
+      "workstream": "quality-substrate",
+      "original_status": "OPEN / HIGH",
+      "lifecycle": "OPEN",
+      "priority": "HIGH",
+      "qualification": "UNQUALIFIED",
+      "criteria": [],
+      "criteria_coverage": "UNKNOWN",
+      "dependencies": [],
+      "dependency_coverage": "COMPLETE",
+      "blockers": [],
+      "current_act": "ACT-CLINEMM-CODE-COVERAGE-BASELINE01",
+      "related_acts": [
+        "ACT-CLINEMM-CODE-COVERAGE-BASELINE01"
+      ],
+      "evidence_locators": [
+        ".factory/quality/code-coverage-baseline.json"
+      ],
+      "reopen_conditions": [
+        "Code-coverage baseline moves without an explicit ACT authorizing the move.",
+        "Vitest baseline regresses (any failure count > 0)."
+      ],
+      "source_refs": [
+        {
+          "path": ".factory/epics/quality-substrate.md",
+          "start_line": 39,
+          "end_line": 39,
+          "sha256": "22320a1fa0c62406d6ebd4d18e31a9623005adf447e73901f40c97731258257b"
+        }
+      ]
+    }
+  ],
+  "source_refs": [
+    {
+      "path": ".factory/epics/quality-substrate.md",
+      "start_line": 5,
+      "end_line": 11,
+      "sha256": "03b96b025c0342732e11559a96e6a77c2eb1d575f08513a50d23b3dd2b0de15b"
+    },
+    {
+      "path": ".factory/epics/quality-substrate.md",
+      "start_line": 36,
+      "end_line": 53,
+      "sha256": "a209600e6b2af436eaa27a5e167f310691215db4469bcb013926e217abc5bf38"
+    }
+  ]
+}

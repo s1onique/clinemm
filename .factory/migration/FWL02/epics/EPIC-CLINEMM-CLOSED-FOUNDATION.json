@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "epic_id": "EPIC-CLINEMM-CLOSED-FOUNDATION",
+  "title": "Closed foundation",
+  "original_status": "CLOSED (historical)",
+  "lifecycle": "TERMINAL",
+  "priority": "P3 / reference-only",
+  "exit_criteria": [
+    "See `task-presentation.md` and `webview-seam-aop.md` for in-flight work that builds on this substrate."
+  ],
+  "items": [],
+  "source_refs": [
+    {
+      "path": ".factory/epics/closed-foundation.md",
+      "start_line": 5,
+      "end_line": 11,
+      "sha256": "41eaf958f4a79e3b176ae63feef70484a964fb0bf3c307af2e11c1c01ca6f936"
+    },
+    {
+      "path": ".factory/epics/closed-foundation.md",
+      "start_line": 16,
+      "end_line": 37,
+      "sha256": "9e8f8f610c793926f8ce14a104482afcda15bb43d97ea99f1fb168e990f7dcfb"
+    }
+  ]
+}

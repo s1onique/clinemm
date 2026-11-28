@@ -1,0 +1,235 @@
+{
+  "schema_version": 1,
+  "kind": "FWL02_SUPPLEMENTAL_MIGRATION_EVIDENCE",
+  "note": "Supplemental migration evidence, NOT canonical ledger state. Decisions and reusable findings are not representable in the FWMI v1 wire schema; they are preserved here, source-bound, rather than discarded or forced into an invented wire field.",
+  "source_head": "e196d0e6243f40ebfd76d2cf0db7bda74e97d6d6",
+  "decisions": [
+    {
+      "id": "DEC-CLINEMM-LEAMAS-OWNS-LEDGER",
+      "kind": "decision",
+      "title": "Leamas is the sole implementation owner of the Factory Work Ledger and its FWMI consumer",
+      "statement": "Leamas is the SOLE implementation owner of the Factory Work Ledger and of its FWMI v1 import consumer. The consumer lives in the existing Go ledger domain, importer, transaction store, evidence authority and rendering mechanisms of the Leamas repository. ClineMM is the PRODUCER of the FWMI v1 migration data; the destination remains `.leamas/ledger/`. There is no second ledger implementation in ClineMM, no universal Markdown parser and no architectural expansion.",
+      "path": ".factory/epics/factory-infrastructure.md",
+      "start_line": 30,
+      "end_line": 38
+    },
+    {
+      "id": "DEC-CLINEMM-FWL02-ADAPTER-SUPERSEDED",
+      "kind": "decision",
+      "title": "The experimental ClineMM FWMI adapter is superseded and disowned",
+      "statement": "The `ACT-CLINEMM-FWL02-INTERCHANGE-IMPORT-ADAPTER01` adapter was an experiment in the wrong repository. It was removed; the evidence package of that ACT is retained as the historical record of the experiment, not as a canonical implementation. The ClineMM-side adapter is DISOWNED; Leamas owns the consumer.",
+      "path": ".factory/epics/factory-infrastructure.md",
+      "start_line": 40,
+      "end_line": 43
+    },
+    {
+      "id": "DEC-CLINEMM-INDEX-STATUS-VOCABULARY",
+      "kind": "decision",
+      "title": "The closed-class status vocabulary and the HOST_REQUIRED truth condition",
+      "statement": "The status tokens NEXT / OPEN / BLOCKED / HOLD / DEFER / CLOSED / SUPERSEDED / NEEDS_CLASSIFICATION / HOST_REQUIRED / ACTIVE are frozen for use across the board, the epic files, closure plans and the future validator; adding a new token requires amending the index contract. A claim that asserts a real-kernel, real-prompt, or unsandboxed-host property MUST either be backed by host-runner / live evidence under `.factory/evidence/<ACT>/`, or explicitly carry the HOST_REQUIRED marker in the verdict. The marker is not a status degradation — it is a truth condition for the claim.",
+      "path": ".factory/epics/_index-contract.md",
+      "start_line": 35,
+      "end_line": 70
+    },
+    {
+      "id": "DEC-CLINEMM-BOARD-MAINTENANCE-RULE",
+      "kind": "decision",
+      "title": "The board maintenance rule",
+      "statement": "At the end of a meaningful ACT, update only rows affected by that ACT. Do not rewrite the whole board. Each row should preferably contain: ID, STATUS, PRIORITY, PURPOSE / SYMPTOM, DEPENDENCIES, NEXT ACT, EVIDENCE / COMMIT. Avoid giant prose. If an item is closed, preserve enough identity to avoid re-litigation. If evidence contradicts a board row, evidence wins; the row becomes P2 stale metadata.",
+      "path": ".factory/epics/factory-infrastructure.md",
+      "start_line": 15,
+      "end_line": 15
+    },
+    {
+      "id": "DEC-CLINEMM-EVIDENCE-WINS",
+      "kind": "decision",
+      "title": "A summary may narrow evidence but must never strengthen it",
+      "statement": "A summary may narrow evidence (e.g. summarize a 4-phase closure into \"CLOSED, 4/4 GREEN\") but must never strengthen evidence (e.g. claim `CLOSED_CLEAN` when the evidence only proves `CLOSED_WITH_RESIDUE`). When evidence contradicts a board row, evidence wins; the row becomes P2 stale metadata per the board-maintenance rule.",
+      "path": ".factory/epics/_index-contract.md",
+      "start_line": 30,
+      "end_line": 33
+    },
+    {
+      "id": "DEC-CLINEMM-ALL-MEANS-ALL-EDITOR-TOOLS",
+      "kind": "decision",
+      "title": "Session override ALL + effective Seatbelt confinement ⇒ ALL means ALL for native editor tools",
+      "statement": "SESSION_OVERRIDE=ALL AND effective Seatbelt confinement is active ⇒ ALL means ALL for native editor tools as well. Persisted editFiles=false is a baseline/default preference, NOT a hard deny against an explicit task-scoped ALL override. Explicit DENY / disabled capability remains non-overridable by ALL alone. E3 verdict: PASS_BY_PRODUCT_CONTRACT (resolved 2026-08-31; the structural finding that `override=all` lifts persisted `editFiles=false` is the intended behavior, NOT a defect).",
+      "path": ".factory/epics/approval-protection.md",
+      "start_line": 44,
+      "end_line": 44
+    },
+    {
+      "id": "DEC-CLINEMM-DEFER-NOT-BYPASS",
+      "kind": "decision",
+      "title": "The defer-not-bypass rule",
+      "statement": "A new temporary YOLO bypass proposal must first check the defer-not-bypass rule: any new ACT must prove the substrate is insufficient against the production-equivalent composition, not just propose a workaround. The production-equivalent composition already collapses the load-bearing-quadrant ASKs from 15 → 3; most \"approval friction\" is environment-specific, not a general command-policy defect.",
+      "path": ".factory/epics/approval-protection.md",
+      "start_line": 61,
+      "end_line": 63
+    },
+    {
+      "id": "DEC-CLINEMM-MCP-OWN-AUTHORITY-OWNER",
+      "kind": "decision",
+      "title": "The MCP auto-approval-off lane gets its own authority owner",
+      "statement": "Per the factory causal reviewer (2026-09-01): \"Give it its own authority owner.\" The MCP auto-approval-off authority boundary therefore has its own epic record rather than being folded into the approval-protection epic. Priority is P0-if-reproduced — conditional on recon, not an asserted current confirmed P0.",
+      "path": ".factory/epics/approval-mcp-authority.md",
+      "start_line": 13,
+      "end_line": 17
+    },
+    {
+      "id": "DEC-CLINEMM-FILE-TOOL-AUTHORIZED-ROOT",
+      "kind": "decision",
+      "title": "Every model-controlled mutation must stay inside the per-tool authorized writable root",
+      "statement": "The CORRECTED invariant: every model-controlled mutation must remain inside the writable root(s) explicitly authorized for THAT tool invocation, NOT a global workspace root. Workspace-universal containment was WRONG / OVERBROAD and would misclassify legitimate global skill / rule / hook creation as escapes. The contract is: resolve the path lexically against the authoritative base; find and canonicalize the nearest existing ancestor; ensure that ancestor is within `authorized_root(tool)`; protect against symlink traversal/replacement; perform the mutation. Seatbelt is explicitly NOT in scope.",
+      "path": ".factory/epic-board.md",
+      "start_line": 9336,
+      "end_line": 9336
+    },
+    {
+      "id": "DEC-CLINEMM-UPSTREAM-TRIAGE-DISPOSITIONS",
+      "kind": "decision",
+      "title": "The four upstream triage dispositions and the binding invariant",
+      "statement": "Four dispositions for triage: IMPORT (promote into a Cline-- epic/ACT), MAP_EXISTING (already covered by an existing Cline-- epic), RADAR (worth watching but not importing yet), REJECT (out of scope or value-not-worth-effort). Binding invariant (post-Correction-04): an upstream issue cannot be cited as evidence for a canonical epic whose failure contract it does not reproduce. The lexical-overlap remediation removed 48 false-mapping rows cumulatively (60 → 43 → 40 → 17 → 12).",
+      "path": ".factory/epics/upstream-intake.md",
+      "start_line": 21,
+      "end_line": 27
+    },
+    {
+      "id": "DEC-CLINEMM-DISTRIBUTION-TWO-QUESTIONS",
+      "kind": "decision",
+      "title": "GitHub distribution is two distinct questions",
+      "statement": "(A) Publish a Cline-- distributable artifact to GitHub (likely primary artifact: VSIX via GitHub Release asset). (B) Determine whether any package genuinely belongs in GitHub Packages. The two must not be conflated. Artifact trust binding: SOURCE_HEAD, VERSION, PATH, BYTE_SIZE, SHA256, and (where relevant) installed version. Reproducibility rule: do not rebuild a supposedly identical release artifact after qualification unless reproducibility is separately proven.",
+      "path": ".factory/epics/distribution-ci.md",
+      "start_line": 14,
+      "end_line": 18
+    },
+    {
+      "id": "DEC-CLINEMM-HOST-RUNNER-AUTHORITY",
+      "kind": "decision",
+      "title": "The host-test runner does not widen authority",
+      "statement": "The runner runs as the host user; the runner does not gain Seatbelt privileges the user does not have, and it does not use the runner as a covert YOLO bypass. Inputs are a declared corpus (commands + expected exit codes + optional timeouts), not arbitrary shell from the agent. Outputs are machine-readable with classified failures. Every invocation logs ACT ID, source HEAD, corpus path, runner version, host OS / kernel, start/end wall time and full result.",
+      "path": ".factory/epics/host-test-infrastructure.md",
+      "start_line": 14,
+      "end_line": 29
+    },
+    {
+      "id": "DEC-CLINEMM-CLINE-NATIVE-BASELINE",
+      "kind": "decision",
+      "title": "The Cline-native edit path is the safety baseline",
+      "statement": "No new backend may widen filesystem authority, weaken approval semantics, or skip the existing audit trail. The Cline-native path remains the default unless the user explicitly opts in. Backends are pluggable, not fork-bound: each backend is identified by name + capability declaration; selection is explicit per-session or per-call, not implicit by environment. Conservative-first ordering: recon first, abstraction second, backend integration third, qualification fourth — do not collapse this sequence.",
+      "path": ".factory/epics/dynamic-editing-backends.md",
+      "start_line": 14,
+      "end_line": 21
+    },
+    {
+      "id": "DEC-CLINEMM-TOOL-RUNTIME-SCOPE-BOUNDARY",
+      "kind": "decision",
+      "title": "Runtime correctness, task progression and telemetry classification are three separate questions",
+      "statement": "tool-runtime-reliability = \"did an individual tool/command execute, return, time out, parse, route, retry, terminate correctly?\"; runtime-task-progression = \"after that event, did the overall agent/task make the correct state transition and continue?\"; tool-execution-semantics = \"telemetry classification of what the tool was (mechanism / outcome / duration / effect-class / purpose)\". These three questions are separately answerable and must NOT be merged into a single epic. Per FACT-001, every working label remains a working label until the recon evidence lands; no speculative single-cause fix.",
+      "path": ".factory/epics/tool-runtime-reliability.md",
+      "start_line": 14,
+      "end_line": 51
+    },
+    {
+      "id": "DEC-CLINEMM-AUTH-DEV-V1-SCOPE",
+      "kind": "decision",
+      "title": "The V1 sensitive-read confinement scope",
+      "statement": "The V1 sensitive-read confinement contract was deliberately scoped to SSH / GnuPG / macOS-keychain and EXCLUDED `~/.aws/`, `~/.kube/`, `~/.docker/config.json`, `~/.config/gh/hosts.yml`. The design ACT for the deferred family must propose how to handle the excluded surfaces without breaking the V1 boundary.",
+      "path": ".factory/epics/authenticated-dev-capabilities.md",
+      "start_line": 10,
+      "end_line": 10
+    }
+  ],
+  "reusable_findings": [
+    {
+      "id": "FIND-CLINEMM-WORKSPACE-IS-DATA-AUTHORITY-BOUNDARY",
+      "kind": "reusable_finding",
+      "title": "WORKSPACE_IS_DATA_AUTHORITY_BOUNDARY",
+      "statement": "`host_workspace_realpath_authority` IS the data-authority boundary, NOT a pre-Seatbelt convenience; `ALL` does NOT bypass it. The outside-read policy recon closed with `NOT_A_DEFECT_POLICY_EXPECTED` and the specimen `54T24A8CE5` = `CLOSED_EXPECTED`. This finding is reusable: it decides the R5 lane's data-boundary question without re-deriving it.",
+      "path": ".factory/epics/safe-yolo-seatbelt.md",
+      "start_line": 46,
+      "end_line": 46
+    },
+    {
+      "id": "FIND-CLINEMM-NEXT-R5-TRIGGER",
+      "kind": "reusable_finding",
+      "title": "The NEXT_R5_TRIGGER predicate",
+      "statement": "The next genuine R5 defect must satisfy `mode=all + mandatorySeatbelt=true + all path-bearing operands INSIDE authorized workspace roots + no explicit deny / hard floor / missing evidence` BUT `finalDecision=ask AND approval UI published`. After `f56e87af0+` lands, dogfood should watch for \"an unexpected prompt on a fully-authorized, all-inside request.\"",
+      "path": ".factory/epics/safe-yolo-seatbelt.md",
+      "start_line": 46,
+      "end_line": 46
+    },
+    {
+      "id": "FIND-CLINEMM-BROAD-MUTATION-NOT-AUTHORIZED",
+      "kind": "reusable_finding",
+      "title": "BROAD_MUTATION != AUTHORIZED_MUTATION",
+      "statement": "A broad or selector-based destructive mutation must deterministically estimate/expand impact where safely possible, force an additional model intent-refinement turn, require an exact bounded target set + intended postcondition, re-evaluate normal policy from scratch, and execute only the precise replacement request. The refinement model is NOT an independent reviewer; the host remains authority. Anti-patterns: NO \"Are you sure?\" self-review; NO free-form \"explain why this is safe\" as sufficient proof; NO rm-specific regex-only architecture; NO automatic execution merely because the second model turn agrees.",
+      "path": ".factory/epics/approval-protection.md",
+      "start_line": 69,
+      "end_line": 87
+    },
+    {
+      "id": "FIND-CLINEMM-CROSS-SCALE-RATIO-INVALID",
+      "kind": "reusable_finding",
+      "title": "Cross-scale ratio transfer is invalid for large working contexts",
+      "statement": "Cross-scale ratio transfer is invalid for working contexts large enough to engage buildForApi's truncation budgets. The discriminator reproduced a 66.6% relative divergence (manualRatio 0.000210 vs workingContextRatio 0.000629) on a realistic canonical case (assistant text > 200K cap), while the trivial canonical case (no truncation engaged) stayed GREEN as the positive control. The broken consumer seam applies a compactor H-space ratio to provider-input P-space tokensIn. The UI consumer math is internally consistent given the bad assumption.",
+      "path": ".factory/epics/context-compaction-token-accounting.md",
+      "start_line": 23,
+      "end_line": 112
+    },
+    {
+      "id": "FIND-CLINEMM-RUNTIME-LATENT-NOT-LIVE-CAUSE",
+      "kind": "reusable_finding",
+      "title": "The two preserved latent defects are NOT the live cause of the runtime stall",
+      "statement": "`agent-runtime.ts:1371` IS a real latent defect under `requireCompletionTool=true`; the downstream AgentFinishReason collapse is a real latent defect; NEITHER is the live cause. The producer seam was exonerated for the live incident: the post-evidence discriminator capture bound the live `completionPolicy.requireCompletionTool = undefined` (mode=act, autoApprovalSettings.useBrowser=false ⇒ isYoloSessionRequested=false ⇒ enableSubmitAndExit=false ⇒ submit_and_exit NOT registered ⇒ completionPolicy=undefined), so 1371 fired under the non-defect configuration (= RUNTIME_INVOCATION_COMPLETION). The live defect re-routes to the host ownership-transition / awaiting_followup seam.",
+      "path": ".factory/epics/runtime-task-progression.md",
+      "start_line": 7,
+      "end_line": 7
+    },
+    {
+      "id": "FIND-CLINEMM-TASK-CANCEL-INVARIANT",
+      "kind": "reusable_finding",
+      "title": "The Cancel-affordance invariant and its four-value discriminator",
+      "statement": "`turnState.phase === \"streaming\"` is the predicate and `SdkTaskControlCoordinator.cancelTask` is the SDK owner; upstream-vs-ClineMM Cancel button structure is byte-identical (no removal in either source). The LIVE discriminator is a four-value capture (`turnState.phase`, `foregroundCommandRunning`, `backgroundCommandRunning`, lastMessage.{type, say, ask, partial}), which separates `UI_RENDER_DEFECT` from `TURN_STATE_PROJECTION_DEFECT` from benign non-streaming phases. The invariant is already durable: idle+Cancel visible, or active+Cancel absent. Do not invent a third authority.",
+      "path": ".factory/epics/runtime-task-progression.md",
+      "start_line": 74,
+      "end_line": 74
+    },
+    {
+      "id": "FIND-CLINEMM-PURPOSE-UNAVAILABLE-FROM-TRACE",
+      "kind": "reusable_finding",
+      "title": "Tool-execution semantic purpose is UNAVAILABLE_FROM_TRACE",
+      "statement": "Mechanism/outcome/duration are REAL; `purpose` is `UNAVAILABLE_FROM_TRACE` and must remain UNAVAILABLE in the projection. Do NOT infer semantic purpose from command/tool arguments — classify only from the canonical registered tool identity (`apply_patch` / native write tool → EDIT; `run_commands` / `execute_command` → COMMAND; native read/search → READ/SEARCH; `mcp_*` → MCP; structurally unknown → OTHER/UNKNOWN).",
+      "path": ".factory/epics/product-config-branding.md",
+      "start_line": 36,
+      "end_line": 36
+    },
+    {
+      "id": "FIND-CLINEMM-COMMAND-RISK-TIERS",
+      "kind": "reusable_finding",
+      "title": "The V1/V2 command-risk framework and its HALT_SHIPPING posture",
+      "statement": "The bounded command-risk classifier shipped as a framework with a HALT_SHIPPING posture; the V2 parser-assisted framework is structurally complete and further rules/expansion is deferred pending a fresh ACT. The V2 READONLY-AND-COMPOSITION01 slice shipped as a bounded auto-approve for safe `&&` chains. The tier lattice and the hard-floor semantics are the reusable substrate for the command-policy lanes; the epic is represented as TERMINAL with its expansion deferred.",
+      "path": ".factory/epics/command-risk-classification.md",
+      "start_line": 12,
+      "end_line": 19
+    },
+    {
+      "id": "FIND-CLINEMM-AOP-EXTENSION-CONTRACT",
+      "kind": "reusable_finding",
+      "title": "The webview AOP extension-point contract",
+      "statement": "The AOPC02 Phase A E1/E2/E3 discriminator and its real-SdkController producer discriminator established the extension-side AOP contract: deterministic behavioural authority lives at the extension seam, and the real producer correlation was proven at the SdkController publication seam. All sub-ACTs landed; the family is historical substrate.",
+      "path": ".factory/epics/webview-seam-aop.md",
+      "start_line": 12,
+      "end_line": 20
+    },
+    {
+      "id": "FIND-CLINEMM-UPSTREAM-SNAPSHOT-CONTRACT",
+      "kind": "reusable_finding",
+      "title": "The upstream snapshot contract and size policy",
+      "statement": "Stored fields per issue: number, title, url, created_at, updated_at, comments, reactions, interactions, labels. EXCLUDED: body, comment bodies, reactions breakdown, avatar URLs, assignee objects, milestone description, user profile metadata, API payload copies. Deterministic ordering: interactions DESC, updated_at DESC, number DESC. Size policy: preferred ≤ 1 MiB; acceptable ≤ 2 MiB; truncation is NEVER silent — total_open_issue_count, committed_issue_count, truncated and selection_policy are always recorded.",
+      "path": ".factory/epics/upstream-intake.md",
+      "start_line": 14,
+      "end_line": 19
+    }
+  ]
+}

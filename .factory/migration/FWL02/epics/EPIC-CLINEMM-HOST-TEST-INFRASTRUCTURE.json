@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "epic_id": "EPIC-CLINEMM-HOST-TEST-INFRASTRUCTURE",
+  "title": "Host test infrastructure",
+  "original_status": "ACTIVE — fresh epic opened at FUTURE-BACKLOG-CENSUS01 (2026-08-27). No ACT authored yet; `HOST-TEST RUNNER` is the working label and remains a label until canonical ACT ID is assigned per FACT-001 in `.factory/epics/factory-infrastructure.md`.",
+  "lifecycle": "ACTIVE",
+  "priority": "P1",
+  "exit_criteria": [
+    "A Seatbelt / approval / classic-protection ACT needs host-only evidence and the runner does not yet cover the required corpus (→ new runner ACT scoped).",
+    "The runner is observed widening authority / leaking secrets / being used as a covert bypass (→ HALT the runner ACT and any consumer)."
+  ],
+  "items": [
+    {
+      "item_id": "EPIC-CLINEMM-HOST-TEST-INFRASTRUCTURE/HOST-TEST-RUNNER",
+      "title": "HOST-TEST RUNNER — author the host-orchestrated runner",
+      "description": "Authoring ACT must ship: (a) the runner binary / script, (b) the corpus/result schema, (c) at least one minimal invocation per dependent ACT (real-kernel Seatbelt probe + fresh VSIX dogfood + live approval-UI capture), (d) the audit-log contract (ACT ID, source HEAD, corpus file path, runner version, host OS / kernel, start/end wall time, full result; appended to `.factory/evidence/<ACT>/`). No widening of authority: the runner runs as the host user, does not gain Seatbelt privileges the user lacks, and is not a covert YOLO bypass. A separate ACT is also required (NOT part of the runner ACT) to reclassify prior per-test Vitest `skipIf(!HAS_SUBSTRATE)` callers from `SKIP` to `HOST_REQUIRED` via the runner.",
+      "workstream": "host-test-infrastructure",
+      "original_status": "OPEN / HIGH",
+      "lifecycle": "OPEN",
+      "priority": "HIGH",
+      "qualification": "UNQUALIFIED",
+      "criteria": [],
+      "criteria_coverage": "UNKNOWN",
+      "dependencies": [],
+      "dependency_coverage": "COMPLETE",
+      "blockers": [],
+      "current_act": null,
+      "related_acts": [],
+      "evidence_locators": [],
+      "reopen_conditions": [
+        "A Seatbelt / approval / classic-protection ACT needs host-only evidence and the runner does not yet cover the required corpus (→ new runner ACT scoped).",
+        "The runner is observed widening authority / leaking secrets / being used as a covert bypass (→ HALT the runner ACT and any consumer)."
+      ],
+      "source_refs": [
+        {
+          "path": ".factory/epics/host-test-infrastructure.md",
+          "start_line": 33,
+          "end_line": 33,
+          "sha256": "cc26f631158ab763f4b2e70d91a406bc9bd3dd8c9910bd447816be7a1382d7cf"
+        },
+        {
+          "path": ".factory/epics/host-test-infrastructure.md",
+          "start_line": 38,
+          "end_line": 46,
+          "sha256": "87d948f119c58256f2c5177f6e82b0bd1a67f7b7266957b7790418bc22b1998a"
+        }
+      ],
+      "relationships": [
+        {
+          "kind": "CROSS_LINK",
+          "target": "EPIC-CLINEMM-SAFE-YOLO-SEATBELT/HOST-TEST-RUNNER",
+          "source_refs": [
+            {
+              "path": ".factory/epics/host-test-infrastructure.md",
+              "start_line": 38,
+              "end_line": 40,
+              "sha256": "d792617a9e25b0b7047354765b69ce2b16ed4808f059868e62c130b1f2f07e97"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "source_refs": [
+    {
+      "path": ".factory/epics/host-test-infrastructure.md",
+      "start_line": 5,
+      "end_line": 10,
+      "sha256": "9eaf01c725b10b56208b88584889704068e4933b60b3698f950ddfdfc2189c76"
+    },
+    {
+      "path": ".factory/epics/host-test-infrastructure.md",
+      "start_line": 31,
+      "end_line": 59,
+      "sha256": "af6024e55e1995906104bb2842da1e6208770e1369fddea7ab1f08490fc4946a"
+    }
+  ]
+}

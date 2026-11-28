@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "epic_id": "EPIC-CLINEMM-COMMAND-RISK-CLASSIFICATION",
+  "title": "Command-risk classification",
+  "original_status": "CLOSED framework (V1 GREEN, V2 framework with HALT_SHIPPING posture; V2-READONLY-COMPOSITION01 STRUCTURAL and shipped as bounded auto-approve for safe `&&` chains)",
+  "lifecycle": "TERMINAL",
+  "priority": "P1",
+  "exit_criteria": [
+    "Further rules / expansion is deferred pending a fresh ACT (see the V2 ACT ledger row)."
+  ],
+  "items": [],
+  "source_refs": [
+    {
+      "path": ".factory/epics/command-risk-classification.md",
+      "start_line": 5,
+      "end_line": 11,
+      "sha256": "e17a25d55468e4fdcb0ae29b8081f2953ac3ca64f2d861f95c6eda59278a0686"
+    },
+    {
+      "path": ".factory/epics/command-risk-classification.md",
+      "start_line": 19,
+      "end_line": 40,
+      "sha256": "c17acfd8b268e49be9599967998aa4489234ac22744c650c47287b2023ad0b57"
+    }
+  ]
+}

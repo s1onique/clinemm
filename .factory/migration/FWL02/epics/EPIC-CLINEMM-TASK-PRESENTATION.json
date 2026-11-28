@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "epic_id": "EPIC-CLINEMM-TASK-PRESENTATION",
+  "title": "Task presentation",
+  "original_status": "ACTIVE — closed substrate + closed frontier",
+  "lifecycle": "ACTIVE",
+  "priority": "P1",
+  "exit_criteria": [
+    "New compaction authority appears that bypasses `COMPACTION-STATE-AUTHORITY01`.",
+    "Context accounting observed diverging between producer and any consumer.",
+    "User-context ceiling becomes soft in production.",
+    "A new second independent lifecycle classifier appears in the TaskHeader source (re-open trigger for `TASKHEADER-CANONICAL-PROJECTION01`).",
+    "Live evidence captured that distinguishes agent-active elapsed from wall-clock elapsed and the user demands the distinction (re-open trigger for `TASKHEADER-OWNER-AWARE-TIMING01`)."
+  ],
+  "items": [],
+  "source_refs": [
+    {
+      "path": ".factory/epics/task-presentation.md",
+      "start_line": 5,
+      "end_line": 11,
+      "sha256": "b091970107de99cf50d7d045cb8100bae931dde16afca58f0a523c34a2b1efaf"
+    },
+    {
+      "path": ".factory/epics/task-presentation.md",
+      "start_line": 42,
+      "end_line": 58,
+      "sha256": "158ef260a658197e3addba63895900c10b57c3fa6a31a642ae7229dd9218a60f"
+    }
+  ]
+}

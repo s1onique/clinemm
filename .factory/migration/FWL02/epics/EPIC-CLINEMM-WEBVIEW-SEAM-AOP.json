@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "epic_id": "EPIC-CLINEMM-WEBVIEW-SEAM-AOP",
+  "title": "Webview seam AOP",
+  "original_status": "CLOSED (all sub-ACTs landed; family is historical substrate)",
+  "lifecycle": "TERMINAL",
+  "priority": "P2",
+  "exit_criteria": [
+    "The RESULT01 sub-ACT (`…LIVE-CAPTURE01-RESULT01`) is `AWAITING_DOGFOOD` — when it lands, it will be recorded in the epic detail file."
+  ],
+  "items": [],
+  "source_refs": [
+    {
+      "path": ".factory/epics/webview-seam-aop.md",
+      "start_line": 5,
+      "end_line": 11,
+      "sha256": "c01c411cca988767ac8dacc406e8cf1321aea933aaf2167f0060d66c0fb15282"
+    },
+    {
+      "path": ".factory/epics/webview-seam-aop.md",
+      "start_line": 37,
+      "end_line": 44,
+      "sha256": "aae7c44bae09a7978e73ba724e9eb4d9d417043f771fe6d8b8c4f1af0ecb1cef"
+    }
+  ]
+}

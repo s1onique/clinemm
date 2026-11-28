@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "epic_id": "EPIC-CLINEMM-APPROVAL-MCP-AUTHORITY",
+  "title": "Approval / MCP authority",
+  "original_status": "OPEN — recon ACT has not yet been opened",
+  "lifecycle": "OPEN",
+  "priority": "P0-if-reproduced",
+  "exit_criteria": [
+    "Sequenced after this ACT (gated on its verdict): a bounded repair ACT only if recon proves a defect, or `SUPERSEDED` closure if recon exonerates."
+  ],
+  "items": [
+    {
+      "item_id": "EPIC-CLINEMM-APPROVAL-MCP-AUTHORITY/MCP-AUTOAPPROVE-OFF-AUTHORITY-RECON01",
+      "title": "ACT-CLINEMM-MCP-AUTOAPPROVE-OFF-AUTHORITY-RECON01 — MCP auto-approval-off authority recon",
+      "description": "Read-only recon of the MCP auto-approval-off authority boundary (upstream #10499). No production change until the recon resolves the live-vs-structural question. Per the factory causal reviewer (2026-09-01): \"Give it its own authority owner.\" The upstream defect says execution proceeds without approval, which is a fail-closed-against-the-user violation — hence `P0-if-reproduced` (deterministic security boundary). Blocked by: n/a. Sequenced after this ACT (gated on its verdict): a bounded repair ACT only if recon proves a defect, or `SUPERSEDED` closure if recon exonerates.",
+      "workstream": "approval-mcp-authority",
+      "original_status": "OPEN",
+      "lifecycle": "OPEN",
+      "priority": "P0-if-reproduced",
+      "qualification": "UNQUALIFIED",
+      "criteria": [],
+      "criteria_coverage": "UNKNOWN",
+      "dependencies": [],
+      "dependency_coverage": "COMPLETE",
+      "blockers": [],
+      "current_act": "ACT-CLINEMM-MCP-AUTOAPPROVE-OFF-AUTHORITY-RECON01",
+      "related_acts": [],
+      "evidence_locators": [],
+      "reopen_conditions": [
+        "A bounded repair ACT only if recon proves a defect, or `SUPERSEDED` closure if recon exonerates."
+      ],
+      "source_refs": [
+        {
+          "path": ".factory/epics/approval-mcp-authority.md",
+          "start_line": 13,
+          "end_line": 17,
+          "sha256": "3259d31dfa75a28985abf795a53890aa9adfaa8c18283785e37015f6dd7cb68b"
+        }
+      ]
+    }
+  ],
+  "source_refs": [
+    {
+      "path": ".factory/epics/approval-mcp-authority.md",
+      "start_line": 11,
+      "end_line": 18,
+      "sha256": "cef463667d4d9d8885a17f9efa8112fe358a9cc61e5bded649335cec756bba5a"
+    },
+    {
+      "path": ".factory/epic-board.md",
+      "start_line": 9376,
+      "end_line": 9376,
+      "sha256": "d533546cef832532942e2937789e60bafefc88fa4b3860c6f7d8ec313223102f"
+    }
+  ]
+}

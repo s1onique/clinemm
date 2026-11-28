@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "epic_id": "EPIC-CLINEMM-FILE-TOOL-WORKSPACE-REALPATH-AUTHORITY",
+  "title": "File-tool workspace-escape authority",
+  "original_status": "OPEN (RECON lane)",
+  "lifecycle": "ACTIVE",
+  "priority": "P0",
+  "exit_criteria": [
+    "Q1 endpoint enumeration + Q2/Q3 sanitization regime + Q3 base-directory authority + Q4 lowest composition seam + Q5 RED matrix with A/B/C/D controls must complete before any repair is authorized."
+  ],
+  "items": [
+    {
+      "item_id": "EPIC-CLINEMM-FILE-TOOL-WORKSPACE-REALPATH-AUTHORITY/FILE-TOOL-WORKSPACE-REALPATH-AUTHORITY-RECON01",
+      "title": "ACT-CLINEMM-FILE-TOOL-WORKSPACE-REALPATH-AUTHORITY-RECON01 — file-tool workspace-escape authority recon",
+      "description": "OPEN / `RECON_LANE_AUTHORIZED / NO_LIVE_FAIL_BIND_YET` per the Factory causal reviewer verdict `C1: GO_FILE_TOOL_SECURITY_RECON` on commit `217e7f53c`. Live evidence anchor: a model-controlled host file mutation created `/Projects/Runtime/...` outside the workspace while shell-side deletion later hit Seatbelt denial (containment-boundary candidate; the post-Q5-GREEN umbrella ACT cannot host this). Production files changed at ENTRY: 0. Q1 endpoint enumeration + Q2/Q3 sanitization regime + Q3 base-directory authority + Q4 lowest composition seam + Q5 RED matrix with A/B/C/D controls (A. model name has traversal `..` with global base → write target escapes workspace MUST be refused; B. model name is absolute path → MUST be refused; C. clean alphanumeric + global base → ALLOWED (control / no false positive); D. clean alphanumeric + workspace-resolved base → ALLOWED (regression-preserving)). NO production repair until Q5 RED authored + Factory reviewer authorizes. Conservation: ACAS01 vitest 4/4 PASS preserved; BHTD01 vitest 6/6 PASS preserved; Q5RR01 vitest 6/6 PASS preserved. Parallel-lanes note: `FRESH_POST_REPAIR_LIVE` for Q5 runs in parallel and does NOT gate this ACT; if this ACT closes REPAIR_AUTHORIZED, a bounded child ACT follows the contract ACT / implementation ACT / Q5-RED matrix discipline used for `BACKGROUND-JOB-OWNER-IDENTITY-CONTRACT01`.",
+      "workstream": "file-tool-workspace-realpath-authority",
+      "original_status": "OPEN / RECON_LANE_AUTHORIZED / NO_LIVE_FAIL_BIND_YET",
+      "lifecycle": "ACTIVE",
+      "priority": "P0",
+      "qualification": "UNQUALIFIED",
+      "criteria": [],
+      "criteria_coverage": "UNKNOWN",
+      "dependencies": [],
+      "dependency_coverage": "COMPLETE",
+      "blockers": [],
+      "current_act": "ACT-CLINEMM-FILE-TOOL-WORKSPACE-REALPATH-AUTHORITY-RECON01",
+      "related_acts": [
+        "ACT-CLINEMM-FILE-TOOL-WORKSPACE-REALPATH-AUTHORITY-RECON01"
+      ],
+      "evidence_locators": [
+        ".factory/evidence/ACT-CLINEMM-FILE-TOOL-WORKSPACE-REALPATH-AUTHORITY-RECON01/00-scope.md",
+        ".factory/evidence/ACT-CLINEMM-FILE-TOOL-WORKSPACE-REALPATH-AUTHORITY-RECON01/entry-freeze.txt"
+      ],
+      "reopen_conditions": [
+        "Live evidence captured that binds a real creator of the escape (the live-failure bind is still pending)."
+      ],
+      "source_refs": [
+        {
+          "path": ".factory/epic-board.md",
+          "start_line": 9368,
+          "end_line": 9368,
+          "sha256": "86d3478f0695ececf9b67f8a4b2bdba2799b0830ceab31617d9f4c37174f29a3"
+        },
+        {
+          "path": ".factory/epics/file-tool-workspace-realpath-authority.md",
+          "start_line": 135,
+          "end_line": 152,
+          "sha256": "f4960bdbc585bd0c0b0557adf09d992d51fdf9c4efd3201d98247777cd0d776e"
+        }
+      ]
+    }
+  ],
+  "source_refs": [
+    {
+      "path": ".factory/epics/file-tool-workspace-realpath-authority.md",
+      "start_line": 6,
+      "end_line": 21,
+      "sha256": "42dcf298935f556b221026a0d5199e6e60e9ccbb0abf4637f2cc26b7eb7c6ce4"
+    },
+    {
+      "path": ".factory/epics/file-tool-workspace-realpath-authority.md",
+      "start_line": 71,
+      "end_line": 160,
+      "sha256": "52170c568306cf721d7997d3ccbbdbe36351b8ccf83d44af6ae4ee5eddffaede"
+    },
+    {
+      "path": ".factory/epic-board.md",
+      "start_line": 9368,
+      "end_line": 9368,
+      "sha256": "86d3478f0695ececf9b67f8a4b2bdba2799b0830ceab31617d9f4c37174f29a3"
+    }
+  ]
+}
