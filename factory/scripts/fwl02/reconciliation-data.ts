@@ -235,11 +235,14 @@ export const RECONCILIATION_RECORDS: readonly ReconciledReconciliationRecord[] =
 			identities: [".factory/epic-board.md"],
 			resolution: "RESOLVED",
 			reason:
-				"The root epic board is 44,731 lines at SOURCE_HEAD and is a PREPEND-ORDERED historical ACT-report log: roughly the first 9,340 lines are narrative ACT reports and the operational index (Current frontier / Active epics / Open supporting work / Deferred-hold / Historical task census) occupies the region around lines 9352-9541. The operational index region was reconciled section-by-section into the frontier tables and the work-item records. The narrative report region was reconciled at the COLD level: 177 ACT report sections were mechanically indexed by identity, verdict and source range into `historical-index.json`, with 167 distinct identities, 7 carrying competing verdicts (CONFLICTING) and 1 carrying repeated identical verdicts (AMBIGUOUS). The remaining narrative prose (the `Updated:` chronology lines and per-ACT bodies) is accounted for as CONTIGUOUS NARRATIVE HISTORY at the byte level and is preserved verbatim through the committed source archive; it is deliberately NOT reconstructed paragraph-by-paragraph as new work items.",
+				"The root epic board is 44,731 lines at SOURCE_HEAD and is a PREPEND-ORDERED historical ACT-report log: roughly the first 9,340 lines are narrative ACT reports and the operational index (Current frontier / Active epics / Open supporting work / Deferred-hold / Historical task census) occupies the region around lines 9352-9541. The operational index region was reconciled section-by-section into the frontier tables and the work-item records. The narrative report region was reconciled at the COLD level by mechanically indexing EVERY ACT report section — at BOTH heading levels — by identity, verdict and exact source range into `historical-index.json`. The corrected extraction indexes 361 report sections carrying 316 distinct historical identities (289 UNAMBIGUOUS, 2 AMBIGUOUS, 25 CONFLICTING), against the 177 sections / 167 identities previously claimed. The trailing range 9,542-44,731 — the region the previous accounting stopped at — was NOT narrative-only: it carries 205 further ACT report sections at heading level 2 (`## ACT-... — VERDICT — date`), belonging to 149 distinct historical ACT identities that the level-1-only extraction had silently skipped. Every one of those 316 identities is now mechanically indexed with its own disposition; the 25 identities carrying competing verdicts are surfaced by the SOURCE_CONFLICT records. The remaining prose — the `Updated:` chronology lines and the per-ACT report bodies — is accounted for as CONTIGUOUS NARRATIVE HISTORY at the byte level and is preserved verbatim through the committed source archive; it is deliberately NOT reconstructed paragraph-by-paragraph as new work items. SUPERSEDED ASSESSMENT: the previous reconciliation of this identity claimed only 177 ACT report sections carrying 167 distinct identities (7 CONFLICTING, 1 AMBIGUOUS) and treated the trailing region as narrative history. That 167-identity inventory was INCOMPLETE — it did NOT cover the complete intended historical source — and it is SUPERSEDED by the 316-identity inventory stated here. The count was not tuned to preserve the earlier value: the corrected index reports what the source actually contains.",
 			source_refs: [
 				{ path: BOARD, lines: [1, 78] },
 				{ path: BOARD, lines: [9344, 9350] },
 				{ path: BOARD, lines: [9443, 9541] },
+				{ path: BOARD, lines: [9542, 9542] },
+				{ path: BOARD, lines: [9636, 9636] },
+				{ path: BOARD, lines: [44731, 44731] },
 			],
 		},
 		{
@@ -369,18 +372,6 @@ export const RECONCILIATION_RECORDS: readonly ReconciledReconciliationRecord[] =
 				{ path: BOARD, lines: [34822, 34822] },
 				{ path: BOARD, lines: [6882, 6882] },
 				{ path: BOARD, lines: [7010, 7010] },
-			],
-		},
-		{
-			kind: "INCOMPLETE_COVERAGE",
-			identities: [".factory/epic-board.md"],
-			resolution: "RESOLVED",
-			reason:
-				"The root epic board is 44,731 lines at SOURCE_HEAD and is a PREPEND-ORDERED historical ACT-report log. The trailing range 9,542-44,731 — the region the previous accounting stopped at — was NOT narrative-only: it carries 205 further ACT report sections at heading level 2 (`## ACT-... — VERDICT — date`), belonging to 149 distinct historical ACT identities that the level-1-only extraction had silently skipped. The corrected extraction therefore indexes 361 report sections carrying 316 distinct identities, against the 177 sections / 167 identities previously claimed. Every one of those 316 identities is now mechanically indexed by identity, verdict and exact source range into `historical-index.json` with its own disposition; 25 carry competing verdicts and are surfaced by the SOURCE_CONFLICT records. The remaining prose — the `Updated:` chronology lines and the per-ACT report bodies — is accounted for as CONTIGUOUS NARRATIVE HISTORY at the byte level and is preserved verbatim through the committed source archive; it is deliberately NOT reconstructed paragraph-by-paragraph as new work items. The claimed 167 identities therefore did NOT cover the complete intended historical source, and the count was not tuned to preserve it: the corrected index reports what the source actually contains.",
-			source_refs: [
-				{ path: BOARD, lines: [9542, 9542] },
-				{ path: BOARD, lines: [9636, 9636] },
-				{ path: BOARD, lines: [44731, 44731] },
 			],
 		},
 	];

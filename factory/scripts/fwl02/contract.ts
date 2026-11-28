@@ -256,6 +256,31 @@ export interface FwmiReconciliation {
 	readonly records: readonly FwmiReconciliationRecord[];
 }
 
+/**
+ * The reconciliation identity of one reconciliation record.
+ *
+ * The identity is DERIVED FROM THE CONTENT of the record: its kind, its
+ * resolution and the identities it concerns. The actual Leamas Go consumer
+ * derives the durable migration identity the same way and REJECTS two
+ * distinct records that claim the same identity — the second would
+ * overwrite the first, and a lost reconciliation is a lost obligation.
+ *
+ * The producer therefore computes the key EXACTLY as the consumer computes
+ * it: kind + resolution + the SORTED identities. Two reconciliation records
+ * in one package may never share this key unless they are byte-identical
+ * repetitions of the same record.
+ */
+export function reconciliationIdentityKey(
+	record: Pick<FwmiReconciliationRecord, "kind" | "resolution" | "identities">,
+): string {
+	const identities = [...record.identities].sort();
+	return [
+		`kind=${record.kind}`,
+		`resolution=${record.resolution}`,
+		`identities=${identities.join(",")}`,
+	].join("\x1e");
+}
+
 /** One executed check reported by the producer. */
 export interface FwmiReceiptCheck {
 	readonly id: string;

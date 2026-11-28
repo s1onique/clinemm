@@ -45,8 +45,10 @@ import {
 	type FwmiEpic,
 	type FwmiHistoricalIndex,
 	type FwmiReconciliation,
+	type FwmiReconciliationRecord,
 	type FwmiSourceManifest,
 	type FwmiSourceRef,
+	reconciliationIdentityKey,
 } from "./contract.ts";
 import {
 	type CommittedFileFacts,
@@ -552,6 +554,36 @@ function validateStructural(
 		"RECONCILIATION.VALID_VOCABULARY",
 		reconProblems.length === 0 ? "PASS" : "FAIL",
 		reconProblems.join("; "),
+	);
+
+	// The reconciliation identity is DERIVED FROM THE CONTENT of a record:
+	// its kind, its resolution and the identities it concerns. The actual
+	// Leamas Go consumer derives the durable migration identity the same
+	// way and REJECTS two distinct records that claim the same identity
+	// (`conflicting reconciliation identity`), because the second record
+	// would overwrite the first and a lost reconciliation is a lost
+	// obligation. The producer therefore refuses to emit such a package.
+	//
+	// The key is computed EXACTLY as the consumer computes it: kind +
+	// resolution + the SORTED identities, joined by the same separator.
+	const conflictingReconGroups = findConflictingReconciliationIdentities(
+		recon.records,
+	);
+	const reconIdentityCount = new Set(
+		recon.records.map((record) => reconciliationIdentityKey(record)),
+	).size;
+	checks.add(
+		"RECONCILIATION.NO_CONFLICTING_IDENTITY",
+		conflictingReconGroups.length === 0 ? "PASS" : "FAIL",
+		conflictingReconGroups
+			.map(
+				(group) =>
+					`${group.key} (${group.records.length} records: ${group.records
+						.map((record) => record.identities.join(","))
+						.join(" | ")})`,
+			)
+			.join("; ") ||
+			`${reconIdentityCount} reconciliation identities, each claimed by exactly one record`,
 	);
 	checks.add(
 		"STRUCTURE.NESTED_SCHEMA_VERSIONS",
@@ -1272,6 +1304,37 @@ function validateAdversarial(
 			: "PARTIAL",
 		`${conflicting.length} conflicting identities; ${conflictingWithMultipleRefs.length} retain their competing source references`,
 	);
+}
+
+/**
+ * Find the reconciliation identity groups that claim one identity twice.
+ *
+ * The actual Leamas Go consumer derives the durable migration identity of a
+ * reconciliation record from its kind, its resolution and the identities it
+ * concerns, and REJECTS two distinct records that claim the same identity:
+ * the second would overwrite the first, and a lost reconciliation is a lost
+ * obligation. This function computes the same key and reports every group
+ * claimed by more than one record.
+ *
+ * The comparison is EXACTLY the consumer's: kind + resolution + the SORTED
+ * identities.
+ */
+export function findConflictingReconciliationIdentities(
+	records: readonly FwmiReconciliationRecord[],
+): Array<{ key: string; records: FwmiReconciliationRecord[] }> {
+	const groups = new Map<string, FwmiReconciliationRecord[]>();
+	for (const record of records) {
+		const key = reconciliationIdentityKey(record);
+		const group = groups.get(key);
+		if (group) {
+			group.push(record);
+		} else {
+			groups.set(key, [record]);
+		}
+	}
+	return [...groups.entries()]
+		.filter(([, group]) => group.length > 1)
+		.map(([key, group]) => ({ key, records: group }));
 }
 
 /** Validate the package and return the executed checks. */

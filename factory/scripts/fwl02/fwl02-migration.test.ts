@@ -29,8 +29,11 @@ import {
 	type FwmiCoverage,
 	type FwmiLifecycle,
 	type FwmiQualification,
+	type FwmiReconciliationRecord,
 	type FwmiRelationshipKind,
 	type FwmiResolution,
+	type FwmiSourceRef,
+	reconciliationIdentityKey,
 } from "./contract.ts";
 import {
 	committedFileFacts,
@@ -40,6 +43,7 @@ import {
 	verifySourceRef,
 } from "./source-refs.ts";
 import {
+	findConflictingReconciliationIdentities,
 	findDuplicateJsonMembers,
 	findPrerequisiteCycle,
 	validatePackage,
@@ -893,6 +897,165 @@ describe("FWL02 migration package — validation receipt", () => {
 		const failures = results.filter((result) => result.status === "FAIL");
 		expect(failures).toEqual([]);
 	}, 60_000);
+});
+
+describe("FWL02 migration package — reconciliation identity uniqueness", () => {
+	/**
+	 * The reconciliation identity of a record, computed EXACTLY as the actual
+	 * Leamas Go consumer computes it: kind + resolution + the SORTED
+	 * identities. Two distinct records that share this key are REJECTED by
+	 * the consumer with `conflicting reconciliation identity`, because the
+	 * second would overwrite the first.
+	 */
+	test("the corrected package claims no reconciliation identity twice", () => {
+		const groups = findConflictingReconciliationIdentities(recon.records);
+		expect(groups).toEqual([]);
+		expect(recon.records.length).toBe(21);
+	});
+
+	test("the corrected package carries exactly one authoritative board record", () => {
+		const boardRecords = recon.records.filter(
+			(record: FwmiReconciliationRecord) =>
+				record.kind === "INCOMPLETE_COVERAGE" &&
+				record.resolution === "RESOLVED" &&
+				record.identities.includes(".factory/epic-board.md"),
+		);
+		expect(boardRecords.length).toBe(1);
+	});
+
+	test("the authoritative board record carries the 316-identity inventory", () => {
+		const boardRecord = recon.records.find(
+			(record: FwmiReconciliationRecord) =>
+				record.kind === "INCOMPLETE_COVERAGE" &&
+				record.resolution === "RESOLVED" &&
+				record.identities.includes(".factory/epic-board.md"),
+		);
+		expect(boardRecord).toBeDefined();
+		// The corrected inventory is stated, and the incomplete 167-identity
+		// inventory is explicitly acknowledged as superseded.
+		expect(boardRecord!.reason).toContain("316 distinct historical identities");
+		expect(boardRecord!.reason).toContain("167");
+		expect(boardRecord!.reason).toContain("SUPERSEDED");
+		expect(boardRecord!.reason).toContain("INCOMPLETE");
+	});
+
+	test("the authoritative board record preserves the source references of both records", () => {
+		const boardRecord = recon.records.find(
+			(record: FwmiReconciliationRecord) =>
+				record.kind === "INCOMPLETE_COVERAGE" &&
+				record.resolution === "RESOLVED" &&
+				record.identities.includes(".factory/epic-board.md"),
+		);
+		const ranges = boardRecord!.source_refs.map(
+			(ref: FwmiSourceRef) => `${ref.path}:${ref.start_line}-${ref.end_line}`,
+		);
+		// The obsolete record's ranges (the operational index region).
+		expect(ranges).toContain(".factory/epic-board.md:1-78");
+		expect(ranges).toContain(".factory/epic-board.md:9344-9350");
+		expect(ranges).toContain(".factory/epic-board.md:9443-9541");
+		// The corrected record's ranges (the trailing region).
+		expect(ranges).toContain(".factory/epic-board.md:9542-9542");
+		expect(ranges).toContain(".factory/epic-board.md:9636-9636");
+		expect(ranges).toContain(".factory/epic-board.md:44731-44731");
+	});
+
+	test("the obsolete 167-identity assessment is retained as migration evidence", () => {
+		const accounting = JSON.parse(
+			readFileSync(join(PACKAGE_DIR, "source-accounting.json"), "utf8"),
+		);
+		const superseded = accounting.superseded_assessments as Array<{
+			identity: string;
+			kind: string;
+			resolution: string;
+			superseded_claim: string;
+			superseded_by: string;
+			source_ranges: Array<{ path: string; lines: [number, number] }>;
+		}>;
+		expect(superseded.length).toBe(1);
+		const entry = superseded[0]!;
+		expect(entry.identity).toBe(".factory/epic-board.md");
+		expect(entry.kind).toBe("INCOMPLETE_COVERAGE");
+		expect(entry.resolution).toBe("RESOLVED");
+		// The obsolete assessment's own claim, verbatim.
+		expect(entry.superseded_claim).toContain("167 distinct identities");
+		expect(entry.superseded_by).toContain("316");
+		expect(entry.superseded_by).toContain("SUPERSEDED");
+		// The obsolete record's source references are preserved.
+		const ranges = entry.source_ranges.map(
+			(ref) => `${ref.path}:${ref.lines[0]}-${ref.lines[1]}`,
+		);
+		expect(ranges).toContain(".factory/epic-board.md:1-78");
+		expect(ranges).toContain(".factory/epic-board.md:9344-9350");
+		expect(ranges).toContain(".factory/epic-board.md:9443-9541");
+	});
+
+	/**
+	 * RED: the PREVIOUS package's shape — the obsolete 167-identity board
+	 * record alongside the corrected 316-identity board record — is rejected
+	 * by the same deterministic check. The check is not a property of the
+	 * corrected package alone: it detects the collision that the consumer
+	 * rejected.
+	 */
+	test("RED: the previous package's colliding board records are detected", () => {
+		const previous = JSON.parse(
+			readFileSync(
+				join(
+					REPO_ROOT,
+					"factory/scripts/fwl02/__fixtures__/previous-reconciliation.json",
+				),
+				"utf8",
+			),
+		) as { records: FwmiReconciliationRecord[] };
+		const groups = findConflictingReconciliationIdentities(previous.records);
+		expect(groups.length).toBe(1);
+		const group = groups[0]!;
+		expect(group.records.length).toBe(2);
+		expect(group.records[0]!.kind).toBe("INCOMPLETE_COVERAGE");
+		expect(group.records[0]!.resolution).toBe("RESOLVED");
+		expect(group.records[0]!.identities).toEqual([".factory/epic-board.md"]);
+		// The two records are DISTINCT: the consumer compares their content
+		// and rejects the pair.
+		expect(group.records[0]!.reason).not.toBe(group.records[1]!.reason);
+	});
+
+	test("the identity key is order-insensitive over the identities", () => {
+		const left: Pick<
+			FwmiReconciliationRecord,
+			"kind" | "resolution" | "identities"
+		> = {
+			kind: "INCOMPLETE_COVERAGE",
+			resolution: "RESOLVED",
+			identities: ["B", "A"],
+		};
+		const right: Pick<
+			FwmiReconciliationRecord,
+			"kind" | "resolution" | "identities"
+		> = {
+			kind: "INCOMPLETE_COVERAGE",
+			resolution: "RESOLVED",
+			identities: ["A", "B"],
+		};
+		expect(reconciliationIdentityKey(left)).toBe(
+			reconciliationIdentityKey(right),
+		);
+	});
+
+	test("the identity key separates records that differ in kind or resolution", () => {
+		const base: Pick<
+			FwmiReconciliationRecord,
+			"kind" | "resolution" | "identities"
+		> = {
+			kind: "INCOMPLETE_COVERAGE",
+			resolution: "RESOLVED",
+			identities: [".factory/epic-board.md"],
+		};
+		expect(reconciliationIdentityKey(base)).not.toBe(
+			reconciliationIdentityKey({ ...base, kind: "SOURCE_CONFLICT" }),
+		);
+		expect(reconciliationIdentityKey(base)).not.toBe(
+			reconciliationIdentityKey({ ...base, resolution: "CONFLICT" }),
+		);
+	});
 });
 
 describe("FWL02 migration package — reproducible regeneration", () => {

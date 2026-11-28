@@ -23,7 +23,7 @@
     {
       "id": "RECONCILIATION.NO_DUPLICATE_JSON_MEMBERS",
       "status": "PASS",
-      "detail": "44681 bytes scanned"
+      "detail": "44262 bytes scanned"
     },
     {
       "id": "RECONCILIATION.VALID_JSON",
@@ -277,6 +277,11 @@
       "id": "RECONCILIATION.VALID_VOCABULARY",
       "status": "PASS",
       "detail": ""
+    },
+    {
+      "id": "RECONCILIATION.NO_CONFLICTING_IDENTITY",
+      "status": "PASS",
+      "detail": "21 reconciliation identities, each claimed by exactly one record"
     },
     {
       "id": "STRUCTURE.NESTED_SCHEMA_VERSIONS",

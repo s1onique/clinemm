@@ -19,6 +19,14 @@
     "overrides": [
         {
             "includes": [
+                "factory/scripts/fwl02/__fixtures__/**"
+            ],
+            "formatter": {
+                "enabled": false
+            }
+        },
+        {
+            "includes": [
                 "apps/vscode/**"
             ],
             "assist": {

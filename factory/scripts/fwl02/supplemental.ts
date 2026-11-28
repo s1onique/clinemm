@@ -777,6 +777,65 @@ const SECONDARY_REPRESENTATIONS: readonly SecondaryRepresentation[] = [
 	},
 ];
 
+/**
+ * An assessment that was ONCE authoritative for a source identity and has
+ * since been superseded by a corrected one.
+ *
+ * The FWMI v1 wire schema carries ONE authoritative reconciliation record per
+ * reconciliation identity: the consumer derives the durable migration
+ * identity from the record's kind, resolution and identities, and rejects two
+ * distinct records that claim the same identity. A superseded assessment
+ * therefore cannot remain a second reconciliation record for the same
+ * identity — it is retained HERE, as source-bound supplemental migration
+ * evidence, so the earlier reading of the source stays recoverable and
+ * auditable without re-entering the machine-consumed wire package.
+ */
+interface SupersededAssessment {
+	/** The source identity the assessment described. */
+	readonly identity: string;
+	/** The reconciliation kind the assessment carried. */
+	readonly kind: string;
+	/** The reconciliation resolution the assessment carried. */
+	readonly resolution: string;
+	/** What the superseded assessment claimed. */
+	readonly superseded_claim: string;
+	/** Why it was superseded, and by what. */
+	readonly superseded_by: string;
+	/** The source ranges the superseded assessment relied on. */
+	readonly source_ranges: readonly {
+		readonly path: string;
+		readonly lines: readonly [number, number];
+	}[];
+}
+
+/**
+ * The assessments that were superseded by the corrected reconciliation.
+ *
+ * The board's historical ACT inventory was first reconciled as 177 ACT report
+ * sections carrying 167 distinct identities. That inventory was INCOMPLETE: the
+ * level-1-only header pattern skipped the trailing board region's 205
+ * level-2 report sections, hiding 149 further historical ACT identities. The
+ * corrected inventory indexes 361 report sections carrying 316 distinct
+ * identities. The earlier assessment is retained here so the incomplete
+ * reading stays recoverable.
+ */
+const SUPERSEDED_ASSESSMENTS: readonly SupersededAssessment[] = [
+	{
+		identity: ".factory/epic-board.md",
+		kind: "INCOMPLETE_COVERAGE",
+		resolution: "RESOLVED",
+		superseded_claim:
+			"The root epic board is 44,731 lines at SOURCE_HEAD and is a PREPEND-ORDERED historical ACT-report log: roughly the first 9,340 lines are narrative ACT reports and the operational index (Current frontier / Active epics / Open supporting work / Deferred-hold / Historical task census) occupies the region around lines 9352-9541. The operational index region was reconciled section-by-section into the frontier tables and the work-item records. The narrative report region was reconciled at the COLD level: 177 ACT report sections were mechanically indexed by identity, verdict and source range into `historical-index.json`, with 167 distinct identities, 7 carrying competing verdicts (CONFLICTING) and 1 carrying repeated identical verdicts (AMBIGUOUS). The remaining narrative prose (the `Updated:` chronology lines and per-ACT bodies) is accounted for as CONTIGUOUS NARRATIVE HISTORY at the byte level and is preserved verbatim through the committed source archive; it is deliberately NOT reconstructed paragraph-by-paragraph as new work items.",
+		superseded_by:
+			"INCOMPLETE AND SUPERSEDED. The 167-identity inventory did NOT cover the complete intended historical source. The level-1-only report-section header pattern matched the prepend-ordered report log and skipped every level-2 report section in the trailing board region 9,542-44,731, which carries 205 further report sections belonging to 149 distinct historical ACT identities. The corrected extraction indexes BOTH heading levels: 361 report sections carrying 316 distinct identities (289 UNAMBIGUOUS, 2 AMBIGUOUS, 25 CONFLICTING). The count was not tuned to preserve the earlier value. The corrected assessment is the single authoritative reconciliation record for this identity in `reconciliation.json`; this entry retains the obsolete reading as supplemental migration evidence only.",
+		source_ranges: [
+			{ path: ".factory/epic-board.md", lines: [1, 78] },
+			{ path: ".factory/epic-board.md", lines: [9344, 9350] },
+			{ path: ".factory/epic-board.md", lines: [9443, 9541] },
+		],
+	},
+];
+
 /** Write the supplemental artifacts. */
 function main(): void {
 	// ---- source-accounting.json -----------------------------------------
@@ -807,6 +866,18 @@ function main(): void {
 		 * collection, so no source representation is silently lost.
 		 */
 		secondary_representations: SECONDARY_REPRESENTATIONS.map((entry) => ({
+			...entry,
+		})),
+		/**
+		 * The assessments that were superseded by a corrected one.
+		 *
+		 * The wire schema carries ONE authoritative reconciliation record per
+		 * reconciliation identity, so a superseded assessment cannot remain a
+		 * second record for the same identity. It is retained here instead:
+		 * the earlier reading of the source stays recoverable and auditable
+		 * without re-entering the machine-consumed wire package.
+		 */
+		superseded_assessments: SUPERSEDED_ASSESSMENTS.map((entry) => ({
 			...entry,
 		})),
 	};
