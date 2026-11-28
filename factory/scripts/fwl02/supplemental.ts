@@ -25,6 +25,7 @@
 import { writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import {
+	FWL02_FROZEN_SOURCE_HEAD,
 	gitText,
 	readCommittedBytes,
 	resolveCommit,
@@ -33,7 +34,7 @@ import {
 
 const REPO_ROOT = resolve(import.meta.dir, "../../..");
 const PACKAGE_DIR = join(REPO_ROOT, ".factory/migration/FWL02");
-const SOURCE_HEAD = resolveCommit("HEAD", REPO_ROOT);
+const SOURCE_HEAD = resolveCommit(FWL02_FROZEN_SOURCE_HEAD, REPO_ROOT);
 
 /** The first shadow-migration source head. */
 const FIRST_SHADOW_HEAD = "29774ba05851f9dd5a46a33a90d963ff3ef286d5";
@@ -741,7 +742,16 @@ function main(): void {
 		"|---|---|",
 		`| Entry head (this ACT's starting point) | \`${SOURCE_HEAD}\` |`,
 		`| First shadow-migration source head | \`${FIRST_SHADOW_HEAD}\` |`,
-		`| Source head of this package | \`${SOURCE_HEAD}\` |`,
+		`| Source head of this package (FROZEN) | \`${SOURCE_HEAD}\` |`,
+		"",
+		"## Why the source head is frozen",
+		"",
+		"The package's source head is an EXPLICIT committed revision, not `HEAD`.",
+		"The package's own publication commit advances `HEAD`; deriving the source head",
+		"from `HEAD` at generation time would rebind every assertion to the publication",
+		"commit itself and make the package non-reproducible and self-referential. The",
+		"frozen head is the repository state the migration was reconciled FROM:",
+		"`e196d0e6243f40ebfd76d2cf0db7bda74e97d6d6`.",
 		"",
 		"## Board size change",
 		"",

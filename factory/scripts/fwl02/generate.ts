@@ -51,6 +51,7 @@ import type {
 import { RECONCILIATION_RECORDS } from "./reconciliation-data.ts";
 import {
 	committedFileFacts,
+	FWL02_FROZEN_SOURCE_HEAD,
 	makeSourceRef,
 	readCommittedBytes,
 	resolveCommit,
@@ -59,8 +60,14 @@ import {
 const REPO_ROOT = resolve(import.meta.dir, "../../..");
 const PACKAGE_DIR = join(REPO_ROOT, ".factory/migration/FWL02");
 
-/** The frozen source head for this package. */
-const SOURCE_HEAD = resolveCommit("HEAD", REPO_ROOT);
+/**
+ * The frozen source head for this package.
+ *
+ * It is an explicit committed revision, NOT `HEAD`: the package's own
+ * publication commit advances `HEAD`, and deriving the source head from `HEAD`
+ * would rebind every assertion to the publication commit itself.
+ */
+const SOURCE_HEAD = resolveCommit(FWL02_FROZEN_SOURCE_HEAD, REPO_ROOT);
 
 /** The board — the operational index that owns the frontier tables. */
 const BOARD_PATH = ".factory/epic-board.md";

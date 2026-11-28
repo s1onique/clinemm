@@ -8,7 +8,16 @@
 |---|---|
 | Entry head (this ACT's starting point) | `e196d0e6243f40ebfd76d2cf0db7bda74e97d6d6` |
 | First shadow-migration source head | `29774ba05851f9dd5a46a33a90d963ff3ef286d5` |
-| Source head of this package | `e196d0e6243f40ebfd76d2cf0db7bda74e97d6d6` |
+| Source head of this package (FROZEN) | `e196d0e6243f40ebfd76d2cf0db7bda74e97d6d6` |
+
+## Why the source head is frozen
+
+The package's source head is an EXPLICIT committed revision, not `HEAD`.
+The package's own publication commit advances `HEAD`; deriving the source head
+from `HEAD` at generation time would rebind every assertion to the publication
+commit itself and make the package non-reproducible and self-referential. The
+frozen head is the repository state the migration was reconciled FROM:
+`e196d0e6243f40ebfd76d2cf0db7bda74e97d6d6`.
 
 ## Board size change
 

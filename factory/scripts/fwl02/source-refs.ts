@@ -50,6 +50,20 @@ export interface CommittedFileFacts {
 }
 
 /**
+ * The FROZEN source head for the FWL02 package.
+ *
+ * The package's source head is FROZEN at an explicit committed revision. It is
+ * NOT derived from `HEAD` at generation time: the package's own publication
+ * commit advances `HEAD`, and re-deriving the source head would silently
+ * rebind every assertion to the publication commit itself — which would make
+ * the package non-reproducible and would create a self-referential digest.
+ *
+ * The frozen head is the repository state the migration was reconciled FROM.
+ */
+export const FWL02_FROZEN_SOURCE_HEAD =
+	"e196d0e6243f40ebfd76d2cf0db7bda74e97d6d6";
+
+/**
  * Run a git command against the repository and return its raw stdout buffer.
  * Throws when git fails, so a broken repository never yields silent empty data.
  */
