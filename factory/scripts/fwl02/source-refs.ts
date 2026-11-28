@@ -163,6 +163,53 @@ export function splitCommittedLines(
 	return lines;
 }
 
+/**
+ * The POSITIONAL byte boundaries of every line in `bytes`.
+ *
+ * `start` is the byte offset at which the line's content begins; `end` is the
+ * byte offset just past the line's terminator (i.e. the start of the NEXT
+ * line). For a final line with no terminator, `end` is the buffer length.
+ *
+ * These offsets are accumulated while scanning, so they identify a line by
+ * POSITION. A content search cannot: it cannot tell the first `same` from the
+ * third, it cannot find an empty line at all, and it can land on a substring
+ * of an unrelated line.
+ */
+interface LineBoundaries {
+	readonly start: number;
+	readonly end: number;
+}
+
+/**
+ * Compute the positional byte boundaries of every line in `bytes`.
+ *
+ * The returned array is indexed by zero-based line number, so line N
+ * (one-based) lives at index N-1.
+ */
+function lineBoundaries(bytes: Buffer): LineBoundaries[] {
+	const boundaries: LineBoundaries[] = [];
+	let start = 0;
+	for (let index = 0; index < bytes.length; index++) {
+		const byte = bytes[index]!;
+		if (byte === 0x0a) {
+			boundaries.push({ start, end: index + 1 });
+			start = index + 1;
+			continue;
+		}
+		if (byte === 0x0d && bytes[index + 1] === 0x0a) {
+			boundaries.push({ start, end: index + 2 });
+			start = index + 2;
+			index++;
+		}
+	}
+	// The trailing remainder is a final line. An empty remainder after a
+	// trailing newline is NOT a line (the file ended with a newline).
+	if (start < bytes.length) {
+		boundaries.push({ start, end: bytes.length });
+	}
+	return boundaries;
+}
+
 /** The exact byte range of a one-based inclusive line span within committed bytes. */
 export function lineRangeBytes(
 	bytes: Buffer,
@@ -178,30 +225,24 @@ export function lineRangeBytes(
 	if (endLine < startLine) {
 		throw new Error(`end_line (${endLine}) < start_line (${startLine})`);
 	}
-	const lines = splitCommittedLines(bytes);
-	if (lines.length === 0) {
+	const boundaries = lineBoundaries(bytes);
+	if (boundaries.length === 0) {
 		throw new Error(
 			`range ${startLine}..${endLine} requested from an empty file`,
 		);
 	}
-	if (endLine > lines.length) {
+	if (endLine > boundaries.length) {
 		throw new Error(
-			`end_line (${endLine}) exceeds file line count (${lines.length})`,
+			`end_line (${endLine}) exceeds file line count (${boundaries.length})`,
 		);
 	}
-	const first = lines[startLine - 1]!;
-	const last = lines[endLine - 1]!;
-	const firstStart = bytes.indexOf(first.content);
-	if (firstStart < 0) {
-		throw new Error("internal: could not locate first line content");
-	}
-	const lastContentStart = bytes.lastIndexOf(last.content);
-	if (lastContentStart < 0) {
-		throw new Error("internal: could not locate last line content");
-	}
-	const lastEnd =
-		lastContentStart + last.content.length + Buffer.byteLength(last.newline);
-	return bytes.subarray(firstStart, lastEnd);
+	// Select the requested lines BY POSITION: the range starts at the first
+	// selected line's content offset and ends just past the last selected
+	// line's terminator. The result is an exact subarray of the ORIGINAL
+	// bytes — no normalization, no trimming, no decode/re-encode.
+	const first = boundaries[startLine - 1]!;
+	const last = boundaries[endLine - 1]!;
+	return bytes.subarray(first.start, last.end);
 }
 
 /**

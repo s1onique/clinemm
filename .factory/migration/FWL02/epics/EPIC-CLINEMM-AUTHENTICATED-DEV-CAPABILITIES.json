@@ -39,7 +39,7 @@
           "path": ".factory/epics/authenticated-dev-capabilities.md",
           "start_line": 47,
           "end_line": 56,
-          "sha256": "d6e5081089639e47f59c9b310ff74d252c03e0f68a925b99e0a3e0a889fa250d"
+          "sha256": "53fa9cac841ebab33252842c9e992ba86fb4ad79a1a1d5159f575d4ca4bdaa45"
         }
       ]
     }
@@ -49,13 +49,13 @@
       "path": ".factory/epics/authenticated-dev-capabilities.md",
       "start_line": 5,
       "end_line": 11,
-      "sha256": "a5f444ec61b2fe48ad9468e5b64d09e73bdf6184d78cfc2f4a5e2e286ff0b987"
+      "sha256": "a08a7cb8ef0b50199259da4c1dad67c02cbe143423aa2c67248e30618e414146"
     },
     {
       "path": ".factory/epics/authenticated-dev-capabilities.md",
       "start_line": 37,
       "end_line": 60,
-      "sha256": "a3992ebe74db2f07913663f81bf32ce21621ec45de2d3fc1f7139204c42a8b06"
+      "sha256": "78f12fe9cba49234591e850698c2f8795a5624d172ee382c48d645e0881fa356"
     }
   ]
 }

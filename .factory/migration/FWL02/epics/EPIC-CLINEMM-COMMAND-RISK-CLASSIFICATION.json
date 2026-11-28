@@ -14,13 +14,13 @@
       "path": ".factory/epics/command-risk-classification.md",
       "start_line": 5,
       "end_line": 11,
-      "sha256": "e17a25d55468e4fdcb0ae29b8081f2953ac3ca64f2d861f95c6eda59278a0686"
+      "sha256": "3301a91923722c7bbc19fd3dc61c94a16b324f69dba0436c68246a4abd389545"
     },
     {
       "path": ".factory/epics/command-risk-classification.md",
       "start_line": 19,
       "end_line": 40,
-      "sha256": "c17acfd8b268e49be9599967998aa4489234ac22744c650c47287b2023ad0b57"
+      "sha256": "1120069e711c4fe13112f4a0d943d7e4928d751a309e8250e5b27449353b0cd3"
     }
   ]
 }

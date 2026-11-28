@@ -76,7 +76,7 @@
           "path": ".factory/epics/product-config-branding.md",
           "start_line": 37,
           "end_line": 37,
-          "sha256": "48f5b83547154a68c666e342dddf1e3ea9d5fb45340abbd2d9ddf78e2e4c22bf"
+          "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
         }
       ]
     },
@@ -189,7 +189,7 @@
           "path": ".factory/epics/product-config-branding.md",
           "start_line": 51,
           "end_line": 90,
-          "sha256": "2d25293bf939361086fef1f90bc5329659e30aef6c3ffe5e28a16b3190de9855"
+          "sha256": "dd07c524285364fc1e59202ed9befab0f2ae8b7ed47660eccd2ee5209e872fd5"
         }
       ]
     }
@@ -199,13 +199,13 @@
       "path": ".factory/epics/product-config-branding.md",
       "start_line": 5,
       "end_line": 11,
-      "sha256": "6892e58c27be681ea181787e5744a71b7ddc22393699535a0adca1ba9d665791"
+      "sha256": "34b609d136af6ad67e2065aa87abc3e6baf65483a74e35826b7f5ea07cb2c027"
     },
     {
       "path": ".factory/epics/product-config-branding.md",
       "start_line": 34,
       "end_line": 49,
-      "sha256": "60e5b0a5c7f3f4d4c0a2a4e138338ad1df3d3a97e0984e48a0c552dacba68840"
+      "sha256": "0b80a0f6c861ea9139c88a07bd6c6ae6f390f9b05575b05d3d714fd518f2dbe2"
     }
   ]
 }

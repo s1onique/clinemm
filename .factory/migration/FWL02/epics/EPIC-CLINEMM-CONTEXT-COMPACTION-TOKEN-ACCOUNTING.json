@@ -58,7 +58,7 @@
           "path": ".factory/acts/ACT-CLINEMM-COMPACTION-HEADER-BAR-FRESHNESS-RECON01.md",
           "start_line": 538,
           "end_line": 560,
-          "sha256": "2c8362a91b4cdb345a75211586309dcebf1d6957f9fb5986aeabf991128af1e5"
+          "sha256": "31f2f0e4c121c52583da1d812ecde30f353b0ac789d288194494e0a40e165dc6"
         }
       ]
     }
@@ -68,7 +68,7 @@
       "path": ".factory/epics/context-compaction-token-accounting.md",
       "start_line": 23,
       "end_line": 112,
-      "sha256": "209cefb8b34fa7e7157b9f976c7ccc90ab35a6bdd6d60cd0cb51ff79c5ae53b5"
+      "sha256": "67f71b91a7de90e41bfc2975af2430e6ce6b4b3596c4a174ccf11f013aada4ae"
     },
     {
       "path": ".factory/epic-board.md",

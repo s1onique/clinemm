@@ -154,13 +154,13 @@
       "path": ".factory/epics/architecture.md",
       "start_line": 5,
       "end_line": 11,
-      "sha256": "7fb73bd61423c1a784f56a1899286d31a3e85a08f075d0607355ab388ae8d412"
+      "sha256": "1a6df24b2ecd2e3ad18ede86a640e074b710901349ad2df91eb57bbde3eacf3b"
     },
     {
       "path": ".factory/epics/architecture.md",
       "start_line": 34,
       "end_line": 52,
-      "sha256": "28513e59a9f3148f31c5455401236ac26b882587bb0fe74083d77dbf0cf2f261"
+      "sha256": "13bb38c05c1286a3f005d94e2bd38d730d78430aee5445425ca5e8a8a8b1fe18"
     }
   ]
 }

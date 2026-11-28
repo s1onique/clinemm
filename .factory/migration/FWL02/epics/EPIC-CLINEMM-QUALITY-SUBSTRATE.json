@@ -89,7 +89,7 @@
           "path": ".factory/epics/quality-substrate.md",
           "start_line": 39,
           "end_line": 39,
-          "sha256": "22320a1fa0c62406d6ebd4d18e31a9623005adf447e73901f40c97731258257b"
+          "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
         }
       ]
     }
@@ -99,13 +99,13 @@
       "path": ".factory/epics/quality-substrate.md",
       "start_line": 5,
       "end_line": 11,
-      "sha256": "03b96b025c0342732e11559a96e6a77c2eb1d575f08513a50d23b3dd2b0de15b"
+      "sha256": "30e408a6022c29f04665004399c7317e2a8a31b3a1b2f680f93afd5e92722325"
     },
     {
       "path": ".factory/epics/quality-substrate.md",
       "start_line": 36,
       "end_line": 53,
-      "sha256": "a209600e6b2af436eaa27a5e167f310691215db4469bcb013926e217abc5bf38"
+      "sha256": "ccb715904aad5b7f50e4238602f1dbd9286ca42037287c7b22838184027ace7c"
     }
   ]
 }

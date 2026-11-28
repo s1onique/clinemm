@@ -107,3 +107,35 @@ The corrected inventory is therefore NOT the previous one: 45 obligations (not 5
 and 316 historical identities (not 167). Neither count was tuned to reproduce a
 previous value; both are what the actual source yields under the corrected
 reconciliation.
+
+## The CORRECTION-04 correction of the source-range byte binding
+
+This package is the CORRECTED successor of the CORRECTION-03 package. The
+correction changed the PRODUCER's byte-range computation, not the source: the
+source head is unchanged at `e196d0e6243f40ebfd76d2cf0db7bda74e97d6d6`, and no
+source path or line range was altered.
+
+One bounded defect was corrected.
+
+1. **Positional byte-range binding.** `lineRangeBytes()` selected the first and
+   last requested lines correctly, but then resolved their byte positions with
+   a content search (`indexOf` on the first line's content, `lastIndexOf` on
+   the last line's content) instead of by POSITION. A content search cannot
+   distinguish the first occurrence of a repeated line from the third, cannot
+   locate an empty line at all, and can land on a substring of an unrelated
+   line. The range is now taken as an exact subarray of the ORIGINAL committed
+   bytes, bounded by positional offsets accumulated while scanning. No newline
+   normalization, trimming, or decode/re-encode was introduced, so a range
+   still covers the exact original bytes of its lines including their original
+   terminators.
+
+Both `makeSourceRef()` and `verifySourceRef()` used the defective function, so
+the producer's own validation accepted the incorrect digests. Independent
+verification against the committed Git blobs found 409 of 534 source
+references bound to the wrong bytes; the remaining 125 were already correct.
+
+Only the 409 incorrect range digests changed. The 125 previously correct
+references retain their digests, every source path and line range is
+unchanged, and all engineering descriptions, criteria, blockers, priorities,
+lifecycle states, qualifications and relationships are preserved. The
+historical semantic reconciliation was NOT repeated.

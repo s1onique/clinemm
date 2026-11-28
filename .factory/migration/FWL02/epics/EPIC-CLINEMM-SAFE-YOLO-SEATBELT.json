@@ -188,7 +188,7 @@
           "path": ".factory/epics/safe-yolo-seatbelt.md",
           "start_line": 159,
           "end_line": 172,
-          "sha256": "afe8b9d1c4f3a8721445682aaad7fda533d6c908f180467625ab377592e10a3f"
+          "sha256": "2ca6d9fa7c6ad83c71af1dff7119404fce282e597938df69f72b87cf944bf459"
         }
       ]
     },
@@ -226,7 +226,7 @@
       "path": ".factory/epics/safe-yolo-seatbelt.md",
       "start_line": 5,
       "end_line": 11,
-      "sha256": "0bfdb20aaa18cd01ea6e6c4f47e433e92ac2c1ab7aebf4219e61c8b2781407be"
+      "sha256": "521c4e53b224ca13ee3c103dd0d83373fda28757f7c91cdf66138e1418997fca"
     },
     {
       "path": ".factory/epics/safe-yolo-seatbelt.md",
